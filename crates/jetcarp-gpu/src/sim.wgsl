@@ -606,9 +606,64 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         na = commit_age(s, v, age);
       }
       // Larger than Life: the reach at aux[k1..], birth bits at aux[k2..] and survival bits
-      // gg words later.
+      // gg words later. thresh 1: two states with B0 (ltl.rs `step_ltl_b0`), stored relative to
+      // the background as for B0 Life-like rules (case 8): a patch's cells carry it in bit 8, a
+      // lattice's is a word per phase and tile type at aux[zin..], at phase table[0].x before
+      // this step and table[0].y after it.
       case 10u: {
-        if (s > 1u) {
+        if (p.thresh == 1u) {
+          let r = p.k1;
+          var c = 0u;
+          var b0 = 0u;
+          var b1 = 0u;
+          if (topo[6] != 0) {
+            let lo = aux[r + i];
+            let hi = aux[r + i + 1u];
+            let at = r + u32(topo[0]) + 1u;
+            var cb = 0u;
+            for (var e = lo; e < hi; e = e + 1u) {
+              let w = src[aux[at + e]];
+              let b = (w >> 8u) & 1u;
+              c += u32((w & 0xffu) == 1u) ^ b;
+              cb += b;
+            }
+            b0 = (old >> 8u) & 1u;
+            let off = p.k2 + select(0u, p.gg, b0 == 1u);
+            b1 = (aux[off + (cb >> 5u)] >> (cb & 31u)) & 1u;
+            glow = b1 << 8u;
+          } else {
+            let nt = u32(topo[3]);
+            let w = u32(topo[1]);
+            let k = i % nt;
+            let cc = i / nt;
+            let j = i32(cc / w);
+            let base = i32(cc % w) + topo[topo[9] + j];
+            let start = aux[r + 2u * k];
+            let cnt = aux[r + 2u * k + 1u];
+            let list = r + 2u * nt;
+            let row0 = p.zin + p.table[0].x * nt;
+            for (var o = 0u; o < cnt; o = o + 1u) {
+              let e = list + (start + o) * 3u;
+              let kk = aux[e + 2u];
+              let x = resolve(base + bitcast<i32>(aux[e]), j + bitcast<i32>(aux[e + 1u]), bitcast<i32>(kk));
+              if (x >= 0) {
+                c += u32((src[u32(x)] & 0xffu) == 1u) ^ aux[row0 + kk];
+              } else if (topo[7] != 0) {
+                c += 1u;
+              } else {
+                c += aux[row0 + kk];
+              }
+            }
+            b0 = aux[row0 + k];
+            b1 = aux[p.zin + p.table[0].y * nt + k];
+          }
+          let real = u32(s != 0u) ^ b0;
+          let off = p.k2 + select(0u, p.gg, real == 1u);
+          v = ((aux[off + (c >> 5u)] >> (c & 31u)) & 1u) ^ b1;
+          if (v == 1u) {
+            if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
+          }
+        } else if (s > 1u) {
           if (s + 1u < p.states) { v = s + 1u; }
         } else {
           let c = ltl_count(i);

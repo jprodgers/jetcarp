@@ -355,7 +355,7 @@ fn golly_states(
     name: &str,
     text: &str,
     gens: u64,
-    generations: bool,
+    algo: Option<&str>,
 ) -> (Option<String>, BTreeSet<(i64, i64, u32)>) {
     let input = dir.join(format!("{name}.rle"));
     let output = dir.join(format!("{name}-golly-{gens}.rle"));
@@ -365,8 +365,8 @@ fn golly_states(
     let run = || {
         let mut p = Process::new(&cmd[0]);
         p.args(&cmd[1..]);
-        if generations {
-            p.args(["-a", "Generations"]);
+        if let Some(a) = algo {
+            p.args(["-a", a]);
         }
         p.args(["-q", "-q", "-m", &gens.to_string(), "-o"])
             .arg(&output)
@@ -539,7 +539,7 @@ fn iso_soup(dir: &Path, ci: usize, c: &IsoCase, si: usize, fill: f64) -> Result<
         if rle::header_rule(&copy).as_deref() != Some(ours.as_str()) {
             return Err(format!("{what}: Copy as RLE names it otherwise:\n{copy}"));
         }
-        let (named, back) = golly_states(dir, &format!("{name}-copy"), &copy, 0, false);
+        let (named, back) = golly_states(dir, &format!("{name}-copy"), &copy, 0, None);
         if named.as_deref() != Some(ours.as_str()) || back != normalised_cells(&copy) {
             return Err(format!("{what}: Golly reads Copy as RLE otherwise"));
         }
@@ -567,7 +567,8 @@ fn iso_soup(dir: &Path, ci: usize, c: &IsoCase, si: usize, fill: f64) -> Result<
         h.exec(Command::Step { gens: 1 }).unwrap();
         let (live, near) = our_states(h.world());
         assert!(!near, "{what}: reached the edge by generation {g}");
-        let (named, theirs) = golly_states(dir, &name, &start, g, generations);
+        let algo = generations.then_some("Generations");
+        let (named, theirs) = golly_states(dir, &name, &start, g, algo);
         if g == 1 {
             assert_eq!(
                 named.as_deref(),
@@ -844,4 +845,122 @@ fn golly_agrees_on_a_library_s_finds() {
         records.len()
     );
     assert!(checked > 0, "no find in the library is one Golly holds");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Larger than Life (#238)
+
+/// Larger than Life against Golly's: soups of rules on squares (Moore, von Neumann and the
+/// cross), two-state and with more states, and two-state rules with B0 whose background flashes
+/// or is live for good from the first step, every generation from the start, the same cells in
+/// the same states. Two-state soups are also copied with Copy as RLE, which Golly reads as the
+/// same rule (writing `C0` for two states) and the same cells.
+#[test]
+#[ignore = "needs Golly's bgolly; run on the release candidates"]
+fn golly_agrees_on_larger_than_life() {
+    let dir = common::scratch("golly-ltl");
+    // (rule, generations): ranges up to 3 grow at most 3 cells a generation, which the world
+    // holds; Bosco's Rule (range 5) settles into blobs.
+    let cases: &[(&str, u64)] = &[
+        ("R2,C2,S3-6,B3-4", 40),
+        ("R2,C2,S2-5,B3-4,NN", 40),
+        ("R3,C2,S2,B3,N+", 40),
+        ("R5,C2,S33-57,B34-45", 20),
+        ("R2,C4,S3-6,B3-4", 40),
+        // B0, flashing: no survival on the full count (24 for range 2 Moore, 12 von Neumann).
+        ("R2,C2,S0-5,B0-3", 40),
+        ("R2,C2,S0-3,6-11,B0-5,NN", 40),
+        // B0, live for good from the first step: survival on the full count.
+        ("R2,C2,S6-24,B0-2", 40),
+        ("R2,C2,S2-12,B0-4,NN", 40),
+        ("R1,C2,S2-8,B0-2", 40),
+    ];
+    let runs: Vec<(usize, usize, f64)> = (0..cases.len())
+        .flat_map(|ci| [(ci, 0, 0.35), (ci, 1, 0.5)])
+        .collect();
+    let failed: Vec<String> = runs
+        .par_iter()
+        .filter_map(|&(ci, si, fill)| {
+            let (rule, gens) = cases[ci];
+            ltl_soup(&dir, ci, rule, gens, si, fill).err()
+        })
+        .collect();
+    assert!(
+        failed.is_empty(),
+        "{} of {} soups differ from Golly:\n{}",
+        failed.len(),
+        runs.len(),
+        failed.join("\n")
+    );
+    eprintln!(
+        "golly: {} Larger than Life rules, {} soups, every generation, agree",
+        cases.len(),
+        runs.len()
+    );
+}
+
+/// One soup of a Larger than Life rule in JETCARP and in Golly, every generation to `gens`.
+fn ltl_soup(
+    dir: &Path,
+    ci: usize,
+    rule: &str,
+    gens: u64,
+    si: usize,
+    fill: f64,
+) -> Result<(), String> {
+    let cx = Ctx::interactive();
+    let name = format!("ltl-{ci}-{si}");
+    let what = format!("{rule} (soup {si}, fill {fill})");
+    let world = json!({"tiling": "square", "width": SIZE, "height": SIZE, "boundary": "dead",
+        "cas": [{"rule": rule, "seed": "empty"}]});
+    let mut h = Session::new();
+    new_world(&cx, &mut h, world);
+    let x = SIZE / 2 - SOUP as i64 / 2;
+    draw(
+        &cx,
+        &mut h,
+        json!({"pattern": soup(2000 + 10 * ci as u64 + si as u64, SOUP, SOUP, fill), "x": x, "y": x}),
+    );
+    let (start_cells, _) = our_states(h.world());
+    let cells_xy: Vec<(i64, i64)> = start_cells.iter().map(|c| (c.0, c.1)).collect();
+    let start = rle::write(&cells_xy, rule, &[]);
+    // Golly names a rule as JETCARP writes it, two states as `C0` (Golly 5.0) or `C2`.
+    let named_so = |named: &Option<String>| {
+        named.as_deref() == Some(rule)
+            || named.as_deref() == Some(rule.replace(",C2,", ",C0,").as_str())
+    };
+    let algo = Some("Larger than Life");
+    let two = !rule.contains(",C4,");
+    if two {
+        // Copy as RLE writes it, and Golly reads it as the same rule and cells.
+        let copy = rle::of_world(h.world(), &[]).map_err(|e| format!("{what}: {e}"))?;
+        let (named, back) = golly_states(dir, &format!("{name}-copy"), &copy, 0, algo);
+        if !named_so(&named) || back != normalised_cells(&copy) {
+            return Err(format!(
+                "{what}: Golly reads Copy as RLE otherwise ({named:?})"
+            ));
+        }
+    }
+    for g in 1..=gens {
+        h.exec(Command::Step { gens: 1 }).unwrap();
+        let (live, near) = our_states(h.world());
+        if near {
+            return Err(format!("{what}: reached the edge by generation {g}"));
+        }
+        let (named, theirs) = golly_states(dir, &name, &start, g, algo);
+        if g == 1 && !named_so(&named) {
+            return Err(format!("{what}: Golly names it {named:?}"));
+        }
+        if live != theirs {
+            return Err(format!(
+                "{what}: generation {g} differs ({} cells here, {} in Golly; {} only here, {} \
+                 only in Golly)",
+                live.len(),
+                theirs.len(),
+                live.difference(&theirs).count(),
+                theirs.difference(&live).count()
+            ));
+        }
+    }
+    Ok(())
 }

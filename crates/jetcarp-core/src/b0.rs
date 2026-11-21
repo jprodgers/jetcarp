@@ -1,4 +1,6 @@
-//! Life-like rules with birth on 0 (B0), stored relative to their background.
+//! Two-state rules with birth on 0 (B0), stored relative to their background: Life-like and
+//! isotropic rules, and Larger than Life (the background's rule is a [`Plain`] rule: counts on a
+//! neighbourhood, or on a Larger than Life reach).
 //!
 //! Under a B0 rule a dead cell with no live neighbours is born, so empty space does not stay
 //! empty: the whole field turns on, and unless the rule survives on every count the tiles have,
@@ -29,7 +31,7 @@
 //!   tiles have fewer neighbours, and inner tiles differ too) and need not settle, so it is kept
 //!   per cell ([`Cells`]) and stepped with the CA.
 
-use crate::topology::{LatticeGrid, Nb, Storage, Topology};
+use crate::topology::{LatticeGrid, Nb, Offset, Storage, Topology};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -42,6 +44,106 @@ pub const MAX_PHASES: usize = 1 << 16;
 pub fn next_state(alive: u8, count: u32, birth: u32, survive: u32) -> u8 {
     let m = if alive != 0 { survive } else { birth };
     (count < 32 && (m >> count) & 1 == 1) as u8
+}
+
+/// The two-state rule a background steps by: a B/S rule's counts on a neighbourhood, or a Larger
+/// than Life rule's on its reach.
+#[derive(Clone, Copy, Debug)]
+pub enum Plain<'a> {
+    Bs {
+        nb: Nb,
+        birth: u32,
+        survive: u32,
+    },
+    Ltl {
+        rule: &'a crate::ltl::LtlRule,
+        reach: &'a crate::ltl::Reach,
+    },
+}
+
+/// What a background is the background of (a [`Plain`] rule, as a value).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Key {
+    Bs {
+        nb: Nb,
+        birth: u32,
+        survive: u32,
+    },
+    /// A Larger than Life rule, by its notation.
+    Ltl(String),
+}
+
+/// The plain rule a CA's background steps by, when the CA keeps one: a two-state Life-like or
+/// isotropic rule with B0 (its counts on `nb`), or a two-state Larger than Life rule with B0 (on
+/// `reach`, the CA's own; `None` while it has none).
+pub fn plain_of<'a>(
+    rule: &'a crate::rules::Rule,
+    nb: Nb,
+    reach: Option<&'a crate::ltl::Reach>,
+) -> Option<Plain<'a>> {
+    match rule {
+        crate::rules::Rule::Ltl(l) if l.b0_kept() => Some(Plain::Ltl {
+            rule: l,
+            reach: reach?,
+        }),
+        r => r
+            .b0_masks()
+            .map(|(birth, survive)| Plain::Bs { nb, birth, survive }),
+    }
+}
+
+impl Plain<'_> {
+    pub fn key(&self) -> Key {
+        match *self {
+            Plain::Bs { nb, birth, survive } => Key::Bs { nb, birth, survive },
+            Plain::Ltl { rule, .. } => Key::Ltl(rule.notation()),
+        }
+    }
+
+    /// A cell's next state, live (`alive != 0`) or dead, with `count` live neighbours.
+    #[inline]
+    pub fn next(&self, alive: u8, count: u32) -> u8 {
+        match *self {
+            Plain::Bs { birth, survive, .. } => next_state(alive, count, birth, survive),
+            Plain::Ltl { rule, .. } => {
+                let v = if alive != 0 {
+                    &rule.survive
+                } else {
+                    &rule.birth
+                };
+                v.get(count as usize).copied().unwrap_or(false) as u8
+            }
+        }
+    }
+
+    /// Per tile type of a lattice, the neighbour slots as offsets.
+    fn offsets(&self, g: &LatticeGrid) -> Result<Vec<Vec<Offset>>, String> {
+        match *self {
+            Plain::Bs { nb, .. } => Ok(g.offsets[nb as usize].clone()),
+            Plain::Ltl { reach, .. } => match reach {
+                crate::ltl::Reach::Lattice(per) => Ok(per.clone()),
+                crate::ltl::Reach::Explicit(_) => Err("a patch's reach on a lattice".into()),
+            },
+        }
+    }
+
+    /// Live cells (`b`) among a patch cell's neighbours.
+    #[inline]
+    fn count(&self, topo: &Topology, i: usize, b: &[u8]) -> u32 {
+        match *self {
+            Plain::Bs { nb, .. } => {
+                let mut c = 0u32;
+                topo.for_each_neighbor(i, nb, |j| c += b[j] as u32);
+                c
+            }
+            Plain::Ltl { reach, .. } => match reach {
+                crate::ltl::Reach::Explicit(csr) => {
+                    csr.row(i).iter().map(|&j| b[j as usize] as u32).sum()
+                }
+                crate::ltl::Reach::Lattice(_) => 0,
+            },
+        }
+    }
 }
 
 /// A lattice's background: each tile type's state from the start (see the module notes), step by
@@ -61,16 +163,20 @@ pub struct Types {
 impl Types {
     /// The background of `(birth, survive)` with neighbourhood `nb` on lattice `g`.
     pub fn new(g: &LatticeGrid, nb: Nb, birth: u32, survive: u32) -> Result<Types, String> {
+        Types::of(g, &Plain::Bs { nb, birth, survive })
+    }
+
+    /// The background of a [`Plain`] rule with birth on 0 on lattice `g`.
+    pub fn of(g: &LatticeGrid, plain: &Plain) -> Result<Types, String> {
         let nt = g.ntypes as usize;
-        let offsets = &g.offsets[nb as usize];
+        let offsets = plain.offsets(g)?;
         let live =
             |b: &[u8], k: usize| -> u32 { offsets[k].iter().map(|o| b[o.k as usize] as u32).sum() };
         let mut seen: HashMap<Vec<u8>, usize> = HashMap::new();
         let mut phases: Vec<Vec<u8>> = Vec::new();
         // The live background, when it is the first step's for good; else the empty world.
         let ones = vec![1u8; nt];
-        let lives =
-            birth & 1 == 1 && (0..nt).all(|k| next_state(1, live(&ones, k), birth, survive) == 1);
+        let lives = plain.next(0, 0) == 1 && (0..nt).all(|k| plain.next(1, live(&ones, k)) == 1);
         let mut b = if lives { ones } else { vec![0u8; nt] };
         let tail = loop {
             if let Some(&p) = seen.get(&b) {
@@ -83,9 +189,7 @@ impl Types {
                 ));
             }
             seen.insert(b.clone(), phases.len());
-            let next = (0..nt)
-                .map(|k| next_state(b[k], live(&b, k), birth, survive))
-                .collect();
+            let next = (0..nt).map(|k| plain.next(b[k], live(&b, k))).collect();
             phases.push(std::mem::replace(&mut b, next));
         };
         Ok(Types {
@@ -140,15 +244,11 @@ const CYCLE_WORK: usize = 1 << 26;
 const CYCLE_STEPS: usize = 4096;
 
 /// One step of the plain rule on every cell of a patch.
-fn cells_next(topo: &Topology, nb: Nb, birth: u32, survive: u32, b: &[u8]) -> Vec<u8> {
+pub fn cells_next(topo: &Topology, plain: &Plain, b: &[u8]) -> Vec<u8> {
     (0..b.len())
         .into_par_iter()
         .with_min_len(crate::step::MIN_PAR)
-        .map(|i| {
-            let mut c = 0u32;
-            topo.for_each_neighbor(i, nb, |j| c += b[j] as u32);
-            next_state(b[i], c, birth, survive)
-        })
+        .map(|i| plain.next(b[i], plain.count(topo, i, b)))
         .collect()
 }
 
@@ -156,14 +256,19 @@ fn cells_next(topo: &Topology, nb: Nb, birth: u32, survive: u32, b: &[u8]) -> Ve
 /// every cell, live with its neighbours live, survives. For steppers that keep a patch's
 /// background themselves.
 pub fn patch_starts_live(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> bool {
-    cells_start(topo, nb, birth, survive).first() == Some(&1)
+    patch_starts_live_of(topo, &Plain::Bs { nb, birth, survive })
+}
+
+/// [`patch_starts_live`] for any [`Plain`] rule.
+pub fn patch_starts_live_of(topo: &Topology, plain: &Plain) -> bool {
+    cells_start(topo, plain).first() == Some(&1)
 }
 
 /// A patch's background at the start: every cell live when the first step's live background
 /// lasts (every cell, live with its neighbours live, survives), else the empty world.
-fn cells_start(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Vec<u8> {
+fn cells_start(topo: &Topology, plain: &Plain) -> Vec<u8> {
     let ones = vec![1u8; topo.len()];
-    if birth & 1 == 1 && cells_next(topo, nb, birth, survive, &ones) == ones {
+    if plain.next(0, 0) == 1 && cells_next(topo, plain, &ones) == ones {
         ones
     } else {
         vec![0; topo.len()]
@@ -172,16 +277,10 @@ fn cells_start(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Vec<u8> {
 
 /// A patch's background as `(tail, period)`, when it repeats within the budget (Brent's cycle
 /// finding, from `x0`, the start).
-fn cells_cycle(
-    topo: &Topology,
-    nb: Nb,
-    birth: u32,
-    survive: u32,
-    x0: Vec<u8>,
-) -> Option<(u64, u64)> {
+fn cells_cycle(topo: &Topology, plain: &Plain, x0: Vec<u8>) -> Option<(u64, u64)> {
     let n = topo.len();
     let budget = (CYCLE_WORK / n.max(1)).min(CYCLE_STEPS);
-    let step = |b: &[u8]| cells_next(topo, nb, birth, survive, b);
+    let step = |b: &[u8]| cells_next(topo, plain, b);
     let (mut power, mut lam) = (1usize, 1usize);
     let (mut tortoise, mut hare) = (x0.clone(), step(&x0));
     let mut steps = 1;
@@ -223,9 +322,8 @@ pub enum Kind {
 /// A B0 CA's background, for the rule and neighbourhood it was made for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Background {
-    pub nb: Nb,
-    pub birth: u32,
-    pub survive: u32,
+    /// What it is the background of.
+    pub key: Key,
     pub kind: Kind,
     /// The background's `(tail, period)` in steps from the start, when known: always on a
     /// lattice; on a patch when it repeats soon enough to be found ([`Background::new`]).
@@ -239,17 +337,22 @@ impl Background {
     /// the module notes). On a patch this looks for the background's cycle, for at most 2^26
     /// cell updates and 4,096 steps.
     pub fn new(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Result<Background, String> {
+        Background::of(topo, &Plain::Bs { nb, birth, survive })
+    }
+
+    /// The background of a [`Plain`] rule with birth on 0 on `topo`, at its start.
+    pub fn of(topo: &Topology, plain: &Plain) -> Result<Background, String> {
         let (kind, cycle, starts_live) = match &topo.storage {
             Storage::Lattice(g) => {
-                let t = Types::new(g, nb, birth, survive)?;
+                let t = Types::of(g, plain)?;
                 let cycle = (t.tail as u64, (t.phases() - t.tail) as u64);
                 let live = t.ntypes > 0 && t.uniform(0) == Some(1);
                 (Kind::Types(t), Some(cycle), live)
             }
             Storage::Explicit(_) => {
-                let start = cells_start(topo, nb, birth, survive);
+                let start = cells_start(topo, plain);
                 let live = start.first() == Some(&1);
-                let cycle = cells_cycle(topo, nb, birth, survive, start.clone());
+                let cycle = cells_cycle(topo, plain, start.clone());
                 (
                     Kind::Cells(Cells {
                         tick: 0,
@@ -261,9 +364,7 @@ impl Background {
             }
         };
         Ok(Background {
-            nb,
-            birth,
-            survive,
+            key: plain.key(),
             kind,
             cycle,
             starts_live,
@@ -273,9 +374,7 @@ impl Background {
     /// This patch background after `tick` steps, as `states`.
     pub fn with_cells(&self, tick: u64, states: Vec<u8>) -> Background {
         Background {
-            nb: self.nb,
-            birth: self.birth,
-            survive: self.survive,
+            key: self.key.clone(),
             kind: Kind::Cells(Cells { tick, states }),
             cycle: self.cycle,
             starts_live: self.starts_live,
@@ -284,11 +383,11 @@ impl Background {
 
     /// Whether this is the background of `(birth, survive)` with neighbourhood `nb`.
     pub fn is_for(&self, nb: Nb, birth: u32, survive: u32) -> bool {
-        (self.nb, self.birth, self.survive) == (nb, birth, survive)
+        self.key == Key::Bs { nb, birth, survive }
     }
 
-    fn fits(&self, nb: Nb, birth: u32, survive: u32, tick: u64) -> bool {
-        self.is_for(nb, birth, survive)
+    fn fits(&self, key: &Key, tick: u64) -> bool {
+        self.key == *key
             && match &self.kind {
                 Kind::Types(_) => true,
                 Kind::Cells(c) => c.tick == tick,
@@ -317,17 +416,25 @@ pub fn ready(
     (birth, survive): (u32, u32),
     tick: u64,
 ) -> Option<std::sync::Arc<Background>> {
-    if !slot
-        .as_deref()
-        .is_some_and(|b| b.fits(nb, birth, survive, tick))
-    {
+    ready_of(slot, topo, &Plain::Bs { nb, birth, survive }, tick)
+}
+
+/// [`ready`] for any [`Plain`] rule.
+pub fn ready_of(
+    slot: &mut Option<std::sync::Arc<Background>>,
+    topo: &Topology,
+    plain: &Plain,
+    tick: u64,
+) -> Option<std::sync::Arc<Background>> {
+    let key = plain.key();
+    if !slot.as_deref().is_some_and(|b| b.fits(&key, tick)) {
         // A patch's background at another step count keeps its cycle; its states are stepped
         // from the start, only as far as that step count's phase when the cycle is known.
         let mut b = match slot.as_deref() {
-            Some(old) if old.is_for(nb, birth, survive) => {
+            Some(old) if old.key == key => {
                 old.with_cells(0, vec![old.starts_live as u8; topo.len()])
             }
-            _ => Background::new(topo, nb, birth, survive).ok()?,
+            _ => Background::of(topo, plain).ok()?,
         };
         let steps = match b.phase_key(tick) {
             p if p >> 63 == 1 => tick,
@@ -335,7 +442,7 @@ pub fn ready(
         };
         if let Kind::Cells(c) = &mut b.kind {
             for _ in 0..steps {
-                c.states = cells_next(topo, nb, birth, survive, &c.states);
+                c.states = cells_next(topo, plain, &c.states);
             }
             c.tick = tick;
         }
@@ -425,7 +532,12 @@ mod tests {
             let (mu, lam) = want;
             let mut states = vec![vec![0u8; t.len()]];
             for _ in 0..mu + 2 * lam {
-                let next = cells_next(&t, Nb::Touch, birth, survive, states.last().unwrap());
+                let plain = Plain::Bs {
+                    nb: Nb::Touch,
+                    birth,
+                    survive,
+                };
+                let next = cells_next(&t, &plain, states.last().unwrap());
                 states.push(next);
             }
             for a in 0..states.len() as u64 {

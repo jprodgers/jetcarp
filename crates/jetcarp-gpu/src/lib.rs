@@ -281,8 +281,13 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
                 p.table[0][k / 4] |= (b as u32) << (8 * (k % 4));
             }
         }
-        // The reach and tables go to the aux buffer (see `GpuSim::prepare_aux`).
-        Rule::Ltl(ref l) => (p.rule, p.states) = (R_LTL, l.states as u32),
+        // The reach and tables go to the aux buffer (see `GpuSim::prepare_aux`). `thresh` 1: two
+        // states with B0, stored relative to the background (on a lattice its states in the aux
+        // at `zin`, its phases in table[0].xy; on a patch in bit 8 of the cells' words).
+        Rule::Ltl(ref l) => {
+            (p.rule, p.states) = (R_LTL, l.states as u32);
+            p.thresh = l.b0_kept() as u32;
+        }
         Rule::ForestFire { p: grow, f: strike } => {
             p.rule = R_FOREST;
             let (g, s) = (forest_threshold(grow), forest_threshold(strike));
@@ -305,9 +310,15 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
 }
 
 /// Whether these parameters are a two-state B0 rule stored against a lattice background: a B0
-/// Life-like rule, or an isotropic one with B0.
+/// Life-like rule, or an isotropic or Larger than Life one with B0.
 fn lattice_b0(p: &Params) -> bool {
-    p.rule == R_B0 || (p.rule == R_ISO && p.thresh == 1)
+    p.rule == R_B0 || ((p.rule == R_ISO || p.rule == R_LTL) && p.thresh == 1)
+}
+
+/// Whether these parameters are a two-state B0 rule a patch's cells can carry the background of
+/// (in bit 8): a B0 Life-like rule, or a Larger than Life one with B0.
+fn patch_b0(p: &Params) -> bool {
+    p.rule == R_B0 || (p.rule == R_LTL && p.thresh == 1)
 }
 
 /// Whether the tests were told a usable GPU adapter must be there: `JETCARP_REQUIRE_GPU=1`. CI
@@ -432,7 +443,8 @@ struct GpuField {
     height: bool,
     /// The JACA CA (by id) whose annihilation glow the cells carry in bits 8-15.
     glow_owner: Option<u32>,
-    /// The B0 Life-like CA (by id) on a patch whose background the cells carry in bit 8.
+    /// The B0 CA (by id: Life-like or Larger than Life) on a patch whose background the cells
+    /// carry in bit 8.
     bg_owner: Option<u32>,
 }
 
@@ -448,10 +460,13 @@ enum AuxKey {
     /// A B0 Life-like rule's background on a lattice (neighbourhood, birth, survival): a word per
     /// phase and tile type, its state ([`jetcarp_core::b0::Types`]).
     Background(u8, u32, u32),
+    /// A two-state Larger than Life rule's background with B0 on a lattice (the rule's
+    /// notation), laid out as [`AuxKey::Background`].
+    LtlBackground(String),
 }
 
 /// The CAs whose cells a field carries more than states for: the JACA CA's glow, and the B0
-/// Life-like CA's background on a patch (`check_plan` allows one of each).
+/// CA's background on a patch (`check_plan` allows one of each).
 fn field_owners(world: &World, f: usize) -> (Option<u32>, Option<u32>) {
     let explicit = matches!(world.topo.storage, Storage::Explicit(_));
     let on = |want: &dyn Fn(&Rule) -> bool| {
@@ -463,28 +478,36 @@ fn field_owners(world: &World, f: usize) -> (Option<u32>, Option<u32>) {
     };
     (
         on(&|r| matches!(r, Rule::Jaca(_))),
-        on(&|r| explicit && is_b0_life(r)),
+        on(&|r| explicit && rule_params(r).is_ok_and(|p| patch_b0(&p))),
     )
 }
 
-/// A Life-like rule with birth on 0.
-fn is_b0_life(rule: &Rule) -> bool {
-    matches!(rule, Rule::LifeLike { birth, .. } if birth & 1 == 1)
-}
-
-/// A two-state B0 rule's background on a lattice (a B0 Life-like rule, or an isotropic one).
+/// A two-state B0 rule's background on a lattice (a B0 Life-like rule, or an isotropic or Larger
+/// than Life one with B0).
 fn b0_types(topo: &Topology, ca: &jetcarp_core::world::CaInstance) -> Result<Types, String> {
-    let (Some((birth, survive)), Some(g)) = (ca.rule.b0_masks(), topo.lattice()) else {
+    let Some(g) = topo.lattice() else {
+        return Err("not a two-state B0 rule on a lattice".into());
+    };
+    // A Larger than Life rule's reach: the CA's own, else made here.
+    let made;
+    let reach = match &ca.rule {
+        Rule::Ltl(l) if ca.reach.is_none() => {
+            made = jetcarp_core::ltl::reach(topo, l.hood, l.range)?;
+            Some(&made)
+        }
+        _ => ca.reach.as_deref(),
+    };
+    let Some(plain) = jetcarp_core::b0::plain_of(&ca.rule, ca.nb, reach) else {
         return Err("not a two-state B0 rule on a lattice".into());
     };
     // The world's own, when it has one for this rule and neighbourhood.
     if let Some(b) = ca.background.as_deref()
-        && (b.nb, b.birth, b.survive) == (ca.nb, birth, survive)
+        && b.key == plain.key()
         && let jetcarp_core::b0::Kind::Types(t) = &b.kind
     {
         return Ok(t.clone());
     }
-    Types::new(g, ca.nb, birth, survive)
+    Types::of(g, &plain)
 }
 
 /// A Larger than Life reach as the shader reads it, with the most cells any cell reaches.
@@ -823,7 +846,7 @@ impl GpuSim {
             if lattice_b0(&p) && p.rule == R_ISO {
                 b0_types(&world.topo, ca).map_err(|e| format!("{}: {e}", cpu_only()))?;
             }
-            if p.rule == R_B0 {
+            if patch_b0(&p) {
                 match world.topo.storage {
                     Storage::Lattice(_) => {
                         b0_types(&world.topo, ca).map_err(|e| format!("{}: {e}", cpu_only()))?;
@@ -832,9 +855,7 @@ impl GpuSim {
                     Storage::Explicit(_) => {
                         if std::mem::replace(&mut b0[ca.field], true) {
                             return Err(
-                                "two B0 Life-like CAs running on one field of a patch run on \
-                                 the CPU"
-                                    .into(),
+                                "two B0 CAs running on one field of a patch run on the CPU".into(),
                             );
                         }
                     }
@@ -964,6 +985,9 @@ impl GpuSim {
                     let sec = self.reach(&world.topo, l.hood, l.range)?;
                     add(AuxKey::Reach(l.hood as u8, l.range));
                     add(AuxKey::Table(ltl_table(l, sec.max)));
+                    if !explicit && l.b0_kept() {
+                        add(AuxKey::LtlBackground(l.notation()));
+                    }
                 }
                 Rule::Sandpile if explicit => add(AuxKey::Open),
                 Rule::Jaca(ref j) if j.blast > 0 => blast = true,
@@ -1005,6 +1029,15 @@ impl GpuSim {
                     let g = world.topo.lattice().ok_or("a patch has no tile types")?;
                     let nb = [jetcarp_core::Nb::Touch, jetcarp_core::Nb::Edge][*nb as usize];
                     let t = Types::new(g, nb, *birth, *survive)?;
+                    words.extend(t.states.iter().map(|&s| s as u32));
+                }
+                AuxKey::LtlBackground(rule) => {
+                    let ca = world
+                        .cas
+                        .iter()
+                        .find(|c| c.enabled && c.rule.notation() == *rule)
+                        .ok_or("no CA runs this rule")?;
+                    let t = b0_types(&world.topo, ca)?;
                     words.extend(t.states.iter().map(|&s| s as u32));
                 }
             }
@@ -1363,16 +1396,15 @@ impl GpuSim {
             let background = gf.bg_owner.and_then(|id| {
                 let topo = world.topo.clone();
                 let ca = world.cas.iter_mut().find(|c| c.id == id)?;
-                let Rule::LifeLike { birth, survive } = ca.rule else {
-                    return None;
-                };
-                jetcarp_core::b0::ready(
-                    &mut ca.background,
-                    &topo,
-                    ca.nb,
-                    (birth, survive),
-                    ca.ticks,
-                )
+                if let Rule::Ltl(l) = &ca.rule
+                    && ca.reach.is_none()
+                {
+                    ca.reach = jetcarp_core::ltl::reach(&topo, l.hood, l.range)
+                        .ok()
+                        .map(Arc::new);
+                }
+                let plain = jetcarp_core::b0::plain_of(&ca.rule, ca.nb, ca.reach.as_deref())?;
+                jetcarp_core::b0::ready_of(&mut ca.background, &topo, &plain, ca.ticks)
             });
             let bg = background.as_deref().and_then(|b| match &b.kind {
                 jetcarp_core::b0::Kind::Cells(c) => Some(&c.states),
@@ -1452,6 +1484,11 @@ impl GpuSim {
                 p.k1 = at(&AuxKey::Reach(l.hood as u8, l.range));
                 p.k2 = at(&AuxKey::Table(table.clone()));
                 p.gg = (table.len() / 2) as u32;
+                // With B0 on a lattice, the background's states (its phases go in table[0].xy
+                // per step); on a patch the cells carry it.
+                if l.b0_kept() {
+                    p.zin = at(&AuxKey::LtlBackground(l.notation()));
+                }
             }
             Rule::Sandpile => {
                 p.k2 = world.topo.center_cell() as u32;
@@ -1491,7 +1528,7 @@ impl GpuSim {
             .iter()
             .map(|&ci| self.ca_params(world, ci))
             .collect();
-        // B0 Life-like CAs on a lattice: their backgrounds, for each step's phases.
+        // Two-state B0 CAs on a lattice: their backgrounds, for each step's phases.
         let types: Vec<Option<Types>> = enabled
             .iter()
             .map(|&ci| {
@@ -1573,6 +1610,12 @@ impl GpuSim {
                         if let Some(t) = &types[ei] {
                             p.k1 = t.phase(ticks) as u32;
                             p.k2 = t.phase(ticks + 1) as u32;
+                        }
+                    }
+                    R_LTL => {
+                        if let Some(t) = &types[ei] {
+                            p.table[0][0] = t.phase(ticks) as u32;
+                            p.table[0][1] = t.phase(ticks + 1) as u32;
                         }
                     }
                     R_MARGOLUS => p.k2 = (ticks & 1) as u32,
@@ -2018,7 +2061,8 @@ impl GpuSim {
                     .bg_owner
                     .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
                 if let Some(ca) = bg_owner
-                    && let Rule::LifeLike { birth, survive } = ca.rule
+                    && let Some(plain) =
+                        jetcarp_core::b0::plain_of(&ca.rule, ca.nb, ca.reach.as_deref())
                 {
                     let bit = |&x: &u32| ((x >> 8) & 1) as u8;
                     let states: Vec<u8> = if small {
@@ -2027,8 +2071,8 @@ impl GpuSim {
                         words.par_iter().map(bit).collect()
                     };
                     let made = match ca.background.as_deref() {
-                        Some(b) if b.is_for(ca.nb, birth, survive) => None,
-                        _ => jetcarp_core::b0::Background::new(&topo, ca.nb, birth, survive).ok(),
+                        Some(b) if b.key == plain.key() => None,
+                        _ => jetcarp_core::b0::Background::of(&topo, &plain).ok(),
                     };
                     let next = made
                         .as_ref()

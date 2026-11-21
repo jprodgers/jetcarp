@@ -139,7 +139,9 @@ fn world_params(rule: &Rule, tables: &mut Vec<u32>, words: u32) -> Option<WorldP
             );
             tables.extend_from_slice(&w);
         }
-        Rule::Ltl(l) => {
+        // Two-state rules with B0 are kept relative to their background (`jetcarp_core::ltl`),
+        // which the batch kernel does not do: those run in the processor's batches.
+        Rule::Ltl(l) if !l.b0_kept() => {
             let LtlRule {
                 states,
                 birth,

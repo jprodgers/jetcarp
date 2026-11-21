@@ -1043,9 +1043,9 @@ fn test_world(grid: &Grid, rule: &Rule, nb: Nb, seed: &SeedSpec, drop: u32) -> O
 
 /// Kernels a family's random draws may miss, always checked where they run: a B0 rule, JACA with
 /// a blast, Margolus blocks and isotropic rules (square grids; two states, B0 and Generations),
-/// Larger than Life, forest fire and sandpiles (one with no drop, one dropping grains, one whose
-/// drop saturates the centre cell: #20), each with a seed that sets it going and its grains
-/// dropped per generation. Add a line here for a variant the draws may not reach.
+/// Larger than Life (and two states with B0), forest fire and sandpiles (one with no drop, one
+/// dropping grains, one whose drop saturates the centre cell: #20), each with a seed that sets it
+/// going and its grains dropped per generation. Add a line here for a variant the draws may not reach.
 fn extra_rules() -> Vec<(&'static str, SeedSpec, u32)> {
     vec![
         ("B013/S1", SeedSpec::Random { density: 0.35 }, 0),
@@ -1059,6 +1059,7 @@ fn extra_rules() -> Vec<(&'static str, SeedSpec, u32)> {
             0,
         ),
         ("R2,C3,S5-9,B7-8", SeedSpec::Random { density: 0.4 }, 0),
+        ("R2,C2,S0-5,B0-3", SeedSpec::Random { density: 0.35 }, 0),
         ("ForestFire 0.05/0.001", SeedSpec::RandomStates, 0),
         ("Sandpile", SeedSpec::Pile { grains: 2_000 }, 0),
         ("Sandpile", SeedSpec::Pile { grains: 2_000 }, 3),

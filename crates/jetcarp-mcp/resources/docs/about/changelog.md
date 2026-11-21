@@ -176,6 +176,24 @@ day later (0.4.2: 17 November here, 18 November there).
   ([B0 rules](../automata/life-like.md#b0-rules),
   [#238](https://github.com/jprodgers/jetcarp/issues/238))
 
+- **Larger than Life rules with birth on 0 are kept against their background, as Golly runs them.**
+  A two-state rule with birth on 0, such as `R2,C2,S0-5,B0-3`, ran as written, so at its first step
+  every cell with no live cell in reach was born and the whole field turned on, where Golly keeps
+  the rule relative to its background. JETCARP now keeps it as it keeps B0 Life-like rules: each
+  cell against the rule's run from an empty world, starting on the live background when that is live
+  for good from the first step (survival on every count the reach holds). JETCARP and Golly agree
+  generation for generation from generation 0, whether the background flashes or is live for good.
+  This holds on lattices and patches, on the CPU and the GPU; the exploratory search's GPU batches
+  leave these rules to the processor's. **Scenes from earlier versions with such a rule replay to
+  other states.** `ltl` goes to version 3, so a library flags Larger than Life records for
+  `jetcarp library reverify`; no Quick Start entry has such a rule, and no pinned state moved. Rules
+  with more than two states and birth on 0 still run as written (Golly refuses them). *Copy as RLE*
+  now writes two-state Larger than Life rules on the square grid, which Golly reads as the same rule
+  and cells, and their B0 rules where Golly reads them the same; a test runs them against Golly from
+  generation 0.
+  ([Larger than Life](../automata/larger-than-life.md#rules-with-birth-on-0),
+  [#238](https://github.com/jprodgers/jetcarp/issues/238))
+
 - **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
   64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
   (the random-number generator, a turmite's internal state, a layered rule's layers, a forest fire's

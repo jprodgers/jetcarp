@@ -105,6 +105,23 @@ fn cases() -> Vec<Case> {
             soup(0.5, 1, 1),
             24,
         ),
+        // Two states with B0 (#238): a background that flashes (with dead edges, past which
+        // the background is), and one live for good from the start (survival on all 24 cells of
+        // a range 2 Moore reach).
+        c(
+            "ltl:b0",
+            rect("square", 32, 32, Dead),
+            "R2,C2,S0-3,6-11,B0-5,NN",
+            soup(0.35, 1, 1),
+            48,
+        ),
+        c(
+            "ltl:live",
+            rect("square", 32, 32, Wrap),
+            "R2,C2,S0-19,22-24,B0-17,22-24",
+            soup(0.35, 1, 1),
+            48,
+        ),
         c(
             "elementary",
             rect("square", 64, 48, Dead),

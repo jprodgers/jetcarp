@@ -124,6 +124,19 @@ AntiLife (`B0123478/S01234678`) and InverseLife (`B0123478/S34678`), both live f
 square grid; the version change alone moved the hashes of the other B0 entries, whose states are
 unchanged.
 
+## Larger than Life rules with birth on 0
+
+JETCARP 0.4.3 also began keeping two-state [Larger than Life](../automata/larger-than-life.md#rules-with-birth-on-0)
+rules with birth on 0 relative to their background, as B0 Life-like rules are, so they match Golly
+from generation 0 (#238). Before, such a rule ran as written, and at its first step every cell with
+no live cell in reach was born. So a scene from 0.4.2 or earlier with such a rule replays to other
+states, and its recorded hash no longer matches: the family, `ltl`, went to version 3, and a
+library flags Larger than Life records for `jetcarp library reverify`. Larger than Life rules
+without birth on 0, and those with more than two states, replay as before. No Quick Start entry has
+such a rule, so no pinned state moved: the version change alone moved the hashes of the eight Larger
+than Life entries (their version 1 hashes, of the states alone, are the same before and after), and
+the rule-semantics scenes gained two, `ltl:b0` and `ltl:live`.
+
 ## Pinned geometry and dynamics
 
 Three tests pin JETCARP's behaviour to recorded values, so that a change to a tiling or a rule cannot
@@ -175,7 +188,8 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   B0 Life-like rules (from an odd step count too), Margolus blocks on even and odd sides,
   isotropic rules (two-state, Generations and B0, from an odd step count too, and the isotropic
   tables of B/S rules against the B/S stepper),
-  Larger than Life on lattices and patches,
+  Larger than Life on lattices and patches (two-state rules with B0 too, from an odd step count,
+  and the CPU going on from where the GPU stopped),
   the forest fire (at probabilities 0 and 1, and past 2^32 steps),
   sandpiles (grains dropped and lost, open patch edges, piles past 2^32 grains),
   on lattices and patches with every edge, through scripts, reseeds and period detection, and

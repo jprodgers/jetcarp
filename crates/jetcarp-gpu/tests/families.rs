@@ -748,6 +748,79 @@ fn ltl_on_patches() {
     compare_gpu(&mut sim, &sc, &[1, 9, 64, 300], "two LtL CAs in a script");
 }
 
+/// Two-state Larger than Life rules with B0 (#238), kept relative to their background on the GPU
+/// as on the CPU: backgrounds that flash and ones live for good from the start, on lattices with
+/// every edge (one background state per tile type) and on patches (the cells carry it). Also from
+/// an odd tick, with several steps per generation, and the CPU going on from where the GPU
+/// stopped (the background read back).
+#[test]
+fn ltl_b0_rules() {
+    let Some(mut sim) = gpu() else { return };
+    let mut cases: Vec<(TilingSpec, &str, &[u64])> = vec![];
+    for &(fam, w, h) in LATTICES {
+        for b in BOUNDARIES {
+            for rule in [
+                "R2,C2,S0-5,B0-3",
+                "R2,C2,S6-24,B0-2",
+                "R2,C2,S2-12,B0-4,NN",
+                "R1,C2,S2-8,B0-2",
+                "R3,C2,S0-48,B0-9",
+            ] {
+                cases.push((TilingSpec::rect(fam, w, h, b), rule, CHUNKS));
+            }
+        }
+    }
+    for (fam, level) in [("penrose-rhomb", 4), ("hat", 3), ("spectre", 3)] {
+        for rule in [
+            "R2,C2,S0-5,B0-3",
+            "R2,C2,S3-99,B0-2",
+            "R1,C2,S0-3,B0-2",
+            "R2,C2,S2-12,B0-4,NN",
+        ] {
+            let t = TilingSpec::new(fam).with_size(SizeSpec::Level(level));
+            cases.push((t, rule, &[1, 5, 40, 150]));
+        }
+    }
+    for (t, rule, chunks) in cases {
+        let what = format!("{rule} on {} {:?}", t.family, t.boundary);
+        let sc = scene(
+            t.clone(),
+            vec![ca(rule, None, SeedSpec::Random { density: 0.3 })],
+        );
+        compare_gpu(&mut sim, &sc, chunks, &what);
+        // 37 generations on the GPU, then 20 on the CPU, equal 57 on the CPU.
+        let mut cpu = World::from_scene(&sc).unwrap();
+        let mut gw = World::from_scene(&sc).unwrap();
+        cpu.apply(Command::Step { gens: 57 }).unwrap();
+        assert_eq!(sim.step_mixed(&mut gw, 37).unwrap().cpu_gens, 0, "{what}");
+        gw.apply(Command::Step { gens: 20 }).unwrap();
+        same(&cpu, &gw, &format!("{what}: the CPU after the GPU"));
+        // Three steps a generation, from tick 3 (a generation on the CPU first).
+        let sc = scene(
+            t,
+            vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(3)],
+        );
+        let mut cpu = World::from_scene(&sc).unwrap();
+        let mut gw = World::from_scene(&sc).unwrap();
+        for w in [&mut cpu, &mut gw] {
+            w.apply(Command::Step { gens: 1 }).unwrap();
+        }
+        let what = format!("{what} x3 from tick 3");
+        let (_, on_cpu) = compare_worlds(&mut sim, &mut cpu, &mut gw, &[1, 2, 7, 30], &what);
+        assert_eq!(on_cpu, 0, "{what}");
+    }
+    // A patch's cells carry one background, so two B0 CAs on one field run on the CPU.
+    let sc = scene(
+        TilingSpec::new("hat").with_size(SizeSpec::Level(2)),
+        vec![
+            ca("R2,C2,S0-5,B0-3", None, SeedSpec::Random { density: 0.3 }),
+            ca("B0/S8", None, SeedSpec::Random { density: 0.3 }),
+        ],
+    );
+    let w = World::from_scene(&sc).unwrap();
+    assert!(sim.check(&w).is_err(), "two B0 CAs on a patch's field");
+}
+
 // ---------------------------------------------------------------------------------------------
 // Forest fire
 

@@ -1600,11 +1600,20 @@ impl World {
         };
         // A two-state B0 rule is stored relative to its background, which a lattice works out
         // on its unit cell (and refuses if it takes too long to repeat).
-        let background = match rule.b0_masks() {
-            Some((birth, survive)) => Some(Arc::new(crate::b0::Background::new(
+        let mut reach = None;
+        let background = match (&rule, rule.b0_masks()) {
+            (_, Some((birth, survive))) => Some(Arc::new(crate::b0::Background::new(
                 &self.topo, nb, birth, survive,
             )?)),
-            None => None,
+            // A Larger than Life rule with B0: its background over its reach.
+            (Rule::Ltl(l), None) if l.b0_kept() => {
+                let r = Arc::new(crate::ltl::reach(&self.topo, l.hood, l.range)?);
+                let plain = crate::b0::Plain::Ltl { rule: l, reach: &r };
+                let b = crate::b0::Background::of(&self.topo, &plain)?;
+                reach = Some(r);
+                Some(Arc::new(b))
+            }
+            _ => None,
         };
         let id = match spec.id {
             Some(id) if !self.cas.iter().any(|c| c.id == id) => id,
@@ -1662,7 +1671,7 @@ impl World {
             agents: vec![],
             cursor: 0,
             table,
-            reach: None,
+            reach,
             kernel: None,
             layers: None,
             noise,
@@ -2191,6 +2200,11 @@ impl World {
                     .background
                     .as_deref()
                     .filter(|b| b.is_for(c.nb, birth, survive))
+                    .map_or((1 << 63) | c.ticks, |b| b.phase_key(c.ticks)),
+                (Rule::Ltl(l), None) if l.b0_kept() => c
+                    .background
+                    .as_deref()
+                    .filter(|b| b.key == crate::b0::Key::Ltl(l.notation()))
                     .map_or((1 << 63) | c.ticks, |b| b.phase_key(c.ticks)),
                 _ => 0,
             })

@@ -9,9 +9,11 @@ use rayon::prelude::*;
 pub(crate) const MIN_PAR: usize = 4096;
 
 /// Rules whose steps advance `CaInstance::ticks` in [`step_ca`] (by one per step): two-state
-/// B0 rules (Life-like and isotropic), forest fire, and Margolus blocks.
+/// B0 rules (Life-like, isotropic and Larger than Life), forest fire, and Margolus blocks.
 pub(crate) fn counts_ticks(rule: &Rule) -> bool {
-    rule.b0_masks().is_some() || matches!(rule, Rule::ForestFire { .. } | Rule::Margolus(_))
+    rule.b0_masks().is_some()
+        || matches!(rule, Rule::Ltl(l) if l.b0_kept())
+        || matches!(rule, Rule::ForestFire { .. } | Rule::Margolus(_))
 }
 
 pub(crate) fn step_ca(topo: &Topology, ca: &mut CaInstance, f: &mut Field, first_of_gen: bool) {
@@ -87,7 +89,12 @@ pub(crate) fn step_ca(topo: &Topology, ca: &mut CaInstance, f: &mut Field, first
                     .map(std::sync::Arc::new);
             }
             if let Some(r) = &ca.reach {
-                crate::ltl::step_ltl(topo, l, r, f)
+                if l.b0_kept() {
+                    ca.ticks += 1;
+                    crate::ltl::step_ltl_b0(topo, l, r, ca.ticks, &mut ca.background, f)
+                } else {
+                    crate::ltl::step_ltl(topo, l, r, f)
+                }
             }
         }
         Rule::VonNeumann => {
@@ -261,7 +268,7 @@ fn step_b0(
 /// Ages for B0 rules, from the stored states: 1 for a stored cell that turns on, one more each
 /// step it stays on.
 #[inline]
-fn b0_age(s: u8, v: u8, age: u16) -> u16 {
+pub(crate) fn b0_age(s: u8, v: u8, age: u16) -> u16 {
     if v == 1 {
         if s == 1 {
             age.saturating_add(1).min(65000)

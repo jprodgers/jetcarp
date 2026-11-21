@@ -4,7 +4,8 @@
 //! Only what both programs read the same way for now: two-state B/S rules on the square grid
 //! (Moore, or von Neumann written with a `V`) and on JETCARP's hexagon grid (`H`), and two-state
 //! isotropic rules in Hensel's notation on the square grid (`B2-a/S12`, named as Golly names
-//! them). Everything else is refused with its reason. The rest of the exchange with Golly and
+//! them), and two-state Larger than Life rules on the square grid (`R2,C2,S3-6,B3-4,NN`, which
+//! Golly's Larger than Life reads). Everything else is refused with its reason. The rest of the exchange with Golly and
 //! LifeViewer is #152.
 //!
 //! **B0 rules.** JETCARP keeps a B0 rule's cells relative to its background, as Golly does
@@ -45,7 +46,9 @@ pub fn header_rule(text: &str) -> Option<String> {
         .find(|l| l.starts_with("x ") || l.starts_with("x="))?;
     let at = line.find("rule")?;
     let rest = line[at + 4..].trim_start().strip_prefix('=')?;
-    Some(rest.split(',').next()?.trim().to_string()).filter(|r| !r.is_empty())
+    // The rule is the line's last field, and may hold commas itself (Larger than Life's
+    // `R2,C2,S3-6,B3-4`).
+    Some(rest.trim().to_string()).filter(|r| !r.is_empty())
 }
 
 /// Whether an RLE text's rule is written for Golly's hexagonal neighbourhood (`…H`).
@@ -171,18 +174,36 @@ pub fn of_world(w: &World, comments: &[String]) -> Result<String, String> {
     let two_state = match &ca.rule {
         Rule::LifeLike { .. } => true,
         Rule::Isotropic(r) => r.states <= 2,
+        Rule::Ltl(l) => l.states <= 2,
         _ => false,
     };
     if !two_state {
         return Err(format!(
-            "Copy as RLE writes two-state B/S and isotropic rules for now; {} is another kind",
+            "Copy as RLE writes two-state B/S, isotropic and Larger than Life rules for now; {} \
+             is another kind",
             ca.rule.notation()
         ));
     }
-    if let Some((birth, survive)) = ca.rule.b0_masks() {
-        // On these grids every tile has the same neighbours, so the background is one state.
+    if hex && matches!(ca.rule, Rule::Ltl(_)) {
+        return Err(
+            "Copy as RLE writes Larger than Life rules on the square grid only for now: Golly's \
+             hexagonal neighbourhood is laid out otherwise"
+                .into(),
+        );
+    }
+    // A B0 rule's background (a Larger than Life rule's over its reach, the CA's own or made
+    // here): on these grids every tile has the same neighbours, so one state.
+    let made;
+    let reach = match &ca.rule {
+        Rule::Ltl(l) if ca.reach.is_none() => {
+            made = jetcarp_core::ltl::reach(&w.topo, l.hood, l.range)?;
+            Some(&made)
+        }
+        _ => ca.reach.as_deref(),
+    };
+    if let Some(plain) = jetcarp_core::b0::plain_of(&ca.rule, ca.nb, reach) {
         let g = w.topo.lattice().ok_or("this tiling has no lattice")?;
-        let t = jetcarp_core::b0::Types::new(g, ca.nb, birth, survive)?;
+        let t = jetcarp_core::b0::Types::of(g, &plain)?;
         if t.state(t.phase(ca.ticks), 0) != t.state(0, 0) {
             return Err(format!(
                 "this B0 rule's background flashes, and Golly reads a pattern against the \
@@ -193,7 +214,11 @@ pub fn of_world(w: &World, comments: &[String]) -> Result<String, String> {
         }
     }
     let mut rule = notation_on(&ca.rule, ca.nb);
-    if hex {
+    if let Rule::Ltl(l) = &ca.rule {
+        // Golly's Larger than Life reads JETCARP's form (`R2,C2,S3-6,B3-4,NN`), with the
+        // neighbourhood in the rule.
+        rule = l.notation();
+    } else if hex {
         // On hexagons the edge and touch neighbours are the same six.
         rule = rule.trim_end_matches('V').to_string();
         rule.push('H');
@@ -271,6 +296,30 @@ mod tests {
         let w = world("square", "B01e/S8", &[(3, 3), (4, 3)]);
         let t = of_world(&w, &[]).unwrap();
         assert_eq!(header_rule(&t).as_deref(), Some("B01e/S8"), "{t}");
+    }
+
+    #[test]
+    fn larger_than_life_is_written_as_golly_reads_it() {
+        // The HROT form, neighbourhood in the rule; Golly reads the rule to the end of the line.
+        let cells = [(6, 5), (7, 6), (5, 7), (6, 7), (7, 7)];
+        let t = of_world(&world("square", "R2,C2,S3-6,B3-4,NN", &cells), &[]).unwrap();
+        assert_eq!(t, "x = 3, y = 3, rule = R2,C2,S3-6,B3-4,NN\nbo$2bo$3o!\n");
+        assert_eq!(header_rule(&t).as_deref(), Some("R2,C2,S3-6,B3-4,NN"));
+        // More states, and hexagons, are refused.
+        let e = of_world(&world("square", "R2,C3,S3-6,B3-4", &cells), &[]).unwrap_err();
+        assert!(e.contains("Larger than Life"), "{e}");
+        let e = of_world(&world("hex", "R2,C2,S3-6,B3-4", &cells), &[]).unwrap_err();
+        assert!(e.contains("square grid only"), "{e}");
+        // With B0: a flashing background at even generations, one live for good at any.
+        let mut w = world("square", "R2,C2,S0-5,B0-3", &cells);
+        assert!(of_world(&w, &[]).is_ok());
+        w.apply(jetcarp_core::Command::Step { gens: 1 }).unwrap();
+        let e = of_world(&w, &[]).unwrap_err();
+        assert!(e.contains("even generations"), "{e}");
+        let mut w = world("square", "R2,C2,S6-24,B0-2", &cells);
+        w.apply(jetcarp_core::Command::Step { gens: 1 }).unwrap();
+        let t = of_world(&w, &[]).unwrap();
+        assert_eq!(header_rule(&t).as_deref(), Some("R2,C2,S6-24,B0-2"));
     }
 
     #[test]
@@ -373,6 +422,10 @@ mod tests {
         assert_eq!(
             header_rule("x=1,y=1,rule=B2/S34H\no!").as_deref(),
             Some("B2/S34H")
+        );
+        assert_eq!(
+            header_rule("x = 2, y = 1, rule = R2,C0,S3-6,B3-4,NN\n2o!").as_deref(),
+            Some("R2,C0,S3-6,B3-4,NN")
         );
         assert_eq!(header_rule("bo$2bo$3o!"), None);
     }
