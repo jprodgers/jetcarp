@@ -3,7 +3,8 @@
 //! 60 generations a second and drawn offscreen at 60 frames a second of simulated time; every frame
 //! read back and measured on the processor. Both ways the painter can draw: into a target it reads
 //! in place, and into its own texture, copied to the target. Each test skips itself when the
-//! machine has no GPU adapter. `JETCARP_STROBE_RECORD=DIR` also writes each frame as a PNG there,
+//! machine has no usable GPU adapter, and fails instead under `JETCARP_REQUIRE_GPU=1`
+//! ([`jetcarp_gpu::no_gpu`]). `JETCARP_STROBE_RECORD=DIR` also writes each frame as a PNG there,
 //! for IRIS.
 
 use jetcarp_core::strobe::flash::FlashMeter;
@@ -22,21 +23,36 @@ const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const W: u32 = 320;
 const H: u32 = 240;
 
+/// The GPU, or None after [`jetcarp_gpu::no_gpu`] (which fails the test instead under
+/// `JETCARP_REQUIRE_GPU=1`).
 fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
+    const WHAT: &str = "the strobe guard's painter tests";
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let choice =
-        jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None).ok()?;
+        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
+            Ok(c) => c,
+            Err(e) => {
+                jetcarp_gpu::no_gpu(WHAT, &e);
+                return None;
+            }
+        };
     if let Err(e) = &choice.usable {
-        eprintln!("skipped: {e}");
+        jetcarp_gpu::no_gpu(WHAT, e);
         return None;
     }
-    pollster::block_on(
+    match pollster::block_on(
         choice
             .adapter
             .request_device(&wgpu::DeviceDescriptor::default()),
-    )
-    .ok()
+    ) {
+        Ok(d) => Some(d),
+        Err(e) => {
+            let name = &choice.info.name;
+            jetcarp_gpu::no_gpu(WHAT, &format!("{name} refused a device: {e}"));
+            None
+        }
+    }
 }
 
 /// A stage showing a Margolus Tron field on an empty background (it flips every generation) at
