@@ -1014,8 +1014,10 @@ impl Core {
         self.build_screens()
     }
 
-    /// Reads the settings file again, and the shared GPU setting.
+    /// Reads the settings file again, the shared GPU setting, and this machine's limits (its
+    /// cells and memory may have been changed in Tools → This computer… or `jetcarp limits`).
     pub fn reload(&mut self) -> Result<(), String> {
+        jetcarp_core::machine::reload();
         let (settings, warning) = HostSettings::load();
         if let Some(w) = warning {
             self.note(w);

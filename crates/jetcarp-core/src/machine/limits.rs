@@ -677,8 +677,7 @@ impl Limits {
             (self.ai_world_bytes() / LIFE_CELL_BYTES).max(AI_SMALL_CELLS)
         };
         c.min(self.world_bytes() / LIFE_CELL_BYTES)
-            .min(CELL_CEILING)
-            .max(1)
+            .clamp(1, CELL_CEILING)
     }
 
     /// Refuse a world that needs more memory than one may take here.

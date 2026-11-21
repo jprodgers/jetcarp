@@ -121,8 +121,9 @@ JETCARP, from its hardware: Tools → This computer…, or `jetcarp limits`)
 
 The MCP tools (and the scripts they run) work within **an AI's share** of JETCARP's limits. It is
 **small** by default: worlds of up to 4 million cells, as before 0.4.3, on any computer. Raise it,
-up to **all of it**, when an AI should check on a massive grid. The tools' descriptions are written
-from the live values, and `reference {"what": "machine"}` shows an AI this computer, its score, its
+up to **all of it**, when an AI should check on a massive grid; the MCP server takes a new share
+when it next starts (`jetcarp mcp`, or the app for its AI control). The tools' descriptions are
+written from the live values, and `reference {"what": "machine"}` shows an AI this computer, its score, its
 limits and its own. An AI can read the score; it can never run the benchmark.
 
 ## The benchmark and the score
@@ -202,7 +203,8 @@ $ jetcarp limits reset
 ```
 
 Your own values are kept in `limits.json` in the [settings folder](../reference/folders.md), and
-only they are: measuring again never undoes a choice. *Reserved for JETCARP* is kept as the system's
+only they are: measuring again never undoes a choice. The app and a running desktop background read
+a change at once; another program started before it, at its next start. *Reserved for JETCARP* is kept as the system's
 part, so a computer whose memory changes keeps what the system was given:
 
 ```json

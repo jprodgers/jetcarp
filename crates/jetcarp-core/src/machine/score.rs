@@ -212,9 +212,7 @@ pub fn formula(rates: &[f64]) -> f64 {
 
 /// A rate with three significant figures: `1,234`, `56.7`, `0.123`, `2.5 billion`.
 pub fn rate_text(v: f64) -> String {
-    if v >= 1e6 {
-        super::count_text(v.round() as u64)
-    } else if v >= 1000.0 {
+    if v >= 1000.0 {
         super::count_text(v.round() as u64)
     } else if v >= 100.0 {
         format!("{v:.0}")

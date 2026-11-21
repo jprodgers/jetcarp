@@ -80,15 +80,16 @@ pub fn score(cx: &Ctx, a: ScoreArgs, json: bool) -> Result<()> {
 }
 
 pub fn limits(cx: &Ctx, a: LimitsArgs, json: bool) -> Result<()> {
-    match a.sub {
-        None => show(&MachineLimits::run(cx, NoInput {}, &Quiet)?, json),
-        Some(LimitsSub::Set { name, value }) => show(
-            &MachineLimitsSet::run(cx, LimitSetIn { name, value }, &Quiet)?,
-            json,
-        ),
-        Some(LimitsSub::Reset { name }) => show(
-            &MachineLimitsReset::run(cx, LimitResetIn { name }, &Quiet)?,
-            json,
-        ),
-    }
+    let out = match a.sub {
+        None => return show(&MachineLimits::run(cx, NoInput {}, &Quiet)?, json),
+        Some(LimitsSub::Set { name, value }) => {
+            MachineLimitsSet::run(cx, LimitSetIn { name, value }, &Quiet)?
+        }
+        Some(LimitsSub::Reset { name }) => {
+            MachineLimitsReset::run(cx, LimitResetIn { name }, &Quiet)?
+        }
+    };
+    // A running desktop background reads its limits again (none running: nothing to tell).
+    let _ = jetcarp_mcp::link::host_call(&serde_json::json!({"action": "reload"}));
+    show(&out, json)
 }

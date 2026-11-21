@@ -175,6 +175,11 @@ impl MachineWin {
         self.reload();
     }
 
+    /// A running desktop background reads its limits again (none running: nothing to tell).
+    fn tell_host() {
+        let _ = jetcarp_mcp::link::host_call(&serde_json::json!({"action": "reload"}));
+    }
+
     fn set(&mut self, id: Id, text: &str) {
         let r = MachineLimitsSet::run(
             &op_ctx(),
@@ -185,7 +190,10 @@ impl MachineWin {
             &jetcarp_api::op::Quiet,
         );
         self.note = match r {
-            Ok(_) => None,
+            Ok(_) => {
+                Self::tell_host();
+                None
+            }
             Err(e) => Some((e.message, true)),
         };
         self.reload();
@@ -199,8 +207,9 @@ impl MachineWin {
             },
             &jetcarp_api::op::Quiet,
         );
-        if let Err(e) = r {
-            self.note = Some((e.message, true));
+        match r {
+            Ok(_) => Self::tell_host(),
+            Err(e) => self.note = Some((e.message, true)),
         }
         self.reload();
     }
