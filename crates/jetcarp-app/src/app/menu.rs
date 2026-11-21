@@ -146,6 +146,7 @@ pub(super) enum Action {
     Reset,
     ClearAll,
     CopyHash,
+    CopyRle,
     PasteFromLibrary,
     StopPasting,
     Fit,
@@ -229,6 +230,7 @@ impl Action {
             Reset,
             ClearAll,
             CopyHash,
+            CopyRle,
             PasteFromLibrary,
             StopPasting,
             Fit,
@@ -280,6 +282,7 @@ impl Action {
             Reset => "Reset".into(),
             ClearAll => "Clear every CA".into(),
             CopyHash => "Copy state hash".into(),
+            CopyRle => "Copy as RLE".into(),
             PasteFromLibrary => "Paste a library pattern…".into(),
             StopPasting => "Stop pasting".into(),
             Fit => "Fit".into(),
@@ -330,6 +333,9 @@ impl Action {
             ExportSheet => "A labelled PNG of the first elementary CA's rule and the ones after it",
             Reset => "Clear and reseed every CA",
             CopyHash => "Copy the world's state hash",
+            CopyRle => {
+                "The pattern as RLE, the format Golly and LifeViewer read, for the ConwayLife forums: B/S rules on the square and hexagon grids"
+            }
             PasteFromLibrary => "Pick a pattern in the library, then click cells in the view",
             CellOutlines => "Draw tile outlines when tiles are large enough",
             AutoHideMenu => {
@@ -468,6 +474,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             A(A_::ClearAll),
             Sep,
             A(A_::CopyHash),
+            A(A_::CopyRle),
             A(A_::PasteFromLibrary),
             A(A_::StopPasting),
         ],
@@ -721,10 +728,10 @@ impl JetcarpApp {
         use Action::*;
         let sim = self.screen == Screen::Sim;
         match a {
-            SaveScene | ExportPng | ExportView | ExportAnim | Reset | ClearAll | CopyHash | Fit
-            | ZoomIn | ZoomOut | RunPause | Step | SeedAll | RandomAll | SweepThisWorld
-            | AddByNotation | LoadRuleTable | TileJson | Pane(_) | PixelZoom | FillCanvas
-            | AutoReseed => sim,
+            SaveScene | ExportPng | ExportView | ExportAnim | Reset | ClearAll | CopyHash
+            | CopyRle | Fit | ZoomIn | ZoomOut | RunPause | Step | SeedAll | RandomAll
+            | SweepThisWorld | AddByNotation | LoadRuleTable | TileJson | Pane(_) | PixelZoom
+            | FillCanvas | AutoReseed => sim,
             ExportSheet => sim && self.sheet_ca().is_some(),
             StopPasting => self.paste.is_some(),
             GpuSim => self.sim.available(),
@@ -879,6 +886,25 @@ impl JetcarpApp {
                 }
             }
             CopyHash => ctx.copy_text(self.world.hash_hex()),
+            CopyRle => {
+                let note = format!(
+                    "Copied from JETCARP {} at generation {}; state hash {}",
+                    env!("CARGO_PKG_VERSION"),
+                    self.world.generation,
+                    self.world.hash_hex()
+                );
+                self.message = Some(match jetcarp_api::rle::of_world(&self.world, &[note]) {
+                    Ok(text) => {
+                        ctx.copy_text(text);
+                        (
+                            "Copied the pattern as RLE, for Golly, LifeViewer and the ConwayLife forums."
+                                .into(),
+                            false,
+                        )
+                    }
+                    Err(e) => (e, true),
+                });
+            }
             PasteFromLibrary => {
                 self.set_tool_open(ToolWin::Library, true);
                 self.message = Some((
