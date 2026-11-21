@@ -5,13 +5,15 @@
 //! A **segment** (`runs/part-000001.parquet`) holds runs in id order, in row groups of
 //! [`ROW_GROUP_ROWS`] rows and data pages of at most [`PAGE_ROWS`] rows, with statistics per
 //! row group and per page (the column and offset indexes), so a reader that wants a few runs
-//! skips the pages it does not need. Its columns are [`COLUMNS`]: the 21 columns of the working
+//! skips the pages it does not need. Its columns are [`COLUMNS`]: the 22 columns of the working
 //! database's `runs` table, with the feature blob as typed columns (the blob's `settle` and
-//! `period` are the run's own `settle` and `period` columns, so they are stored once), JACA's sign
-//! measures last (nullable: null for other families).
+//! `period` are the run's own `settle` and `period` columns, so they are stored once), then JACA's
+//! sign measures (nullable: null for other families) and `parent_job`.
 //!
-//! Schema 2 ([`RUN_SCHEMA`]) added the five sign columns; a segment of schema 1 has none, and
-//! reads as runs without sign measures. Columns a reader does not know are skipped.
+//! Schema 2 added the five sign columns; a segment of schema 1 has none, and reads as runs
+//! without sign measures. Schema 3 ([`RUN_SCHEMA`]) added `parent_job`, last: a segment of an
+//! older schema reads as runs whose parents are all the search's own. Columns a reader does not
+//! know are skipped.
 //!
 //! A **score sidecar** (`scores-<n>/part-000001.parquet`) holds `id` and `score` for every run of
 //! one segment, in the segment's row order and row groups, so a reader swaps one column for the
@@ -37,9 +39,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// The run schema's name and version, in each file's key-value metadata (`jetcarp.schema`).
-pub const RUN_SCHEMA: &str = "jetcarp-explore-runs 2";
+pub const RUN_SCHEMA: &str = "jetcarp-explore-runs 3";
 /// The run schemas this JETCARP reads.
-pub const RUN_SCHEMAS: [&str; 2] = ["jetcarp-explore-runs 1", RUN_SCHEMA];
+pub const RUN_SCHEMAS: [&str; 3] = [
+    "jetcarp-explore-runs 1",
+    "jetcarp-explore-runs 2",
+    RUN_SCHEMA,
+];
 /// The score sidecar schema's name and version.
 pub const SCORE_SCHEMA: &str = "jetcarp-explore-scores 1";
 /// Rows per row group.
@@ -79,7 +85,7 @@ pub enum Kind {
 }
 
 /// Every column of a run segment, in file order: (name, type).
-pub const COLUMNS: [(&str, Kind); 43] = [
+pub const COLUMNS: [(&str, Kind); 44] = [
     ("id", Kind::I64),
     ("stage", Kind::I8),
     ("parent", Kind::OptI64),
@@ -123,6 +129,7 @@ pub const COLUMNS: [(&str, Kind); 43] = [
     ("sign_sorted", Kind::OptF32),
     ("sign_trade", Kind::OptF32),
     ("sign_lost", Kind::OptF32),
+    ("parent_job", Kind::OptI64),
 ];
 
 /// Column numbers in [`COLUMNS`].
@@ -154,6 +161,8 @@ pub mod col {
     /// JACA's sign measures (schema 2): pos, balance, sorted, trade, lost.
     pub const SIGN0: usize = 38;
     pub const SIGN_LOST: usize = 42;
+    /// The job whose run `parent` is, when it is another job's (schema 3).
+    pub const PARENT_JOB: usize = 43;
 }
 
 /// A set of columns, one bit per column of [`COLUMNS`].
@@ -195,14 +204,20 @@ pub const EVAL: Cols = FEATURES
         col::BIN,
     ]);
 
-/// One run as stored: the 21 columns of `runs`, with the features typed. A run read with only
+/// One run as stored: the 22 columns of `runs`, with the features typed. A run read with only
 /// some columns has the others at their defaults.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RunRec {
     pub id: i64,
     /// 1 screened, 2 a confirmation run of `parent`.
     pub stage: i64,
+    /// The run this one was made from: the screened run a confirmation run confirms; for a
+    /// screened run, the elite it was made from (a mutation, a new seed, a transplant or a
+    /// balance variant), or with `parent_job` a run of that job (`--parents-from`); none for a
+    /// fresh draw.
     pub parent: Option<i64>,
+    /// The job whose run `parent` is, when it is not this search's own.
+    pub parent_job: Option<i64>,
     pub tiling: String,
     /// 0 touch (corners count), 1 edge.
     pub nb: i64,
@@ -330,6 +345,8 @@ fn run_schema() -> TypePtr {
 
 /// Columns of a run segment of schema 1 (the first of [`COLUMNS`]).
 const SCHEMA1_COLUMNS: usize = col::TS + 1;
+/// Columns of a run segment of schema 2.
+const SCHEMA2_COLUMNS: usize = col::SIGN_LOST + 1;
 
 /// The run schema of the first `n` columns.
 fn run_schema_of(n: usize) -> TypePtr {
@@ -480,6 +497,21 @@ impl SegmentWriter {
             kv,
             run_schema_of(SCHEMA1_COLUMNS),
             RUN_SCHEMAS[0],
+            None,
+            false,
+            &Tuning::default(),
+        )
+    }
+
+    /// A run segment of schema 2, as JETCARP 0.4.2 wrote them (no `parent_job`), to test that
+    /// they still read.
+    #[doc(hidden)]
+    pub fn create_schema2(path: &Path, kv: &[(String, String)]) -> Result<SegmentWriter, String> {
+        Self::make(
+            path,
+            kv,
+            run_schema_of(SCHEMA2_COLUMNS),
+            RUN_SCHEMAS[1],
             None,
             false,
             &Tuning::default(),
@@ -657,8 +689,15 @@ fn write_column(
                 .map_err(pe)?;
         }
         Kind::OptI64 => {
-            let v: Vec<i64> = rows.iter().filter_map(|r| r.parent).collect();
-            let d: Vec<i16> = rows.iter().map(|r| r.parent.is_some() as i16).collect();
+            let get = |r: &RunRec| {
+                if c == col::PARENT {
+                    r.parent
+                } else {
+                    r.parent_job
+                }
+            };
+            let v: Vec<i64> = rows.iter().filter_map(get).collect();
+            let d: Vec<i16> = rows.iter().map(|r| get(r).is_some() as i16).collect();
             cw.typed::<Int64Type>()
                 .write_batch(&v, Some(&d), None)
                 .map_err(pe)?;
@@ -901,6 +940,9 @@ impl Batch {
             parent: self
                 .opt_i64(col::PARENT, i)
                 .filter(|_| self.has(col::PARENT)),
+            parent_job: self
+                .opt_i64(col::PARENT_JOB, i)
+                .filter(|_| self.has(col::PARENT_JOB)),
             tiling: self.text(col::TILING, i),
             nb: self.i64(col::NB, i),
             fam: self.text(col::FAM, i),
@@ -937,7 +979,17 @@ impl Batch {
                         })
                         .collect(),
                 ),
-                Kind::OptI64 => ColData::OptI64(recs.iter().map(|r| r.parent).collect()),
+                Kind::OptI64 => ColData::OptI64(
+                    recs.iter()
+                        .map(|r| {
+                            if c == col::PARENT {
+                                r.parent
+                            } else {
+                                r.parent_job
+                            }
+                        })
+                        .collect(),
+                ),
                 Kind::I32 | Kind::I8 | Kind::U32 => ColData::I32(
                     recs.iter()
                         .map(|r| {

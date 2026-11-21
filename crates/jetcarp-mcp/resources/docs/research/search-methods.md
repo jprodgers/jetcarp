@@ -516,6 +516,12 @@ least-tried, 10% catalogue rules).
   the job's spec, so a resumed search has them still, and its log and `jetcarp jobs status` say what
   it took: `parents: 3 JACA runs of explore job 1 (2 keep, 1 maybe); 3 with both signs holding to the
   end`.
+- **Lineage.** Every run made from another names it as its `parent`: a variation, a new starting
+  pattern, a transplant or a balance variant the elite it came from, and a run made from another
+  job's the run there, with that job in `parent_job`; a confirmation run names the run it
+  confirms. Following `parent` back from a run gives the chain of runs the search built it from,
+  back to a fresh draw or to the job given with `--parents-from`
+  ([Search runs](../reference/search-runs.md)).
 
 **Your taste as the score.** `jetcarp jobs refit` fits a score model to the keep, maybe and drop
 reviews recorded for a job's runs, all raters' or one's (`--rater`). It is a ridge logistic

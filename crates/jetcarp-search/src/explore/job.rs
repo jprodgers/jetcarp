@@ -313,12 +313,18 @@ fn weighted(rng: &mut Rng, w: &[(Fam, f64)]) -> Fam {
     w[0].0
 }
 
-/// A candidate made: its rule (none when it could not be made), seed kind, seed and origin.
+/// Where a run came from (#28): the run it was made from, and the job whose run that is when it
+/// is not this search's own (`--parents-from`); none for a fresh draw.
+pub type Lineage = Option<(i64, Option<i64>)>;
+
+/// A candidate made: its rule (none when it could not be made), seed kind, seed, origin, and the
+/// run it was made from.
 type Made = (
     Option<Rule>,
     String,
     jetcarp_core::world::SeedSpec,
     &'static str,
+    Lineage,
 );
 
 /// A parent for a transplant or a balance variant.
@@ -328,6 +334,8 @@ struct Pick {
     nb: Nb,
     seed: jetcarp_core::world::SeedSpec,
     weaker: Option<breed::Sign>,
+    /// Its run: an elite of this search, or a run of the job it came from.
+    from: (i64, Option<i64>),
 }
 
 /// How a candidate is made.
@@ -1056,8 +1064,8 @@ impl Search {
         gens: u32,
         rng: &mut Rng,
         backend: Option<&dyn Fn(&Rule) -> bool>,
-    ) -> Vec<(Cand, String)> {
-        let mut out: Vec<(Cand, String)> = Vec::with_capacity(n);
+    ) -> Vec<(Cand, String, Lineage)> {
+        let mut out: Vec<(Cand, String, Lineage)> = Vec::with_capacity(n);
         let Some(ti) = self.tiling_index(&grid.key) else {
             return out;
         };
@@ -1066,7 +1074,7 @@ impl Search {
         let mut extra: Option<Made> = None;
         while out.len() < n && tries < n * 12 {
             tries += 1;
-            let (rule, kind, seed, origin): Made = if let Some(x) = extra.take() {
+            let (rule, kind, seed, origin, from): Made = if let Some(x) = extra.take() {
                 x
             } else {
                 let fam = if ltl.is_some() {
@@ -1087,7 +1095,7 @@ impl Search {
                             None => sample_rule(fam, grid, nb, rng),
                         };
                         let (sd, k) = seed_for(fam, grid, rng);
-                        (r, k.to_string(), sd, "random")
+                        (r, k.to_string(), sd, "random", None)
                     }
                     Way::Mutate => {
                         let el = self
@@ -1095,8 +1103,8 @@ impl Search {
                             .lock()
                             .unwrap()
                             .sample_parent(rng, Some(fam), &parent_ok)
-                            .map(|(_, e)| e.clone());
-                        let Some(el) = el else { continue };
+                            .map(|(id, e)| (id, e.clone()));
+                        let Some((id, el)) = el else { continue };
                         let Some(base) = el.cand.rule() else { continue };
                         if let Some(g) = ltl
                             && !matches!(&base, Rule::Ltl(l) if (l.hood, l.range) == g)
@@ -1104,7 +1112,8 @@ impl Search {
                             continue;
                         }
                         let r = space::mutate_rule(&base, grid, nb, rng);
-                        (r, "mutated".to_string(), el.cand.seed.clone(), "mutate")
+                        let seed = el.cand.seed.clone();
+                        (r, "mutated".to_string(), seed, "mutate", Some((id, None)))
                     }
                     Way::Seed => {
                         let el = self
@@ -1112,8 +1121,8 @@ impl Search {
                             .lock()
                             .unwrap()
                             .sample_parent(rng, Some(fam), &parent_ok)
-                            .map(|(_, e)| e.clone());
-                        let Some(el) = el else { continue };
+                            .map(|(id, e)| (id, e.clone()));
+                        let Some((id, el)) = el else { continue };
                         let Some(base) = el.cand.rule() else { continue };
                         if let Some(g) = ltl
                             && !matches!(&base, Rule::Ltl(l) if (l.hood, l.range) == g)
@@ -1121,7 +1130,7 @@ impl Search {
                             continue;
                         }
                         let (sd, k) = seed_for(fam, grid, rng);
-                        (Some(base), k.to_string(), sd, "seed")
+                        (Some(base), k.to_string(), sd, "seed", Some((id, None)))
                     }
                     Way::Transplant => {
                         let Some((made, scaled)) = self.transplant(grid, nb, rng) else {
@@ -1154,7 +1163,7 @@ impl Search {
                             Some(g) => sample_ltl(grid, rng, Some(g)),
                             None => sample_rule(fam, grid, nb, rng),
                         };
-                        (r, k.to_string(), sd, "cover")
+                        (r, k.to_string(), sd, "cover", None)
                     }
                     Way::Named => {
                         // A named rule on this grid.
@@ -1182,7 +1191,7 @@ impl Search {
                             continue;
                         }
                         let (sd, k) = seed_for(f2, grid, rng);
-                        (Some(r), k.to_string(), sd, "named")
+                        (Some(r), k.to_string(), sd, "named", None)
                     }
                 }
             };
@@ -1207,7 +1216,7 @@ impl Search {
             if !self.seen.lock().unwrap().insert(cand.id_hash()) {
                 continue;
             }
-            out.push((cand, kind));
+            out.push((cand, kind, from));
         }
         out
     }
@@ -1262,19 +1271,21 @@ impl Search {
                     nb: if p.nb == 0 { Nb::Touch } else { Nb::Edge },
                     seed,
                     weaker: p.weaker,
+                    from: (p.run, Some(p.job)),
                 });
             }
             return out;
         }
         let a = self.archive.lock().unwrap();
         for _ in 0..n {
-            if let Some((_, e)) = a.sample_parent(rng, Some(Fam::Jaca), ok) {
+            if let Some((id, e)) = a.sample_parent(rng, Some(Fam::Jaca), ok) {
                 out.push(Pick {
                     rule: e.cand.rule.clone(),
                     tiling: e.cand.tiling.clone(),
                     nb: e.cand.nb,
                     seed: e.cand.seed.clone(),
                     weaker: breed::losing(&e.feat),
+                    from: (id, None),
                 });
             }
         }
@@ -1320,13 +1331,20 @@ impl Search {
                         "transplant".to_string(),
                         p.seed.clone(),
                         "transplant-scaled",
+                        Some(p.from),
                     )
                 })
             }
             _ => None,
         };
         Some((
-            (Some(rule), "transplant".to_string(), p.seed, "transplant"),
+            (
+                Some(rule),
+                "transplant".to_string(),
+                p.seed,
+                "transplant",
+                Some(p.from),
+            ),
             scaled,
         ))
     }
@@ -1348,6 +1366,7 @@ impl Search {
             "balance".to_string(),
             seed,
             "balance",
+            Some(p.from),
         ))
     }
 
@@ -1360,7 +1379,7 @@ impl Search {
         be: &mut dyn Backend,
         grid: &Grid,
         nb: Nb,
-        cands: Vec<(Cand, String, Option<i64>)>,
+        cands: Vec<(Cand, String, Lineage)>,
         stage: u8,
         reach: Option<usize>,
         lim: &StepLimits<'_>,
@@ -1440,7 +1459,7 @@ impl Search {
         let rows: Vec<RunOut> = good
             .into_par_iter()
             .zip(traces.into_par_iter())
-            .filter_map(|((c, kind, parent), t)| {
+            .filter_map(|((c, kind, from), t)| {
                 let (fate, feat, score, bin) =
                     catch_unwind(AssertUnwindSafe(|| self.evaluate(grid, &c, &t)))
                         .map_err(|_| self.panics.fetch_add(1, Ordering::Relaxed))
@@ -1448,7 +1467,8 @@ impl Search {
                 Some(RunOut {
                     id: self.next_id(),
                     stage,
-                    parent,
+                    parent: from.map(|f| f.0),
+                    parent_job: from.and_then(|f| f.1),
                     ev: Eval {
                         cand: c,
                         fate,
@@ -1563,8 +1583,7 @@ impl Search {
             rng,
             Some(&filter),
         );
-        let tagged = cands.into_iter().map(|(c, k)| (c, k, None)).collect();
-        self.gpu_batch(be, &grid, nb, tagged, 1, reach, lim)
+        self.gpu_batch(be, &grid, nb, cands, 1, reach, lim)
     }
 
     /// Confirm the best runs of one grid/neighbourhood group on the GPU, as many as end before
@@ -1626,7 +1645,7 @@ impl Search {
         let mut cands = Vec::new();
         for (id, e) in &picked {
             for c in self.confirmations(e, &grid) {
-                cands.push((c, "confirm".to_string(), Some(*id)));
+                cands.push((c, "confirm".to_string(), Some((*id, None))));
             }
         }
         if !self.gpu_batch(be, &grid, nb, cands, 2, reach, lim)? {
@@ -1715,11 +1734,11 @@ impl Search {
         );
         let rows: Vec<RunOut> = cands
             .into_par_iter()
-            .filter_map(|(c, kind)| {
+            .filter_map(|(c, kind, from)| {
                 if lim.cut() {
                     return None;
                 }
-                match self.cpu_eval(&grid, c, kind, None, 1, lim) {
+                match self.cpu_eval(&grid, c, kind, from, 1, lim) {
                     Ran::Done(r) => Some(*r),
                     Ran::Failed | Ran::GivenUp => None,
                 }
@@ -1739,7 +1758,7 @@ impl Search {
         grid: &Grid,
         mut c: Cand,
         kind: String,
-        parent: Option<i64>,
+        from: Lineage,
         stage: u8,
         lim: &StepLimits<'_>,
     ) -> Ran {
@@ -1856,7 +1875,8 @@ impl Search {
         Ran::Done(Box::new(RunOut {
             id: self.next_id(),
             stage,
-            parent,
+            parent: from.map(|f| f.0),
+            parent_job: from.and_then(|f| f.1),
             ev: Eval {
                 cand: c,
                 fate,
@@ -1890,7 +1910,7 @@ impl Search {
                 let grid = self.confirm_grid(&e.cand.tiling).ok()?;
                 let mut rows = Vec::new();
                 for c in self.confirmations(e, &grid) {
-                    match self.cpu_eval(&grid, c, "confirm".into(), Some(*id), 2, lim) {
+                    match self.cpu_eval(&grid, c, "confirm".into(), Some((*id, None)), 2, lim) {
                         Ran::Done(r) => rows.push(*r),
                         Ran::Failed => {}
                         Ran::GivenUp => return None,
@@ -2333,12 +2353,12 @@ mod tests {
                             &mut rng,
                             None,
                         );
-                        let Some((c, kind)) = c.into_iter().next() else {
+                        let Some((c, kind, from)) = c.into_iter().next() else {
                             continue;
                         };
                         let what = format!("{} {} {:?}", c.tiling, c.rule, c.seed);
                         let t = Instant::now();
-                        let r = pool.install(|| s.cpu_eval(&grid, c, kind, None, 1, &lim));
+                        let r = pool.install(|| s.cpu_eval(&grid, c, kind, from, 1, &lim));
                         let ts = t.elapsed().as_secs_f64();
                         let Ran::Done(r) = r else { continue };
                         sc_t.push(ts);
@@ -2353,7 +2373,7 @@ mod tests {
                         };
                         let t = Instant::now();
                         let r2 = pool.install(|| {
-                            s.cpu_eval(&big, c2, "confirm".into(), Some(r.id), 2, &lim)
+                            s.cpu_eval(&big, c2, "confirm".into(), Some((r.id, None)), 2, &lim)
                         });
                         let tc = t.elapsed().as_secs_f64();
                         if matches!(r2, Ran::Done(_)) {
@@ -2492,6 +2512,128 @@ mod tests {
                 .filter(|r| r.ev.cand.origin == "balance")
                 .all(|r| r.ev.cand.fam == Fam::Jaca)
         );
+    }
+
+    /// Every run made from another names it as its `parent` (#28): a mutation or a new seed of an
+    /// elite (a screened run of the search, before it), a transplant or a balance variant (an
+    /// elite, or a run of the job its parents came from), and a confirmation run the run it
+    /// confirms; fresh draws, cover runs and named rules have none.
+    #[test]
+    fn runs_record_their_lineage() {
+        let base = Settings {
+            tilings: vec!["square".into(), "hex".into(), "trihex".into()],
+            families: vec![Fam::Jaca, Fam::LifeLike],
+            screen_cells: 600,
+            screen_gens: 120,
+            confirm_cells: 600,
+            confirm_gens: 120,
+            confirm_seeds: 1,
+            seed: 21,
+            ..Settings::default()
+        };
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let stop = AtomicBool::new(false);
+        let run = |s: &Search, n: u64| {
+            let mut rows = Vec::new();
+            while s.screened() < n {
+                let lim = StepLimits {
+                    until: Instant::now() + Duration::from_millis(20),
+                    end: None,
+                    stop: &stop,
+                    max_screened: Some(n),
+                };
+                assert!(s.step(&pool, None, &lim).is_none());
+                rows.extend(s.take_delta().rows);
+            }
+            rows
+        };
+        let first = Search::new(base.clone(), Saved::default()).unwrap();
+        let parents: Vec<Parent> = run(&first, 80)
+            .iter()
+            .filter(|r| r.ev.cand.fam == Fam::Jaca && r.stage == 1)
+            .take(8)
+            .enumerate()
+            .map(|(i, r)| Parent {
+                strong: true,
+                weaker: (i % 2 == 1).then_some(breed::Sign::Pos),
+                ..Parent::of(1, r.id, "keep", &r.ev)
+            })
+            .collect();
+        assert!(parents.len() >= 4, "{} parents", parents.len());
+        let s = Search::new(
+            Settings {
+                parents: parents.clone(),
+                seed: 22,
+                ..base
+            },
+            Saved::default(),
+        )
+        .unwrap();
+        let rows = run(&s, 600);
+        let by_id: HashMap<i64, &RunOut> = rows.iter().map(|r| (r.id, r)).collect();
+        let mut seen: HashMap<&str, usize> = HashMap::new();
+        for r in &rows {
+            let o = r.ev.cand.origin.as_str();
+            *seen.entry(o).or_default() += 1;
+            let elite = r.parent.and_then(|p| by_id.get(&p));
+            match o {
+                "random" | "cover" | "named" => assert_eq!(r.parent, None, "run {} ({o})", r.id),
+                "confirm" => {
+                    let p = elite.expect("a confirmation run's parent");
+                    assert_eq!((p.stage, &p.ev.cand.rule), (1, &r.ev.cand.rule));
+                }
+                "mutate" | "seed" => {
+                    let p = elite.unwrap_or_else(|| panic!("run {} ({o}): {:?}", r.id, r.parent));
+                    assert!(p.stage == 1 && p.id < r.id, "run {} ({o})", r.id);
+                    if o == "seed" {
+                        assert_eq!(p.ev.cand.rule, r.ev.cand.rule);
+                    }
+                }
+                _ => {
+                    // A transplant or a balance variant: an elite, or a parent of the other job.
+                    let p = r
+                        .parent
+                        .unwrap_or_else(|| panic!("run {} ({o}) has none", r.id));
+                    match r.parent_job {
+                        Some(job) => {
+                            assert_eq!(job, 1, "run {} ({o})", r.id);
+                            let q = parents.iter().find(|q| q.run == p).expect("its parent");
+                            if o != "balance" {
+                                // Transplanted unchanged, or scaled from it.
+                                assert!(o == "transplant-scaled" || q.rule == r.ev.cand.rule);
+                            }
+                        }
+                        None => assert!(
+                            elite.is_some_and(|e| e.stage == 1 && e.id < r.id),
+                            "run {} ({o}): parent {p}",
+                            r.id
+                        ),
+                    }
+                }
+            }
+            if r.parent_job.is_some() {
+                assert!(matches!(o, "transplant" | "transplant-scaled" | "balance"));
+            }
+        }
+        for o in [
+            "random",
+            "mutate",
+            "seed",
+            "transplant",
+            "balance",
+            "confirm",
+        ] {
+            assert!(seen.get(o).is_some_and(|&n| n > 0), "no {o} run: {seen:?}");
+        }
+        let from_job = rows.iter().filter(|r| r.parent_job.is_some()).count();
+        let from_elites = rows
+            .iter()
+            .filter(|r| r.stage == 1 && r.parent.is_some() && r.parent_job.is_none())
+            .count();
+        assert!(from_job > 0 && from_elites > 0, "{from_job} {from_elites}");
     }
 
     /// Runs of a search on one tiling until a confirmation run comes (or a minute passes): its

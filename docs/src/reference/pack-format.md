@@ -808,9 +808,10 @@ segments of schema `jetcarp-explore-runs 2` or `1`, score sidecars `jetcarp-expl
 - `parts`: the sealed segments in id order, each a Parquet object, with its `segment` name
   (`part-` and digits), `rows`, `bytes`, and `first` and `last` run ids in decimal.
 - `run_schema`: the newest segment's schema. Schema 2 added five nullable columns, JACA's sign
-  measures, at the end; a search sealed before them and continued after has segments of both
-  schemas, each naming its own in its `jetcarp.schema` metadata. A reader MUST read both, reading
-  the sign columns of a schema 1 segment as null, and SHOULD skip columns it does not know. The
+  measures, at the end, and schema 3 one more, `parent_job`; a search sealed before them and
+  continued after has segments of several schemas, each naming its own in its `jetcarp.schema`
+  metadata. A reader MUST read them all, reading the columns a segment's schema lacks as null, and
+  SHOULD skip columns it does not know. The
   objects are copied as they are: publishing and importing never rewrite a segment.
 - `scores`: each rescore, with the sidecar of each segment it changed. A run's score is the one in
   its segment's newest sidecar, or the segment's own.

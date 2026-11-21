@@ -52,7 +52,7 @@ another process.
 | `format` | `jetcarp-search-manifest 1` |
 | `search`, `kind` | the search's uuid, and `explore` |
 | `engine_version` | the JETCARP version that last wrote the manifest |
-| `run_schema`, `score_schema` | the column layouts below: `jetcarp-explore-runs 2` (or `1` for a folder whose newest segment was sealed before JETCARP 0.4.2) and `jetcarp-explore-scores 1` |
+| `run_schema`, `score_schema` | the column layouts below: `jetcarp-explore-runs 3` (or `2` for a folder whose newest segment was sealed by JETCARP 0.4.2, `1` before) and `jetcarp-explore-scores 1` |
 | `created`, `updated` | UTC times |
 | `spec` | the job's settings (tilings, families, grid sizes, generations, seeds, ...), with its score model (`score`) when it has one (see [Score models](#score-models)) |
 | `segments` | one per segment, in id order: `file` (relative to the folder), `sha256` and `bytes` of the file, `rows`, `first_id` and `last_id`, `sealed` (UTC) and `engine_version` |
@@ -110,23 +110,25 @@ Each segment is a Parquet file compressed with zstd (level 9). Its runs are in i
 groups of 131,072 runs, with statistics for every row group and every data page (the column and
 offset indexes), so a reader that wants a few runs or the best scores skips most of the file. Floats
 are stored with byte-stream-split encoding and ids and times as deltas. The file's key-value metadata
-says `jetcarp.schema` (`jetcarp-explore-runs 2`), `jetcarp.search` (the uuid), `jetcarp.segment`
+says `jetcarp.schema` (`jetcarp-explore-runs 3`), `jetcarp.search` (the uuid), `jetcarp.segment`
 (its own name) and `jetcarp.engine_version`.
 
 **Schema 2** (JETCARP 0.4.2) added the five sign columns at the end. A segment sealed before then is
-of schema 1: it has every column but those, and its runs have no sign measures. A search sealed
-before 0.4.2 and continued after holds segments of both schemas, each naming its own; JETCARP reads
-both, and skips columns it does not know. DuckDB reads such a folder with
-`read_parquet('runs/part-*.parquet', union_by_name = true)`, the sign columns null in the older
-segments.
+of schema 1: it has every column but those, and its runs have no sign measures. **Schema 3** (0.4.3)
+added `parent_job` after them, and from 0.4.3 on a screened run's `parent` names the run it was
+made from; in a segment of schema 1 or 2 only confirmation runs have a `parent`, and none has a
+`parent_job`. A search sealed under one schema and continued under another holds segments of both,
+each naming its own; JETCARP reads them all, and skips columns it does not know. DuckDB reads such a
+folder with `read_parquet('runs/part-*.parquet', union_by_name = true)`, the newer columns null in
+the older segments.
 
-Every column is required (never null) except `parent` and the sign columns.
+Every column is required (never null) except `parent`, the sign columns and `parent_job`.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
 | `id` | int64 | The run's id |
 | `stage` | int8 | 1: a screening run; 2: a confirmation run, the same candidate again on a bigger grid with another random seed |
-| `parent` | int64, null for screening runs | The screening run a confirmation run confirms |
+| `parent` | int64, null for a fresh draw | The run this one was made from: for a confirmation run, the screening run it confirms; for a screening run, the elite of the search it was made from (`origin` `mutate`, `seed`, `transplant`, `transplant-scaled` or `balance`), or with `parent_job` the run of another job it was made from; null for `random`, `cover` and `named` runs (and for every screening run sealed before 0.4.3) |
 | `tiling` | string | The tiling key: `square`, `hex`, `trihex`, `catalog:k3-019`, `ih28`, `spectre`, ... |
 | `nb` | int8 | The neighbourhood: 0 touch (tiles that share a corner count), 1 edge |
 | `fam` | string | The rule family: `life_like`, `generations`, `ltl`, `jaca`, `cyclic`, ... |
@@ -167,6 +169,7 @@ Every column is required (never null) except `parent` and the sign columns.
 | `sign_sorted` | float32, null but for JACA | JACA: how well the signs sort into territories at the end: the same-sign fraction among neighbouring live cells (the CA's own neighbourhood), relative to what shuffled signs would give (0 mixed, 1 fully sorted; 0 when one sign is all that is left, and with no live neighbours) |
 | `sign_trade` | float32, null but for JACA | JACA: of the cells live at both the three-quarter mark and the end, the fraction whose sign differs |
 | `sign_lost` | float32, null but for JACA | JACA: when a sign first fell below 1% of live cells, as a fraction of the run (1 if never) |
+| `parent_job` | int64, null but for runs made from another job's | The job whose run `parent` is, when it is not this search's own: a transplant or balance variant of a rule taken with `--parents-from` (its job and run are also in the search's `parents` setting) |
 
 The 18 columns from `density` to `mover_speed`, with `settle` and `period`, are the run's 20 measures,
 and the sign columns five more. The working database stores them as a blob of little-endian 32-bit
