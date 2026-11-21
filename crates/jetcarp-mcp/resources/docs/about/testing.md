@@ -64,9 +64,10 @@ with the guard already on.
   frames match the processor's, to the texture unit's sRGB decoding.
 - **The corpus** (`docs/scenes/strobe/`): scenes made to flash (a Margolus Tron field, which flips
   every generation, in grey and in a saturated red-orange; Tron from a blob, whose rectilinear
-  growth is regular stripes as well; a Seeds soup), the Tron field just under and just over the
-  rate (six and seven generations a second, and six for long enough to be the extended failure)
-  and the area (shown 112 and 128 pixels across), striped scenes (still stripes, a reversing
+  growth is regular stripes as well; a Seeds soup; Hodgepodge as Quick Start shows it, the seizure
+  warning's example, which fails at 60 generations a second, is a warning at 30 and passes at 15),
+  the Tron field just under and just over the rate (six and seven generations a second, and six
+  for long enough to be the extended failure) and the area (shown 112 and 128 pixels across), striped scenes (still stripes, a reversing
   checkerboard of squares smaller than a tile) and ordinary scenes (a Life soup, Brian's Brain, a
   maze, Greenberg-Hastings waves). Each is drawn frame by frame on the processor, at a fixed speed,
   at 320 by 240 and 60 frames a second, and JETCARP's verdict on each is pinned

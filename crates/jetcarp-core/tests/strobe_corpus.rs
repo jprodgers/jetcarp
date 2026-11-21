@@ -66,6 +66,13 @@ const CASES: &[Case] = &[
     // Made to flash.
     case("tron-field", 60.0, 3.0, None, Fail, Pass, SPass),
     case("tron-red", 30.0, 3.0, None, Fail, Fail, SPass),
+    // Hodgepodge as Quick Start shows it (the warning's example): from random states the whole
+    // field swings between healthy and ill every ten generations or so as it settles, so at 60
+    // generations a second its worst second has 8 transitions (four flashes), at 30 it has 6, and
+    // at 15, 3.
+    case("hodgepodge", 60.0, 4.0, None, Fail, Pass, SPass),
+    case("hodgepodge", 30.0, 4.0, None, Warning, Pass, SPass),
+    case("hodgepodge", 15.0, 4.0, None, Pass, Pass, SPass),
     // Tron's rectilinear pattern, grown from the blob, is regular stripes too.
     case("tron-blob", 30.0, 3.0, None, Fail, Pass, SFail),
     case("seeds-soup", 30.0, 3.0, None, Fail, Pass, SPass),

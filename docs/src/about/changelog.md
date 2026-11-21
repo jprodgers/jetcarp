@@ -49,6 +49,13 @@ that will declare them stable.
 
 ### Fixed
 
+- **The photosensitive seizure warning's example is Hodgepodge, not B0.** Since B0 rules are drawn
+  relative to their background ([#171](https://github.com/jprodgers/jetcarp/issues/171)), a B0
+  rule no longer turns the whole field over at each step on screen. The warning now gives
+  Hodgepodge, which can flicker across the whole field at each step, and the book's warning page
+  follows it: Hodgepodge as Quick Start shows it, run at 60 generations a second, flashes about
+  four times a second as it settles, and the strobe guard catches it (a scene in its test corpus).
+  ([Photosensitive seizure warning](../getting-started/photosensitivity.md))
 - **Programs starting together no longer fail with "database is locked" on a new library.** When
   the app, the desktop host, the MCP server or a search job opened a library that did not exist
   yet at the same moment as another, one of them could be refused at once, although each waits
