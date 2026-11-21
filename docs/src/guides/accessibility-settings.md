@@ -91,9 +91,11 @@ The app follows your system's high-contrast setting:
 **High contrast** turns the theme on and **Standard** off, whatever the system says.
 
 **Light or dark** chooses the form, for the standard theme and the high-contrast one alike:
-*Follow the system* (the default), *Dark* or *Light*. On Windows and macOS the app follows the
-system's light or dark choice; on Linux it stays dark unless you choose *Light* here
-([#137](https://github.com/jprodgers/jetcarp/issues/137)).
+*Follow the system* (the default), *Dark* or *Light*. The app follows the system's light or dark
+choice: on Windows and macOS, and on Linux through the desktop's settings portal
+(`org.freedesktop.appearance color-scheme`, or GNOME's own `org.gnome.desktop.interface
+color-scheme` where there is no portal). GNOME's *Light* style says no preference there, and the
+app takes it as light; a desktop it can't read at all leaves the app dark.
 
 ## Palettes for scenes that name none
 

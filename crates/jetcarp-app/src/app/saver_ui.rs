@@ -465,11 +465,17 @@ impl JetcarpApp {
                                     .hint_text("scene.json")
                                     .desired_width(180.0),
                             );
-                            if ui.button("…").clicked()
-                                && let Some(p) = rfd::FileDialog::new()
-                                    .add_filter("JETCARP scene", &["json"])
-                                    .pick_file()
-                            {
+                            let clicked = ui.button("…").clicked();
+                            if let Some(p) = crate::file_dialog::on_click(
+                                ui.ctx(),
+                                "saver.scene",
+                                clicked,
+                                || {
+                                    rfd::FileDialog::new()
+                                        .add_filter("JETCARP scene", &["json"])
+                                        .pick_file()
+                                },
+                            ) {
                                 c.scene = p.display().to_string();
                             }
                         });
@@ -629,13 +635,16 @@ impl JetcarpApp {
                 self.display.saver_ui.shown = Some(name.clone());
                 self.saver_select(&name);
             }
-            if ui
+            let clicked = ui
                 .button("Import…")
                 .on_hover_text("Add profile files (names already taken get a number)")
-                .clicked()
-                && let Some(files) = rfd::FileDialog::new()
-                    .add_filter("Screensaver profile", &["json"])
-                    .pick_files()
+                .clicked();
+            if let Some(files) =
+                crate::file_dialog::on_click(ui.ctx(), "saver.import", clicked, || {
+                    rfd::FileDialog::new()
+                        .add_filter("Screensaver profile", &["json"])
+                        .pick_files()
+                })
             {
                 let mut done = vec![];
                 let mut errs = vec![];
@@ -688,6 +697,14 @@ impl JetcarpApp {
 
     /// The selected profile's settings and actions.
     fn profile_editor_ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, now: f64) {
+        if let Some((path, json)) =
+            crate::file_dialog::take::<(std::path::PathBuf, String)>("saver.export")
+        {
+            self.display.saver_ui.note = Some(match std::fs::write(&path, json) {
+                Ok(()) => (format!("Exported {}", path.display()), false),
+                Err(e) => (format!("{}: {e}", path.display()), true),
+            });
+        }
         let Some(name) = self.display.saver_ui.selected.clone() else {
             return;
         };
@@ -859,11 +876,17 @@ impl JetcarpApp {
                                             .desired_width(150.0),
                                     )
                                     .changed();
-                                if ui.small_button("…").clicked()
-                                    && let Some(p) = rfd::FileDialog::new()
-                                        .add_filter("JETCARP scene", &["json"])
-                                        .pick_file()
-                                {
+                                let clicked = ui.small_button("…").clicked();
+                                if let Some(p) = crate::file_dialog::on_click(
+                                    ui.ctx(),
+                                    "saver.profile_scene",
+                                    clicked,
+                                    || {
+                                        rfd::FileDialog::new()
+                                            .add_filter("JETCARP scene", &["json"])
+                                            .pick_file()
+                                    },
+                                ) {
                                     *path = p.display().to_string();
                                     changed = true;
                                 }
@@ -1260,17 +1283,15 @@ impl JetcarpApp {
                 });
             }
             Some("export") => {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Screensaver profile", &["json"])
-                    .set_file_name(format!("{}.json", profiles::slug(&name)))
-                    .save_file()
-                {
-                    self.display.saver_ui.note =
-                        Some(match std::fs::write(&path, draft.to_json()) {
-                            Ok(()) => (format!("Exported {}", path.display()), false),
-                            Err(e) => (format!("{}: {e}", path.display()), true),
-                        });
-                }
+                // The profile as it is now, whatever is changed while the dialog is open.
+                let (file, json) = (format!("{}.json", profiles::slug(&name)), draft.to_json());
+                crate::file_dialog::open(ctx, "saver.export", move || {
+                    rfd::FileDialog::new()
+                        .add_filter("Screensaver profile", &["json"])
+                        .set_file_name(file)
+                        .save_file()
+                        .map(|p| (p, json))
+                });
             }
             _ => {}
         }

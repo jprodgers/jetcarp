@@ -47,8 +47,7 @@ day later (0.4.2: 17 November here, 18 November there).
 - **A high-contrast theme for the app,** dark and light: text at 7:1 or more against its
   background, thicker outlines at 3:1 or more, and a thick ring round whatever has the keyboard.
   It follows Windows' contrast themes, macOS's *Increase contrast* and GNOME's *High Contrast*, and
-  *Settings → Accessibility* overrides them, and chooses light or dark (on Linux, the way to a
-  light app until [#137](https://github.com/jprodgers/jetcarp/issues/137) is fixed). A test
+  *Settings → Accessibility* overrides them, and chooses light or dark. A test
   computes every contrast the theme uses. The docked panes now take the theme's panel colour in
   the light and high-contrast themes, where they kept the grid's dark backdrop.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
@@ -145,6 +144,25 @@ day later (0.4.2: 17 November here, 18 November there).
   for isn't there, JETCARP now looks twice more, a quarter of a second apart, before falling back,
   and says so on the error stream too. ([GPU](../guides/gpu.md),
   [#82](https://github.com/jprodgers/jetcarp/issues/82))
+- **On GNOME (Wayland), the app is drawn right when it opens at its saved size.** It was drawn
+  for the default size inside a window of the saved one: squeezed into part of the window, or
+  scaled up and grainy with clicks landing away from the pointer, until the window was resized by
+  hand. Wayland applies a size at once and says nothing, and the size was set behind egui's back,
+  so its drawing surface kept the old size. Found in 0.4.1 and 0.4.2's testing.
+  ([#140](https://github.com/jprodgers/jetcarp/issues/140))
+- **On Linux, the window keeps answering while a file dialog is open.** Open, save, export and
+  the other file dialogs held up the app's window until they closed, so GNOME briefly said JETCARP
+  might not be responding, and a request to close the window went unanswered. On Linux each
+  dialog now runs beside the window. While one is open the world waits, as before, so what is
+  saved or exported is what was showing when it was asked for. Windows and macOS were not
+  affected. ([#136](https://github.com/jprodgers/jetcarp/issues/136))
+- **On Linux, the app follows the system's light or dark style.** It stayed dark whatever the
+  desktop was set to; it now reads the style from the desktop's settings portal (or GNOME's own
+  setting), as it does on Windows and macOS, and *Settings → Accessibility* can still choose either.
+  In the light theme, the Quick Start's list of categories, tilings and rule families was pale grey
+  on white, and is now drawn in the theme's colours.
+  ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
+  [#137](https://github.com/jprodgers/jetcarp/issues/137))
 - **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
   with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
   with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's
