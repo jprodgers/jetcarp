@@ -223,6 +223,7 @@ impl AntsWindow {
                     // Another palette: in memory only, the catalog keeps the house style.
                     let o = MediaOptions {
                         style: MediaStyle::with_palette(Some(p))?,
+                        strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
                         ..Default::default()
                     };
                     let a = jetcarp_store::media::target_animation(
@@ -248,7 +249,10 @@ impl AntsWindow {
                         crate::strobe_cpu::guard_frames(frames, a.delay_ms.max(20));
                     return Ok((frames, delay, note));
                 }
-                let o = MediaOptions::default();
+                let o = MediaOptions {
+                    strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
+                    ..Default::default()
+                };
                 let done = jetcarp_store::media::render(&lib, &MediaTarget::Ant(id.clone()), &o)?;
                 let a = done.animation().ok_or("no animation was rendered")?.clone();
                 let bytes = std::fs::read(&a.abs_path)

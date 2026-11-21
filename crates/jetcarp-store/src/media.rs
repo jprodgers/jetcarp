@@ -231,10 +231,15 @@ fn render_key(source: &Source, mode: MediaMode, o: &MediaOptions) -> String {
     };
     // The strobe guard changes the animation it saves (#149); its being part of the key also
     // renders again everything rendered before it checked animations.
-    let opts = json!({
+    let mut opts = json!({
         "mode": mode.name(), "format": o.format.name(), "periods": o.periods, "gens": o.gens,
         "every": o.every, "frames": o.frames, "strobe_guard": o.strobe_guard,
     });
+    // The at-risk guard's stricter stripe rule changes the animation too; only then is it in the
+    // key, so everyone else's keys stay as they were.
+    if o.strobe_guard && o.strobe_at_risk {
+        opts["strobe_at_risk"] = json!(true);
+    }
     let text = json!({"input": input, "opts": opts, "style": o.style.hash(), "v": STYLE_VERSION})
         .to_string();
     content_hash(text.as_bytes())
@@ -572,7 +577,7 @@ fn write_tree(dir: &Path, enc: &Encoded) -> Result<Vec<MediaRow>, String> {
 /// Encode an animation's files (frames, animation, poster, thumbnail) with their rows.
 fn encode_all(anim: &Animation, o: &MediaOptions, job: &Job) -> Result<Encoded, String> {
     let st = &o.style;
-    let (fmt, guarded) = anim.encode_guarded(o.format, st, o.strobe_guard)?;
+    let (fmt, guarded) = anim.encode_guarded(o.format, st, o.strobe_guard, o.strobe_at_risk)?;
     let delay_ms = guarded.delay_ms;
     let bytes = guarded.bytes.clone();
     let render = json!({
