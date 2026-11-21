@@ -10,7 +10,7 @@
 //!
 //! `JETCARP_STROBE_PRINT=1` prints every case's readings (to see why a pin moved).
 
-use jetcarp_core::render::{self, RenderOptions};
+use jetcarp_core::render::{self, RenderOptions, ViewOptions};
 use jetcarp_core::strobe::Viewing;
 use jetcarp_core::strobe::flash::{FlashMeter, FlashReading, Level};
 use jetcarp_core::strobe::frame::reduce_both;
@@ -33,6 +33,9 @@ struct Case {
     /// Drawn in a square this many pixels across in the middle of a black frame (a small view),
     /// or over the whole frame.
     inset: Option<u32>,
+    /// Drawn this many pixels a cell around the world's middle, as a desktop picture or an
+    /// exported animation draws it (with cell outlines from 7 pixels a cell), rather than fitted.
+    cell_px: Option<f64>,
     flash: Level,
     red: Level,
     stripes: PatternLevel,
@@ -52,8 +55,23 @@ const fn case(
         speed,
         secs,
         inset,
+        cell_px: None,
         flash,
         red,
+        stripes,
+    }
+}
+
+/// A still scene drawn `cell_px` pixels a cell.
+const fn sized(scene: &'static str, cell_px: f64, stripes: PatternLevel) -> Case {
+    Case {
+        scene,
+        speed: 30.0,
+        secs: 2.0,
+        inset: None,
+        cell_px: Some(cell_px),
+        flash: Pass,
+        red: Pass,
         stripes,
     }
 }
@@ -95,6 +113,15 @@ const CASES: &[Case] = &[
     case("brians-brain", 30.0, 4.0, None, Pass, Pass, SPass),
     case("maze", 30.0, 4.0, None, Pass, Pass, SPass),
     case("cyclic-waves", 15.0, 4.0, None, Pass, Pass, SPass),
+    // Still fields with thin lines over them: live cells at a fractional size (no seams), and
+    // with cell outlines as a desktop picture or an exported animation draws them, a strong grid,
+    // rows of repeated squares, which counts (IRIS passes it: a false alarm, see testing.md); and
+    // outlines over a light ground with scattered cells on it, which do not.
+    sized("live-field", 4.37, SPass),
+    sized("live-field", 8.0, SFail),
+    sized("live-field", 16.0, SFail),
+    sized("paper-field", 8.0, SPass),
+    sized("paper-field", 16.0, SPass),
 ];
 
 fn scene(name: &str) -> Scene {
@@ -106,12 +133,17 @@ fn scene(name: &str) -> Scene {
 }
 
 /// The frame of `world` as the case draws it.
-fn draw(world: &World, inset: Option<u32>) -> Vec<u8> {
+fn draw(world: &World, c: &Case) -> Vec<u8> {
+    if let Some(px) = c.cell_px {
+        let b = world.topo.bounds;
+        let center = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
+        return render::render_view(world, W, H, center, px, &ViewOptions::default()).rgba;
+    }
     let opts = RenderOptions {
         outline_min_px: 0.0,
         ..Default::default()
     };
-    match inset {
+    match c.inset {
         None => render::render_fitted(world, W, H, &opts).rgba,
         Some(s) => {
             let img = render::render_fitted(world, s, s, &opts);
@@ -160,7 +192,7 @@ fn verdict(c: &Case) -> (FlashReading, FlashReading, PatternReading) {
         while (world.generation as f64) < due {
             world.step();
         }
-        let px = draw(&world, c.inset);
+        let px = draw(&world, c);
         let (map, half) = reduce_both(&px, W, H);
         let r = meter.update(&map, t);
         if worse(&seen.flash, &r) {
@@ -200,7 +232,7 @@ fn guarded(c: &Case) -> (u32, Level, PatternLevel) {
                 world.step();
             }
         }
-        let px = draw(&world, c.inset);
+        let px = draw(&world, c);
         let s = soft.apply(&px, W, H, &guard.plan().clone(), (1.0 / FPS) as f32);
         let out = s.shown.as_deref().unwrap_or(&px);
         let r = shown.update(&s.output, t);
@@ -244,6 +276,8 @@ fn the_corpus_verdicts_are_pinned() {
             c.speed,
             c.secs,
             c.inset.map_or(String::new(), |s| format!(", {s} px inset"))
+                + &c.cell_px
+                    .map_or(String::new(), |p| format!(", {p} px a cell"))
         );
         if print {
             eprintln!(
@@ -281,6 +315,7 @@ fn with_the_guard_on_nothing_in_the_corpus_fails_on_screen() {
                 c.scene,
                 c.speed,
                 c.inset.map_or(String::new(), |s| format!(", {s} px inset"))
+                    + &c.cell_px.map_or(String::new(), |p| format!(", {p} px a cell"))
             ));
         }
     }

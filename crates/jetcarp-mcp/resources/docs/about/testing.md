@@ -72,11 +72,15 @@ with the guard already on.
   growth is regular stripes as well; a Seeds soup; Hodgepodge as Quick Start shows it, the seizure
   warning's example, which fails at 60 generations a second, is a warning at 30 and passes at 15),
   the Tron field just under and just over the rate (six and seven generations a second, and six
-  for long enough to be the extended failure) and the area (shown 112 and 128 pixels across), striped scenes (still stripes, a reversing
-  checkerboard of squares smaller than a tile) and ordinary scenes (a Life soup, Brian's Brain, a
-  maze, Greenberg-Hastings waves). Each is drawn frame by frame on the processor, at a fixed speed,
-  at 320 by 240 and 60 frames a second, and JETCARP's verdict on each is pinned
-  (`crates/jetcarp-core/tests/strobe_corpus.rs`). Each is also run through the guard as a screen
+  for long enough to be the extended failure) and the area (shown 112 and 128 pixels across),
+  striped scenes (still stripes, a reversing checkerboard of squares smaller than a tile),
+  ordinary scenes (a Life soup, Brian's Brain, a maze, Greenberg-Hastings waves) and still fields
+  with thin lines over them (white live cells at a fractional size, where seams would show, and
+  with cell outlines at 8 and 16 pixels a cell; Paper's light ground with scattered cells and
+  outlines). Each is drawn frame by frame on the processor, at a fixed speed, at 320 by 240 and 60
+  frames a second, and JETCARP's verdict on each is pinned
+  (`crates/jetcarp-core/tests/strobe_corpus.rs`); the app's view of the outlined fields, drawn on
+  the GPU, is pinned too (`outlines_in_the_app_s_view_are_pinned`). Each is also run through the guard as a screen
   shows it, readings two frames late, and nothing it shows may fail. The corpus found two things
   the first version got wrong: a Life soup of 4-pixel cells counted as flashing (tiles flickering
   independently), so a transition now counts only where neighbouring tiles change together; and
@@ -87,54 +91,155 @@ with the guard already on.
   animation of it is caught, and its softened version, read back from the file, passes.
 - **The outside check** compares JETCARP's verdicts with those of EA's
   [IRIS](https://github.com/electronicarts/IRIS) on recordings of what each output path drew
-  ([Comparing with IRIS](#comparing-with-iris)). JETCARP must miss nothing IRIS flags; false alarms
-  are counted and kept low. IRIS, like the guard, is a tool, not a certificate.
+  ([Comparing with IRIS](#comparing-with-iris)). For flashes it misses nothing IRIS flags, and with
+  the guard on IRIS passes every recording; for stripes, IRIS's pattern check turned out not to be
+  a usable reference on cellular automata, and every disagreement is listed. IRIS, like the guard,
+  is a tool, not a certificate.
 
 ### Comparing with IRIS
 
-This step is still to be run; this is what it needs. JETCARP neither ships nor builds IRIS.
+JETCARP neither ships nor builds IRIS; this is how the comparison was run, and what it found.
 
-1. **IRIS** from its repository, built as its README says (CMake with vcpkg, which brings
-   OpenCV), and run as its example program on each recording, with pattern detection on and JSON
-   results: `-v <recording> -p 1 -j 1`. Its default settings (`config/appsettings.json`) are kept:
-   a transition is a change of 0.1 in the frame's mean luminance (with the darker state below 0.8)
-   or of 20 in its red measure, counted when at least a quarter of the frame's pixels changed; more
-   than 6 transitions in a second fails, 4 to 6 for 4 seconds out of 5 is the extended failure;
-   a pattern of at least 6 similar parts over a quarter of the frame, with light parts of at
-   least 0.25, fails after half a second. Note IRIS's commit with the results.
-2. **Recordings**: one video for each, at its own size, at the rate the output drew it (60 frames a
-   second here) and constant, and lossless RGB: chroma subsampling smears red and fine stripes, and
-   a lossy codec smears flashes. From a folder of PNGs:
-   `ffmpeg -framerate 60 -i %05d.png -c:v libx264rgb -crf 0 -preset veryslow out.mkv`. IRIS takes
-   the frame rate from the file, so `-framerate` must be the rate drawn at.
-3. **Recordings of each output path, made headlessly** (nothing is shown on a screen):
-   - *The desktop background and the screen savers* (the shared painter, on the GPU):
-     `JETCARP_STROBE_RECORD=DIR cargo test --release -p jetcarp-display --test strobe_painter
-     record_the_corpus_for_iris -- --ignored` writes every corpus scene with the guard off (what the
-     scene draws, `DIR/desktop-off/<scene>/`) and on (what the guard shows, `DIR/desktop-on/`), 6
-     seconds at 60 frames a second, 320 by 240, and `DIR/verdicts.json`, JETCARP's verdict on each
-     recording from the processor's meters on the very frames recorded.
-   - *The app's view*: the whole window drawn offscreen in real time, the flipping field with the
-     guard on: `JETCARP_OFFSCREEN_OUT=… JETCARP_STROBE_RECORD=DIR cargo test --release -p
-     jetcarp-app --lib strobe_guard_keeps_the_app_view -- --ignored --test-threads 1` (with
-     `JETCARP_CONFIG_DIR`, `JETCARP_DATA_DIR`, `JETCARP_OUT`, `JETCARP_LIBRARY` and
-     `JETCARP_RUNTIME_DIR` set to scratch folders).
-   - *Exported animations*: `jetcarp media render --scene docs/scenes/strobe/<scene>.json --gens 120
-     --format gif` (and `--format webp`), which saves through the guard. FFmpeg reads a GIF
-     directly; a WebP's frames can be written out with Pillow first. What a scene draws unguarded is
-     in its `desktop-off` recording.
-   - *The screens themselves*, on the test machines, with the guard on, and nobody watching a
-     flashing scene: Windows, `ffmpeg -f gdigrab -framerate 60 -i desktop -c:v libx264rgb -crf 0
-     desktop.mkv`; macOS (the screen saver), `ffmpeg -f avfoundation -framerate 60 -capture_cursor 0
-     -i "<screen>:none" -c:v libx264rgb -crf 0 saver.mkv`; GNOME (the extension's desktop
+1. **IRIS** at commit `d96978ac1107f3463b77f69a9c1b1ec5d45291a0` (14 January 2025), unchanged,
+   built as its README says: CMake with vcpkg at IRIS's own baseline (`0affe8710a4a`, which brings
+   OpenCV 4.8 with FFmpeg), its example program, release only. It was built on Fedora 45 without
+   administrator rights: the build tools vcpkg does not fetch on Linux (m4, bison, autoconf,
+   automake, libtool, gperf and NASM, a few pure-Perl modules Fedora packages apart, and Jinja2)
+   were built or fetched into the build's own folder. The host's compiler and headers are newer
+   than IRIS's dependencies: C was built as gnu17, three new warnings that ports building with
+   `-Werror` trip were kept as warnings, and hdf5 was pointed at vcpkg's zlib (the system's zlib
+   configuration names a static library that is not installed). None of that touches what IRIS
+   computes.
+2. **Settings**: its example program, `IrisApp -v <recording> -p 1 -j 1`, with its default
+   `config/appsettings.json`: a transition is a change of 0.1 in the frame's mean luminance (the
+   darker state below 0.8) or of 20 in its red measure, counted when at least a quarter of the
+   frame's pixels changed; more than 6 in a second fails, 4 to 6 for 4 seconds of 5 is the
+   extended failure. IRIS's defaults leave its pattern check off; `-p 1` turns it on, for the
+   stripe check's comparison: at least 6 similar parts over a quarter of the frame, with light
+   parts of at least 0.25, for half a second. IRIS's own test images were checked first:
+   `20stripes.png` fails and `shapes.png` passes, as its tests expect.
+3. **Recordings**, made headlessly (nothing shown on a screen), 6 seconds at 60 frames a second,
+   320 by 240:
+   - *The desktop background and the screen savers* (the shared painter, on the GPU), every
+     corpus scene with the guard off (`desktop-off`, what the scene draws) and on (`desktop-on`,
+     what the guard shows): `JETCARP_STROBE_RECORD=DIR cargo test --release -p jetcarp-display
+     --test strobe_painter record_the_corpus_for_iris -- --ignored`, which also writes
+     `DIR/verdicts.json`, JETCARP's verdict on each recording from the processor's meters on the
+     frames recorded. The live field is also drawn at fractional sizes (4.37 and 7.7 pixels a
+     cell), where seams between cells would show.
+   - *The app's view with cell outlines* (`view-off`, `view-on`): the same test draws the live
+     field and the Paper field through the tile renderer with outlines, as the app's view draws
+     them (faint from 7 pixels a cell, full from 16), and through the GPU guard.
+   - *Pictures drawn on the processor with outlines* (`still`), as desktop pictures and exported
+     animations draw them from 7 pixels a cell: `jetcarp wallpaper docs/scenes/strobe/<scene>.json
+     --size 320x240 --fit repeat --cell-px 8 --outline 7`, held for 6 seconds. JETCARP's verdicts
+     on these are the corpus's, pinned for the same scenes.
+   - Each folder of PNGs became a lossless video, `ffmpeg -framerate 60 -i %05d.png -c:v ffv1
+     -level 3 -pix_fmt bgr0 out.mkv` (RGB, no chroma subsampling, constant frame rate: IRIS takes
+     the rate from the file), checked frame for frame against the PNGs.
+   - Still to do, on the test machines: *the screens themselves*, with the guard on and nobody
+     watching a flashing scene: Windows, `ffmpeg -f gdigrab -framerate 60 -i desktop -c:v ffv1
+     desktop.mkv`; macOS (the screen saver), `ffmpeg -f avfoundation -framerate 60
+     -capture_cursor 0 -i "<screen>:none" -c:v ffv1 saver.mkv`; GNOME (the extension's desktop
      background), GNOME Shell's own screencast in a headless session, or `ffmpeg -f kmsgrab`.
-4. **The comparison**: for each recording, IRIS's result (pass, pass with a warning, or a flash,
-   extended or pattern failure) against JETCARP's in `verdicts.json`. A *miss* is a recording IRIS
-   fails and JETCARP passes: there must be none. A *false alarm* is one JETCARP fails and IRIS
-   passes: these are counted, and some are expected, since the guard's area rule (a quarter of a 10°
-   field at 40 cm) is far stricter than IRIS's quarter of the whole frame, and it counts a
-   checkerboard reversing within tiles as stripes. Every recording with the guard on must pass IRIS.
-   The counts, IRIS's commit and every miss and false alarm by name go on this page.
+4. **Scoring**: a *miss* is a recording IRIS fails and JETCARP passes; a *false alarm* one
+   JETCARP fails and IRIS passes. With the guard on, every recording should pass IRIS.
+
+**Results.** Transitions are the most in any one second (JETCARP stops counting at 8, past a
+failure); IRIS's pattern column is the frames it failed for a pattern.
+
+| Recording | IRIS | IRIS transitions (light / red) | IRIS pattern frames failed | JETCARP | JETCARP transitions (light / red) | JETCARP stripes |
+|---|---|---|---|---|---|---|
+| `desktop-off-brians-brain` | pass | 1 / 0 | 0 | pass | 3 / 0 | pass |
+| `desktop-off-cyclic-waves` | pass | 1 / 0 | 0 | pass | 2 / 0 | pass |
+| `desktop-off-hodgepodge` | fail (flash) | 12 / 0 | 0 | fail (flash) | 8 / 0 | pass |
+| `desktop-off-life-soup` | pass | 0 / 0 | 0 | pass, warning | 4 / 0 | pass |
+| `desktop-off-live-field-4.37px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+| `desktop-off-live-field-7.7px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+| `desktop-off-maze` | pass | 0 / 0 | 0 | pass | 1 / 0 | pass |
+| `desktop-off-seeds-soup` | fail (pattern) | 0 / 0 | 297 | fail (flash) | 8 / 0 | pass |
+| `desktop-off-stripes-still` | pass | 1 / 0 | 0 | fail (stripes) | 1 / 0 | fail |
+| `desktop-off-tron-blob` | fail (flash, pattern) | 31 / 0 | 53 | fail (flash, stripes) | 8 / 0 | fail |
+| `desktop-off-tron-checkerboard` | pass | 0 / 0 | 0 | fail (stripes) | 0 / 0 | fail |
+| `desktop-off-tron-field` | fail (flash) | 60 / 0 | 0 | fail (flash) | 8 / 0 | pass |
+| `desktop-off-tron-red` | fail (flash, red) | 37 / 37 | 0 | fail (flash, red) | 8 / 8 | pass |
+| `desktop-on-brians-brain` | pass | 1 / 0 | 0 | pass | 2 / 0 | pass |
+| `desktop-on-cyclic-waves` | fail (pattern) | 1 / 0 | 24 | pass | 2 / 0 | pass |
+| `desktop-on-hodgepodge` | pass | 1 / 0 | 0 | pass | 2 / 0 | pass |
+| `desktop-on-life-soup` | pass | 0 / 0 | 0 | pass | 2 / 0 | pass |
+| `desktop-on-live-field-4.37px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+| `desktop-on-live-field-7.7px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+| `desktop-on-maze` | pass | 0 / 0 | 0 | pass | 1 / 0 | pass |
+| `desktop-on-seeds-soup` | fail (pattern) | 0 / 0 | 122 | pass | 2 / 0 | pass |
+| `desktop-on-stripes-still` | pass | 1 / 0 | 0 | pass | 1 / 0 | harmful |
+| `desktop-on-tron-blob` | pass | 3 / 0 | 0 | pass | 3 / 0 | harmful |
+| `desktop-on-tron-checkerboard` | pass | 1 / 0 | 0 | pass | 1 / 0 | harmful |
+| `desktop-on-tron-field` | pass | 3 / 0 | 0 | pass | 3 / 0 | pass |
+| `desktop-on-tron-red` | pass | 2 / 3 | 0 | pass | 3 / 3 | pass |
+| `still-live-field-outlined-16px` | pass | 0 / 0 | 0 | fail (stripes) | 0 / 0 | fail |
+| `still-live-field-outlined-8px` | pass | 0 / 0 | 0 | fail (stripes) | 0 / 0 | fail |
+| `still-paper-field-outlined-16px` | fail (pattern) | 0 / 0 | 331 | pass | 0 / 0 | pass |
+| `still-paper-field-outlined-8px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+| `view-off-live-field-outlined-12px` | pass | 0 / 0 | 0 | fail (stripes) | 0 / 0 | fail |
+| `view-off-live-field-outlined-16px` | pass | 0 / 0 | 0 | fail (stripes) | 0 / 0 | fail |
+| `view-off-live-field-outlined-8px` | pass | 0 / 0 | 0 | fail (stripes) | 0 / 0 | fail |
+| `view-off-paper-field-outlined-16px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+| `view-off-paper-field-outlined-8px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+| `view-on-live-field-outlined-12px` | pass | 1 / 0 | 0 | pass | 1 / 0 | harmful |
+| `view-on-live-field-outlined-16px` | pass | 1 / 0 | 0 | pass | 1 / 0 | harmful |
+| `view-on-live-field-outlined-8px` | pass | 1 / 0 | 0 | pass | 1 / 0 | harmful |
+| `view-on-paper-field-outlined-16px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+| `view-on-paper-field-outlined-8px` | pass | 0 / 0 | 0 | pass | 0 / 0 | pass |
+
+**Flashes**: no misses. IRIS fails four recordings for flashing (the Tron field, in grey and in
+red, Tron from a blob, and Hodgepodge at 60 generations a second), and JETCARP fails all four.
+With the guard on, IRIS passes every recording for flashing. One false alarm: the Seeds soup,
+whose flicker JETCARP counts by its area rule, a quarter of a 10° field (about 0.7% of a 1080p
+screen), where IRIS takes the mean of the whole frame. That difference is deliberate.
+
+**Stripes**: the two checks disagree both ways, and IRIS's pattern check is not a usable
+reference on these scenes:
+
+- IRIS fails five recordings for a pattern: Tron from a blob, which JETCARP fails too, and four
+  JETCARP passes: the Seeds soup with the guard off (which JETCARP fails for flashing) and on,
+  the Greenberg-Hastings waves with the guard on (not with it off), and the Paper field drawn on
+  the processor at 16 pixels a cell (not at 8, and not on the GPU, with darker outlines). None of
+  the four has stripes: they are random cells, or scattered cells on a faint grid. IRIS's check
+  counts *similar shapes*, at least six over a quarter of the frame, without asking whether they
+  repeat regularly, so a soup of equal square cells passes as a pattern; whether it fails then
+  depends on half a second of frames in a row keeping six of them, which a slower scene does
+  more often (the guard slowed both the soup and the waves). Scaled up four times, the soup and
+  the waves still fail.
+- JETCARP fails seven recordings for stripes that IRIS passes: still stripes 16 pixels a pair (at
+  320 by 240; scaled up four times, IRIS fails them too), the checkerboard reversing (IRIS passes
+  it at both sizes), and a field of white cells drawn with dark outlines, on the GPU at 8, 12 and
+  16 pixels a cell and on the processor at 8 and 16. JETCARP counts strong lines in a grid as rows
+  of repeated squares, as the guidance counts rows of repeated elements.
+
+So JETCARP was not changed to follow IRIS's pattern verdicts: doing so would veil ordinary soups,
+and IRIS's check passes plain stripes and checkerboards the guidance names. The misses are listed
+here, as the rule above asks, with what each is.
+
+**Seams**: there are none. A live field drawn at fractional sizes is one colour on the GPU (the
+tile renderer's triangles share exact edges; `a_live_field_at_a_fractional_size_draws_no_seams`
+checks it at 4.37 to 12.4 pixels a cell) and on the processor; both pass, and IRIS agrees. The
+lines first seen over a live field in the app's view were its cell outlines.
+
+**Outlines over a live field** remain a false alarm, not reduced. In the stripe check's
+half-resolution image, as to the eye from a little way off, a one-pixel line looks like a
+two-pixel line at half the contrast; every 8 to 12 pixels that is stripes a sixth to a quarter
+dark, which the check must keep, and coarser scales see the 16-pixel grid the same way. A rule
+that let thin lines through would let rows of small dots through too, which the guidance names.
+Where the cells are scattered (the Paper field) the outlines do not count. The false alarm needs
+a large, even area of bright live cells drawn at 7 pixels a cell or more, and the veil only dims
+it; outlines drawn so that they cannot make a strong grid over live cells would remove it.
+
+**Found on the way**: with the guard on, the outlined field at 16 pixels a cell failed JETCARP's
+own check of what was shown. The stripe check's windows were laid from the top left, so at the
+coarser scales a band along the right and bottom edges (up to a window wide) was never looked at,
+and never veiled; on a large pattern the band alone could be over a quarter of the screen.
+Windows now also sit against the far edges (`stripes_against_the_far_edges_are_found_too`), and
+the recordings were made again.
 
 ## Continuous integration
 
