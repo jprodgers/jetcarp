@@ -70,6 +70,13 @@ cargo build --release
 cargo test --workspace --release
 ```
 
+## Accessibility
+
+JETCARP's animations can flash and flicker. It asks about photosensitive epilepsy before showing its
+first scene, and its strobe guard softens, slows or pauses a scene before it flashes. What else it
+does for accessibility, where it falls short, and how to report a problem are in the book's
+[Accessibility](https://jprodgers.github.io/jetcarp/about/accessibility.html) page.
+
 ## Contributing
 
 Bug reports, corrections to the history and credits, rules, tilings, code and documentation are all

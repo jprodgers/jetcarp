@@ -109,4 +109,5 @@
 - [How JETCARP is tested](about/testing.md)
 - [Changelog](about/changelog.md)
 - [Roadmap](about/roadmap.md)
+- [Accessibility](about/accessibility.md)
 - [Contributing](about/contributing.md)

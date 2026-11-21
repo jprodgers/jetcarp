@@ -7,7 +7,7 @@ which are kept current; this page is updated with each release.
 
 | Release | The large feature | Tracking |
 | --- | --- | --- |
-| 0.4.3 | **The strobe guard**: JETCARP notices flashing and strong stripes in what it draws, and softens, slows or pauses the scene, in every output, exported animations included. And every bug fix that can go in. | [#97](https://github.com/jprodgers/jetcarp/issues/97), [milestone](https://github.com/jprodgers/jetcarp/milestone/2) |
+| 0.4.3 | **Accessibility**, led by **the strobe guard**: JETCARP notices flashing and strong stripes in what it draws, and softens, slows or pauses the scene, in every output, exported animations included. Also palettes for colour-vision deficiency, reduced motion, the keyboard and screen readers, a high-contrast theme, and an [accessibility statement](accessibility.md). And every bug fix that can go in. | [#97](https://github.com/jprodgers/jetcarp/issues/97), [milestone](https://github.com/jprodgers/jetcarp/milestone/2) |
 | 0.4.4 | **Exchange with Golly and LifeViewer**: rule strings both ways, complete RLE import and export, plaintext, Life 1.05/1.06 and Macrocell, hexagonal and triangular coordinates, Golly's `.rule` files, and an automatic comparison with Golly | [#152](https://github.com/jprodgers/jetcarp/issues/152), [milestone](https://github.com/jprodgers/jetcarp/milestone/3) |
 | 0.4.5 | **Printing**: PDFs of any world, paper sizes and physical scale, posters across many pages, contact sheets and tiling paper | [#161](https://github.com/jprodgers/jetcarp/issues/161) |
 | 0.4.6 | **Reports**: HTML and PDF reports from scripted templates, and long research runs that write their own | [#162](https://github.com/jprodgers/jetcarp/issues/162) |
