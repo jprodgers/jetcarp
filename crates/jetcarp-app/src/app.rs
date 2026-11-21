@@ -566,7 +566,7 @@ impl eframe::App for JetcarpApp {
             f.frame(self.world.generation);
         }
         self.shell.monitors.update(frame);
-        self.window_place(frame);
+        self.window_place(&ctx, frame);
         // The photosensitive seizure warning, alone, until it has been answered (#96): no outputs,
         // screensaver, tool windows or setup. A screenshot run still ends, picturing it.
         if self.warning.showing {
