@@ -5,7 +5,8 @@ JETCARP @VERSION@ installer for Windows.
 .DESCRIPTION
 Downloads JETCARP's release archive and the release's SHA256SUMS, checks the archive against it,
 unpacks it into one folder (by default %LOCALAPPDATA%\Programs\jetcarp), and adds that folder to
-your user PATH. It changes nothing else, and needs no administrator rights.
+your user PATH. Then the program adds JETCARP, with its icon, to your Start menu
+(`jetcarp launcher install`). It changes nothing else, and needs no administrator rights.
 
   Invoke-WebRequest https://github.com/@REPO@/releases/latest/download/jetcarp-installer.ps1 -OutFile "$env:TEMP\jetcarp-installer.ps1"
   powershell -ExecutionPolicy Bypass -File "$env:TEMP\jetcarp-installer.ps1"
@@ -27,6 +28,9 @@ Do not add the folder to the user PATH (JETCARP_NO_MODIFY_PATH=1).
 .PARAMETER NoPacks
 Leave out the starter pack (JETCARP_NO_PACKS=1).
 
+.PARAMETER NoLauncher
+Add no JETCARP entry to the Start menu (JETCARP_NO_LAUNCHER=1).
+
 .PARAMETER DownloadUrl
 Where to get the release files: a URL, or a local folder holding them (JETCARP_DOWNLOAD_URL).
 Default: https://github.com/@REPO@/releases/download/v<version>
@@ -35,13 +39,14 @@ Default: https://github.com/@REPO@/releases/download/v<version>
 Download with the GitHub CLI, gh, signed in: for a private repository (JETCARP_USE_GH=1).
 
 .PARAMETER Uninstall
-Remove the folder this installer made, and take it off the user PATH.
+Remove the folder this installer made and its Start menu entry, and take it off the user PATH.
 #>
 param(
     [string]$Version = $env:JETCARP_VERSION,
     [string]$InstallDir = $env:JETCARP_INSTALL_DIR,
     [switch]$NoModifyPath = ($env:JETCARP_NO_MODIFY_PATH -eq "1"),
     [switch]$NoPacks = ($env:JETCARP_NO_PACKS -eq "1"),
+    [switch]$NoLauncher = ($env:JETCARP_NO_LAUNCHER -eq "1"),
     [string]$DownloadUrl = $env:JETCARP_DOWNLOAD_URL,
     [switch]$UseGh = ($env:JETCARP_USE_GH -eq "1"),
     [switch]$Uninstall
@@ -119,6 +124,22 @@ function Get-MissingDirs([string]$Dir) {
     return $out
 }
 
+# Runs JETCARP's program with these arguments, and returns whether it succeeded and what it said,
+# as text. Windows PowerShell stops at a program's standard error under "Stop", so not here; a
+# version without the command asked for (before 0.4.3) only fails.
+function Invoke-Program([string]$Program, [string[]]$Arguments) {
+    $Prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $Said = (& $Program @Arguments 2>&1 | ForEach-Object { "$_" }) -join "`n"
+        return [pscustomobject]@{ Ok = ($LASTEXITCODE -eq 0); Said = $Said.Trim() }
+    } catch {
+        return [pscustomobject]@{ Ok = $false; Said = $_.Exception.Message }
+    } finally {
+        $ErrorActionPreference = $Prev
+    }
+}
+
 # The folders an earlier install recorded as its own (`made` lines in the marker).
 function Get-MadeBefore {
     if (-not (Test-Path -LiteralPath $Marker)) { return @() }
@@ -129,6 +150,17 @@ if ($Uninstall) {
     if (-not (Test-Path $Marker)) { Fail "no JETCARP installed by this installer in $InstallDir" }
     if (Test-Path (Join-Path $InstallDir "jetcarp.exe")) {
         Say "removing the program; what JETCARP set up outside its folders (the host, starting at login, the screen saver) is undone by ``jetcarp uninstall``, not by this: if that is still to do, install again and run it"
+    }
+    # The Start menu entry the install asked the program for, taken out while the program is
+    # still there.
+    $Program = Join-Path $InstallDir "jetcarp.exe"
+    if ((Test-Path $Program) -and (Invoke-Program $Program @("launcher", "status")).Ok) {
+        $R = Invoke-Program $Program @("launcher", "remove")
+        if ($R.Ok) {
+            foreach ($l in ($R.Said -split "`r?`n")) { if ($l) { Say $l.Trim() } }
+        } else {
+            Say "could not remove JETCARP's Start menu entry: $($R.Said)"
+        }
     }
     $Made = @(Get-MadeBefore)
     Remove-Item -Recurse -Force $InstallDir
@@ -241,6 +273,16 @@ $Exe = Join-Path $InstallDir "jetcarp.exe"
 $Shown = & $Exe --version
 Say "installed $Shown in $InstallDir"
 if (Test-Path (Join-Path $InstallDir "packs")) { Say "the starter pack is in $(Join-Path $InstallDir 'packs')" }
+# JETCARP in the Start menu, with its icon (#105). A version without the `launcher` command
+# (before 0.4.3) is left without one, and nothing is said.
+if (-not $NoLauncher -and (Invoke-Program $Exe @("launcher", "status")).Ok) {
+    $R = Invoke-Program $Exe @("launcher", "install")
+    if ($R.Ok) {
+        Say $R.Said
+    } else {
+        Say "could not add JETCARP to the Start menu (``jetcarp launcher install`` tries again): $($R.Said)"
+    }
+}
 
 if (-not $NoModifyPath) {
     $UserPath = Get-UserPath

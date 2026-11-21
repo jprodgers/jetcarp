@@ -48,11 +48,17 @@ class Jetcarp < Formula
   end
 
   # No post_install step registers the login item with launchd: Homebrew may run it in a sandbox.
-  # The program does it itself when the app or the host starts.
+  # The program does it itself when the app or the host starts. Nor does one make JETCARP.app or
+  # the Linux menu entry, which go in the home folder, out of the sandbox's reach: the caveats
+  # name the command.
   def caveats
     <<~EOS
+      To open JETCARP from Launchpad, Spotlight and the Dock (macOS, as JETCARP.app in
+      ~/Applications) or from your applications menu (Linux), with its icon, run:
+        jetcarp launcher install
+
       Before `brew uninstall jetcarp`, run `jetcarp uninstall` to undo what JETCARP set up
-      outside its folders (the background host, login item and screen saver).
+      outside its folders (the background host, login item, screen saver and launcher).
 
       On macOS, after `brew upgrade jetcarp`: if the desktop background starts at login, open
       the JETCARP app or run `jetcarp host start` once, so that macOS accepts the new version

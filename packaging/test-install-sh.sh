@@ -2,14 +2,19 @@
 # The shell installer refuses a download that does not match the release's SHA256SUMS
 # (SECURITY.md, "Release files"). This makes a release folder of its own, with a stand-in
 # program and SHA256SUMS written by `package.py sums` as a release's is, and runs the installer
-# from it (--url FOLDER) three times, each with a scratch home:
+# from it (--url FOLDER), each case with a scratch home:
 #
-#   1. intact: it installs;
+#   1. intact: it installs, and has the program add JETCARP to the system's apps (`jetcarp
+#      launcher install`, #105);
 #   2. one byte of the archive changed: refused, and nothing installed;
-#   3. the archive missing from SHA256SUMS: refused, and nothing installed.
+#   3. the archive missing from SHA256SUMS: refused, and nothing installed;
+#   4. --no-launcher: it installs, and asks for no launcher;
+#   5. --uninstall, after case 1: the program takes its launcher out (`jetcarp launcher remove`)
+#      before its folder and link go.
 #
 # "Nothing installed" means the scratch home is still empty afterwards: no program folder, no
-# link, no folder made on the way to them, and nothing left in the temporary folder.
+# link, no folder made on the way to them, and nothing left in the temporary folder. The stand-in
+# program writes each command it is given to `jetcarp-calls` in the scratch home.
 #
 # Usage: packaging/test-install-sh.sh [INSTALLER]
 # INSTALLER is the installer to test (default: packaging/install.sh). CI tests the one a release
@@ -23,7 +28,7 @@ installer=${1:-$here/install.sh}
     exit 2
 }
 # Only what this script passes may steer the installer.
-unset JETCARP_VERSION JETCARP_INSTALL_DIR JETCARP_BIN_DIR JETCARP_DOWNLOAD_URL JETCARP_NO_PACKS JETCARP_USE_GH
+unset JETCARP_VERSION JETCARP_INSTALL_DIR JETCARP_BIN_DIR JETCARP_DOWNLOAD_URL JETCARP_NO_PACKS JETCARP_USE_GH JETCARP_NO_LAUNCHER
 
 version=0.0.0
 work=$(mktemp -d 2>/dev/null || mktemp -d -t jetcarp-installer-test)
@@ -43,7 +48,8 @@ make_release() {
     for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin; do
         name="jetcarp-$version-$target"
         mkdir -p "$work/build/$name"
-        printf '#!/bin/sh\necho "jetcarp %s (a stand-in for the installer test)"\n' "$version" >"$work/build/$name/jetcarp"
+        # shellcheck disable=SC2016 # $HOME and $* are the stand-in's own, when it runs.
+        printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"$HOME/jetcarp-calls"\necho "jetcarp %s (a stand-in for the installer test)"\n' "$version" >"$work/build/$name/jetcarp"
         chmod +x "$work/build/$name/jetcarp"
         tar -czf "$rel/$name.tar.gz" -C "$work/build" "$name"
     done
@@ -60,18 +66,26 @@ flip_byte() {
     printf "\\$(printf '%03o' "$new")" | dd of="$1" bs=1 seek="$at" conv=notrunc 2>/dev/null
 }
 
-# Run the installer from release folder $1 with a fresh scratch home, `$work/home-$2`; its output
-# goes to `$work/out-$2`, and its exit status is returned.
+# Run the installer from release folder $1 with a fresh scratch home, `$work/home-$2`, and any
+# further options after those; its output goes to `$work/out-$2`, and its exit status is returned.
 run_installer() {
+    rel=$1
     home="$work/home-$2"
-    mkdir -p "$home" "$work/tmp-$2"
+    case_name=$2
+    shift 2
+    mkdir -p "$home" "$work/tmp-$case_name"
     set +e
-    HOME="$home" TMPDIR="$work/tmp-$2" sh "$installer" --version "$version" --url "$1" \
-        --dir "$home/lib/jetcarp" --bin-dir "$home/bin" --no-packs >"$work/out-$2" 2>&1
+    HOME="$home" TMPDIR="$work/tmp-$case_name" sh "$installer" --version "$version" --url "$rel" \
+        --dir "$home/lib/jetcarp" --bin-dir "$home/bin" --no-packs "$@" >"$work/out-$case_name" 2>&1
     status=$?
     set -e
-    sed 's/^/    | /' "$work/out-$2"
+    sed 's/^/    | /' "$work/out-$case_name"
     return "$status"
+}
+
+# Whether the stand-in program in scratch home $1 was given the command $2.
+called() {
+    [ -f "$1/jetcarp-calls" ] && grep -qx "$2" "$1/jetcarp-calls"
 }
 
 # Case $1 must have been refused with a message holding $2, leaving its home and its temporary
@@ -100,6 +114,11 @@ if run_installer "$work/intact" intact; then
     else
         bad "intact: the installer succeeded but the program or its link is missing"
     fi
+    if called "$home" "launcher install"; then
+        ok "intact: the program was asked to add JETCARP to the system's apps"
+    else
+        bad "intact: the installer did not run \`jetcarp launcher install\`"
+    fi
 else
     bad "intact: the installer failed on an intact release"
 fi
@@ -126,8 +145,40 @@ else
     refused unlisted "SHA256SUMS does not list"
 fi
 
+echo "4. --no-launcher"
+if run_installer "$work/intact" no-launcher --no-launcher; then
+    home="$work/home-no-launcher"
+    if [ ! -x "$home/lib/jetcarp/jetcarp" ]; then
+        bad "no-launcher: the program is missing"
+    elif called "$home" "launcher install"; then
+        bad "no-launcher: the installer ran \`jetcarp launcher install\` all the same"
+    else
+        ok "no-launcher: installed, and no launcher asked for"
+    fi
+else
+    bad "no-launcher: the installer failed"
+fi
+
+echo "5. --uninstall, after case 1"
+home="$work/home-intact"
+set +e
+HOME="$home" TMPDIR="$work/tmp-intact" sh "$installer" --version "$version" --uninstall \
+    --dir "$home/lib/jetcarp" --bin-dir "$home/bin" >"$work/out-uninstall" 2>&1
+status=$?
+set -e
+sed 's/^/    | /' "$work/out-uninstall"
+if [ "$status" -ne 0 ]; then
+    bad "uninstall: the installer failed"
+elif [ -e "$home/lib/jetcarp" ] || [ -e "$home/bin/jetcarp" ]; then
+    bad "uninstall: the program's folder or its link is still there"
+elif ! called "$home" "launcher remove"; then
+    bad "uninstall: the installer did not run \`jetcarp launcher remove\` first"
+else
+    ok "uninstall: the launcher, the program's folder and its link removed"
+fi
+
 if [ "$failures" -gt 0 ]; then
     echo "$failures case(s) failed"
     exit 1
 fi
-echo "all three cases passed"
+echo "all five cases passed"

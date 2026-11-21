@@ -5,7 +5,9 @@
 #
 # It downloads the release archive for this machine and the release's SHA256SUMS, checks the
 # archive against it, unpacks it into one folder, and links the program into a folder on your
-# PATH. It changes nothing else: no shell startup files, no system folders, no sudo.
+# PATH. Then the program adds JETCARP, with its icon, to your applications menu (Linux) or as
+# JETCARP.app to ~/Applications (macOS): `jetcarp launcher install`. It changes nothing else: no
+# shell startup files, no system folders, no sudo.
 #
 # Options, each also an environment variable (for `curl ... | sh -s -- OPTIONS` or `VAR=... sh`):
 #   --version V     install release V instead of @VERSION@, such as 0.4.0, v0.4.0 or 0.4.0-rc.2
@@ -13,12 +15,14 @@
 #   --dir DIR       the program's folder (JETCARP_INSTALL_DIR; default ~/.local/lib/jetcarp)
 #   --bin-dir DIR   where the `jetcarp` link goes (JETCARP_BIN_DIR; default ~/.local/bin)
 #   --no-packs      leave out the starter pack (JETCARP_NO_PACKS=1)
+#   --no-launcher   add JETCARP to no applications menu or Applications folder
+#                   (JETCARP_NO_LAUNCHER=1)
 #   --url URL       where to get the release files: a URL or a local folder holding them
 #                   (JETCARP_DOWNLOAD_URL; default
 #                   https://github.com/@REPO@/releases/download/v<version>)
 #   --gh            download with the GitHub CLI, `gh`, signed in: for a private repository
 #                   (JETCARP_USE_GH=1)
-#   --uninstall     remove the folder and the link this installer made
+#   --uninstall     remove the folder, the link and the launcher this installer made
 #   -h, --help      this text
 set -eu
 
@@ -30,6 +34,7 @@ dir="${JETCARP_INSTALL_DIR:-}"
 bin_dir="${JETCARP_BIN_DIR:-}"
 url="${JETCARP_DOWNLOAD_URL:-}"
 no_packs="${JETCARP_NO_PACKS:-}"
+no_launcher="${JETCARP_NO_LAUNCHER:-}"
 use_gh="${JETCARP_USE_GH:-}"
 uninstall=""
 
@@ -50,9 +55,10 @@ JETCARP $VERSION installer for Linux and macOS
   --dir DIR       the program's folder (JETCARP_INSTALL_DIR; default ~/.local/lib/jetcarp)
   --bin-dir DIR   where the \`jetcarp\` link goes (JETCARP_BIN_DIR; default ~/.local/bin)
   --no-packs      leave out the starter pack (JETCARP_NO_PACKS=1)
+  --no-launcher   add JETCARP to no applications menu or Applications folder (JETCARP_NO_LAUNCHER=1)
   --url URL       a URL or local folder with the release files (JETCARP_DOWNLOAD_URL)
   --gh            download with the GitHub CLI, signed in, for a private repository
-  --uninstall     remove the folder and the link this installer made
+  --uninstall     remove the folder, the link and the launcher this installer made
   -h, --help      this text
 EOF
 }
@@ -65,6 +71,7 @@ while [ $# -gt 0 ]; do
         --url) url="${2:?--url needs a URL}"; shift 2 ;;
         --gh) use_gh=1; shift ;;
         --no-packs) no_packs=1; shift ;;
+        --no-launcher) no_launcher=1; shift ;;
         --uninstall) uninstall=1; shift ;;
         -h | --help) usage; exit 0 ;;
         *) die "unknown option $1 (try --help)" ;;
@@ -120,6 +127,15 @@ if [ -n "$uninstall" ]; then
     [ -f "$marker" ] || die "no JETCARP installed by this installer in $dir"
     if [ -x "$dir/jetcarp" ]; then
         say "removing the program; what JETCARP set up outside its folders (the host, starting at login, the screen saver) is undone by \`jetcarp uninstall\`, not by this: if that is still to do, install again and run it"
+    fi
+    # The launcher the install asked the program for, taken out while the program is still there
+    # (a version without the `launcher` command, before 0.4.3, made none).
+    if [ -x "$dir/jetcarp" ] && "$dir/jetcarp" launcher status >/dev/null 2>&1; then
+        if out=$("$dir/jetcarp" launcher remove 2>&1); then
+            printf '%s\n' "$out" | while IFS= read -r l; do say "$l"; done
+        else
+            say "could not remove JETCARP's launcher: $out"
+        fi
     fi
     if link_ours; then
         rm -f "$bin_dir/jetcarp"
@@ -282,6 +298,15 @@ say "installed $("$dir/jetcarp" --version 2>/dev/null || echo "JETCARP $version"
 say "linked $bin_dir/jetcarp"
 if [ -d "$dir/packs" ]; then
     say "the starter pack is in $dir/packs"
+fi
+# JETCARP among the system's apps, with its icon (#105). A version without the `launcher` command
+# (before 0.4.3) is left without one, and nothing is said.
+if [ -z "$no_launcher" ] && "$dir/jetcarp" launcher status >/dev/null 2>&1; then
+    if out=$("$dir/jetcarp" launcher install 2>&1); then
+        printf '%s\n' "$out" | while IFS= read -r l; do say "$l"; done
+    else
+        say "could not add JETCARP to the system's apps (\`jetcarp launcher install\` tries again): $out"
+    fi
 fi
 case ":${PATH:-}:" in
     *":$bin_dir:"*) ;;
