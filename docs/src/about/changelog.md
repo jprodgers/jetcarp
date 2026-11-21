@@ -44,6 +44,14 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **A settled reseed policy fires at the same generation whatever else counts changes.** Its
+  check for a steady cycle of changing cells read every generation whose changes had been counted,
+  and which those were depended on whether the app's activity graph or the desktop host was
+  counting them, or a script trigger, or the GPU: with them it could fire sooner, so a scene saved
+  from the app could replay to another state. It now reads only the generations it measured itself,
+  from the end of its cooldown. A scene in which something else measured activity before a policy's
+  cooldown ended can reseed at another generation than before.
+  ([Reseeding](../guides/reseeding.md))
 - **A world with a B0 rule is said to repeat only when it does.** The period check compared the
   cells JETCARP keeps for a B0 rule, which are relative to its background, but not the
   background's phase, so a world whose kept cells came back with the background in another phase

@@ -74,6 +74,7 @@ fn scenes() -> Vec<(&'static str, Scene)> {
     vec![
         ("a script", script),
         ("reseed policies", reseed),
+        ("a settled policy with a cooldown", settled_scene()),
         (
             "a turmite",
             scene(
@@ -106,8 +107,8 @@ fn scenes() -> Vec<(&'static str, Scene)> {
     ]
 }
 
-const AT: [u64; 5] = [1, 7, 30, 64, 101];
-const END: u64 = 140;
+const AT: [u64; 7] = [1, 7, 30, 64, 101, 200, 333];
+const END: u64 = 400;
 
 /// The world's version 2 hash after each generation up to `END`.
 fn straight(sc: &Scene, track_changes: bool) -> Vec<String> {
@@ -170,6 +171,61 @@ fn a_reopened_world_hashes_as_the_unbroken_one() {
     let mut w = World::from_scene(&all[0].1).unwrap();
     w.apply(Command::Step { gens: END }).unwrap();
     assert!(w.script_state.started > 0, "the script never moved on");
+}
+
+/// A settled policy with a cooldown that looks for a steady cycle of changed counts, on a small
+/// torus that settles soon after each reseed.
+pub fn settled_scene() -> Scene {
+    let mut sc = scene(
+        TilingSpec::rect("square", 16, 16, Boundary::Wrap),
+        vec![CaSpec::new("B3/S23")],
+    );
+    sc.reseed = vec![
+        AutoReseed::new(
+            ReseedMode::rain(),
+            ReseedWhen::Settled {
+                activity: 0.0,
+                for_gens: 6,
+                cycle: Some(6),
+                period: None,
+                latest: Some(400),
+            },
+        )
+        .cooldown(40),
+    ];
+    sc
+}
+
+/// The generations at which the world's policies fired, and its version 2 hash after each
+/// generation, over `gens` generations stepped one at a time.
+fn reseeds(w: &mut World, gens: u64) -> (Vec<u64>, Vec<String>) {
+    let (mut at, mut hashes) = (vec![], vec![]);
+    let mut fired = 0;
+    for _ in 0..gens {
+        w.apply(Command::Step { gens: 1 }).unwrap();
+        let f: u64 = w.reseed_status().iter().map(|s| s.fired).sum();
+        if f != fired {
+            at.push(w.generation);
+            fired = f;
+        }
+        hashes.push(w.hash_hex());
+    }
+    (at, hashes)
+}
+
+// Whether a front end counts every generation's changes must not change when a settled policy
+// fires: its decision reads only what the world measures for it.
+#[test]
+fn settled_policies_fire_alike_whether_changes_are_tracked() {
+    let sc = settled_scene();
+    let mut off = World::from_scene(&sc).unwrap();
+    let mut on = World::from_scene(&sc).unwrap();
+    on.set_track_changes(true);
+    let (a, ha) = reseeds(&mut off, 600);
+    let (b, hb) = reseeds(&mut on, 600);
+    assert!(a.len() >= 3, "the policy fired at {a:?}");
+    assert_eq!(a, b, "reseeded at {a:?} untracked, at {b:?} tracked");
+    assert_eq!(ha, hb);
 }
 
 // An old record (no version: version 1, 16 digits) still verifies against its replay, and a

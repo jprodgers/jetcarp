@@ -257,6 +257,65 @@ fn jaca_glow_and_counts() {
     }
 }
 
+/// A settled policy with a cooldown that looks for a steady cycle fires at the same generations,
+/// with the same version 2 hash after every generation, on the CPU, on the GPU, and on the GPU
+/// while every generation's changes are counted: its decision reads only the generations it
+/// measured itself.
+#[test]
+fn settled_policies_fire_alike_on_the_gpu() {
+    let Some(mut sim) = gpu() else { return };
+    let mut sc = scene(
+        TilingSpec::rect("square", 16, 16, Boundary::Wrap),
+        vec![ca("B3/S23", None, SeedSpec::Random { density: 0.3 })],
+    );
+    sc.reseed = vec![
+        AutoReseed::new(
+            ReseedMode::rain(),
+            ReseedWhen::Settled {
+                activity: 0.0,
+                for_gens: 6,
+                cycle: Some(6),
+                period: None,
+                latest: Some(400),
+            },
+        )
+        .cooldown(40),
+    ];
+    let gens = 600;
+    let run = |w: &mut World, step: &mut dyn FnMut(&mut World)| -> (Vec<u64>, Vec<String>) {
+        let (mut at, mut hashes, mut fired) = (vec![], vec![], 0);
+        for _ in 0..gens {
+            step(w);
+            let f: u64 = w.reseed_status().iter().map(|s| s.fired).sum();
+            if f != fired {
+                at.push(w.generation);
+                fired = f;
+            }
+            hashes.push(w.hash_hex());
+        }
+        (at, hashes)
+    };
+    let mut cpu = World::from_scene(&sc).unwrap();
+    let want = run(&mut cpu, &mut |w| {
+        w.apply(Command::Step { gens: 1 }).unwrap();
+    });
+    assert!(want.0.len() >= 3, "fired at {:?}", want.0);
+    for tracked in [false, true] {
+        let mut gw = World::from_scene(&sc).unwrap();
+        gw.set_track_changes(tracked);
+        let mut on_cpu = 0;
+        let got = run(&mut gw, &mut |w| {
+            on_cpu += sim.step_mixed(w, 1).unwrap().cpu_gens;
+        });
+        assert_eq!(on_cpu, 0, "tracked {tracked}: fell back to the CPU");
+        assert_eq!(
+            got.0, want.0,
+            "tracked {tracked}: fired at other generations"
+        );
+        assert!(got.1 == want.1, "tracked {tracked}: the hashes differ");
+    }
+}
+
 /// Several JACA and other CAs, steps per generation, a script switching between them (the glow
 /// stays with its CA), reseeds of either sign, and period detection.
 #[test]

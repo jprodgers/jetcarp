@@ -371,7 +371,10 @@ impl World {
             // A front end's option (whether every generation's changes are counted).
             track_changes: _,
             // Not reproduced by a restore: counted only while changes are tracked, a trigger
-            // or policy measures them, or the GPU counts them.
+            // or policy measures them, or the GPU counts them. The one decision that reads them
+            // (a script waiting for `done`) makes the world count every generation's changes
+            // itself, on the CPU and the GPU alike, so it reads the same however the world is
+            // stepped.
             last_changed: _,
             last_moved: _,
             // A cache of a topology built ahead.
@@ -382,8 +385,11 @@ impl World {
             // which the stepper applies before the world is used again (`external`).
             pending_reseed: _,
             manual_reseeds,
-            // Not reproduced by a restore: kept for every generation whose changes were counted,
-            // which depends on whether a front end tracked them, or the GPU counted them.
+            // Kept for every generation whose changes were counted, which depends on whether a
+            // front end tracked them or the GPU counted them, so not reproduced by a restore as a
+            // whole. What decides anything is hashed below: the generations each settled policy
+            // measured itself, which its steadiness check reads (`measured`). A script's
+            // activity trigger measures each generation itself (`ScriptState` is hashed).
             activity: _,
             // A cache.
             tile_size: _,
@@ -423,6 +429,23 @@ impl World {
             policy(&mut h, p);
         }
         h.u64(*manual_reseeds);
+        // What each settled policy's steadiness check will read.
+        for (p, st) in reseed.iter().zip(reseed_status) {
+            if let crate::reseed::ReseedWhen::Settled {
+                for_gens,
+                cycle: Some(c),
+                ..
+            } = p.when
+            {
+                let need = (for_gens.max(1) + c) as usize;
+                let window = self.measured(st.since, st.since.saturating_add(p.cooldown), need);
+                h.len(window.len());
+                for a in window {
+                    h.u64(a.generation);
+                    h.u64(a.changed);
+                }
+            }
+        }
         watch(&mut h, period);
         h.finish()
     }
@@ -529,10 +552,19 @@ mod tests {
         })
         .unwrap();
         w.apply(Command::SetReseed {
-            policies: vec![AutoReseed::new(
-                ReseedMode::rain(),
-                ReseedWhen::Every { gens: 3 },
-            )],
+            policies: vec![
+                AutoReseed::new(ReseedMode::rain(), ReseedWhen::Every { gens: 3 }),
+                AutoReseed::new(
+                    ReseedMode::rain(),
+                    ReseedWhen::Settled {
+                        activity: 0.0,
+                        for_gens: 2,
+                        cycle: Some(2),
+                        period: None,
+                        latest: None,
+                    },
+                ),
+            ],
         })
         .unwrap();
         w.apply(Command::Step { gens: 5 }).unwrap();
@@ -677,6 +709,10 @@ mod tests {
                 Box::new(|w| w.reseed_status[0].error = Some("x".into())),
             ),
             ("manual reseeds", Box::new(|w| w.manual_reseeds += 1)),
+            (
+                "a change count a settled policy measured",
+                Box::new(|w| w.activity.back_mut().unwrap().changed += 1),
+            ),
             ("the watch's power", Box::new(|w| w.watch.power *= 2)),
             ("the watch's lam", Box::new(|w| w.watch.lam += 1)),
             (
