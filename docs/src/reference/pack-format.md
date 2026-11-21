@@ -714,7 +714,12 @@ means its palette for good; a later JETCARP may add names to the list, never cha
 `Ember`, `Tide`, `Prism`, `Mono`, `Ink`, `Aurora`, `Synthwave`, `Moss`, `Candy`, `Lava`, `Glacier`,
 `Phosphor`, `Koi`, `Desert`, `Thermal`, `Deep Sea`, `Paper`, `Blueprint`, `Neon`, `Autumn`,
 `Verdigris`, `Marigold`, `Coral`, `Orchid`, `Citrus`, `Riso`, `Bone`, `Ultramarine`,
-`Stained Glass`, `Opal`, `Lantern`, `Cobalt`, `Saffron`.
+`Stained Glass`, `Opal`, `Lantern`, `Cobalt`, `Saffron`, `Dusk`, `Furnace`, `Kelp`, `Abyss`,
+`Rosewood`, `Harbour`, `Lagoon`, `Heather`, `Graphite`, `Honey`, `Spruce`, `Fjord`, `Copper`,
+`Peony`, `Sulphur`, `Frost`, `Sepia`, `Midnight Garden`, `Lava Flow`, `Nebula`, `Vellum`, `Linen`,
+`Ink Wash`, `Bluebell`, `Fern`, `Brick`, `Mulberry`, `Driftwood`, `Tidewheel`, `Compass Rose`,
+`Indigo`, `Marmalade`, `Sky`, `Rust`, `Iris`, `Gold`, `Lapis`, `Amber`, `Ice`, `Ember Red`, `Delft`,
+`Ochre`.
 <!-- /palette-registry -->
 
 ### Media
@@ -808,9 +813,10 @@ segments of schema `jetcarp-explore-runs 2` or `1`, score sidecars `jetcarp-expl
 - `parts`: the sealed segments in id order, each a Parquet object, with its `segment` name
   (`part-` and digits), `rows`, `bytes`, and `first` and `last` run ids in decimal.
 - `run_schema`: the newest segment's schema. Schema 2 added five nullable columns, JACA's sign
-  measures, at the end; a search sealed before them and continued after has segments of both
-  schemas, each naming its own in its `jetcarp.schema` metadata. A reader MUST read both, reading
-  the sign columns of a schema 1 segment as null, and SHOULD skip columns it does not know. The
+  measures, at the end, and schema 3 two more, `parent_job` and `parent_search`; a search sealed before them and
+  continued after has segments of several schemas, each naming its own in its `jetcarp.schema`
+  metadata. A reader MUST read them all, reading the columns a segment's schema lacks as null, and
+  SHOULD skip columns it does not know. The
   objects are copied as they are: publishing and importing never rewrite a segment.
 - `scores`: each rescore, with the sidecar of each segment it changed. A run's score is the one in
   its segment's newest sidecar, or the segment's own.
@@ -982,11 +988,14 @@ packs; none is ever deleted or rewritten.
 | `ants` | two ant runs on the square grid: Langton's ant (a highway, named) and LLRR (symmetric growth) | `sha256:c5f2ab90b2bb2f269a62db194cc951eb77f0753b18e4658d93b0749ad53b317d` |
 | `export` | `minimal` as an export | `sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6` |
 | `numbers` | random states beyond 2^53, as decimal strings: a Quick Start scene's `rng_state`, a block's find in `provenance.run`, and Langton's ant from a soup's `state` | `sha256:74f36181bc2ec72a7a9d1c45164d98cfec1e964f224ad704abe9f635cc243e38` |
+| `searches3` | an explore search sealed in run schema 3 (0.4.3): its runs' lineage in `parent`, `parent_job` and `parent_search`, and a run on the 4,000-tile Penrose rhomb patch with those tiles as its `cells` | `sha256:503076430fba7efbbf9d5de724c2e03d3931de66f9cb2db9f012878e87d3130c` |
 
 Their keys are Ed25519 keys from fixed seeds and their raters are invented. Every time in them is
 fixed, including the times a search stamps on what it finds (a find's date and its verification's),
-so making them again gives the same bytes; a test makes and publishes the aperiodic one twice, in
-different seconds, and compares every file.
+so the JETCARP that made a pack makes it again in the same bytes; a test makes and publishes the
+aperiodic one twice, in different seconds, and compares every file. A later JETCARP may write an
+older pack differently, so the test that writes them writes only the ones not there yet: each is
+kept as its JETCARP made it, and `searches` keeps run schema 2 as `searches3` holds schema 3.
 
 ### Conformance levels
 

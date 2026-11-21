@@ -231,6 +231,58 @@ pub fn is_aperiodic(key: &str) -> bool {
     matches!(key, "penrose-rhomb" | "penrose-kd" | "spectre" | "hat")
 }
 
+/// How a search sizes its grids from the cells it asks for (a search's `sizing`). Sizing 1, what
+/// searches made before JETCARP 0.4.3 keep: a run records the cells asked, and an aperiodic
+/// patch is the first level from the default up with at least half of them, so 16,000 and
+/// 64,000 cells both gave the 35,000-tile level. Sizing 2: an aperiodic patch is the level
+/// nearest the cells asked ([`search_cells`]), and a run records the patch's tiles.
+pub const SIZING: u32 = 2;
+
+/// The aperiodic levels a search may use: from the default level (about 500 tiles) to the
+/// largest used without asking (about 2 million), as (level, tiles).
+fn search_levels(key: &str) -> Vec<(u32, u32)> {
+    let top = aperiodic::auto_level_max(key);
+    aperiodic::levels(key)
+        .iter()
+        .filter(|l| l.0 <= top)
+        .map(|&(l, n)| (l, n as u32))
+        .collect()
+}
+
+/// The cells a search records for a grid of tiling `key` asked at about `cells`, under `sizing`
+/// ([`SIZING`]). On a periodic tiling, and under sizing 1, the cells asked (the grid has about
+/// that many). Under sizing 2 on an aperiodic patch, the tiles of the level nearest `cells`
+/// (16,000 asked: the 4,000-tile level, not 35,000), which [`sized_spec`] builds exactly, so a
+/// run that records them replays on that patch in any JETCARP.
+pub fn search_cells(key: &str, cells: u32, sizing: u32) -> u32 {
+    let key = tiling_key(key);
+    if sizing < 2 || !is_aperiodic(&key) {
+        return cells;
+    }
+    search_levels(&key)
+        .into_iter()
+        .min_by_key(|&(_, n)| (n.abs_diff(cells), n))
+        .map_or(cells, |l| l.1)
+}
+
+/// The cells of a search's confirming grid of tiling `key`, with `screen` and `confirm` the
+/// screening and confirming cells asked: [`search_cells`] of `confirm`, except that under sizing
+/// 2 an aperiodic confirming patch is bigger than the screening one whenever `confirm` is bigger
+/// than `screen` (the next level up when the nearest level is the same).
+pub fn confirm_cells(key: &str, screen: u32, confirm: u32, sizing: u32) -> u32 {
+    let c = search_cells(key, confirm, sizing);
+    let s = search_cells(key, screen, sizing);
+    let key = tiling_key(key);
+    if sizing < 2 || !is_aperiodic(&key) || confirm <= screen || c > s {
+        return c;
+    }
+    search_levels(&key)
+        .into_iter()
+        .map(|l| l.1)
+        .find(|&n| n > s)
+        .unwrap_or(c)
+}
+
 /// The spec of `key` at about `cells` cells. Periodic tilings wrap; aperiodic patches have a
 /// dead edge.
 pub fn sized_spec(key: &str, cells: u32) -> Result<(TilingSpec, Arc<Topology>), String> {
@@ -964,5 +1016,35 @@ mod tests {
             sized_spec("k2-017", 500).unwrap().0,
             sized_spec("catalog:k2-017", 500).unwrap().0
         );
+    }
+
+    /// Sizing 2 picks the aperiodic level nearest the cells asked, and records its tiles, which
+    /// `sized_spec` (the sizing every JETCARP replays with) builds exactly; periodic tilings and
+    /// sizing 1 record the cells asked.
+    #[test]
+    fn a_search_records_the_aperiodic_level_nearest_the_cells_asked() {
+        for key in ["penrose-rhomb", "penrose-kd", "spectre", "hat"] {
+            let levels = search_levels(key);
+            assert_eq!(levels.first().map(|l| l.0), Some(3), "{key}");
+            assert_eq!(levels.last().map(|l| l.0), Some(7), "{key}");
+            // Every level small enough to build here rebuilds from its own tile count.
+            for &(level, n) in levels.iter().filter(|l| l.1 <= 40_000) {
+                let (spec, topo) = sized_spec(key, n).unwrap();
+                assert_eq!(spec.size, Some(SizeSpec::Level(level)), "{key} {n}");
+                assert_eq!(topo.len() as u32, n, "{key} level {level}");
+            }
+            let near = |c| search_cells(key, c, SIZING);
+            let (l4, l5) = (levels[1].1, levels[2].1);
+            assert_eq!((near(16_000), near(64_000)), (l4, l5), "{key}");
+            assert_eq!((near(100), near(1_000_000_000)), (levels[0].1, levels[4].1));
+            assert_eq!(search_cells(key, 16_000, 1), 16_000);
+            assert_eq!(confirm_cells(key, 16_000, 64_000, SIZING), l5);
+            // Both nearest the same level: the confirming patch is the next one up.
+            assert_eq!(confirm_cells(key, 30_000, 40_000, SIZING), levels[3].1);
+            assert_eq!(confirm_cells(key, 30_000, 30_000, SIZING), l5);
+            assert_eq!(confirm_cells(key, 30_000, 40_000, 1), 40_000);
+        }
+        assert_eq!(search_cells("square", 16_000, SIZING), 16_000);
+        assert_eq!(confirm_cells("k2-017", 900, 900, SIZING), 900);
     }
 }

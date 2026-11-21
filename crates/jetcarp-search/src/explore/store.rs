@@ -4,7 +4,7 @@
 //!
 //! | Table | What |
 //! | --- | --- |
-//! | `runs` | the runs not yet sealed, one row each: candidate, fate, score, behaviour bin, features (100-byte blob of 25 `f32`, [`feat_blob`]; 80 bytes for runs stored before JACA's sign measures); `stage` 1 screened, 2 confirmed on a bigger grid (`parent` the screened run) |
+//! | `runs` | the runs not yet sealed, one row each: candidate, fate, score, behaviour bin, features (100-byte blob of 25 `f32`, [`feat_blob`]; 80 bytes for runs stored before JACA's sign measures); `stage` 1 screened, 2 confirmed on a bigger grid; `parent` the run it was made from (the screened run a confirmation run confirms, the elite a screened run was made from) and `parent_job` and `parent_search` the job whose run that is, and its search's uuid, when it is not this search's (`--parents-from`) |
 //! | `elites` | the archive: each elite run's id, tiling group (its niche is its family, that group, and its bin), and the candidate and measures the search needs of it (the columns of `runs` it reads), so loading never reads the runs |
 //! | `confirmed` | elites confirmed on bigger grids |
 //! | `coverage` | screened runs per tiling, family, and seed kind (where the search tries next) |
@@ -171,7 +171,32 @@ pub fn feat_from_blob(b: &[u8]) -> Features {
 
 /// The columns of `runs`, in order.
 pub const RUN_COLS: &str = "id,stage,parent,tiling,nb,fam,rule,seed,seed_kind,cells,gens,steps,\
-                            rng,origin,fate,settle,period,score,bin,feats,ts";
+                            rng,origin,fate,settle,period,score,bin,feats,ts,parent_job,\
+                            parent_search";
+
+/// The columns of `runs` added since JETCARP 0.4.2, last, with their types.
+const LATER_RUN_COLS: [(&str, &str); 2] = [("parent_job", "INT"), ("parent_search", "TEXT")];
+
+/// The columns of `runs` to read from this database: [`RUN_COLS`], those a database that an
+/// older JETCARP last wrote lacks read as null (opened for reading, it is not brought up to
+/// date).
+pub fn run_cols(c: &Connection) -> Result<String, String> {
+    let mut cols = RUN_COLS.to_string();
+    for (name, _) in LATER_RUN_COLS {
+        if !has_column(c, "runs", name)? {
+            cols = cols.replace(&format!(",{name}"), ",NULL");
+        }
+    }
+    Ok(cols)
+}
+
+/// Does this table have this column?
+fn has_column(c: &Connection, table: &str, column: &str) -> Result<bool, String> {
+    c.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
+        .map_err(e)?
+        .exists(params![table, column])
+        .map_err(e)
+}
 
 /// The columns of `elites` after its id and group: what [`eval_at`] reads.
 pub const EVAL_COLS: &str =
@@ -182,7 +207,7 @@ CREATE TABLE IF NOT EXISTS runs(
   id INTEGER PRIMARY KEY, stage INT NOT NULL, parent INT, tiling TEXT NOT NULL, nb INT,
   fam TEXT NOT NULL, rule TEXT NOT NULL, seed TEXT NOT NULL, seed_kind TEXT, cells INT,
   gens INT, steps INT, rng INT, origin TEXT, fate TEXT, settle INT, period INT,
-  score REAL, bin INT, feats BLOB, ts INT);
+  score REAL, bin INT, feats BLOB, ts INT, parent_job INT, parent_search TEXT);
 CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS elites(id INTEGER PRIMARY KEY, grp INT NOT NULL, tiling TEXT,
   nb INT, fam TEXT, rule TEXT, seed TEXT, cells INT, gens INT, steps INT, rng INT, origin TEXT,
@@ -212,6 +237,18 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     c.execute_batch("PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY;")
         .map_err(e)?;
     c.execute_batch(SCHEMA).map_err(e)?;
+    // Before 0.4.3 a run had no `parent_job` or `parent_search`. Asked again with the write lock
+    // held, as below.
+    for (name, kind) in LATER_RUN_COLS {
+        if !has_column(&c, "runs", name)? {
+            let tx = begin_write(&mut c)?;
+            if !has_column(&tx, "runs", name)? {
+                tx.execute_batch(&format!("ALTER TABLE runs ADD COLUMN {name} {kind}"))
+                    .map_err(e)?;
+            }
+            tx.commit().map_err(e)?;
+        }
+    }
     // Format 1: elites held only ids. Asked again with the write lock held: another program
     // opening the same database at the same moment may have brought it up already.
     if !elites_have_runs(&c)? {
@@ -317,7 +354,11 @@ impl FamStat {
 pub struct RunOut {
     pub id: i64,
     pub stage: u8,
+    /// The run it was made from (see [`crate::explore::segments::RunRec::parent`]), and the job
+    /// whose run that is when it is another job's.
     pub parent: Option<i64>,
+    pub parent_job: Option<i64>,
+    pub parent_search: Option<String>,
     pub ev: Eval,
     pub seed_kind: String,
 }
@@ -400,7 +441,7 @@ fn write_in(tx: &rusqlite::Transaction, d: &Delta) -> Result<(), String> {
     {
         let mut st = tx
             .prepare_cached(&format!(
-                "INSERT INTO runs({RUN_COLS}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                "INSERT INTO runs({RUN_COLS}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             ))
             .map_err(e)?;
         let t = now();
@@ -429,7 +470,9 @@ fn write_in(tx: &rusqlite::Transaction, d: &Delta) -> Result<(), String> {
                 ev.score as f64,
                 ev.bin,
                 feat_blob(&ev.feat),
-                t
+                t,
+                b.parent_job,
+                b.parent_search
             ])
             .map_err(e)?;
         }
@@ -617,6 +660,8 @@ pub fn rec_at(r: &rusqlite::Row, at: usize) -> rusqlite::Result<RunRec> {
         bin: oi(18)?.unwrap_or(0),
         feat,
         ts: oi(20)?.unwrap_or(0),
+        parent_job: oi(21)?,
+        parent_search: r.get::<_, Option<String>>(at + 22)?,
     })
 }
 

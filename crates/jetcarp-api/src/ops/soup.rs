@@ -13,6 +13,11 @@
 //! that does not say its shape was a rect or a disc, so a rect is tried first, then a disc. The
 //! scene is the soup pasted at the centre of a dead-edged grid with room for it to run.
 //!
+//! **Where to look** ([`jetcarp_core::hunt::soup::sightings`]). Each soup given says the
+//! generation the find first shows in it, whole and apart from everything else, and for a
+//! spaceship the generation the hunt cut it out as it flew off and about when it reaches the
+//! scene's dead edge, where it breaks up.
+//!
 //! **The best soups** (`best`): the hunt's soups run again, from soup 0, and the ones that made
 //! the most copies of the find (then the most spaceships) given. That needs the hunt's seed: the
 //! record's own (0.4.2 on), or its job's spec while the job is in the library.
@@ -22,7 +27,10 @@ use crate::ctx::Ctx;
 use crate::error::ApiError;
 use crate::op::{Op, Progress, Report};
 use jetcarp_core::hunt::separate::{Cache, Census};
-use jetcarp_core::hunt::soup::{Layout, SoupShape, SoupSpec, run_soup, soup_state};
+use jetcarp_core::hunt::soup::{
+    Layout, Limits, Sighting, SoupShape, SoupSpec, run_soup, sightings, soup_state,
+};
+use jetcarp_core::objects::LCell;
 use jetcarp_core::pattern::paste::{PasteAt, PatternSource};
 use jetcarp_core::pattern::{PatternClass, PatternRecord, encode_cells, tiling_identity};
 use jetcarp_core::{Boundary, CaSpec, Command, Scene, SeedSpec, SizeSpec, World};
@@ -65,8 +73,43 @@ pub struct SoupMade {
     /// How it ended (`settled`, `died`, `exploded`, `unsettled`) and at which generation.
     pub end: String,
     pub generation: u64,
+    /// The generation the find first shows in it, whole and apart from everything else (to
+    /// within its period), and stays until the hunt took it: the earliest of its copies. None
+    /// when no copy could be told apart from what was around it.
+    pub first_seen: Option<u64>,
+    /// A spaceship: the generation the hunt cut that copy out as it flew off, past the soup's
+    /// area.
+    pub flew_off: Option<u64>,
+    /// A spaceship: about the generation that copy reaches the scene's dead edge, where it breaks
+    /// up.
+    pub edge: Option<u64>,
     /// Where its scene was written, with `save`.
     pub saved: Option<String>,
+}
+
+impl SoupMade {
+    /// Where to look, in words: `; it first shows at generation 1260, flies off at 1328 and
+    /// reaches the scene's edge at about 2204` (`the first copy shows` when there are several).
+    fn where_text(&self) -> String {
+        let Some(first) = self.first_seen else {
+            return String::new();
+        };
+        let who = if self.copies > 1 {
+            "the first copy shows"
+        } else {
+            "it first shows"
+        };
+        let mut s = format!("; {who} at generation {first}");
+        match (self.flew_off, self.edge) {
+            (Some(f), Some(e)) => {
+                s += &format!(", flies off at {f} and reaches the scene's edge at about {e}")
+            }
+            (Some(f), None) => s += &format!(" and flies off at {f}"),
+            (None, Some(e)) => s += &format!(" and reaches the scene's edge at about {e}"),
+            (None, None) => {}
+        }
+        s
+    }
 }
 
 /// The soups rebuilt.
@@ -118,7 +161,7 @@ impl Report for SoupScene {
         for m in &self.soups {
             let _ = writeln!(
                 s,
-                "  soup {} (rng state {}): {} cop{}, {} ship{}; {} at generation {}{}",
+                "  soup {} (rng state {}): {} cop{}, {} ship{}; {} at generation {}{}{}",
                 m.soup,
                 m.rng_state,
                 m.copies,
@@ -127,6 +170,7 @@ impl Report for SoupScene {
                 if m.ships == 1 { "" } else { "s" },
                 m.end,
                 m.generation,
+                m.where_text(),
                 m.saved
                     .as_ref()
                     .map(|p| format!("; scene: {p}"))
@@ -207,6 +251,73 @@ fn run_one(
     (copies, ships, out.end.name().to_string(), out.gens)
 }
 
+/// The side of a soup's scene, in unit cells: room for a soup `w` by `h` unit cells to run
+/// `gens` generations, at most 1,024 unit cells (or 16 million cells) on a side; and whether it
+/// had to be cut to that.
+fn scene_side(w: u32, h: u32, gens: u64, ntypes: u32) -> (u32, bool) {
+    let fit = ((16_000_000 / ntypes.max(1) as u64) as f64).sqrt() as u64;
+    let want = w.max(h) as u64 + 2 * (gens + 16);
+    let side = want.clamp(64, 1024.min(fit)) as u32;
+    (side, want > side as u64)
+}
+
+/// The earliest copy of the find a soup makes, and where to look for it ([`SoupMade`]'s
+/// `first_seen`, `flew_off`, `edge`): the copy that first shows earliest, and for a spaceship
+/// the generation it would first have a cell past the edge of the soup's scene (`side` unit cells
+/// across, the soup pasted at its centre), to within its period.
+fn where_to_look(
+    census: &Census,
+    layout: &Layout,
+    limits: Limits,
+    rng: u64,
+    id: &str,
+    side: u32,
+) -> (Option<u64>, Option<u64>, Option<u64>) {
+    let mut cache = Cache::with_budget(Cache::DEFAULT_BUDGET);
+    let seen = sightings(census, &mut cache, layout, limits, rng, id);
+    let Some(s): Option<&Sighting> = seen
+        .iter()
+        .filter(|s| s.first.is_some())
+        .min_by_key(|s| (s.first, s.at))
+    else {
+        return (None, None, None);
+    };
+    let first = s.first.unwrap_or(s.at);
+    let flew_off = s.cut.then_some(s.at);
+    let Some(g) = census.topo.lattice() else {
+        return (Some(first), flew_off, None);
+    };
+    if s.d == [0, 0] || s.cells.is_empty() {
+        return (Some(first), flew_off, None);
+    }
+    // Where the paste puts the soup: its live cells' box at the grid's centre, as
+    // `PasteAt::Center` places it.
+    let start = layout.soup(rng);
+    let (mi, mj) = (
+        start.iter().map(|c| c.i).min().unwrap_or(0),
+        start.iter().map(|c| c.j).min().unwrap_or(0),
+    );
+    let pw = start.iter().map(|c| c.i - mi).max().unwrap_or(0) + 1;
+    let ph = start.iter().map(|c| c.j - mj).max().unwrap_or(0) + 1;
+    let shear = g.a2[0] / g.a1[0];
+    let row_start = |j: i32| -((j as f64 * shear + 1e-9).floor() as i32);
+    let n = side as i32;
+    let j0 = (n - ph) / 2;
+    let i0 = (n - pw) / 2 + row_start(j0.clamp(0, n - 1));
+    let on_grid = |q: &LCell, k: i64| {
+        let gj = (q.j as i64 + k * s.d[1] as i64 - mj as i64 + j0 as i64) as i32;
+        let gi = (q.i as i64 + k * s.d[0] as i64 - mi as i64 + i0 as i64) as i32;
+        (0..n).contains(&gj) && (0..n).contains(&(gi - row_start(gj)))
+    };
+    // From when it first shows (in whole periods back from where it was taken) onwards.
+    let back = ((s.at - first) / s.period) as i64;
+    let most = 4 * side as i64 + 64;
+    let edge = (-back..most)
+        .find(|&k| !s.cells.iter().all(|q| on_grid(q, k)))
+        .map(|k| (s.at as i64 + k * s.period as i64).max(0) as u64);
+    (Some(first), flew_off, edge)
+}
+
 /// The scene of a soup: its cells pasted at the centre of a dead-edged grid with room to run
 /// `gens` generations (at most 1,024 unit cells, or 16 million cells, on a side).
 #[allow(clippy::too_many_arguments)]
@@ -222,10 +333,8 @@ fn scene_of(
 ) -> Result<Scene, ApiError> {
     let cells = layout.soup(rng);
     let (w, h) = (layout.spec.w, layout.spec.h);
-    let fit = ((16_000_000 / ntypes.max(1) as u64) as f64).sqrt() as u64;
-    let want = w.max(h) as u64 + 2 * (gens + 16);
-    let side = want.clamp(64, 1024.min(fit)) as u32;
-    if want > side as u64 && notes.iter().all(|n| !n.starts_with("the grid")) {
+    let (side, cut) = scene_side(w, h, gens, ntypes);
+    if cut && notes.iter().all(|n| !n.starts_with("the grid")) {
         notes.push(format!(
             "the grid is {side} unit cells across: ships that fly off reach its dead edge before \
              generation {gens}, and land there"
@@ -270,7 +379,7 @@ fn scene_of(
 pub struct LibrarySoup;
 impl Op for LibrarySoup {
     const NAME: &'static str = "library.soup";
-    const SUMMARY: &'static str = "Rebuild the exact soup a hunt find came from (or the soups of its hunt that made the most copies of it) as a scene that replays to the find.";
+    const SUMMARY: &'static str = "Rebuild the exact soup a hunt find came from (or the soups of its hunt that made the most copies of it) as a scene that replays to the find, with the generation the find first shows in each (and a spaceship's flight off and to the scene's edge).";
     const READ_ONLY: bool = false;
     type In = SoupIn;
     type Out = SoupScene;
@@ -339,11 +448,11 @@ impl Op for LibrarySoup {
             let mut cache = Cache::with_budget(Cache::DEFAULT_BUDGET);
             let r = run_one(&census, &mut cache, &layout, limits, soup, rng, &rec.id);
             if r.0 > 0 {
-                made = Some((layout, r));
+                made = Some((layout, r, limits));
                 break;
             }
         }
-        let Some((layout, first)) = made else {
+        let Some((layout, first, first_limits)) = made else {
             return Err(ApiError::engine(format!(
                 "soup {soup} (rng state {rng}), rebuilt as a {} soup, does not make {}: the record \
                  may come from an engine whose soups or rules differ from this one's",
@@ -368,8 +477,13 @@ impl Op for LibrarySoup {
             ships: first.1,
             end: first.2,
             generation: first.3,
+            first_seen: None,
+            flew_off: None,
+            edge: None,
             saved: None,
         }];
+        // Each soup given is run with the limits it was found with.
+        let mut soup_limits = vec![first_limits];
         let mut looked = None;
         if let Some(n) = a.best {
             let seed = seed.ok_or_else(|| {
@@ -409,6 +523,9 @@ impl Op for LibrarySoup {
                                 ships: r.1,
                                 end: r.2,
                                 generation: r.3,
+                                first_seen: None,
+                                flew_off: None,
+                                edge: None,
                                 saved: None,
                             }
                         },
@@ -428,9 +545,16 @@ impl Op for LibrarySoup {
                     total - 1
                 ));
             } else {
+                soup_limits = vec![limits; all.len()];
                 soups = all;
                 looked = Some(total);
             }
+        }
+        // Where to look in each: when the find first shows, and a ship's flight.
+        for (m, &lim) in soups.iter_mut().zip(&soup_limits) {
+            let (side, _) = scene_side(w, h, m.generation, ntypes);
+            (m.first_seen, m.flew_off, m.edge) =
+                where_to_look(&census, &layout, lim, m.rng_state, &rec.id, side);
         }
         // The scenes.
         let mut scene = None;

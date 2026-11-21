@@ -16,7 +16,11 @@ pub struct RunRow {
     pub id: i64,
     /// 1 screened, 2 a confirmation run of `parent` on a bigger grid.
     pub stage: i64,
+    /// The run it was made from, and that run's job and its search's uuid when it is another
+    /// job's ([`RunRec::parent`]).
     pub parent: Option<i64>,
+    pub parent_job: Option<i64>,
+    pub parent_search: Option<String>,
     /// The kind of starting pattern (`random`, `blob`, `point`, `mutated`, `confirm`, ...).
     pub seed_kind: String,
     pub cand: Cand,
@@ -34,6 +38,8 @@ impl RunRow {
             id: r.id,
             stage: r.stage,
             parent: r.parent,
+            parent_job: r.parent_job,
+            parent_search: r.parent_search.clone(),
             seed_kind: r.seed_kind.clone(),
             cand: Cand {
                 tiling: r.tiling.clone(),

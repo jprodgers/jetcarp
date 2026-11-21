@@ -108,8 +108,8 @@ for most rules (JETCARP's own default is Ember), and two for JACA's +1 and −1 
 stay apart for protanopia, deuteranopia, tritanopia and their milder forms: Lantern, and Cobalt
 and Saffron for JACA (see
 [Palettes for colour-vision deficiency](palettes.md#palettes-for-colour-vision-deficiency)). Or
-choose any built-in palette for each. The window lists the built-in palettes that pass JETCARP's
-colour-vision check.
+choose any built-in palette for each. The window says how many built-in palettes pass JETCARP's
+colour-vision check, and names JACA's pairs that stay apart.
 
 The choice applies to the scenes you open after making it: Quick Start entries, scene files, the
 library's patterns and AI control's worlds. A scene that names its palettes keeps them, and a scene

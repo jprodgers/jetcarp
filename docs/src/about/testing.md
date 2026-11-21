@@ -32,7 +32,12 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   the square grid (Moore and von Neumann) and the hexagon grid, placed on rows of both parities,
   where JETCARP's offset rows and Golly's sheared grid differ: 62 generations up to 100
   (`golly_agrees_on_jetcarp_s_rle`, `jetcarp-api/tests/golly.rs`, ignored where Golly isn't
-  installed). It fails if the hexagon layout is shifted the wrong way, at the first generation.
+  installed). It fails if the hexagon layout is shifted the wrong way, at the first generation. A
+  second test does the same for every find in a library that Golly can hold, over four of each
+  one's periods (`golly_agrees_on_a_library_s_finds`, given a library with
+  `JETCARP_GOLLY_LIBRARY`). On 21 November 2026, a library of fresh hunts on squares, hexagons and
+  the von Neumann neighbourhood held 3,314 finds: 2,024 oscillators, 1,282 still lifes and 8
+  spaceships. Every one pasted back as the same cells and ran to the same generation in Golly 5.0.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
   on Windows directory junctions and symbolic links too) and its limits, that nothing listens for AI

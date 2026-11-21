@@ -55,6 +55,15 @@ day later (0.4.2: 17 November here, 18 November there).
   Accessibility* makes them, or any palettes, the defaults for scenes that name none.
   ([Palettes](../reference/palettes.md#colour-vision-deficiency),
   [#217](https://github.com/jprodgers/jetcarp/issues/217))
+- **42 more palettes that pass the colour-vision check, 49 of the 75 built-ins in all:** ramps of
+  several hues (Dusk, Furnace, Kelp, Abyss, Rosewood, Harbour, Lagoon), of one hue (Heather,
+  Graphite, Honey, Spruce, Fjord, Copper, Peony, Sulphur, Frost, Sepia), longer ramps on a deeper
+  ground (Midnight Garden, Lava Flow, Nebula), light grounds (Vellum, Linen, Ink Wash, Bluebell,
+  Fern, Brick, Mulberry, Driftwood), two closed wheels for cyclic rules (Tidewheel, Compass Rose),
+  and six more pairs for JACA's two signs (Indigo and Marmalade, Sky and Rust, Iris and Gold, Lapis
+  and Amber, Ice and Ember Red, Delft and Ochre). All join the frozen palette registry. They were
+  designed with `docs/tools/design-palettes.py`, and the tests hold every one, and every JACA pair,
+  to the check. ([Palettes](../reference/palettes.md#colour-vision-deficiency))
 - **The app follows the system's request for reduced motion.** It reads Windows' *Show animations
   in Windows*, macOS's *Reduce motion* and GNOME's *Reduce Animation* at start and every couple of
   seconds. When it is on, the Quick Start's cards and the small animations in the Hunts and Ants
@@ -79,6 +88,25 @@ day later (0.4.2: 17 November here, 18 November there).
   it against Golly on every change: Golly reads the copy as the same cells and runs it to the same
   generations, on squares and hexagons.
   ([Copy as RLE](../guides/pattern-library.md#copy-as-rle), [#145](https://github.com/jprodgers/jetcarp/issues/145))
+- **An explore search records where each run came from.** A screened run's `parent` now names the
+  run it was made from: the elite a variation, a new starting pattern, a transplant or a balance
+  variant came from, or the run of the job given with `--parents-from`, whose job is in the new
+  column `parent_job` and its search's uuid in `parent_search`, which names that search in any
+  library or pack. A confirmation run's `parent` is the run it confirms, as before, and a fresh
+  draw has none. Segments are of schema 3 (`jetcarp-explore-runs 3`), with the two new columns
+  last; older ones read as before, and a new golden pack, `searches3`, holds such segments.
+  `jetcarp jobs runs --format csv`, `--json` and the MCP tool `search_runs` give them after
+  `parent`.
+  ([Search runs](../reference/search-runs.md), [#28](https://github.com/jprodgers/jetcarp/issues/28))
+- **`jetcarp library soup` says when the find first shows in its soup.** Each soup given names the
+  generation its first copy of the find is there, whole and apart from everything else, and for a
+  spaceship the generation the hunt cut it out as it flew off and about when it reaches the scene's
+  dead edge, where it breaks up: `the first copy shows at generation 176, flies off at 320 and
+  reaches the scene's edge at about 2172`. A ship that flies off is in the scene only between
+  those, so running the scene to the soup's end showed nothing. `--json` and `library.soup` give
+  them as `first_seen`, `flew_off` and `edge`.
+  ([The pattern library](../guides/pattern-library.md),
+  [#34](https://github.com/jprodgers/jetcarp/issues/34))
 - **WireWorld's `circuit` seed has a short form.** The command line, scripts and the MCP tools
   take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
   `reference seeds` lists them; before, only a scene file could name a circuit.
@@ -194,6 +222,45 @@ day later (0.4.2: 17 November here, 18 November there).
   on white, and is now drawn in the theme's colours.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
   [#137](https://github.com/jprodgers/jetcarp/issues/137))
+- **An explore search's screening goes on while it confirms elites.** Every fourth CPU round
+  confirmed twice the threads' number of elites after its screening, each elite's seeds one after
+  another, and nothing was screened meanwhile; on the GPU a batch of confirmation runs took every
+  elite of a tiling waiting. A laptop's search screened nothing for a minute. Each CPU round now
+  confirms its share of those elites, started first, each elite's seeds side by side, beside the
+  round's screening runs, which are counted and stored as they end; a GPU batch of confirmation
+  runs is sized to about 8 seconds of the GPU's time by its pace, the GPU confirming as many elites
+  as before in such batches between its screening batches. A run on the processor's time cap
+  now counts its own time only, not a run its thread took up while waiting inside it (runs were
+  capped at their 8th generation that way). A round's runs reach the archive in the order they were
+  made, with their ids, so a search on the processor alone makes the same runs and confirmations
+  whatever the length of its steps and however its threads take up its runs.
+  ([Search methods](../research/search-methods.md#explore),
+  [#83](https://github.com/jprodgers/jetcarp/issues/83))
+- **An explore search's memory reading, memory cap and stored runs keep up with steps that run
+  long.** A step is meant to last 2 seconds, but a round of slow runs on the processor runs to its
+  end, and steps lasted from 10 seconds to more than two minutes: the memory `jetcarp jobs status`
+  showed and the cap read were taken at each step's start, so the status could be a minute old and a
+  peak inside a step went unseen, and a step's runs were written only at its end. The job now reads
+  its memory every half second, shows the newest reading and the session's highest, acts on the cap
+  as soon as the reading calls for it, and writes the runs that have ended every two seconds.
+  ([Searching](../guides/searching.md), [#129](https://github.com/jprodgers/jetcarp/issues/129))
+- **A memory peak no longer pauses an explore search whose cap is near its steady level.** Over
+  the cap, the search first gives back what it can, the memory it has freed and the grids it keeps
+  for reuse but is not using, and reads again; it pauses only once its memory has stayed over the
+  cap for 10 seconds. It also gives freed memory back every 30 seconds during a step, not only
+  between steps: with steps of minutes, memory freed during them (a GPU batch's frames, a few
+  hundred MB each) counted as the search's until the step ended.
+  ([Searching](../guides/searching.md), [#81](https://github.com/jprodgers/jetcarp/issues/81))
+- **An explore search's aperiodic patches are the size asked for, and its confirming patch is
+  bigger than its screening one.** A patch comes in levels of about 500, 4,000, 35,000 and 280,000
+  tiles, and a search took the first level with at least half the cells asked, so the default
+  16,000 screening cells and 64,000 confirming cells both ran on 35,000 tiles: screening cost about
+  twice what was asked, and a confirmation on the "bigger grid" ran on the same patch. A new
+  search takes the level nearest the cells asked, 4,000 and 35,000 tiles, and the confirming patch
+  a level up whenever both would be the same. Its runs record the patch's tiles as their `cells`, so
+  any JETCARP rebuilds the patch they ran on; a search made before keeps its sizing (its spec has
+  no `sizing`, read as 1), so its runs and the ones it adds replay as before.
+  ([Search runs](../reference/search-runs.md), [#55](https://github.com/jprodgers/jetcarp/issues/55))
 - **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
   with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
   with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's

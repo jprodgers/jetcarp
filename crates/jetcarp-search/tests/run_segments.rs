@@ -9,7 +9,16 @@ fn rec(id: i64) -> RunRec {
     RunRec {
         id,
         stage: 1 + (id % 5 == 0) as i64,
-        parent: (id % 5 == 0).then_some(id - 1),
+        // Confirmation runs name the run they confirm; some screened runs an elite, or a run of
+        // another job.
+        parent: if id % 5 == 0 {
+            Some(id - 1)
+        } else {
+            (id % 7 < 2).then_some(id / 2)
+        },
+        parent_job: (id % 5 != 0 && id % 7 == 1).then_some(4),
+        parent_search: (id % 5 != 0 && id % 7 == 1)
+            .then(|| "00000000-0000-4000-8000-000000000004".to_string()),
         tiling: ["square", "hex", "k3-019"][(id % 3) as usize].into(),
         nb: id % 2,
         fam: "life_like".into(),
@@ -163,6 +172,7 @@ fn a_schema_1_segment_reads_without_sign_measures() {
         .into_iter()
         .map(|mut r| {
             r.feat.signs = None;
+            (r.parent_job, r.parent_search) = (None, None);
             r
         })
         .collect();
@@ -177,4 +187,36 @@ fn a_schema_1_segment_reads_without_sign_measures() {
     assert_eq!(feat_from_blob(&blob[..80]), f);
     let none = feat_blob(&f);
     assert_eq!(feat_from_blob(&none), f, "NaN signs read as none");
+}
+
+/// A segment of schema 2 (0.4.2's, before `parent_job`) reads with every parent the search's own,
+/// its sign measures kept.
+#[test]
+fn a_schema_2_segment_reads_without_parent_jobs() {
+    let d = scratch("schema2");
+    let p = d.join("part-000001.parquet");
+    let recs: Vec<RunRec> = (1..=500).map(rec).collect();
+    assert!(recs.iter().any(|r| r.parent_job.is_some()));
+    let mut w = SegmentWriter::create_schema2(&p, &[]).unwrap();
+    for r in &recs {
+        w.push(r.clone()).unwrap();
+    }
+    w.finish().unwrap();
+    let s = Segment::open(&p).unwrap();
+    assert_eq!(s.meta("jetcarp.schema").as_deref(), Some(RUN_SCHEMAS[1]));
+    let mut back = Vec::new();
+    s.read(0, ALL, None, None, &mut |_, b| {
+        assert!(b.has(col::SIGN0) && !b.has(col::PARENT_JOB) && !b.has(col::PARENT_SEARCH));
+        back.extend((0..b.len).map(|i| b.rec(i)));
+        Ok(())
+    })
+    .unwrap();
+    let want: Vec<RunRec> = recs
+        .into_iter()
+        .map(|mut r| {
+            (r.parent_job, r.parent_search) = (None, None);
+            r
+        })
+        .collect();
+    assert!(back == want);
 }

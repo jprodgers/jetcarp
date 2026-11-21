@@ -1461,13 +1461,13 @@ pub struct ExploreIn {
     #[serde(default)]
     #[schemars(schema_with = "texts_schema")]
     pub families: Option<Value>,
-    /// About this many cells in a screening run's grid (default 16,000).
+    /// About this many cells in a screening run's grid (default 16,000; an aperiodic patch is the level nearest it, 4,000 tiles for 16,000).
     #[serde(default)]
     pub screen_cells: Option<u32>,
     /// Generations of a screening run (default 1024).
     #[serde(default)]
     pub screen_gens: Option<u32>,
-    /// Cells of a confirmation run, on a bigger grid (default 64,000).
+    /// Cells of a confirmation run, on a bigger grid (default 64,000; an aperiodic patch is the level nearest it, and bigger than the screening patch).
     #[serde(default)]
     pub confirm_cells: Option<u32>,
     /// Generations of a confirmation run (default 4096).
@@ -1538,6 +1538,7 @@ impl ExploreIn {
                 families,
                 score: None,
                 parents: vec![],
+                sizing: d.sizing,
             },
             gpu: self.gpu == Some(true),
             cpu: self.gpu == Some(false),

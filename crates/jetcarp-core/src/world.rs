@@ -1023,7 +1023,7 @@ impl World {
     }
 
     /// What loading the scene let pass but should be told: each palette it names that this
-    /// JETCARP does not know (`palette 'Dusk' is unknown here; drawn in Ember`). `jetcarp run`,
+    /// JETCARP does not know (`palette 'Nonesuch' is unknown here; drawn in Ember`). `jetcarp run`,
     /// `jetcarp verify`, `world_open` and the app's status line show them.
     pub fn warnings(&self) -> &[String] {
         &self.warnings
