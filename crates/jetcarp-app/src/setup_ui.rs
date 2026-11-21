@@ -1418,7 +1418,6 @@ mod tests {
             assert!(std::env::var_os(v).is_some(), "set {v}");
         }
         let Some(o) = Offscreen::new(690, 640) else {
-            eprintln!("no GPU adapter");
             return None;
         };
         app_fonts(&o.ctx);

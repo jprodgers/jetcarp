@@ -44,6 +44,12 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
+  with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
+  with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's
+  lavapipe) and macOS (the runner's own GPU), and the release workflow's tests, which had left
+  lavapipe unused, now run the GPU tests on it.
+  ([Contributing](contributing.md), [Testing](testing.md))
 - **A settled reseed policy fires at the same generation whatever else counts changes.** Its
   check for a steady cycle of changing cells read every generation whose changes had been counted,
   and which those were depended on whether the app's activity graph or the desktop host was

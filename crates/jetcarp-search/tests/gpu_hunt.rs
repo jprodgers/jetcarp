@@ -1,6 +1,7 @@
 //! The GPU soup batcher against the CPU: every soup's prefix (cells, generation, hash history,
 //! outcome) must be identical to `prefix_cpu`, and a hunt with the GPU must leave exactly the
-//! catalog a CPU-only hunt leaves. Skipped (with a note) when no GPU adapter is available.
+//! catalog a CPU-only hunt leaves. Skipped (with a note) when no GPU adapter is available, failed
+//! under `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::hunt::separate::Census;
 use jetcarp_core::hunt::soup::{Layout, SoupBatcher, prefix_cpu, soup_state};
@@ -19,7 +20,7 @@ fn gpu() -> Option<Arc<GpuHunter>> {
             Some(Arc::new(g))
         }
         Err(e) => {
-            eprintln!("note: skipping GPU hunter tests: {e}");
+            jetcarp_gpu::no_gpu("GPU hunter tests", &e);
             None
         }
     })

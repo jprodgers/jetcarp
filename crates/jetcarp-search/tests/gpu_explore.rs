@@ -1,8 +1,8 @@
 //! The explore search with the GPU batch stepper as its backend: an explore job run on the GPU
-//! (only GPU families, so every run is the GPU loop's: screening batches and confirmation
-//! batches), and every run it stored measured again on the CPU's own loop (`try_one`, which
-//! steps the world with the engine): the same fate, behaviour bin, features, and score. Skipped
-//! (with a note) when no GPU adapter is available.
+//! (only GPU families, so every run is the GPU loop's: screening batches and confirmation batches),
+//! and every run it stored measured again on the CPU's own loop (`try_one`, which steps the world
+//! with the engine): the same fate, behaviour bin, features, and score. Skipped (with a note) when
+//! no GPU adapter is available, failed under `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_gpu::batch::BatchSim;
 use jetcarp_search::explore::job::try_one;
@@ -18,7 +18,7 @@ fn explore_runs_measured_on_the_gpu_match_the_cpu() {
     let sim = match BatchSim::headless() {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("note: skipping the explore GPU test: {e}");
+            jetcarp_gpu::no_gpu("the explore GPU test", &e);
             return;
         }
     };

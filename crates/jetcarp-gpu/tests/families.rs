@@ -1,8 +1,8 @@
-//! CPU vs GPU for the families the world stepper gained in 0.4.2. Every generation must give
-//! the same states, ages, grain counts, generation, step counters and hash (and, for JACA, the
-//! same annihilation glow and counts) on lattices and patches, with every edge, in chunks of
-//! several sizes, through scripts, reseeds and period detection. Skipped (with a note) when no
-//! GPU adapter is available.
+//! CPU vs GPU for the families the world stepper gained in 0.4.2. Every generation must give the
+//! same states, ages, grain counts, generation, step counters and hash (and, for JACA, the same
+//! annihilation glow and counts) on lattices and patches, with every edge, in chunks of several
+//! sizes, through scripts, reseeds and period detection. Skipped (with a note) when no GPU adapter
+//! is available, failed under `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::reseed::{AutoReseed, ReseedMode, ReseedWhen};
 use jetcarp_core::rules::Rule;
@@ -19,7 +19,7 @@ fn gpu() -> Option<MutexGuard<'static, GpuSim>> {
             Some(Mutex::new(s))
         }
         Err(e) => {
-            eprintln!("note: skipping GPU family tests: {e}");
+            jetcarp_gpu::no_gpu("GPU family tests", &e);
             None
         }
     });

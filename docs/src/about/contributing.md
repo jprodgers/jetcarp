@@ -50,9 +50,12 @@ cargo run --release -p jetcarp -- --help
 
 On Linux the app needs the usual windowing libraries; on Debian and Ubuntu, continuous integration
 installs `pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev
-libvulkan1`, plus `mesa-vulkan-drivers` so that the GPU tests can run on a software renderer. GPU tests
-are skipped, with a note, on a machine with no usable graphics adapter. A few slow surveys are marked
-`#[ignore]` and run only when asked (`cargo test … -- --ignored`).
+libvulkan1`, plus `mesa-vulkan-drivers` so that the GPU tests can run on a software renderer (which
+JETCARP uses only when asked for, with `JETCARP_GPU=software`). GPU tests are skipped, with a note, on a
+machine with no usable graphics adapter, or with only one the GPU self-test turns down. With
+`JETCARP_REQUIRE_GPU=1` they fail instead, naming the adapter and why, as on CI's Linux and macOS
+runners: set it when you mean the GPU tests to run, so that a missing driver cannot pass for a pass.
+A few slow surveys are marked `#[ignore]` and run only when asked (`cargo test … -- --ignored`).
 
 On Windows the tests of the folder rules make directory junctions and symbolic links. Symbolic links
 need Developer Mode (*Settings → System → For developers*) or an administrator's terminal; without
