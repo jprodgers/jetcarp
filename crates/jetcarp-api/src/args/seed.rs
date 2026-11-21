@@ -4,12 +4,13 @@ use jetcarp_core::SeedSpec;
 use serde_json::{Value, json};
 
 /// The examples the scripts' error message lists.
-const SCRIPT_FORMS: &str = "\"empty\", \"random\", \"random:0.2\", \"center\", \"top_center\", \"top_random:0.5\", \"random_states\", \"ants:3\", \"pile:10000\", \"blob:0.3:0.5\", \"gauss:3:8:1\", \"lenia:orbium\", \"signed:0.3:0.5\" (JACA: density, share of -1), \"halves:0.3\" (JACA: +1 left, -1 right), \"pattern:blobs:0.4:by_region\", #{shape: \"blobs\", count: 3, density: 0.4}, or #{random: 0.2}";
+const SCRIPT_FORMS: &str = "\"empty\", \"random\", \"random:0.2\", \"center\", \"top_center\", \"top_random:0.5\", \"random_states\", \"ants:3\", \"pile:10000\", \"blob:0.3:0.5\", \"gauss:3:8:1\", \"lenia:orbium\", \"signed:0.3:0.5\" (JACA: density, share of -1), \"halves:0.3\" (JACA: +1 left, -1 right), \"circuit:40\" (WireWorld wiring: regions, signals), \"pattern:blobs:0.4:by_region\", #{shape: \"blobs\", count: 3, density: 0.4}, or #{random: 0.2}";
 
 /// Seed shorthands: `"empty"`, `"random"` (30%), `"random:0.2"` (also `"random 0.2"`,
 /// `"random 20%"`), `"center"`, `"top_center"`, `"top_random:0.5"`, `"random_states"`,
 /// `"ants:3"`, `"pile:10000"`, `"blob:0.3:0.5"` (radius, density), `"gauss:3:8:1"`, `"lenia"`
-/// or `"lenia:orbium:2"` (scale), `"glider_pair"`, `"wire_demo"`; maps `#{random: 0.2}`,
+/// or `"lenia:orbium:2"` (scale), `"glider_pair"`, `"wire_demo"`, `"circuit:40:160"` (regions,
+/// signals); maps `#{random: 0.2}`,
 /// `#{density: 0.2}`, `#{cells: [[i, s], ...]}`, or the scene format's seed objects. Pattern
 /// seeds: `"pattern:blobs"`, `"pattern:blobs:0.4:by_region"` (shape, density, states), or
 /// `#{shape: "blobs", count: 3, density: 0.4, states: "by_region"}`.
@@ -115,6 +116,19 @@ fn seed_core(v: &Value) -> Result<SeedSpec, String> {
             "halves" | "half" => Ok(SeedSpec::Halves {
                 density: density(arg(0, 0.3))?,
             }),
+            // WireWorld wiring on any tiling: "circuit:sites:signals", four signals a region by
+            // default.
+            "circuit" => {
+                let sites = arg(0, 40.0);
+                if !(2.0..=100_000.0).contains(&sites) {
+                    return Err("a circuit needs 2 to 100,000 regions".into());
+                }
+                let sites = sites as u32;
+                Ok(SeedSpec::Circuit {
+                    sites,
+                    electrons: arg(1, 4.0 * sites as f64).clamp(0.0, 1e7) as u32,
+                })
+            }
             "centre" => Ok(SeedSpec::Center),
             "top" | "top_centre" => Ok(SeedSpec::TopCenter),
             _ => serde_json::from_value(Value::String(head)).map_err(|e| e.to_string()),
@@ -335,6 +349,26 @@ mod tests {
                 .unwrap_err()
                 .starts_with("bad seed")
         );
+    }
+
+    // WireWorld's wiring on any tiling: `circuit` (40 regions, four signals each),
+    // `circuit:sites` (four signals per region) and `circuit:sites:signals`.
+    #[test]
+    fn circuit_shorthands() {
+        for (text, sites, electrons) in [
+            ("circuit", 40, 160),
+            ("circuit:12", 12, 48),
+            ("circuit 12", 12, 48),
+            ("Circuit:12:6", 12, 6),
+        ] {
+            assert_eq!(
+                parse_seed(&json!(text)).unwrap_or_else(|e| panic!("{text}: {e}")),
+                SeedSpec::Circuit { sites, electrons },
+                "{text}"
+            );
+        }
+        assert!(parse_seed(&json!("circuit:1")).is_err());
+        assert!(SCRIPT_FORMS.contains("circuit"));
     }
 
     #[test]

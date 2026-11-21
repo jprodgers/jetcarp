@@ -11,6 +11,10 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Added
 
+- **WireWorld's `circuit` seed has a short form.** The command line, scripts and the MCP tools
+  take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
+  `reference seeds` lists them; before, only a scene file could name a circuit.
+  ([Scripting](../reference/scripting.md))
 - **Importing a pack says who signed it, and says plainly when their key is new.** The setup
   window shows, under each pack before it is imported and under each import afterwards, the
   publisher's name and the start of their key, marked *New key: never seen in this library* when
@@ -22,6 +26,52 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **A world with a B0 rule is said to repeat only when it does.** The period check compared the
+  cells JETCARP keeps for a B0 rule, which are relative to its background, but not the
+  background's phase, so a world whose kept cells came back with the background in another phase
+  (on squares, after an odd number of generations) was reported as repeating, and a script
+  waiting for a repeat stopped, although the next generations differed. The background's phase is
+  now compared too, on the CPU and the GPU: such a world repeats with the true period (often
+  twice the old one), and on an aperiodic patch whose background does not settle within a few
+  thousand generations no repeat is reported. ([B0 rules](../automata/life-like.md#b0-rules),
+  [#211](https://github.com/jprodgers/jetcarp/issues/211))
+- **Life-like rules with birth on 0 give the right results on every tiling.** JETCARP ran a B0
+  rule as two complementary rules alternating on even and odd generations, which is exact only
+  where every tile has the same number of neighbours. On tilings whose tiles have different
+  numbers, such as 4.8.8, 3.4.6.4, most k-uniform tilings and every aperiodic patch, a rule whose
+  survival list held some of those numbers but not all, such as `B0/S8` on 4.8.8, went wrong from
+  the third generation, on the CPU and the GPU alike. Each cell is now kept relative to the rule's
+  run from an empty world, so empty space still stays dark and the result is exact on any tiling;
+  where every tile has the same number of neighbours nothing changes. A B0 rule also counts the
+  cells past a live edge as live now, as other B/S rules do (it ignored live edges), and HashLife
+  runs B0 rules on wrap-edge lattices whatever their tiles' neighbour counts. B0 rules are now a
+  [rule-semantics family](../reference/library-format.md#rule-semantics-versions) of their own,
+  `lifelike_b0`, at version 2: scenes of such rules replay to other states, and a library flags
+  any B0 pattern record for `jetcarp library reverify` (no search stores B0 patterns). Other B/S
+  rules keep `lifelike` at version 1, so their records are not flagged.
+  ([B0 rules](../automata/life-like.md#b0-rules),
+  [#171](https://github.com/jprodgers/jetcarp/issues/171))
+- **WireWorld can be added without a start on any tiling.** Its default start, the clock-loop
+  demo, is drawn for the square grid, so everywhere else adding the rule alone was refused with
+  "the WireWorld demo needs the square grid", from the command line, scripts and the MCP tools
+  alike. Off the square grid it now starts with a `circuit`: wiring along the borders of random
+  regions, about one region per 70 cells, with four signals in each. The square grid keeps the
+  demo. ([WireWorld](../automata/wireworld.md#on-any-tiling),
+  [#180](https://github.com/jprodgers/jetcarp/issues/180))
+- **Larger than Life keeps every count a rule names.** A birth or survival count above the square
+  grid's neighbourhood size (8 at range 1, 1,680 at range 20) was dropped without a word, so on
+  tilings whose neighbourhoods hold more cells, such as triangles with 12 touch neighbours, a rule
+  ran as another: `R1,C2,S0-12,B9-12` ran as `R1,C2,S0-8,B`. Counts up to 65,535 are now kept, a
+  larger one is refused with a message, and the notation reads back as written, so Majority and
+  Majorly show as `R4,C2,S40-80,B41-81` and `R7,C2,S112-224,B113-225`. On the square grid no rule
+  runs differently, but those two rules' Quick Start entries have new handles
+  (`rule:R4,C2,S40-80,B41-81`, `rule:R7,C2,S112-224,B113-225`), and so new random starts; the
+  old handles still open them, so rotations and screensaver profiles naming them keep working. Larger
+  than Life's [rule-semantics version](../reference/library-format.md#rule-semantics-versions) is
+  now 2: scenes of such rules on other tilings replay to other states, and pattern records verified
+  under version 1 are flagged for `jetcarp library reverify`.
+  ([Larger than Life](../automata/larger-than-life.md#on-any-tiling),
+  [#172](https://github.com/jprodgers/jetcarp/issues/172))
 - **Programs starting together no longer fail with "database is locked" on a new library.** When
   the app, the desktop host, the MCP server or a search job opened a library that did not exist
   yet at the same moment as another, one of them could be refused at once, although each waits

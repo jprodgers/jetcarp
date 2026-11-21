@@ -2,6 +2,7 @@
 
 pub mod ants;
 pub mod aperiodic;
+pub mod b0;
 pub mod board;
 pub mod catalog;
 pub mod cellcheck;
