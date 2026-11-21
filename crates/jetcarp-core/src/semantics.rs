@@ -17,11 +17,12 @@
 //!   reaches. A change in a family's meaning fails that test, and the test refuses to pin the new
 //!   state until the family's version here has been raised.
 //!
-//! The families ([`family`]) are the engine's rule kinds, one per kind of [`Rule`], with two
+//! The families ([`family`]) are the engine's rule kinds, one per kind of [`Rule`], with three
 //! splits: B/S rules (`lifelike`) and Generations (`generations`) are apart, though a pattern's
-//! identity calls both `lifelike`; and turmites are `ant` (a turn string: one state, each colour
-//! repainted the next, such as `Ant RL` and `Turmite LLRR`) or `turmite` (a state table, such as
-//! `Turmite 1R1,1L0/1R1,0N0`). The names of the families that a pattern identity's `model` line
+//! identity calls both `lifelike`; B/S rules with birth on 0 (`lifelike_b0`, stored relative to
+//! their background, see [`crate::b0`]) are apart from the others; and turmites are `ant` (a turn
+//! string: one state, each colour repainted the next, such as `Ant RL` and `Turmite LLRR`) or
+//! `turmite` (a state table, such as `Turmite 1R1,1L0/1R1,0N0`). The names of the families that a pattern identity's `model` line
 //! also names (`lifelike`, `wireworld`, `table`, `priority`, `spectre_glider`, `ltl`,
 //! `margolus`, `lenia`) are the same; the identity's `other` is split here into its families.
 
@@ -33,13 +34,18 @@ pub const FIRST: &str = "1";
 
 /// Every rule family and its semantics version: the one table. Raise a family's version by one
 /// when the meaning of any of its rules changes (see the module notes).
-pub const RULE_SEMANTICS: [(&str, &str); 23] = [
-    // B/S rules: `B3/S23`, `B3/S23V`.
+pub const RULE_SEMANTICS: [(&str, &str); 24] = [
+    // B/S rules without birth on 0: `B3/S23`, `B3/S23V`.
     ("lifelike", "1"),
+    // B/S rules with birth on 0: `B0/S8`, `B014/S2`. 2 since 0.4.3: exact where the tiles have
+    // different numbers of neighbours, and live past a live edge (#171); a family of their own
+    // since then, as the other B/S rules' meaning did not change.
+    ("lifelike_b0", "2"),
     // Generations: `B2/S/C3`.
     ("generations", "1"),
-    // Larger than Life: `R5,C2,S33-57,B34-45`.
-    ("ltl", "1"),
+    // Larger than Life: `R5,C2,S33-57,B34-45`. 2 since 0.4.3: counts above the square grid's
+    // neighbourhood size are kept, not dropped (#172).
+    ("ltl", "2"),
     // Elementary rules on square rows: `W30`.
     ("elementary", "1"),
     // Two-parent hexagon rows: `HexW 6`, `HexW3 1234`.
@@ -85,6 +91,7 @@ pub const RULE_SEMANTICS: [(&str, &str); 23] = [
 pub fn family(rule: &Rule) -> &'static str {
     // No catch-all arm: a new kind of rule must be given its family here.
     match rule {
+        Rule::LifeLike { birth, .. } if birth & 1 == 1 => "lifelike_b0",
         Rule::LifeLike { .. } => "lifelike",
         Rule::Generations { .. } => "generations",
         Rule::Ltl(_) => "ltl",
@@ -136,9 +143,10 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    /// One rule of every kind, the two kinds of turmite apart.
-    const EXAMPLES: [&str; 23] = [
+    /// One rule of every kind, the two kinds of turmite and of B/S rule apart.
+    const EXAMPLES: [&str; 24] = [
         "B3/S23",
+        "B014/S2",
         "B2/S/C3",
         "R5,C2,S33-57,B34-45",
         "W30",
@@ -234,5 +242,21 @@ mod tests {
             );
         }
         assert_eq!(FIRST, "1");
+    }
+
+    // B/S rules with birth on 0 are a family of their own: their meaning changed in 0.4.3 (#171),
+    // the other B/S rules' did not, so only B0 records are flagged for re-verification.
+    #[test]
+    fn b0_rules_are_a_family_of_their_own() {
+        for (rule, fam, v) in [
+            ("B3/S23", "lifelike", "1"),
+            ("B36/S23V", "lifelike", "1"),
+            ("B0/S8", "lifelike_b0", "2"),
+            ("B014/S2V", "lifelike_b0", "2"),
+            // Generations rules with B0 run unemulated, as they always have.
+            ("B02/S/C3", "generations", "1"),
+        ] {
+            assert_eq!(of_notation(rule), Some((fam, v)), "{rule}");
+        }
     }
 }

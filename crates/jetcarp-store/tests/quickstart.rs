@@ -273,6 +273,42 @@ fn an_atlas_is_published_into_the_table() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+// A built-in entry whose handle changed still answers to the old one, as a rotation or a
+// screensaver profile names it: Majority and Majorly read back as written since 0.4.3 (#172),
+// and their handles are their rules. Before and after the library's file exists.
+#[test]
+fn renamed_builtin_handles_still_find_their_entries() {
+    let pairs = [
+        ("rule:R4,C2,S40-80,B41-80", "rule:R4,C2,S40-80,B41-81"),
+        (
+            "rule:R7,C2,S112-224,B113-224",
+            "rule:R7,C2,S112-224,B113-225",
+        ),
+    ];
+    let dir = temp_dir("renamed");
+    let lib = Library::open(dir.join("lib"));
+    for (old, new) in pairs {
+        // No file yet: the build's built-ins answer.
+        let unmade = qs::scene(&lib, old).unwrap_or_else(|e| panic!("{old}, no file yet: {e}"));
+        assert_eq!(
+            unmade.cas[0].rule,
+            qs::scene(&lib, new).unwrap().cas[0].rule
+        );
+    }
+    lib.sync_builtins().unwrap();
+    for (old, new) in pairs {
+        let row = lib
+            .get_quickstart(old)
+            .unwrap_or_else(|e| panic!("{old}: {e}"));
+        assert_eq!(row.handle, new);
+        assert_eq!(
+            qs::scene(&lib, old).unwrap().cas[0].rule,
+            new.trim_start_matches("rule:")
+        );
+        assert!(qs::card(&lib, old).is_ok(), "{old}: card");
+    }
+}
+
 #[test]
 fn cards_and_scenes_are_read_by_handle() {
     let (lib, dir) = temp_lib("cards");

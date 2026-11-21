@@ -169,7 +169,8 @@ A seed is either a word or an object with one key:
 The command line, scripts and MCP tools also accept short forms such as `random:0.2` or `ants:3`
 (the `reference.seeds` operation lists them); a scene file needs the forms above. Without a `seed`,
 each rule takes its usual one: a 30% random soup for B/S rules, one ant for turmites, one cell in the
-top row for elementary rules, a pile for sandpiles, and so on. A B/S rule added to a shared field
+top row for elementary rules, a pile for sandpiles, clock loops for WireWorld on the square grid and a
+`circuit` on other tilings, and so on. A B/S rule added to a shared field
 that already has live cells starts from those cells instead.
 
 ## Commands
