@@ -178,7 +178,8 @@ Life-like rule's (`lifelike`), so a still life is the same pattern whichever rul
 its rule is kept with it. A record's rule range (the rules it works in, from least to most) is a set
 of B/S rules: an isotropic rule's object has one when some B/S rule gives its evolution too, and
 none when its evolution needs a count's arrangements to differ. Ranges of isotropic rules are for
-later, and the exploratory search does not sample isotropic rules yet.
+later; the exploratory search does not sample isotropic rules yet, and HashLife (`jetcarp
+hashlife`) does not run them.
 
 ### On the GPU
 
