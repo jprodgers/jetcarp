@@ -3261,7 +3261,9 @@ mod tests {
         let stop = AtomicBool::new(false);
         let (mut screened, mut confirmed) = (HashSet::new(), HashSet::new());
         let t0 = Instant::now();
-        while confirmed.is_empty() && t0.elapsed() < Duration::from_secs(60) {
+        // Until the first confirmation: a few seconds here, but a 35,000-tile screening patch on
+        // a busy 4-core CI runner, beside the other search tests, once took over a minute.
+        while confirmed.is_empty() && t0.elapsed() < Duration::from_secs(300) {
             let lim = StepLimits {
                 until: Instant::now() + Duration::from_millis(50),
                 end: None,
