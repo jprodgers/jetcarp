@@ -64,12 +64,9 @@ impl Check {
             parts.push(if t >= super::flash::COUNT_CAP {
                 format!("flashes {} or more times a second", t / 2)
             } else if self.flash.worst() == Level::Extended {
-                format!(
-                    "flashes {} times a second for seconds on end",
-                    t as f32 / 2.0
-                )
+                format!("flashes {} for seconds on end", super::guard::flashes(t))
             } else {
-                format!("flashes {} times a second", t as f32 / 2.0)
+                format!("flashes {}", super::guard::flashes(t))
             });
         }
         if self.stripes.level == PatternLevel::Fail {

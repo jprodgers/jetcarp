@@ -82,10 +82,21 @@ impl JetcarpApp {
                             {
                                 cmds.push(Command::ScriptGoto { step: k });
                             }
-                            if k > 0 && ui.small_button("^").on_hover_text("Move up").clicked() {
+                            if k > 0
+                                && ui
+                                    .small_button("^")
+                                    .on_hover_text("Move up")
+                                    .accessible_name("Move this step up")
+                                    .clicked()
+                            {
                                 swap = Some(k);
                             }
-                            if ui.small_button("x").on_hover_text("Remove step").clicked() {
+                            if ui
+                                .small_button("x")
+                                .on_hover_text("Remove step")
+                                .accessible_name("Remove this step")
+                                .clicked()
+                            {
                                 remove = Some(k);
                             }
                         });

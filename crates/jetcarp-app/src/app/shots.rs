@@ -300,6 +300,19 @@ impl Harness {
         self.frame_with(0.05, vec![]);
     }
 
+    /// A key pressed with these modifiers and let go.
+    fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
+        let ev = |pressed| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers,
+        };
+        self.frame_with(0.05, vec![ev(true)]);
+        self.frame_with(0.05, vec![ev(false)]);
+    }
+
     /// An app action, as the menu or a shortcut does it.
     fn action(&mut self, a: menu::Action) {
         let ctx = self.o.ctx.clone();
@@ -370,20 +383,22 @@ fn shots_tour() {
     all.extend(places);
     h.shot_part("tour-card-menu", Harness::around(&all, 12.0));
     h.escape();
-    // A world: an entry of the starter pack, its panes docked as at first.
-    let handle = handle_titled(&h.app.menu, "Oscillating Greenberg-Hastings");
+    // A world: the starter pack's Greenberg-Hastings spiral on IH30 (the atlas names it by its
+    // rule), or failing that any Greenberg-Hastings entry; its panes docked as at first.
+    let handle = [
+        "Oscillating GH 6/2",
+        "Oscillating Greenberg-Hastings",
+        "Greenberg-Hastings",
+    ]
+    .iter()
+    .find(|t| h.app.menu.items.iter().any(|it| it.title.starts_with(**t)))
+    .map(|t| handle_titled(&h.app.menu, t))
+    .expect("a Greenberg-Hastings entry");
     h.open_entry(&handle);
     h.run(4.0, 0.05, |_| false);
     h.steady();
     h.shot("tour-world");
-    // The Tools menu.
-    h.hold_menu("Tools");
-    let first = h.find("Scripts and sweeps…");
-    let last = h.find("AI control…");
-    let bar = h.find("Tools");
-    h.shot_part("tour-tools-menu", Harness::around(&[first, last, bar], 8.0));
-    h.hold_menu("");
-    h.escape();
+    tools_menu(&mut h);
     // The Window menu: every pane and tool window, and where each is.
     h.hold_menu("Window");
     let bar = h.find("Window");
@@ -392,6 +407,31 @@ fn shots_tour() {
     h.shot_part("tour-window-menu", Harness::around(&[bar, last, wide], 8.0));
     h.hold_menu("");
     h.escape();
+}
+
+/// The Tools menu, as the tour shows it.
+fn tools_menu(h: &mut Harness) {
+    h.hold_menu("Tools");
+    let first = h.find("Scripts and sweeps…");
+    let last = h.find("This computer…");
+    let bar = h.find("Tools");
+    h.shot_part("tour-tools-menu", Harness::around(&[first, last, bar], 8.0));
+    h.hold_menu("");
+    h.escape();
+}
+
+/// The tour's Tools menu alone (the rest of [`shots_tour`] needs the starter pack).
+#[test]
+#[ignore]
+fn shots_tools_menu() {
+    let Some(mut h) = Harness::new(1400, 900) else {
+        return;
+    };
+    h.quick_start_loaded();
+    // In a world, as the tour shows it (a built-in entry).
+    h.open_entry("penrose-rhomb-brain");
+    h.run(1.0, 0.05, |_| false);
+    tools_menu(&mut h);
 }
 
 /// The book's photosensitive seizure warning (`getting-started/photosensitivity.md`, #96): the
@@ -1175,6 +1215,186 @@ fn shots_safety() {
     h.app.strobe.reread();
 }
 
+/// Tools → This computer… (`guides/this-computer.md`, #213), on an example 32 GB machine (never
+/// the one running the test), not measured yet: its limits, and one of your own. Then a world
+/// over the machine's limit: asked about, not built on *Cancel*, built on *Build anyway*.
+#[test]
+#[ignore]
+fn shots_this_computer() {
+    use jetcarp_core::machine::{self, GpuMemory, Hardware, Id, Limits, Own};
+    let Some(mut h) = Harness::new(1000, 760) else {
+        return;
+    };
+    let settings = jetcarp_core::paths::config_dir().expect("a scratch settings folder");
+    let _ = std::fs::remove_file(settings.join("limits.json"));
+    let _ = std::fs::remove_file(settings.join("machine.json"));
+    h.action(menu::Action::Tool(menu::ToolWin::Machine));
+    h.run(0.5, 0.05, |_| false);
+    // An example machine, so the picture shows no real one.
+    let example = Hardware {
+        os: "linux".into(),
+        arch: "x86_64".into(),
+        cpu: "An 8-core processor".into(),
+        threads: 16,
+        cores: Some(8),
+        memory_total: 32 << 30,
+        memory_available: Some(21 << 30),
+        gpus: vec![GpuMemory {
+            vendor: 0x1002,
+            device: 0x73df,
+            dedicated: Some(12 << 30),
+            shared: Some(16 << 30),
+            unified: false,
+            source: "sysfs".into(),
+            name: String::new(),
+        }],
+    };
+    let set_example = |h: &mut Harness, own: &Own| {
+        let l = Limits::compute(&example, own);
+        let mut info = h
+            .app
+            .machine
+            .info
+            .clone()
+            .expect("the window read the machine");
+        info.hardware = example.clone();
+        info.adapters = vec![jetcarp_api::ctx::GpuAdapter {
+            name: "An example GPU".into(),
+            backend: "Vulkan".into(),
+            kind: "discrete".into(),
+            ..Default::default()
+        }];
+        // The pool as two example programs would hold it (tests record no memory of their own).
+        info.limits.pool = Some(machine::pool::Pool {
+            total: l.jetcarp_memory(),
+            others: vec![machine::pool::Use {
+                pid: 2,
+                program: "the desktop background".into(),
+                bytes: 1200 << 20,
+                at_ms: 0,
+            }],
+            own: 640 << 20,
+            program: "the app".into(),
+        });
+        info.limits.entries = l.entries;
+        info.limits.memory_total = l.memory_total;
+        h.app.machine.show_info(info);
+    };
+    let own = Limits::compute(&example, &Own::default())
+        .set(&Own::default(), Id::ReservedSystem, (12u64 << 30) as f64)
+        .unwrap();
+    set_example(&mut h, &own);
+    h.run(0.3, 0.05, |_| false);
+    h.find("Measure this computer");
+    h.find("Reserved for the System");
+    h.find("Back to the suggestion");
+    h.shot("this-computer-1-window");
+    // A world over the limit: the reference machine's 4 GB here, lowered to 100 MB for the test.
+    h.app.set_tool_open(menu::ToolWin::Machine, false);
+    h.quick_start_loaded();
+    h.open_entry("penrose-rhomb-brain");
+    let l = Limits::reference();
+    let small = l
+        .set(&Own::default(), Id::World, (100u64 << 20) as f64)
+        .unwrap();
+    small.save(&settings).unwrap();
+    machine::reload();
+    let mut big = jetcarp_core::TilingSpec::new("square");
+    big.size = Some(jetcarp_core::SizeSpec::Rect { w: 4000, h: 4000 });
+    let before = h.app.world.topo.len();
+    h.app.set_tiling_bg(big.clone());
+    h.run(0.3, 0.05, |_| false);
+    assert!(h.app.machine.ask.is_some(), "asked first");
+    h.find("Build anyway");
+    h.shot("this-computer-2-over-limit");
+    h.click("Cancel");
+    assert!(h.app.machine.ask.is_none());
+    assert_eq!(h.app.world.topo.len(), before, "not built on Cancel");
+    h.app.set_tiling_bg(big);
+    h.run(0.3, 0.05, |_| false);
+    h.click("Build anyway");
+    h.built();
+    assert_eq!(h.app.world.topo.len(), 16_000_000, "built when asked");
+    Own::default().save(&settings).unwrap();
+    machine::reload();
+}
+
+/// The grid from the keyboard (`guides/keyboard.md`, #219): Life on squares, the grid given the
+/// keyboard as Tab gives it, a glider drawn with the arrows and Space, then a selection of nine
+/// cells made with Shift and the arrows, the cell cursor at its corner. The world is made here, so
+/// it needs no library.
+#[test]
+#[ignore]
+fn shots_keyboard() {
+    use egui::{Key, Modifiers};
+    let Some(mut h) = Harness::new(1000, 640) else {
+        return;
+    };
+    let scene = Scene::from_json(
+        r#"{"name": "Life from the keyboard", "tiling": {"family": "square", "size": {"rect": {"w": 48, "h": 32}}, "boundary": "wrap"}, "rng_state": 1, "cas": [{"rule": "B3/S23", "seed": "empty"}]}"#,
+    )
+    .unwrap();
+    h.app.load_scene(&scene);
+    h.app.playing = false;
+    h.app.message = None;
+    h.run(1.0, 0.05, |_| false);
+    // About fourteen cells across the part pictured.
+    h.app.zoom_by(3.6);
+    h.frame_with(0.05, vec![]);
+    let grid = h.app.kb.grid_id.expect("the grid was drawn");
+    h.o.ctx.memory_mut(|m| m.request_focus(grid));
+    h.frame_with(0.05, vec![]);
+    let none = Modifiers::NONE;
+    // A glider, from the cursor's cell: .O. / ..O / OOO.
+    for keys in [
+        &[Key::ArrowRight][..],
+        &[Key::Space],
+        &[Key::ArrowDown, Key::ArrowRight],
+        &[Key::Space],
+        &[Key::ArrowDown],
+        &[Key::Space],
+        &[Key::ArrowLeft],
+        &[Key::Space],
+        &[Key::ArrowLeft],
+        &[Key::Space],
+    ] {
+        for k in keys {
+            h.key(*k, none);
+        }
+    }
+    assert_eq!(h.app.world.fields[0].population(), 5, "a glider drawn");
+    // Off to the right, a selection of three by three.
+    for _ in 0..4 {
+        h.key(Key::ArrowRight, none);
+    }
+    h.key(Key::ArrowUp, none);
+    for k in [
+        Key::ArrowRight,
+        Key::ArrowRight,
+        Key::ArrowDown,
+        Key::ArrowDown,
+    ] {
+        h.key(k, Modifiers::SHIFT);
+    }
+    assert_eq!(
+        h.app.kb.cursor.cells(&h.app.world.topo).len(),
+        9,
+        "nine cells selected"
+    );
+    // The pointer out of the grid, so no hover text shows.
+    h.hover(egui::pos2(2.0, 638.0));
+    let g = h.app.world.topo.lattice().unwrap().clone();
+    let c = h.app.kb.cursor.cell.unwrap();
+    let (u, j, _) = g.decompose(c);
+    eprintln!("cursor at column {}, row {}", u + 1, j + 1);
+    // The glider and the selection, the cursor at the selection's corner.
+    let grid_rect = h.find("World grid: Life from the keyboard");
+    let xf = h.app.tile_xf(grid_rect, h.o.ctx.pixels_per_point());
+    let at = xf.to_screen(h.app.world.topo.centroid(c));
+    let part = egui::Rect::from_center_size(at - egui::vec2(110.0, 40.0), egui::vec2(480.0, 280.0));
+    h.shot_part("keyboard-grid-cursor", part.intersect(grid_rect));
+}
+
 /// Settings → Accessibility (`guides/accessibility-settings.md`, #217, #218, #220): the window in
 /// the standard dark theme, then a JACA world in Cobalt and Saffron (the palettes chosen for
 /// colour-vision deficiency) with its panes and the window, in the high-contrast theme, dark and
@@ -1236,4 +1456,64 @@ fn shots_accessibility() {
     h.quick_start_loaded();
     h.shot("accessibility-check-quick-start-light");
     h.app.a11y.settings = Default::default();
+}
+
+/// Not a picture: what a screen reader is given, with a library set up as the book's pictures are
+/// (#219): the Quick Start's cards drawn, the pattern library with the starter pack's patterns,
+/// its ant runs, a world from the pack with each pane in turn, and every tool window over it. Each
+/// control must have a role, a name that says something, and a value that reads
+/// (`keyboard_tests::audit_tree`), as the suite's own test checks on an empty library.
+#[test]
+#[ignore]
+fn screen_reader_tree_with_the_starter_pack() {
+    use super::keyboard_tests::{audit_tree, tree_of};
+    let Some(mut h) = Harness::new(1400, 900) else {
+        return;
+    };
+    let mut all = vec![];
+    let mut check = |h: &Harness, what: &str| {
+        let tree = tree_of(&h.o.tree);
+        for p in audit_tree(&tree) {
+            all.push(format!("{what}: {p}"));
+        }
+        eprintln!("{what}: {} nodes", tree.len());
+    };
+    h.quick_start_loaded();
+    check(&h, "Quick Start");
+    h.app.menu.view.filter.source = Some(jetcarp_store::QsSource::Pack);
+    h.run(4.0, 0.05, |_| false);
+    check(&h, "Quick Start, the pack's cards");
+    h.app.menu.view.filter.source = None;
+    // A world from the pack, each pane in turn.
+    let handle = h
+        .app
+        .menu
+        .items
+        .iter()
+        .find(|it| it.source == jetcarp_store::QsSource::Pack)
+        .map(|it| it.handle.clone())
+        .expect("a pack entry");
+    h.open_entry(&handle);
+    h.app.playing = false;
+    for p in panes::PANES {
+        h.action(menu::Action::Pane(p.id));
+        h.run(0.5, 0.05, |_| false);
+        check(&h, &format!("{} pane", p.title));
+    }
+    // Every tool window, alone, with the library's records to show.
+    for t in menu::ToolWin::ALL {
+        h.app.set_tool_open(t, true);
+        h.run(3.0, 0.05, |_| false);
+        check(&h, t.label());
+        h.app.set_tool_open(t, false);
+        h.frame_with(0.05, vec![]);
+    }
+    for p in &all {
+        eprintln!("{p}");
+    }
+    assert!(
+        all.is_empty(),
+        "{} problems a screen reader would meet",
+        all.len()
+    );
 }

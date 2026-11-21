@@ -378,7 +378,7 @@ impl Core {
             1,
             canvas,
             self.lookup.clone(),
-            self.settings.max_cells,
+            self.settings.cell_limit(),
         )?;
         stage.resize(canvas, scale, 0.0);
         Ok(stage)

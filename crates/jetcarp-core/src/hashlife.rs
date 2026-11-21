@@ -51,8 +51,16 @@ use crate::topology::{Boundary, LatticeGrid, Nb, SizeSpec, Storage, TilingSpec, 
 use crate::world::{CaSpec, Command, Scene, SeedSpec, World};
 use std::collections::HashMap;
 
-/// Default node cap: about 2 GB of nodes and table.
+/// The node cap on a 16 GB machine: about 2 GB of nodes and table. The default on this machine
+/// is its limit ([`default_node_cap`]).
 pub const DEFAULT_NODE_CAP: usize = 48_000_000;
+
+/// The node cap this machine allows (`hashlife-nodes` in its limits, from its memory:
+/// [`crate::machine::limits`]); [`DEFAULT_NODE_CAP`] for code that never asked for the
+/// machine's limits. Collection never changes results, so neither does this.
+pub fn default_node_cap() -> usize {
+    crate::machine::current().hashlife_nodes()
+}
 /// Largest number of distinct site states (states ^ tile types).
 pub const MAX_SITE_STATES: u64 = 1 << 16;
 /// Largest jump (and plane extent stays far inside i128).
@@ -73,7 +81,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
-            node_cap: DEFAULT_NODE_CAP,
+            node_cap: default_node_cap(),
             leaf_level: DEFAULT_LEAF_LEVEL,
         }
     }

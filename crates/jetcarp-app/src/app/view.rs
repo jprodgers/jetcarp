@@ -169,16 +169,28 @@ impl JetcarpApp {
         let ppp = ui.ctx().pixels_per_point();
         let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         self.view_size = rect.size();
+        // A part of the window F6 moves to, and a grid to a screen reader (#219).
+        crate::a11y::region(ui.ctx(), crate::a11y::MAIN, "Grid", ui.layer_id(), rect);
         if self.fit_pending && rect.width() > 10.0 && self.canvas_ready() {
             self.fit_view();
             self.zoom *= self.zoom_mul;
             self.fit_pending = false;
         }
         if self.outputs_active() && self.shell.display.hide_preview {
+            resp.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::Role::Grid,
+                    true,
+                    "World grid, shown on the outputs",
+                )
+            });
             self.preview_placeholder(ui, rect);
             self.message_overlay(ui, rect);
             return;
         }
+        // The keyboard's cell cursor: drawing, erasing, selecting, moving (`keyboard.rs`).
+        let xf = self.tile_xf(rect, ppp);
+        self.grid_keys(ui, &resp, &xf);
         let xf = self.tile_xf(rect, ppp);
         // Zoom about the cursor.
         if resp.hovered() {
@@ -260,6 +272,7 @@ impl JetcarpApp {
             {
                 screensaver::paint_caption(ui.painter(), rect, &c);
             }
+            self.paint_cursor(ui, &resp, &xf);
         } else {
             ui.painter().text(
                 rect.center(),
@@ -290,6 +303,7 @@ impl JetcarpApp {
                 );
             }
         }
+        self.grid_accesskit(ui, &resp, &xf);
     }
 
     /// Pan the canvas by a drag of `d` pixels in a view of `zoom_px` pixels per world unit.

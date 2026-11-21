@@ -1,7 +1,7 @@
 //! `run_script`: a Rhai script, bounded in time and world size, writing only inside the output
 //! folder (and the folders the server was allowed), reading only there too.
 
-use crate::tools::{Call, MAX_CELLS, MAX_SCRIPT_SECONDS, Res, Tool, ToolOutput};
+use crate::tools::{Call, MAX_SCRIPT_SECONDS, Res, Tool, ToolOutput};
 use serde_json::{Value, json};
 use std::fmt::Write as _;
 
@@ -14,7 +14,8 @@ pub(crate) fn tools() -> Vec<Tool> {
         description: || {
             format!(
                 "Runs a JETCARP script (the Rhai language) and returns its log, errors with line numbers, output folders and sweep summaries. Scripts make their own worlds (the current world is not changed), run them until something happens, save PNGs, and run parallel rule sweeps into new folders under the output folder. Example: `let w = world(#{{ tiling: \"hex\", size: [120, 80], boundary: \"dead\" }}); w.add_ca(\"HexW3 8229\", #{{ seed: \"top_center\" }}); let r = w.run(#{{ until: \"done\" }}); print(r.generations); w.save_png(out_dir(\"test\") + \"/a.png\");` or `sweep(#{{ rules: \"W\", until: \"done\", png: #{{ size: [400, 300] }} }});`. help {{\"topic\": \"scripts\"}} lists every function. Limits: {} seconds at most (default 60, `max_seconds`), worlds of at most {} cells; files are written only inside the output folder and read only there. Stops early when the client cancels the call.",
-                MAX_SCRIPT_SECONDS, MAX_CELLS
+                MAX_SCRIPT_SECONDS,
+                crate::tools::max_cells()
             )
         },
         schema: || {
@@ -91,6 +92,7 @@ fn run_script(c: &mut Call) -> Res {
     let secs = num(a, "max_seconds")?.unwrap_or(60.0);
     opts.limits.max_seconds = Some(secs.clamp(1.0, limits.max_script_seconds));
     opts.limits.max_cells = Some(limits.max_cells);
+    opts.limits.world_memory = limits.world_memory;
     opts.limits.restrict_reads = true;
     opts.allow_dirs = crate::tools::folders().allowed;
     let keep = num(a, "log_lines")?.unwrap_or(200.0).clamp(1.0, 2000.0) as usize;

@@ -526,17 +526,24 @@ fn editor(
     for (i, it) in r.items.iter_mut().enumerate() {
         ui.push_id(i, |ui| {
             ui.horizontal(|ui| {
-                if ui.small_button("×").on_hover_text("Remove").clicked() {
+                if ui
+                    .small_button("×")
+                    .on_hover_text("Remove")
+                    .accessible_name("Remove this item")
+                    .clicked()
+                {
                     remove = Some(i);
                 }
                 if ui
                     .add_enabled(i > 0, egui::Button::new("↑").small())
+                    .accessible_name("Move this item up")
                     .clicked()
                 {
                     swap = Some((i - 1, i));
                 }
                 if ui
                     .add_enabled(i + 1 < n, egui::Button::new("↓").small())
+                    .accessible_name("Move this item down")
                     .clicked()
                 {
                     swap = Some((i, i + 1));
@@ -740,7 +747,12 @@ fn item_ui(ui: &mut egui::Ui, it: &mut Item) {
     for (i, e) in it.end.iter_mut().enumerate() {
         ui.push_id(i, |ui| {
             ui.horizontal(|ui| {
-                if ui.small_button("×").clicked() {
+                if ui
+                    .small_button("×")
+                    .on_hover_text("Remove this end")
+                    .accessible_name("Remove this end")
+                    .clicked()
+                {
                     remove = Some(i);
                 }
                 end_ui(ui, e);

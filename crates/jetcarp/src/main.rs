@@ -17,6 +17,7 @@ mod hashlife_cmd;
 mod host_cmd;
 mod jobs_cmd;
 mod library;
+mod machine_cmd;
 mod media_cmd;
 mod movers_cmd;
 mod pack_cmd;
@@ -89,6 +90,9 @@ enum Cmd {
     Wallpaper(Box<wallpaper_cmd::WallpaperArgs>),
     /// List the palettes with their background colours.
     Palettes,
+    /// The app's keys: moving about it, the menus' shortcuts, and the grid's cell cursor, on
+    /// Windows and Linux and on macOS, as Help → Keyboard shortcuts lists them.
+    Shortcuts,
     /// Check that a saved scene still replays to its recorded hash (or a PNG JETCARP wrote, which
     /// carries its scene).
     Verify { scene: PathBuf },
@@ -167,9 +171,18 @@ enum Cmd {
     Site(media_cmd::SiteArgs),
     /// List tiling families with their neighbour counts.
     Tilings,
-    /// What JETCARP sees on this machine: version, folders, graphics adapters, desktop
-    /// integration. Include it in bug reports.
+    /// What JETCARP sees on this machine: version, the hardware and its score, folders, graphics
+    /// adapters, desktop integration. Include it in bug reports.
     Doctor,
+    /// Measure this machine: about a minute of JETCARP's own work (Life soups on five
+    /// non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for
+    /// the JETCARP Hardware Score and its parts. Kept in machine.json; `--report FILE` also writes
+    /// a report. It never runs by itself.
+    Score(machine_cmd::ScoreArgs),
+    /// This machine's limits (the largest world, the desktop background's, HashLife's, an AI's
+    /// share...): each your own value if you set one, else the machine's suggestion from its
+    /// memory, never above a ceiling. `set NAME VALUE`, `reset [NAME]`.
+    Limits(machine_cmd::LimitsArgs),
     /// The strobe guard's switches: on for the app and for the desktop background and screen
     /// saver unless turned off in the app (Settings → Safety). `--on` turns them back on; nothing
     /// here turns them off.
@@ -300,6 +313,35 @@ fn args() -> Vec<std::ffi::OsString> {
 
 /// Print an operation's output, as JSON with `--json`, else as text (and its notes on standard
 /// error); then fail if the output's own check failed (`run --expect`).
+/// `jetcarp shortcuts`: the app's table of keys, as text or JSON (`{"groups": [...]}`, which the
+/// book's keyboard page is generated from).
+fn print_shortcuts(json: bool) -> Result<()> {
+    let groups = jetcarp_app::shortcuts();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({ "groups": groups }))?
+        );
+        return Ok(());
+    }
+    let dash = |s: &str| {
+        if s.is_empty() {
+            "-".to_string()
+        } else {
+            s.to_string()
+        }
+    };
+    for g in &groups {
+        println!("{}", g.name);
+        println!("  {:<24} {:<18} What it does", "Windows and Linux", "macOS");
+        for s in &g.keys {
+            println!("  {:<24} {:<18} {}", dash(&s.keys), dash(&s.mac), s.what);
+        }
+        println!();
+    }
+    Ok(())
+}
+
 pub(crate) fn show<T: serde::Serialize + Report>(out: &T, json: bool) -> Result<()> {
     if json {
         println!("{}", op::to_pretty(out));
@@ -394,7 +436,15 @@ fn main() -> Result<()> {
     // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
     // command was writing.
     broken_pipe::install();
+    // This machine's limits (its memory, and the person's own values in limits.json), never the
+    // reference machine's that the crates' tests use.
+    let (_, note) = jetcarp_core::machine::use_this_machine();
+    if let Some(n) = note {
+        eprintln!("note: {n}");
+    }
     let r = run();
+    // This program's record in JETCARP's memory pool goes with it.
+    jetcarp_core::machine::pool::stop();
     if let Err(e) = &r
         && broken_pipe::is_broken(e)
     {
@@ -403,15 +453,42 @@ fn main() -> Result<()> {
     r
 }
 
+/// What this program is, in words, for its record in JETCARP's memory pool: `the app`, `the
+/// desktop background`, `an MCP server`, `a search job`, or `jetcarp <command>`.
+fn program_name(cmd: &Option<Cmd>) -> String {
+    match cmd {
+        None => "the app".into(),
+        Some(Cmd::Host(h)) if matches!(h.cmd, host_cmd::HostCmd::Serve(_)) => {
+            "the desktop background".into()
+        }
+        Some(Cmd::Mcp { .. }) => "an MCP server".into(),
+        Some(Cmd::Jobs(j)) if j.resumes() => "a search job".into(),
+        Some(_) => {
+            let names: Vec<String> = Cli::command()
+                .get_subcommands()
+                .map(|c| c.get_name().to_string())
+                .collect();
+            let word = std::env::args().skip(1).find(|a| names.contains(a));
+            format!("jetcarp {}", word.unwrap_or_default())
+        }
+    }
+}
+
 fn run() -> Result<()> {
     let cli = Cli::parse_from(args());
+    // Every JETCARP program records the memory it holds, so each sees what the others leave of
+    // the one pool reserved for JETCARP (`jetcarp_core::machine::pool`).
+    jetcarp_core::machine::pool::start(
+        &program_name(&cli.cmd),
+        jetcarp_search::jobs::explore::memory_bytes,
+    );
     let Some(cmd) = cli.cmd else {
         return jetcarp_app::run(cli.app).map_err(|e| anyhow::anyhow!(e));
     };
     let json = cli.json;
     if json && let Some(name) = without_json(&cmd) {
         bail!(
-            "`jetcarp {name}` has no JSON output; --json works with the commands that report a result (run, verify, paths, doctor, uninstall, rules, tilings, isohedral, palettes, search, jobs, pile, and the library, media, host, and app commands that print records)"
+            "`jetcarp {name}` has no JSON output; --json works with the commands that report a result (run, verify, paths, doctor, score, limits, uninstall, rules, tilings, isohedral, palettes, search, jobs, pile, and the library, media, host, and app commands that print records)"
         );
     }
     // Scripts may ask for GPU toppling of large sandpiles.
@@ -543,6 +620,8 @@ fn run() -> Result<()> {
         Cmd::Site(a) => media_cmd::run_site(a, json)?,
         Cmd::Wallpaper(a) => wallpaper_cmd::run(&cx, *a, json)?,
         Cmd::Doctor => show(&system::SystemDoctor::run(&cx, NoInput {}, &Quiet)?, json)?,
+        Cmd::Score(a) => machine_cmd::score(&cx, a, json)?,
+        Cmd::Limits(a) => machine_cmd::limits(&cx, a, json)?,
         Cmd::Guard { on } => match on {
             Some(place) => show(
                 &system::SystemStrobeGuardOn::run(
@@ -572,6 +651,7 @@ fn run() -> Result<()> {
             &reference::ReferencePalettes::run(&cx, NoInput {}, &Quiet)?,
             json,
         )?,
+        Cmd::Shortcuts => print_shortcuts(json)?,
         Cmd::Tilings => show(
             &reference::ReferenceTilings::run(&cx, Default::default(), &Quiet)?,
             json,

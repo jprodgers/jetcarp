@@ -159,6 +159,16 @@ impl Store {
         }
     }
 
+    /// A store that reads and writes nothing (tests that drive the whole app).
+    #[cfg(test)]
+    pub fn none() -> Store {
+        Store {
+            path: None,
+            last_json: String::new(),
+            last_check: 0.0,
+        }
+    }
+
     #[cfg(test)]
     pub fn at(path: &Path) -> Store {
         Store {

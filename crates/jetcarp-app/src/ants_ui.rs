@@ -365,6 +365,14 @@ impl AntsWindow {
                 let on = r.rating.is_some_and(|x| x >= k);
                 let (rect, resp) =
                     ui.allocate_exact_size(egui::vec2(17.0, 17.0), egui::Sense::click());
+                resp.widget_info(|| {
+                    egui::WidgetInfo::selected(
+                        egui::Role::Button,
+                        true,
+                        on,
+                        format!("Rate {k} of 5"),
+                    )
+                });
                 let lit = on || resp.hovered();
                 crate::thumbs::star(
                     ui.painter(),
@@ -412,6 +420,13 @@ impl AntsWindow {
             let sz = sel.frames[0].size_vec2();
             let s = (300.0 / sz.x.max(sz.y)).min(4.0);
             let (rect, resp) = ui.allocate_exact_size(sz * s, egui::Sense::click());
+            resp.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::Role::Button,
+                    true,
+                    "The run's animation (Enter plays or stills it)",
+                )
+            });
             // With reduced motion, a still until it is clicked (#218).
             let secs = sel
                 .stills
@@ -563,7 +578,7 @@ impl AntsWindow {
                 ui.separator();
                 let mut changed = false;
                 ui.horizontal(|ui| {
-                    egui::ComboBox::from_id_salt("ant-outcome")
+                    let named = egui::ComboBox::from_id_salt("ant-outcome")
                         .selected_text(self.outcome.map(|o| o.name()).unwrap_or("any outcome"))
                         .show_ui(ui, |ui| {
                             changed |= ui
@@ -575,19 +590,21 @@ impl AntsWindow {
                                     .clicked();
                             }
                         });
+                    crate::a11y::name(&named.response, "Outcome");
                     ui.label("tiling");
                     changed |= ui
                         .add(
                             egui::TextEdit::singleline(&mut self.tiling_filter).desired_width(90.0),
                         )
                         .lost_focus();
-                    egui::ComboBox::from_id_salt("ant-sort")
+                    let named = egui::ComboBox::from_id_salt("ant-sort")
                         .selected_text(format!("by {}", self.sort))
                         .show_ui(ui, |ui| {
                             for s in ["score", "onset", "period", "speed", "rule"] {
                                 changed |= ui.selectable_value(&mut self.sort, s, s).clicked();
                             }
                         });
+                    crate::a11y::name(&named.response, "Sort");
                     if ui.button("Refresh").clicked() {
                         changed = true;
                     }

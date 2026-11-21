@@ -32,7 +32,8 @@ fn every_operation_is_named_once_and_found_by_name() {
                 "search",
                 "jobs",
                 "pack",
-                "setup"
+                "setup",
+                "machine"
             ]
             .contains(&group),
             "{n}"

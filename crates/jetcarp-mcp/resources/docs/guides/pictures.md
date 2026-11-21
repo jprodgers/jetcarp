@@ -29,7 +29,7 @@ the screen's resolution (the grid's size in pixels, or the outputs' span when th
 outputs), with tile outlines as *View → Cell outlines* has them.
 
 *File → Export animation (GIF or WebP)…* records the view as it is now and the generations after
-it: choose how many generations, a frame every how many (up to 2,000 frames in all), the longer side
+it: choose how many generations, a frame every how many (up to this computer's `animation-frames` limit in all: 2,000 frames on a 16 GB computer, more on a bigger one, see [This computer](this-computer.md)), the longer side
 in pixels and the format (GIF, or lossless WebP for worlds with more than 256 colours), then
 *Export…*. It steps a copy of the world on the processor in the background, so the app runs on
 meanwhile, and the frames play at the world's speed. Like the media below, an animation does not

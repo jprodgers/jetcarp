@@ -185,6 +185,7 @@ fn paths_and_doctor() {
             "folders",
             "gpu",
             "gpu_policy",
+            "machine",
             "os",
             "threads",
             "version"

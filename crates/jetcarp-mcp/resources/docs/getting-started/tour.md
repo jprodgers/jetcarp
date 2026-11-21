@@ -57,7 +57,7 @@ Click a card to open its entry. (Shift-click opens the small version its card ru
 one.) The world opens running, with the grid on the right and the panes on the left; when your
 system asks for reduced motion it opens paused, with a note saying so, and Space runs it:
 
-<img src="../images/getting-started/tour-world.webp" alt="A world open in the app: a hexagonal Greenberg-Hastings spiral on an isohedral tiling fills the grid; the menu bar shows the scene's name, running, the generation, the hash and the frame rate; the Scene and CAs panes are on the left; the status bar is at the bottom" width="700">
+<img src="../images/getting-started/tour-world.webp" alt="A world open in the app: a hexagonal Greenberg-Hastings spiral on an isohedral tiling fills the grid; the menu bar shows the scene's name, running, the generation, the hash and the frame rate; the Scene and CAs panes are on the left; the status bar at the bottom carries the strobe guard's note that it slowed the scene because it flashed" width="700">
 
 - **Look around.** The scroll wheel zooms and dragging pans. (When the *Draw* pane's tool is *Draw*
   or *Erase*, the left button paints cells, and dragging with the right or middle button still
@@ -75,9 +75,14 @@ system asks for reduced motion it opens paused, with a note saying so, and Space
   first digits of the [state hash](../guides/scenes.md#the-state-hash) (click it to copy all of it)
   and the frame rate. **The status bar** says whether the world is still changing, and counts its
   live cells and its tiles.
-- **More room:** Tab hides the panes and brings them back, F11 (⌃⌘F on macOS) fills the screen, and
+- **More room:** F9 hides the panes and brings them back, F11 (⌃⌘F on macOS) fills the screen, and
   F12 starts screensaver mode (Esc leaves it). On macOS, ⌘M minimises the window, and the world
   and [AI control](../tutorials/mcp.md) keep running while it is minimised or covered.
+- **From the keyboard:** Tab moves from control to control, F6 from the menu bar to each group
+  of panes, the grid, the status line and each floating window, and F10 opens the menus. On the
+  grid, the arrow keys move a cell cursor that draws (Space), erases (Delete), selects
+  (Shift+arrows) and moves what is selected (Ctrl+arrows). See
+  [Using the app from the keyboard](../guides/keyboard.md).
 
 *File → Quick Start* (Ctrl+Shift+H, ⇧⌘H on macOS) goes back to the Quick Start screen, and
 *File → New empty world* (Ctrl+N) starts a square grid with no automata on it, ready for your own
@@ -91,7 +96,7 @@ The panes are in two groups of tabs, upper and lower:
 | --- | --- | --- |
 | *Scene* | The world's name, description, tiling, size and generation | [Scenes](../guides/scenes.md) |
 | *Tiling* | The tiling: its family, size and edges, the catalog of 1,254 periodic tilings, *Edit tile…* and *Edit unit cell…* | [Tilings as neighbour graphs](../tilings/neighbour-graphs.md), [Drawing and editing tiles](../guides/drawing-tiles.md) |
-| *Draw* | The mouse's tool (*Pan*, *Draw* or *Erase*), which automaton it paints *Into*, and the state it paints | [Several automata at once](../guides/several-automata.md#in-the-app) |
+| *Draw* | The mouse's tool (*Pan*, *Draw* or *Erase*), and which automaton and state it and the keyboard's cell cursor paint (*Into*, *State*) | [Several automata at once](../guides/several-automata.md#in-the-app) |
 | *Objects* | *Find objects*: the still lifes, oscillators and spaceships in the world now, counted, and highlighted when you click a row | [Life on a new tiling](../tutorials/life-on-a-new-tiling.md) |
 | *Display* | Where the grid shows (this window, full screen, or full-screen *Outputs* on chosen monitors) and the cell size in pixels | [Wallpapers](../guides/wallpapers.md#screensaver-mode-in-the-app) |
 | *Screensaver* | Screensaver mode, its profiles and rotations, and the system screen saver's rotation | [Wallpapers](../guides/wallpapers.md#screensaver-mode-in-the-app) |
@@ -125,16 +130,18 @@ and *Window → Reset layout* puts everything back:
 | *Settings* | *Safety…*: the [strobe guard](../guides/strobe-guard.md), what it is doing, and its switches; *Accessibility…*: reduced motion, the high-contrast theme, light or dark, and the palettes for scenes that name none ([Accessibility settings](../guides/accessibility-settings.md)) |
 | *Help* | *Setup…* (the setup window again), *Keyboard shortcuts…* (F1), *About JETCARP…* |
 
-*Help → Keyboard shortcuts…* lists the menus' shortcuts. Single-key shortcuts such as Space and R
-work while no text box has the keyboard.
+*Help → Keyboard shortcuts…* lists every key: the menus' shortcuts, the keys that move about the
+app, and the grid's cell cursor ([Using the app from the keyboard](../guides/keyboard.md) has the
+same list). Single-key shortcuts such as R and F work except while you are typing in a text box;
+Space, Enter and the arrows belong to whatever control has the keyboard.
 
 ## The tool windows
 
 Most tools open in windows of their own. Each floats over the world, and its ↗ button (or
 *In its own window* under its name in the *Window* menu) moves it to a separate window that can go
-on another monitor.
+on another monitor. Esc closes the tool window whose control has the keyboard.
 
-<img src="../images/getting-started/tour-tools-menu.webp" alt="The Tools menu: Scripts and sweeps, Sweep this world, Sweep results, Pattern library, Hunts, Catalog tools, Ants and turmites, Large sandpile, HashLife view, Objects and AI control" width="244">
+<img src="../images/getting-started/tour-tools-menu.webp" alt="The Tools menu: Scripts and sweeps, Sweep this world, Sweep results, Pattern library, Hunts, Catalog tools, Ants and turmites, Large sandpile, HashLife view, Objects, AI control and This computer" width="244">
 
 | Window | Menu | What it is for |
 | --- | --- | --- |
@@ -147,6 +154,7 @@ on another monitor.
 | *Accessibility* | *Settings* | Reduced motion, the high-contrast theme, light or dark, and the palettes for scenes that name none ([Accessibility settings](../guides/accessibility-settings.md)) |
 | *Scripts and sweeps* | *Tools* | Rhai scripts, and sweeps of many rules built from a form ([Scripting a rule sweep](../tutorials/scripting-a-sweep.md)) |
 | *AI control* | *Tools* | Let an AI assistant act on this world, through `jetcarp mcp --app` ([Driving JETCARP from an AI assistant](../tutorials/mcp.md)) |
+| *This computer* | *Tools* | The computer's hardware, its JETCARP Hardware Score, and the limits set from them ([This computer](../guides/this-computer.md)) |
 | *Tile editor* | *Tiling* | Move a tile's corners and bend its edges ([Drawing and editing tiles](../guides/drawing-tiles.md#the-tile-editor)) |
 | *Unit cell editor* | *Tiling* | Edit a periodic tiling's lattice and every tile of its unit cell ([Drawing and editing tiles](../guides/drawing-tiles.md#the-unit-cell-editor)) |
 

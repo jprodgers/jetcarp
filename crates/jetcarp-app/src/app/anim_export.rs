@@ -6,7 +6,7 @@
 //!   running meanwhile; the frames are what stepping gives, exactly as on the GPU.
 //! - **The format** is the user's choice; the hunts' *Render media* picks it by size instead.
 //! - **Memory:** every frame is held until encoding, so the frame count is capped
-//!   ([`MAX_FRAMES`]).
+//!   ([`max_frames`], the machine's `animation-frames` limit).
 //! - **The strobe guard** (#149): the frames are checked at their own rate before anything is
 //!   saved (`jetcarp_core::strobe::export`). An animation that flashes or shows strong stripes is
 //!   held, with what was found and a choice: save the softened version (the default), or cancel;
@@ -17,9 +17,15 @@ use jetcarp_core::media::encode;
 use jetcarp_core::render::Image;
 use std::sync::{Arc, Mutex};
 
-/// Frames an animation may have (each held until the end: 2,000 frames of 640 x 400 is about
-/// 2 GB).
-pub const MAX_FRAMES: u32 = 2000;
+/// Frames an animation may have on this machine (each held until the end: 2,000 frames of
+/// 640 x 400 is about 2 GB): its `animation-frames` limit, 2,000 on a 16 GB machine.
+pub fn max_frames() -> u32 {
+    jetcarp_core::machine::current().animation_frames()
+}
+
+fn anim_window_id() -> egui::Id {
+    egui::Id::unique("jetcarp-anim-export")
+}
 
 /// The window's settings, kept between exports.
 pub(crate) struct AnimExport {
@@ -30,6 +36,8 @@ pub(crate) struct AnimExport {
     pub webp: bool,
     /// The export under way: frames done, frames in all, and its outcome once finished.
     pub job: Option<Arc<Mutex<AnimJob>>>,
+    /// It was open last frame (it gives its Export button the keyboard as it opens).
+    pub was_open: bool,
 }
 
 impl Default for AnimExport {
@@ -41,6 +49,7 @@ impl Default for AnimExport {
             side: 640,
             webp: false,
             job: None,
+            was_open: false,
         }
     }
 }
@@ -99,12 +108,15 @@ impl JetcarpApp {
                 ctx.request_repaint_after(std::time::Duration::from_millis(200));
             }
         }
+        let opened = self.anim.open && !self.anim.was_open;
+        self.anim.was_open = self.anim.open;
         if !self.anim.open {
             return;
         }
         let mut open = true;
         let mut go = false;
-        egui::Window::new("Export animation")
+        let shown = egui::Window::new("Export animation")
+            .id(anim_window_id())
             .open(&mut open)
             .resizable(false)
             .show(ctx, |ui| {
@@ -135,11 +147,12 @@ impl JetcarpApp {
                     ui.end_row();
                 });
                 let frames = self.anim.gens / self.anim.every.max(1) + 1;
-                if frames > MAX_FRAMES {
+                if frames > max_frames() {
                     ui.colored_label(
                         crate::theme::ink(ui, egui::Color32::LIGHT_RED),
                         format!(
-                            "{frames} frames is over the limit of {MAX_FRAMES}: fewer generations, or a frame every more"
+                            "{frames} frames is over this machine's limit of {}: fewer generations, or a frame every more",
+                            max_frames()
                         ),
                     );
                 } else {
@@ -161,12 +174,24 @@ impl JetcarpApp {
                         );
                     }
                     None => {
-                        go = ui
-                            .add_enabled(frames <= MAX_FRAMES, egui::Button::new("Export…"))
-                            .clicked();
+                        let b = ui.add_enabled(frames <= max_frames(), egui::Button::new("Export…"));
+                        // The dialog opens with the keyboard on Export, so Enter exports (#219).
+                        if opened {
+                            b.request_focus();
+                        }
+                        go = b.clicked();
                     }
                 }
             });
+        // Esc closes it; it is a part of the window F6 moves to (#219).
+        if let Some(r) = &shown {
+            let layer = r.response.layer_id;
+            crate::a11y::window_region(ctx, "Export animation", layer, r.response.rect);
+            crate::a11y::mouse_only(ctx, anim_window_id().with("__title_click"));
+            if crate::a11y::escape_closes_dialog(ctx, layer) {
+                open = false;
+            }
+        }
         self.anim.open = open;
         if go {
             self.start_anim_export();
@@ -374,8 +399,11 @@ pub(crate) fn render_frames(
 ) -> Result<Vec<Image>, String> {
     let every = every.max(1);
     let total = gens / every + 1;
-    if total > MAX_FRAMES {
-        return Err(format!("{total} frames is over the limit of {MAX_FRAMES}"));
+    if total > max_frames() {
+        return Err(format!(
+            "{total} frames is over this machine's limit of {}",
+            max_frames()
+        ));
     }
     let opts = render::ViewOptions {
         outline_min_px: 0.0,

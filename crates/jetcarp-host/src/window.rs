@@ -1065,7 +1065,7 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
         Ok(el) => el,
         Err(e) => {
             say!("jetcarp-host: cannot reach the display: {e}");
-            std::process::exit(1);
+            jetcarp_core::machine::pool::exit(1);
         }
     };
     let mut app = App {

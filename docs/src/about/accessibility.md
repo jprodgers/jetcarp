@@ -50,9 +50,15 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
 
 ## Without seeing the screen
 
-- **Screen readers.** The app's menus, buttons, text fields and windows are offered to screen
-  readers through AccessKit: UI Automation on Windows, the accessibility API on macOS, and AT-SPI
-  on Linux. The world itself is a picture, and a screen reader can't describe it.
+- **Screen readers.** The app's controls are offered to screen readers through AccessKit: UI
+  Automation on Windows, the accessibility API on macOS, and AT-SPI on Linux. Every control has a
+  role and a name, the custom-drawn ones too (the Quick Start's cards, filters, swatches, stars and
+  pictures), and a button drawn as a symbol is named by what it does ("Hide the CAs pane", not
+  "×"). The status line is a live region: a scene the strobe guard pauses, a hunt that finishes,
+  fails or pauses, and a scene that can't open are read out as they happen. The world itself is a
+  picture: a screen reader hears the cell under the keyboard's cursor ("Cell 1234, column 5, row 7:
+  alive"), not the whole grid. See
+  [With a screen reader](../guides/keyboard.md#with-a-screen-reader).
 - **Everything has a text form.** JETCARP is one program with four ways in: the app, the command
   line, Rhai scripts and an MCP server. The command line and scripts can do most of what the app
   does, and answer in text: a world's status, its population and hash, the objects in it, the
@@ -78,7 +84,7 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
   own. The [palettes reference](../reference/palettes.md#colour-vision-deficiency) gives every
   built-in palette's result.
 - **High contrast.** The app has a high-contrast theme, dark and light: text at a contrast of 7:1
-  or more, thicker outlines, and a thick ring round whatever has the keyboard. It follows Windows'
+  or more, thicker outlines, and a thicker ring round whatever has the keyboard. It follows Windows'
   contrast themes, macOS's *Increase contrast* and GNOME's *High Contrast*, and *Settings →
   Accessibility* turns it on or off whatever the system says
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast)).
@@ -87,10 +93,22 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
 
 ## Using the keyboard
 
-The common actions have keyboard shortcuts, which *Help → Keyboard shortcuts…* (F1) lists. Running,
-pausing and stepping have single keys (Space to run or pause, S or → to step), and + and − zoom the
-world; they work while no text box has the keyboard. In the high-contrast theme, a thick ring shows
-which control has the keyboard.
+The app can be used from the keyboard alone, as far as the toolkit it's built with allows
+([Using the app from the keyboard](../guides/keyboard.md)).
+
+- **Moving about.** Tab and Shift+Tab reach every control in every window, in the order the window
+  shows them, and scroll each into view. F6 and Shift+F6 move between the menu bar, each group of
+  panes, the grid, the status line and each floating window. F10 opens the menus. Esc closes the
+  tool window that has the keyboard, and dialogs open with their main button ready for Enter.
+- **A ring in every theme** shows which control has the keyboard: two points wide in the standard
+  themes, three in high contrast, at a contrast of at least 3:1 against every background.
+- **The grid.** With the keyboard on the grid, the arrow keys move a cursor from cell to cell on any
+  tiling. Space draws and Delete erases. Shift and the arrows select, and Ctrl and the arrows
+  move what's selected by the tiling's own steps, so a pattern keeps its shape. Space also pastes a
+  pattern chosen from the library at the cursor.
+- **Shortcuts.** Running, pausing and stepping have single keys (Space to run or pause, S or → to
+  step), and + and − zoom the world; they work unless a text box has the keyboard.
+  *Help → Keyboard shortcuts…* (F1) lists every key.
 
 ## Hearing
 
@@ -105,12 +123,20 @@ These are known, and each is tracked:
   colour-vision deficiency are checked by simulation, not yet by people with those deficiencies,
   and 26 of the built-in palettes don't pass the check
   ([#217](https://github.com/jprodgers/jetcarp/issues/217)).
-- **The keyboard alone.** Drawing cells, selecting and moving patterns, and arranging the docked
-  panes need a mouse or a touchpad, and the menus and windows have not been checked for use without
-  one. Scripts and the command line can draw and edit worlds instead
+- **Dragging has no keyboard path.** Moving tabs between groups of panes, resizing panes, editing
+  a tile's shape and placing an output need a mouse or a touchpad; the *Window* menu places panes
+  instead, and scripts and the command line can draw and edit worlds
+  ([What the keyboard and screen readers can't do](../guides/keyboard.md#what-the-keyboard-and-screen-readers-cant-do)).
+- **Limits of the toolkit.** The app draws its menus inside its window, so on macOS VoiceOver's
+  menu-bar key (VO+M) can't reach them; F10 does. A window popped out on its own is a separate
+  system window, which F6 can't move to. Scroll areas don't scroll with Page Up and Page Down.
+  Only the cursor's cell of the grid is offered to a screen reader, and on Windows, Narrator and
+  NVDA may announce the grid as having "0 rows"
   ([#219](https://github.com/jprodgers/jetcarp/issues/219)).
-- **Not yet tested** with screen readers, with keyboard-only use
-  ([#219](https://github.com/jprodgers/jetcarp/issues/219)), or by disabled people. Reduced motion
+- **Not yet tested by hand** with screen readers (Narrator, NVDA, VoiceOver and Orca) or with
+  keyboard-only use, though the program's tests drive the whole app with key presses and read
+  what it offers screen readers ([#219](https://github.com/jprodgers/jetcarp/issues/219)); nor by
+  disabled people. Reduced motion
   and the high-contrast theme are checked by the program's tests; reading each system's settings is
   checked by hand on Windows, macOS and GNOME as part of each release's testing
   ([#218](https://github.com/jprodgers/jetcarp/issues/218),

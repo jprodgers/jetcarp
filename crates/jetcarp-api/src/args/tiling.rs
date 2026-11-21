@@ -164,34 +164,34 @@ fn size_value(s: &Value, spec: &TilingSpec, screen: &Screen) -> Result<SizeSpec,
                 .as_u64()
                 .ok_or("size should be a positive number of cells")?;
             if aperiodic {
-                SizeSpec::Level(c as u32)
+                SizeSpec::Level(super::to_u32(c, "the level")?)
             } else {
-                SizeSpec::Cells(c.min(u32::MAX as u64) as u32)
+                SizeSpec::Cells(super::to_u32(c, "the size")?)
             }
         }
         Value::Array(a) if a.len() == 2 => {
             let w = a[0].as_u64().ok_or("size [w, h] needs whole numbers")?;
             let h = a[1].as_u64().ok_or("size [w, h] needs whole numbers")?;
             SizeSpec::Rect {
-                w: w as u32,
-                h: h as u32,
+                w: super::to_u32(w, "the width")?,
+                h: super::to_u32(h, "the height")?,
             }
         }
         Value::Object(_) => {
             if let (Some(w), Some(h)) = (get_u64(s, "w")?, get_u64(s, "h")?) {
                 SizeSpec::Rect {
-                    w: w as u32,
-                    h: h as u32,
+                    w: super::to_u32(w, "the width")?,
+                    h: super::to_u32(h, "the height")?,
                 }
             } else if let (Some(w), Some(h)) = (get_u64(s, "width")?, get_u64(s, "height")?) {
                 SizeSpec::Rect {
-                    w: w as u32,
-                    h: h as u32,
+                    w: super::to_u32(w, "the width")?,
+                    h: super::to_u32(h, "the height")?,
                 }
             } else if let Some(c) = get_u64(s, "cells")? {
-                SizeSpec::Cells(c as u32)
+                SizeSpec::Cells(super::to_u32(c, "the size")?)
             } else if let Some(l) = get_u64(s, "level")? {
-                SizeSpec::Level(l as u32)
+                SizeSpec::Level(super::to_u32(l, "the level")?)
             } else {
                 return Err(format!(
                     "size map should have w and h, cells, or level; got {s}"
@@ -221,6 +221,36 @@ mod tests {
         let t = tiling_spec(&json!({"tiling": "ih41", "size": 900}), &scr).unwrap();
         assert_eq!(t.size, Some(SizeSpec::Cells(900)));
         assert!(tiling_spec(&json!({"tiling": "nope"}), &scr).is_err());
+    }
+
+    /// A size past what 32 bits hold is refused, never wrapped round to a small one (a width
+    /// of 2^32 + 8 was read as 8, so a grid four billion cells wide came out 8 wide).
+    #[test]
+    fn sizes_past_32_bits_are_refused_not_wrapped() {
+        let scr = Screen::default();
+        let big = (1u64 << 32) + 8;
+        for size in [
+            json!([big, 8]),
+            json!([8, big]),
+            json!({"w": big, "h": 8}),
+            json!({"width": 8, "height": big}),
+            json!({"cells": (1u64 << 32) + 900}),
+        ] {
+            let e = tiling_spec(&json!({"tiling": "square", "size": size}), &scr).unwrap_err();
+            assert!(e.contains("more than"), "{size}: {e}");
+        }
+        let e = tiling_spec(
+            &json!({"tiling": "spectre", "size": {"level": (1u64 << 32) + 3}}),
+            &scr,
+        )
+        .unwrap_err();
+        assert!(e.contains("more than"), "{e}");
+        let e = tiling_spec(&json!({"tiling": "square", "size": big}), &scr).unwrap_err();
+        assert!(e.contains("more than"), "{e}");
+        // Up to the most a 32-bit integer holds is read as given (the grid's own ceiling then
+        // decides).
+        let t = tiling_spec(&json!({"tiling": "square", "size": [u32::MAX, 8]}), &scr).unwrap();
+        assert_eq!(t.size, Some(SizeSpec::Rect { w: u32::MAX, h: 8 }));
     }
 
     #[test]

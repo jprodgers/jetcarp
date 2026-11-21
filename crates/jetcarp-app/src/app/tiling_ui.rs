@@ -91,7 +91,7 @@ impl JetcarpApp {
         let fam_name = jetcarp_core::families::family(&self.t_family)
             .map(|f| f.name)
             .unwrap_or("?");
-        egui::ComboBox::from_id_salt("family")
+        let named = egui::ComboBox::from_id_salt("family")
             .selected_text(fam_name)
             .width(240.0)
             .show_ui(ui, |ui| {
@@ -115,6 +115,7 @@ impl JetcarpApp {
                     family_changed = true;
                 }
             });
+        crate::a11y::name(&named.response, "Tiling family");
         let spec_params = (self.world.topo.spec.family == self.t_family)
             .then_some(self.world.topo.spec.params.as_ref())
             .flatten();
@@ -160,7 +161,7 @@ impl JetcarpApp {
                     .lattice()
                     .map_or(SizeChoice::Rect(64, 64), |g| SizeChoice::Rect(g.w, g.h)),
             };
-            egui::ComboBox::from_id_salt("size")
+            let named = egui::ComboBox::from_id_salt("size")
                 .selected_text(text)
                 .show_ui(ui, |ui| {
                     if aperiodic {
@@ -187,6 +188,7 @@ impl JetcarpApp {
                             .changed();
                     }
                 });
+            crate::a11y::name(&named.response, "Size");
         });
         if let SizeChoice::Rect(mut w, mut h) = self.t_size
             && !aperiodic

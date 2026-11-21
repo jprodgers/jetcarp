@@ -38,17 +38,46 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   `JETCARP_GOLLY_LIBRARY`). On 21 November 2026, a library of fresh hunts on squares, hexagons and
   the von Neumann neighbourhood held 3,314 finds: 2,024 oscillators, 1,282 still lifes and 8
   spaceships. Every one pasted back as the same cells and ran to the same generation in Golly 5.0.
+- **The benchmark's answers.** A short run of the benchmark behind the
+  [JETCARP Hardware Score](../guides/this-computer.md) (each workload once) must give its stored
+  answers on the processor, and on the GPU where there is one (Mesa's software renderer in CI), and
+  a device with a wrong answer must be left out of the score. CI checks the answers, never the
+  speed: no test depends on how fast the machine is.
+- **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
+  person's own values, the two linked memory values and the ceilings; a world over the limit is
+  refused before anything is built, naming the limit and where it came from. The memory each kind
+  of world takes is measured by counting every allocation while one is built and stepped, and the
+  table the limits use must never be below it. A grid of exactly the largest number of cells the
+  code can number (4,294,967,295) is built and its last cells' neighbours checked, without making
+  any field.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
   on Windows directory junctions and symbolic links too) and its limits, that nothing listens for AI
   control while it is switched off, the scripting API, packs (signed, unsigned, tampered and truncated), and the app,
   which a test harness drives offscreen, clicking widgets by their text.
-- **The book.** The command-line and MCP reference pages are generated from the program and checked
-  against it, and the copy of the book built into the program must match the book.
+- **The keyboard and screen readers.** Tests drive the whole app, with no window and no GPU, by
+  key presses, and read the accessibility tree it gives screen readers through AccessKit. Tab must
+  reach every control of the main window, of each tool window, of the setup window and of the
+  Quick Start, scroll each into view and draw the focus ring round it, in the standard and the
+  high-contrast theme; F6 must visit the menu bar, each group of panes, the grid, the status line
+  and each floating window, and Shift+F6 go back; F10, the arrows, Enter and Esc must work the
+  menus and close dialogs and tool windows; the grid's cell cursor must draw, erase, select and
+  move a pattern. In every window, every control must have a role, a name that says something and
+  a value that reads, and the status line must be a live region. Each runs in a process of its
+  own with scratch folders (`crates/jetcarp-app/src/app/keyboard_tests.rs`); the cell cursor's
+  next cell is checked on thirteen tilings (`cell_cursor.rs`), and an ignored test reads the tree
+  again with the starter pack's cards, patterns and ant runs in the windows
+  (`screen_reader_tree_with_the_starter_pack`). What a screen reader says aloud is checked by hand
+  (see [What this testing does not cover](#what-this-testing-does-not-cover)).
+- **The book.** The command-line and MCP reference pages and the keyboard page's table of keys are
+  generated from the program and checked against it, and the copy of the book built into the
+  program must match the book.
 
-About 40 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
-book's pictures of the app, and the rest time the program, run very large worlds, or need a desktop
-session.
+About 50 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
+book's pictures of the app, and the rest time the program, run very large worlds, need a desktop
+session, or read the app's accessibility tree with the starter pack set up. (The eleven halves of
+the keyboard tests that run in a process of their own are ignored too: the suite starts them
+itself, with their scratch folders, and they do nothing when started any other way.)
 
 Tests never write to your own settings, data or pictures: they run in scratch folders, and CI fails
 if a test touches the default ones.
@@ -279,6 +308,22 @@ own check of what was shown. The stripe check's windows were laid from the top l
 coarser scales a band along the right and bottom edges (up to a window wide) was never looked at,
 and never veiled; on a large pattern the band alone could be over a quarter of the screen.
 Windows now also sit against the far edges (`stripes_against_the_far_edges_are_found_too`).
+
+## The test machines' scores
+
+Each release's sittings measure the three test machines with `jetcarp score --report`, and the
+reports go to the public test records. The scores are of score v1 (see
+[This computer](../guides/this-computer.md#the-benchmark-and-the-score)): the geometric mean of five
+Life soup rates, in soups a second.
+
+| Machine | Score | Measured |
+| --- | --- | --- |
+| A desktop with 128 GB of memory (96 GB for the system, 32 GB set aside for its integrated GPU), 16 cores | 24,997 (its GPU about 10 times its processor on the soups) | during development, 21 November 2026 |
+| A Windows laptop | at the 0.4.3 sittings | |
+| An Apple silicon laptop | at the 0.4.3 sittings | |
+
+The desktop is measured at two or three firmware splits of its memory between the system and the
+GPU, since its limits follow the split.
 
 ## Continuous integration
 
@@ -518,6 +563,9 @@ keeps them free of it.
   could still give a different answer; `jetcarp verify` checks any run on the CPU.
 - **One person at the keyboard.** The hands-on sittings are Jimmie's: one person's eyes and habits,
   on one set of machines.
+- **What a screen reader says.** The tests read the tree a screen reader is given, not what
+  Narrator, NVDA, VoiceOver or Orca make of it: how each reads a role, a live region or a grid's
+  active cell is checked by hand, on each system.
 - **The same author for the code and the tests.** The plans' detailed steps and all the test code
   were written by the AI that wrote the program, so they can share its blind spots. The checks on
   that are the hands-on sittings, the checks that compare one way of computing with another (each
