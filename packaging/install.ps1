@@ -108,9 +108,12 @@ function Set-UserPath([string]$Value) {
     [Environment]::SetEnvironmentVariable("JETCARP_INSTALLER_REFRESH", $null, "User")
 }
 
+# Takes $Dir off the user PATH. Only when it is on it: a PATH without it is left exactly as it
+# was (empty entries and all), where it used to be written back tidied whatever it held.
 function Remove-FromUserPath([string]$Dir) {
-    $parts = @((Get-UserPath) -split ";" | Where-Object { $_ -and ($_.TrimEnd("\") -ne $Dir.TrimEnd("\")) })
-    Set-UserPath ($parts -join ";")
+    $all = @((Get-UserPath) -split ";")
+    $keep = @($all | Where-Object { -not $_ -or ($_.TrimEnd("\") -ne $Dir.TrimEnd("\")) })
+    if ($keep.Count -ne $all.Count) { Set-UserPath ($keep -join ";") }
 }
 
 # The folders `New-Item -Force` would make for $Dir, deepest first.

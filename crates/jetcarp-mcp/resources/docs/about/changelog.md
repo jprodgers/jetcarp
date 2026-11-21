@@ -324,6 +324,10 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The Windows installer's `-Uninstall` leaves the user PATH alone when JETCARP's folder isn't on
+  it.** It wrote the PATH back whatever it held, tidied (empty entries dropped), so a PATH could
+  change even after `-NoModifyPath`. Found by the installer test's new uninstall case.
+
 - **Animated WebP exports keep white.** The WebP encoder's colour cache started at the value that
   is opaque white, so a frame, or the part of a frame that changed, beginning with white pixels
   stored them under another colour's index: white came out as the frame's first other colour (in a
