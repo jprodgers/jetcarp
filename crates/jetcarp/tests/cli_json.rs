@@ -595,7 +595,10 @@ fn explore_runs_with_measures_as_csv_and_json() {
     let text = String::from_utf8(o.stdout).unwrap();
     let mut lines = text.lines();
     let head = lines.next().unwrap();
-    assert!(head.starts_with("id,stage,parent,parent_job,family,"), "{head}");
+    assert!(
+        head.starts_with("id,stage,parent,parent_job,family,"),
+        "{head}"
+    );
     assert!(head.ends_with(",score,sign_pos,sign_lost"), "{head}");
     let n = lines.count();
     assert!(n >= 40, "{n} runs");
