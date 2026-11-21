@@ -1792,7 +1792,12 @@ impl Search {
         // time (an elite's seeds at least), so screening on the GPU never waits long (#83).
         let most = picked.len() * seeds;
         let by_end = fit_worlds(pace, world_work, secs_left(lim.end), most);
-        let by_time = fit_worlds(pace, world_work, Some(self.gpu_confirm_s / GPU_FILL), most);
+        // With no pace yet for this kind of batch (Larger than Life on a patch, say: forty times
+        // slower a cell), one elite, to time it: twelve then (36 worlds) ran 23 s.
+        let by_time = match pace {
+            Some(_) => fit_worlds(pace, world_work, Some(self.gpu_confirm_s / GPU_FILL), most),
+            None => seeds,
+        };
         picked.truncate(by_end.min(by_time.max(seeds)) / seeds);
         if picked.is_empty() {
             return Ok(false);
