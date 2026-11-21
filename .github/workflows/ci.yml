@@ -131,7 +131,8 @@ jobs:
         shell: bash
         run: |
           command -v bgolly || { echo "::error::the golly package has no bgolly"; exit 1; }
-          version=$(bgolly -h 2>&1 | sed -n 's/^This is bgolly \([0-9.]*\).*/\1/p')
+          # `bgolly -h` exits with status 10, which pipefail would take for a failure.
+          version=$( (bgolly -h 2>&1 || true) | sed -n 's/^This is bgolly \([0-9.]*\).*/\1/p')
           echo "bgolly ${version:-of an unknown version}"
           # Every Golly test but the library one, which needs a library of finds (JETCARP_GOLLY_LIBRARY).
           skip=(--skip golly_agrees_on_a_library_s_finds)
