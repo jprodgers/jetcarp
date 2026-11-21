@@ -183,7 +183,10 @@ the record (`jetcarp library show`, the app, the MCP tools), stored in the libra
 (format 1.1), and `--works-in` matches a rule against it, so Life's glider is found in tlife. A
 record also has a B/S rule range when a B/S rule gives its evolution; an object of an isotropic rule
 whose evolution needs a count's arrangements to differ has only the isotropic one. The exploratory
-search does not sample isotropic rules yet, and HashLife (`jetcarp hashlife`) does not run them.
+search samples isotropic rules when a search names them (`jetcarp search explore --families
+isotropic`), on the processor, since its GPU batches don't run them yet, and leaves them out
+otherwise, the named ones too ([Search methods](../research/search-methods.md#explore)). HashLife
+(`jetcarp hashlife`) does not run them.
 
 ### On the GPU
 
@@ -222,6 +225,8 @@ Nothing. The notation and the rules belong to the people credited above.
 - `jetcarp run docs/scenes/automata/isotropic-tlife.json --gens 300 --png tlife.png`
 - `jetcarp search hunt --rules "B3/S2-i34q" --tilings square --soups 500` hunts tlife's soups, and
   finds its glider and other spaceships.
+- `jetcarp search explore --families isotropic --minutes 30` explores random isotropic rules near
+  the B/S rules, on the square grid.
 - Type a Life-like rule with one letter changed, such as `B3/S23-a` (Life, but a live cell with
   three neighbours in a corner and its two edges dies), and watch how far Life's patterns still hold.
 

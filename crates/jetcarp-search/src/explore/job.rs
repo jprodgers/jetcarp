@@ -64,6 +64,35 @@ fn d_batch() -> usize {
 fn d_old_sizing() -> u32 {
     1
 }
+/// A spec without `schedule` is a search made before it: it keeps its whole tiling list.
+fn d_old_schedule() -> u32 {
+    1
+}
+
+/// How a search made now fits its tilings to its rule families (a search's `schedule`, #239).
+/// Schedule 1, what searches made before JETCARP 0.4.3 keep: every tiling chosen stays in the
+/// list, even one none of the search's families can run on. Schedule 2: such tilings are left
+/// out, a family chosen by name that can run on none of the tilings chosen is refused, and when
+/// every family the processor runs is tied to one grid (isotropic rules, the elementary ones),
+/// every one of its rounds goes to those grids. A search with every family keeps today's runs
+/// under both.
+pub const SCHEDULE: u32 = 2;
+
+/// Families the explore search samples only when a search names them: they are left out of the
+/// default schedule, so a search that chooses no families runs as it did before they came
+/// (isotropic rules, #239).
+pub const OPT_IN: [Fam; 1] = [Fam::Isotropic];
+
+/// The families an explore search can sample, in the order the app lists them: the GPU's, the
+/// processor's, Larger than Life, and the ones taken only when named ([`OPT_IN`]). Von Neumann's
+/// 29-state rule is not among them.
+pub fn sampled_families() -> Vec<Fam> {
+    let mut v: Vec<Fam> = GPU_FAMS.iter().map(|x| x.0).collect();
+    v.extend(CPU_FAMS.iter().map(|x| x.0).filter(|f| !OPT_IN.contains(f)));
+    v.push(Fam::Ltl);
+    v.extend(OPT_IN);
+    v
+}
 
 /// Cells the search's cache of grids holds at most, in all. A grid costs about 87 bytes a cell
 /// (the 1,359 tilings' grids counted by allocation: 1.91 GB for 21.8 million cells at 16,000,
@@ -183,9 +212,23 @@ pub struct Settings {
     /// Only these tilings (keys: `square`, `ih28`, `catalog:k2-001`, ...); empty: all.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tilings: Vec<String>,
-    /// Only these rule families; empty: all.
+    /// Only the tilings of these groups ([`space::TILING_GROUPS`]: `square`, `hexagon`, ...,
+    /// `aperiodic`); empty: every group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tiling_groups: Vec<String>,
+    /// Leave out these tilings.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skip_tilings: Vec<String>,
+    /// Leave out the tilings of these groups.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skip_tiling_groups: Vec<String>,
+    /// Only these rule families; empty: the default schedule, every family but the ones taken
+    /// only when named ([`OPT_IN`]: isotropic rules).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub families: Vec<Fam>,
+    /// Leave out these rule families.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skip_families: Vec<Fam>,
     /// A fitted score model (`jetcarp jobs refit`) to score runs with, in place of the built-in
     /// score (for its family only, when it was fitted to one); none: the built-in score.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -198,6 +241,10 @@ pub struct Settings {
     /// JETCARP 0.4.3, which keeps its sizing when it carries on.
     #[serde(default = "d_old_sizing")]
     pub sizing: u32,
+    /// How it fits its tilings to its rule families ([`SCHEDULE`]): 2 for a search made now, 1
+    /// for one made before JETCARP 0.4.3, which keeps its whole tiling list when it carries on.
+    #[serde(default = "d_old_schedule")]
+    pub schedule: u32,
 }
 
 impl Default for Settings {
@@ -211,10 +258,15 @@ impl Default for Settings {
             batch: d_batch(),
             seed: 0,
             tilings: vec![],
+            tiling_groups: vec![],
+            skip_tilings: vec![],
+            skip_tiling_groups: vec![],
             families: vec![],
+            skip_families: vec![],
             score: None,
             parents: vec![],
             sizing: space::SIZING,
+            schedule: SCHEDULE,
         }
     }
 }
@@ -243,22 +295,120 @@ impl Settings {
                 self.sizing
             ));
         }
-        for t in &self.tilings {
+        if !(1..=SCHEDULE).contains(&self.schedule) {
+            return Err(format!(
+                "schedule must be 1 to {SCHEDULE}, not {}",
+                self.schedule
+            ));
+        }
+        for t in self.tilings.iter().chain(&self.skip_tilings) {
             if !all.iter().any(|x| &x.key == t) {
                 return Err(format!(
                     "no tiling '{t}' in the search's list (ids: square, hex, trihex, spectre, ih28, k2-001, ...)"
                 ));
             }
         }
-        let (g, c, ltl) = families(&self.families, true);
+        for g in self.tiling_groups.iter().chain(&self.skip_tiling_groups) {
+            if !space::TILING_GROUPS.contains(&g.as_str()) {
+                return Err(format!(
+                    "no tiling group '{g}' (groups: {})",
+                    space::TILING_GROUPS.join(", ")
+                ));
+            }
+        }
+        if self.schedule >= 2 {
+            let sampled = sampled_families();
+            if let Some(f) = self.families.iter().find(|f| !sampled.contains(f)) {
+                return Err(format!(
+                    "the explore search does not sample {} rules (families: {})",
+                    f.name(),
+                    family_names(&sampled)
+                ));
+            }
+        }
+        let (g, c, ltl) = families(&self.families, &self.skip_families, true);
         if g.is_empty() && c.is_empty() && !ltl {
             return Err("no rule family to search".into());
+        }
+        let picked = self.picked_tilings(all.to_vec());
+        if picked.is_empty() {
+            return Err(
+                "no tiling left to search: the tilings and groups chosen leave none".into(),
+            );
+        }
+        if self.schedule >= 2 {
+            for f in self.named_families() {
+                if let Some(k) = f.only_on()
+                    && !picked.iter().any(|t| t.key == k)
+                {
+                    return Err(format!(
+                        "{} rules run only on the {k} tiling, which this search leaves out",
+                        f.name()
+                    ));
+                }
+            }
+            if self.chosen_tilings(picked).is_empty() {
+                return Err("none of the rule families chosen runs on the tilings chosen".into());
+            }
         }
         if let Some(m) = &self.score {
             m.check()?;
         }
         Ok(())
     }
+
+    /// The families named (`families`), less those left out (`skip_families`).
+    fn named_families(&self) -> Vec<Fam> {
+        self.families
+            .iter()
+            .copied()
+            .filter(|f| !self.skip_families.contains(f))
+            .collect()
+    }
+
+    /// Every family the search samples, on the GPU or the processor (and Larger than Life).
+    pub fn chosen_families(&self) -> Vec<Fam> {
+        let (_, c, ltl) = families(&self.families, &self.skip_families, false);
+        let mut v: Vec<Fam> = c.into_iter().map(|x| x.0).collect();
+        if ltl {
+            v.push(Fam::Ltl);
+        }
+        v
+    }
+
+    /// The tilings of `all` chosen (`tilings`, `tiling_groups`), less those left out
+    /// (`skip_tilings`, `skip_tiling_groups`), in `all`'s order.
+    fn picked_tilings(&self, mut all: Vec<TilingChoice>) -> Vec<TilingChoice> {
+        if !self.tilings.is_empty() {
+            all.retain(|t| self.tilings.contains(&t.key));
+        }
+        if !self.tiling_groups.is_empty() {
+            all.retain(|t| self.tiling_groups.contains(&t.group));
+        }
+        if !self.skip_tilings.is_empty() || !self.skip_tiling_groups.is_empty() {
+            all.retain(|t| {
+                !self.skip_tilings.contains(&t.key) && !self.skip_tiling_groups.contains(&t.group)
+            });
+        }
+        all
+    }
+
+    /// The tilings the search draws from, out of `all` (the whole list, [`space::all_tilings`]):
+    /// the ones chosen less the ones left out, and under schedule 2 ([`SCHEDULE`]) less those
+    /// none of its families can run on.
+    pub fn chosen_tilings(&self, all: Vec<TilingChoice>) -> Vec<TilingChoice> {
+        let mut t = self.picked_tilings(all);
+        if self.schedule >= 2 {
+            let fams = self.chosen_families();
+            t.retain(|x| fams.iter().any(|f| f.runs_on(&x.key)));
+        }
+        t
+    }
+}
+
+/// Families' names, separated by commas.
+fn family_names(fams: &[Fam]) -> String {
+    fams.iter().map(|f| f.name()).collect::<Vec<_>>().join(", ")
 }
 
 pub const WINDOW: usize = 17;
@@ -317,12 +467,22 @@ const CPU_FAMS: &[(Fam, f64)] = &[
     (Fam::ForestFire, 3.0),
     (Fam::Sandpile, 4.0),
     (Fam::Table, 1.0),
+    // Only when named ([`OPT_IN`]). On the processor: the GPU's batches do not run them yet.
+    (Fam::Isotropic, 8.0),
 ];
 
 /// The GPU loop's families, the CPU loop's (with a GPU, or without one: then it also takes the
-/// GPU's), and whether Larger than Life rounds run (on the GPU), within `only` (empty: all).
-fn families(only: &[Fam], gpu: bool) -> (Vec<(Fam, f64)>, Vec<(Fam, f64)>, bool) {
-    let keep = |f: &Fam| only.is_empty() || only.contains(f);
+/// GPU's), and whether Larger than Life rounds run (on the GPU), within `only` (empty: every
+/// family but [`OPT_IN`]'s) and less `skip`.
+fn families(only: &[Fam], skip: &[Fam], gpu: bool) -> (Vec<(Fam, f64)>, Vec<(Fam, f64)>, bool) {
+    let keep = |f: &Fam| {
+        !skip.contains(f)
+            && if only.is_empty() {
+                !OPT_IN.contains(f)
+            } else {
+                only.contains(f)
+            }
+    };
     let g: Vec<(Fam, f64)> = GPU_FAMS.iter().copied().filter(|x| keep(&x.0)).collect();
     let mut c: Vec<(Fam, f64)> = CPU_FAMS.iter().copied().filter(|x| keep(&x.0)).collect();
     if !gpu {
@@ -695,20 +855,19 @@ pub struct Search {
 impl Search {
     /// A search with these settings, carrying on from `saved` (a default one: from the start).
     pub fn new(set: Settings, mut saved: Saved) -> Result<Search, String> {
-        let mut tilings = space::all_tilings();
-        set.check_in(&tilings)?;
-        if !set.tilings.is_empty() {
-            tilings.retain(|t| set.tilings.contains(&t.key));
-        }
+        let all = space::all_tilings();
+        set.check_in(&all)?;
+        let tilings = set.chosen_tilings(all);
         let tiling_total: f64 = tilings.iter().map(|t| t.weight).sum();
+        // The catalogue's rules, less those of families taken only when named, unless named
+        // (isotropic rules). A round passes over the rules of families it does not run.
+        let chosen = set.chosen_families();
+        let named_ok = |f: Fam| !OPT_IN.contains(&f) || chosen.contains(&f);
         let mut named = Vec::new();
         for (i, t) in tilings.iter().enumerate() {
             if t.twin_of.is_none() {
                 for e in jetcarp_core::rules::catalog() {
-                    // Families the search does not sample are left out (isotropic rules).
-                    let sampled = Rule::parse(e.notation)
-                        .is_ok_and(|(r, _)| space::ALL_FAMS.contains(&space::Fam::of(&r)));
-                    if sampled {
+                    if Rule::parse(e.notation).is_ok_and(|(r, _)| named_ok(Fam::of(&r))) {
                         named.push((i, e.notation.to_string()));
                     }
                 }
@@ -785,7 +944,7 @@ impl Search {
     /// Is there anything to run, with a GPU or without one? (Larger than Life runs on the GPU
     /// only.)
     pub fn can_run(&self, gpu: bool) -> Result<(), String> {
-        let (g, c, ltl) = families(&self.set.families, gpu);
+        let (g, c, ltl) = families(&self.set.families, &self.set.skip_families, gpu);
         if c.is_empty() && !(gpu && (ltl || !g.is_empty())) {
             return Err(if gpu {
                 "no rule family to search".into()
@@ -1139,7 +1298,8 @@ impl Search {
                 && lim.max_screened.is_none_or(|m| self.screened() < m)
         };
         let has_gpu = gpu.is_some();
-        let (gpu_fams, cpu_fams, ltl) = families(&self.set.families, has_gpu);
+        let (gpu_fams, cpu_fams, ltl) =
+            families(&self.set.families, &self.set.skip_families, has_gpu);
         let cpu_busy = AtomicBool::new(false);
         let gpu_go = || {
             !lim.cut()
@@ -1674,6 +1834,20 @@ impl Search {
         Ok(true)
     }
 
+    /// A GPU round's kind (a Larger than Life round, or one of `fams`) and tiling. Some rounds go
+    /// to the least-tried tiling, so every tiling is reached by the deadline.
+    fn gpu_plan(&self, rng: &mut Rng, fams: &[(Fam, f64)], ltl_ok: bool) -> (bool, usize) {
+        let ltl_round = ltl_ok && (fams.is_empty() || rng.below(8) == 0);
+        let ti = if ltl_round && rng.below(3) == 0 {
+            self.least_tried_tiling(rng, &[(Fam::Ltl, 1.0)])
+        } else if !ltl_round && rng.below(8) == 0 {
+            self.least_tried_tiling(rng, fams)
+        } else {
+            self.pick_tiling(rng)
+        };
+        (ltl_round, ti)
+    }
+
     /// One screening batch on the GPU, sized to end before the run's end. False when not even a
     /// small batch would, or the batch was given up (a stop, or the end reached).
     fn gpu_round(
@@ -1684,15 +1858,7 @@ impl Search {
         ltl_ok: bool,
         lim: &StepLimits<'_>,
     ) -> Result<bool, String> {
-        let ltl_round = ltl_ok && (fams.is_empty() || rng.below(8) == 0);
-        // Some rounds go to the least-tried tiling, so every tiling is reached by the deadline.
-        let ti = if ltl_round && rng.below(3) == 0 {
-            self.least_tried_tiling(rng, &[(Fam::Ltl, 1.0)])
-        } else if !ltl_round && rng.below(8) == 0 {
-            self.least_tried_tiling(rng, fams)
-        } else {
-            self.pick_tiling(rng)
-        };
+        let (ltl_round, ti) = self.gpu_plan(rng, fams, ltl_ok);
         let key = self.tilings[ti].key.clone();
         let grid = self.screen_grid(&key)?;
         let nb = if grid.has_edge && rng.below(4) == 0 {
@@ -1858,6 +2024,42 @@ impl Search {
         cands
     }
 
+    /// A CPU round's tiling and families, from `fams` (the processor's). CPU rounds are few, so
+    /// weighted picks alone would miss tilings: a quarter go to the least-tried family tied to
+    /// one grid ([`Fam::only_on`], when that grid is in the list), half sweep the least-tried
+    /// tiling with the families that run on any. Under schedule 2 ([`SCHEDULE`]), when every
+    /// family here is tied to one grid (isotropic rules alone), every round goes to one of them,
+    /// rather than three in four to a tiling they cannot run on.
+    fn cpu_plan(&self, round: u64, rng: &mut Rng, fams: &[(Fam, f64)]) -> (usize, Vec<(Fam, f64)>) {
+        let everywhere: Vec<(Fam, f64)> = fams
+            .iter()
+            .filter(|(f, _)| f.only_on().is_none())
+            .map(|(f, _)| (*f, 1.0))
+            .collect();
+        let native: Vec<Fam> = fams
+            .iter()
+            .map(|(f, _)| *f)
+            .filter(|f| f.only_on().is_some_and(|k| self.tiling_index(k).is_some()))
+            .collect();
+        let only_native = self.set.schedule >= 2 && everywhere.is_empty() && !native.is_empty();
+        match round % 4 {
+            0 if !native.is_empty() => self.native_round(&native),
+            _ if only_native => self.native_round(&native),
+            1 | 2 if !everywhere.is_empty() => (
+                self.least_tried_tiling(rng, &everywhere),
+                everywhere.clone(),
+            ),
+            _ => (self.pick_tiling(rng), fams.to_vec()),
+        }
+    }
+
+    /// A round of the least-tried of these grid-specific families, on its grid.
+    fn native_round(&self, native: &[Fam]) -> (usize, Vec<(Fam, f64)>) {
+        let f = self.least_tried_fam(native);
+        let key = f.only_on().expect("a grid-specific family");
+        (self.tiling_index(key).unwrap_or(0), vec![(f, 1.0)])
+    }
+
     /// One CPU round: a tiling and families chosen, candidates made, and run on the pool (the
     /// caller's) beside this round's share of elites confirmed (twice the threads every four
     /// rounds, spread over them). The confirmations start first, each elite's seeds side by side,
@@ -1875,32 +2077,7 @@ impl Search {
     fn cpu_round(&self, rng: &mut Rng, fams: &[(Fam, f64)], lim: &StepLimits<'_>) {
         let round = self.cpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
         let threads = rayon::current_num_threads().max(1);
-        // Families that run on any tiling, and the ones tied to a native grid (when it is one
-        // the search draws from).
-        let everywhere: Vec<(Fam, f64)> = fams
-            .iter()
-            .filter(|(f, _)| native_tiling(*f).is_none())
-            .map(|(f, _)| (*f, 1.0))
-            .collect();
-        let native: Vec<Fam> = fams
-            .iter()
-            .map(|(f, _)| *f)
-            .filter(|f| native_tiling(*f).is_some_and(|k| self.tiling_index(k).is_some()))
-            .collect();
-        // CPU rounds are few, so weighted picks alone would miss tilings. A quarter go to the
-        // least-tried native-grid family, half sweep the least-tried tiling.
-        let (ti, round_fams): (usize, Vec<(Fam, f64)>) = match round % 4 {
-            0 if !native.is_empty() => {
-                let f = self.least_tried_fam(&native);
-                let key = native_tiling(f).expect("native family");
-                (self.tiling_index(key).unwrap_or(0), vec![(f, 1.0)])
-            }
-            1 | 2 if !everywhere.is_empty() => (
-                self.least_tried_tiling(rng, &everywhere),
-                everywhere.clone(),
-            ),
-            _ => (self.pick_tiling(rng), fams.to_vec()),
-        };
+        let (ti, round_fams) = self.cpu_plan(round, rng, fams);
         let key = self.tilings[ti].key.clone();
         let Ok(grid) = self.screen_grid(&key) else {
             return;
@@ -2181,28 +2358,10 @@ pub fn group_of(tilings: &[TilingChoice], key: &str) -> u8 {
 }
 
 fn group_index(g: &str) -> Option<u8> {
-    Some(match g {
-        "square" => 0,
-        "hexagon" => 1,
-        "triangle" => 2,
-        "pentagon" => 3,
-        "archimedean" => 4,
-        "k-uniform" => 5,
-        "isohedral" => 6,
-        "aperiodic" => 7,
-        _ => return None,
-    })
-}
-
-/// The tiling a grid-specific family is searched on. Weighted tiling picks starve these: some
-/// are structural twins of another tiling and carry the twin discount.
-fn native_tiling(f: Fam) -> Option<&'static str> {
-    match f {
-        Fam::Wolfram | Fam::Margolus | Fam::Table => Some("square"),
-        Fam::HexWolfram => Some("hex"),
-        Fam::HexTri => Some("hex_flat"),
-        _ => None,
-    }
+    space::TILING_GROUPS
+        .iter()
+        .position(|x| *x == g)
+        .map(|i| i as u8)
 }
 
 /// Generations and steps for a family on a grid.
@@ -2762,7 +2921,7 @@ mod tests {
                     let mut rng = Rng::new(seed * 7919 + k as u64);
                     let (mut sc_t, mut cf_t) = (Vec::new(), Vec::new());
                     let mut worst = (0.0f64, String::new());
-                    let native = native_tiling(*fam);
+                    let native = fam.only_on();
                     let mut tries = 0;
                     while sc_t.len() < n && tries < n * 20 {
                         tries += 1;
@@ -3102,7 +3261,9 @@ mod tests {
         let stop = AtomicBool::new(false);
         let (mut screened, mut confirmed) = (HashSet::new(), HashSet::new());
         let t0 = Instant::now();
-        while confirmed.is_empty() && t0.elapsed() < Duration::from_secs(60) {
+        // Until the first confirmation: a few seconds here, but a 35,000-tile screening patch on
+        // a busy 4-core CI runner, beside the other search tests, once took over a minute.
+        while confirmed.is_empty() && t0.elapsed() < Duration::from_secs(300) {
             let lim = StepLimits {
                 until: Instant::now() + Duration::from_millis(50),
                 end: None,
@@ -3156,6 +3317,408 @@ mod tests {
             HashSet::from([35000]),
             "an older search's confirming"
         );
+    }
+
+    /// Small, quick settings for the tests of what a search draws from (#239): every tiling and
+    /// family unless `extra` (a spec's keys) says otherwise.
+    fn choosing(extra: serde_json::Value) -> Settings {
+        let mut v = serde_json::to_value(Settings {
+            screen_cells: 600,
+            screen_gens: 96,
+            confirm_cells: 600,
+            confirm_gens: 96,
+            confirm_seeds: 1,
+            // Small GPU batches, so the GPU's runs come in many rounds beside the processor's.
+            batch: 64,
+            ..Settings::default()
+        })
+        .unwrap();
+        for (k, x) in extra.as_object().unwrap() {
+            v[k] = x.clone();
+        }
+        serde_json::from_value(v).unwrap()
+    }
+
+    /// The runs of a search, screened and confirming, until `n` are screened and (when the
+    /// processor has families to run) eight CPU rounds have run, so its rounds for the families
+    /// tied to one grid have come whatever the GPU did meanwhile (or two minutes pass); with a
+    /// GPU (a stand-in that runs its batches on the processor, beside the CPU rounds) or on the
+    /// processor alone.
+    fn sampled(set: &Settings, gpu: bool, n: u64) -> Vec<RunOut> {
+        let s = Search::new(set.clone(), Saved::default()).unwrap();
+        let cpu = !families(&set.families, &set.skip_families, gpu)
+            .1
+            .is_empty();
+        let rounds = || s.cpu_rounds.load(Ordering::Relaxed);
+        let enough = || s.screened() >= n && (!cpu || rounds() >= 8);
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let gpu_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let mut be = jetcarp_core::explore::batch::CpuBatch;
+        let stop = AtomicBool::new(false);
+        let mut rows = Vec::new();
+        let t0 = Instant::now();
+        while !enough() && t0.elapsed() < Duration::from_secs(120) {
+            let lim = StepLimits {
+                until: Instant::now() + Duration::from_millis(200),
+                end: None,
+                stop: &stop,
+                max_screened: None,
+            };
+            let backend = gpu.then_some((&mut be as &mut dyn Backend, &gpu_pool));
+            assert!(s.step(&pool, backend, &lim).is_none());
+            rows.extend(s.take_delta().rows);
+        }
+        assert!(
+            enough(),
+            "{} screened, {} CPU rounds",
+            s.screened(),
+            rounds()
+        );
+        rows
+    }
+
+    /// A search told which tilings and families to search draws only from them, on the GPU and
+    /// on the processor, and reaches every family named (#239).
+    #[test]
+    fn a_search_samples_only_the_tilings_and_families_chosen() {
+        let all = space::all_tilings();
+        let group = |k: &str| all.iter().find(|t| t.key == k).unwrap().group.clone();
+        let set = choosing(serde_json::json!({
+            "tiling_groups": ["square", "hexagon"],
+            "skip_tilings": ["brick"],
+            "families": ["life_like", "turmite", "isotropic", "wolfram"],
+            "seed": 31,
+        }));
+        for gpu in [false, true] {
+            let rows = sampled(&set, gpu, 400);
+            let fams: HashSet<Fam> = rows.iter().map(|r| r.ev.cand.fam).collect();
+            let tilings: HashSet<&str> = rows.iter().map(|r| r.ev.cand.tiling.as_str()).collect();
+            for r in &rows {
+                let c = &r.ev.cand;
+                assert!(set.families.contains(&c.fam), "{:?} (gpu {gpu})", c.fam);
+                assert_eq!(c.fam, Fam::of(&c.rule().unwrap()), "{}", c.rule);
+                let g = group(&c.tiling);
+                assert!(g == "square" || g == "hexagon", "{} ({g})", c.tiling);
+                assert_ne!(c.tiling, "brick");
+                if matches!(c.fam, Fam::Isotropic | Fam::Wolfram) {
+                    assert_eq!(c.tiling, "square", "{:?}", c.fam);
+                }
+            }
+            for f in [Fam::LifeLike, Fam::Turmite, Fam::Isotropic, Fam::Wolfram] {
+                assert!(fams.contains(&f), "no {f:?} run (gpu {gpu}): {fams:?}");
+            }
+            assert!(tilings.contains("hex"), "{tilings:?}");
+        }
+    }
+
+    /// The tilings, groups and families a search leaves out never appear in its runs (#239).
+    #[test]
+    fn the_tilings_and_families_left_out_never_appear() {
+        let all = space::all_tilings();
+        let group = |k: &str| all.iter().find(|t| t.key == k).unwrap().group.clone();
+        let skipped_fams = [
+            Fam::LifeLike,
+            Fam::Generations,
+            Fam::Turmite,
+            Fam::Lenia,
+            Fam::Sandpile,
+        ];
+        let set = choosing(serde_json::json!({
+            "skip_tiling_groups": ["aperiodic", "isohedral", "k-uniform"],
+            "skip_tilings": ["square", "hex"],
+            "skip_families": skipped_fams,
+            "seed": 32,
+        }));
+        let s = Search::new(set.clone(), Saved::default()).unwrap();
+        assert!(
+            s.tilings
+                .iter()
+                .all(|t| t.key != "square" && t.key != "hex")
+        );
+        for gpu in [false, true] {
+            let rows = sampled(&set, gpu, 400);
+            let fams: HashSet<Fam> = rows.iter().map(|r| r.ev.cand.fam).collect();
+            for r in &rows {
+                let c = &r.ev.cand;
+                assert!(!skipped_fams.contains(&c.fam), "{:?} (gpu {gpu})", c.fam);
+                assert_ne!(c.fam, Fam::Isotropic, "never named");
+                assert!(c.tiling != "square" && c.tiling != "hex", "{}", c.tiling);
+                let g = group(&c.tiling);
+                assert!(
+                    !["aperiodic", "isohedral", "k-uniform"].contains(&g.as_str()),
+                    "{g}"
+                );
+            }
+            assert!(fams.len() >= 4, "{fams:?}");
+        }
+    }
+
+    /// Isotropic rules are left out of the default schedule: a search that names no families
+    /// never runs one, nor one of the catalogue's. Named, they are sampled beside the others, on
+    /// the square grid only; named alone, every round goes to the square grid (#239).
+    #[test]
+    fn isotropic_rules_are_sampled_when_named_and_never_otherwise() {
+        let unnamed = choosing(serde_json::json!({
+            "tilings": ["square", "hex"],
+            "skip_families": ["lenia", "sandpile", "forest_fire"],
+            "seed": 33,
+        }));
+        let s = Search::new(unnamed.clone(), Saved::default()).unwrap();
+        let iso = |n: &String| matches!(Rule::parse(n), Ok((Rule::Isotropic(_), _)));
+        assert!(!s.named.lock().unwrap().iter().any(|(_, n)| iso(n)));
+        // Named beside every family that runs on these two tilings, the catalogue's isotropic
+        // rules come too.
+        let every = Settings {
+            families: sampled_families()
+                .into_iter()
+                .filter(|f| f.runs_on("square") || f.runs_on("hex"))
+                .collect(),
+            ..unnamed.clone()
+        };
+        let s = Search::new(every, Saved::default()).unwrap();
+        assert!(s.named.lock().unwrap().iter().any(|(_, n)| iso(n)));
+        // Named beside families of any tiling: a quarter of the processor's rounds (every one
+        // of them with a GPU, which runs the others) go to isotropic rules on the square grid.
+        let named = Settings {
+            families: vec![Fam::LifeLike, Fam::Generations, Fam::Cyclic, Fam::Isotropic],
+            ..unnamed.clone()
+        };
+        let alone = choosing(serde_json::json!({"families": ["isotropic"], "seed": 34}));
+        let s = Search::new(alone.clone(), Saved::default()).unwrap();
+        assert_eq!(s.tiling_count(), 1, "only the square grid");
+        for gpu in [false, true] {
+            let rows = sampled(&unnamed, gpu, 300);
+            for r in &rows {
+                let c = &r.ev.cand;
+                assert_ne!(c.fam, Fam::Isotropic, "{} (gpu {gpu})", c.rule);
+                assert!(!iso(&c.rule), "{} (gpu {gpu})", c.rule);
+            }
+            let rows = sampled(&named, gpu, 300);
+            let iso_runs: Vec<&RunOut> = rows
+                .iter()
+                .filter(|r| r.ev.cand.fam == Fam::Isotropic)
+                .collect();
+            assert!(!iso_runs.is_empty(), "no isotropic run (gpu {gpu})");
+            for r in iso_runs {
+                assert!(iso(&r.ev.cand.rule), "{}", r.ev.cand.rule);
+                assert_eq!(r.ev.cand.tiling, "square");
+            }
+            let rows = sampled(&alone, gpu, 150);
+            assert!(rows.iter().all(|r| r.ev.cand.fam == Fam::Isotropic
+                && r.ev.cand.tiling == "square"
+                && iso(&r.ev.cand.rule)));
+        }
+    }
+
+    /// A search records what it was told to draw from in its spec, and the spec read back makes
+    /// the same runs: the same seed and choice give the same search (on the processor, with the
+    /// same threads) whatever the length of its steps (#239).
+    #[test]
+    fn a_search_with_a_choice_replays_from_its_spec() {
+        let set = choosing(serde_json::json!({
+            "tiling_groups": ["square", "hexagon", "triangle"],
+            "skip_tilings": ["brick"],
+            "families": ["life_like", "isotropic", "cyclic"],
+            "skip_families": ["cyclic"],
+            "screen_gens": 160,
+            "seed": 35,
+        }));
+        let v = serde_json::to_value(&set).unwrap();
+        assert_eq!(
+            v["tiling_groups"],
+            serde_json::json!(["square", "hexagon", "triangle"])
+        );
+        assert_eq!(v["skip_tilings"], serde_json::json!(["brick"]));
+        assert_eq!(
+            v["families"],
+            serde_json::json!(["life_like", "isotropic", "cyclic"])
+        );
+        assert_eq!(v["skip_families"], serde_json::json!(["cyclic"]));
+        assert_eq!(v["schedule"], SCHEDULE);
+        let back: Settings = serde_json::from_value(v).unwrap();
+        assert_eq!(back, set);
+        let a = runs_of(&set, 3, Duration::from_millis(5), 300);
+        let b = runs_of(&back, 3, Duration::from_secs(30), 300);
+        assert_eq!(a.len(), b.len());
+        assert!(a == b, "the runs differ");
+    }
+
+    /// A choice that leaves nothing to search, or names a family that cannot run on the tilings
+    /// chosen, is refused when the search is made; one a search made before 0.4.3 had is not.
+    #[test]
+    fn a_choice_that_leaves_nothing_to_search_is_refused() {
+        for (extra, want) in [
+            (
+                serde_json::json!({"tiling_groups": ["nowhere"]}),
+                "no tiling group 'nowhere'",
+            ),
+            (
+                serde_json::json!({"skip_tilings": ["nowhere"]}),
+                "no tiling 'nowhere'",
+            ),
+            (
+                serde_json::json!({"tiling_groups": ["hexagon"], "families": ["isotropic", "life_like"]}),
+                "isotropic rules run only on the square tiling",
+            ),
+            (
+                serde_json::json!({"families": ["von_neumann"]}),
+                "does not sample von_neumann rules",
+            ),
+            (
+                serde_json::json!({"skip_tiling_groups": space::TILING_GROUPS}),
+                "no tiling left to search",
+            ),
+            (
+                serde_json::json!({"families": ["life_like"], "skip_families": ["life_like"]}),
+                "no rule family to search",
+            ),
+            (
+                serde_json::json!({"tilings": ["hex"], "families": ["wolfram"]}),
+                "wolfram rules run only on the square tiling",
+            ),
+        ] {
+            let e = choosing(extra.clone()).check().unwrap_err();
+            assert!(e.contains(want), "{extra}: {e}");
+        }
+        // Not named, the families that cannot run on the tilings chosen are dropped quietly.
+        let s = choosing(serde_json::json!({"tiling_groups": ["hexagon"]}));
+        assert!(s.check().is_ok());
+        assert!(!s.chosen_tilings(space::all_tilings()).is_empty());
+        // A search made before kept every tiling, and still carries on.
+        let mut old = serde_json::to_value(choosing(
+            serde_json::json!({"tilings": ["hex", "square"], "families": ["wolfram"]}),
+        ))
+        .unwrap();
+        old.as_object_mut().unwrap().remove("schedule");
+        let old: Settings = serde_json::from_value(old).unwrap();
+        assert_eq!(old.schedule, 1);
+        let s = Search::new(old, Saved::default()).unwrap();
+        assert_eq!(s.tiling_count(), 2);
+    }
+
+    /// A fingerprint of a search's schedule: its tiling list and named rules, then the
+    /// candidates of its first `rounds` CPU rounds and as many GPU rounds (six each), made from
+    /// an empty archive, so it depends only on the schedule and the random draws, not on what
+    /// any run measures. A rule's notation is left out only for forest fire, whose numbers come
+    /// from `powf`, which may differ in its last bit between systems.
+    fn schedule_pin(set: &Settings, rounds: u64) -> u64 {
+        let s = Search::new(set.clone(), Saved::default()).unwrap();
+        let mut h = jetcarp_core::rng::Fnv::default();
+        let text = |h: &mut jetcarp_core::rng::Fnv, t: &str| {
+            h.bytes(t.as_bytes());
+            h.bytes(&[0xff]);
+        };
+        h.u64(s.tilings.len() as u64);
+        for t in &s.tilings {
+            text(&mut h, &t.key);
+        }
+        h.u64(s.tiling_total.to_bits());
+        h.u64(s.named.lock().unwrap().len() as u64);
+        for gpu in [false, true] {
+            let (g, c, ltl) = families(&set.families, &set.skip_families, gpu);
+            let mut rng = Rng::new(set.seed ^ 0x5eed);
+            // The loop runs only with families to run (as `step` has it).
+            let some = if gpu {
+                !g.is_empty() || ltl
+            } else {
+                !c.is_empty()
+            };
+            for round in (1..=rounds).filter(|_| some) {
+                let (ti, fams, group) = if gpu {
+                    let (l, ti) = s.gpu_plan(&mut rng, &g, ltl);
+                    (ti, g.clone(), l.then_some((Hood::Moore, 2)))
+                } else {
+                    let (ti, f) = s.cpu_plan(round, &mut rng, &c);
+                    (ti, f, None)
+                };
+                let grid = s.screen_grid(&s.tilings[ti].key).unwrap();
+                let made = s.emit(
+                    &grid,
+                    Nb::Touch,
+                    &fams,
+                    group,
+                    6,
+                    set.screen_gens,
+                    &mut rng,
+                    None,
+                );
+                for (cand, kind, _) in made {
+                    text(&mut h, &cand.tiling);
+                    text(&mut h, cand.fam.name());
+                    text(&mut h, &kind);
+                    text(&mut h, &cand.origin);
+                    h.u64(cand.rng);
+                    h.u64(cand.gens as u64);
+                    if cand.fam != Fam::ForestFire {
+                        text(&mut h, &cand.rule);
+                    }
+                }
+            }
+        }
+        h.0
+    }
+
+    /// A spec as JETCARP 0.4.2 wrote it (no `sizing`, no `schedule`, none of the new choices).
+    fn old_spec(extra: serde_json::Value) -> Settings {
+        let mut v = serde_json::json!({
+            "screen_cells": 900, "screen_gens": 120, "confirm_cells": 900, "confirm_gens": 120,
+            "confirm_seeds": 1, "batch": 1024, "seed": 36,
+        });
+        for (k, x) in extra.as_object().unwrap() {
+            v[k] = x.clone();
+        }
+        let set: Settings = serde_json::from_value(v).unwrap();
+        assert_eq!((set.sizing, set.schedule), (1, 1));
+        set
+    }
+
+    /// An older search, and a search that chooses nothing, keep the schedule they had before
+    /// tilings and families could be chosen (#239): the same tiling list, named rules and
+    /// candidates, pinned here as JETCARP 0.4.2's code made them (with the plans of its CPU and
+    /// GPU rounds copied out of it). A search made now that chooses nothing makes the same
+    /// candidates as an older one; one that names only grid-specific families leaves out the
+    /// tilings they cannot run on, which an older one keeps.
+    #[test]
+    fn an_old_spec_replays_as_before() {
+        let cases = [
+            (
+                "every tiling and family",
+                serde_json::json!({}),
+                0x9bbe_8c05_0184_8d60u64,
+            ),
+            (
+                "grid-specific families",
+                serde_json::json!({"tilings": ["square", "hex", "cairo"], "families": ["wolfram", "margolus"]}),
+                0x089d_b83f_1ff6_f10c,
+            ),
+            (
+                "families that run anywhere",
+                serde_json::json!({"families": ["life_like", "jaca", "turmite"]}),
+                0xddf8_24f4_e637_1cb1,
+            ),
+        ];
+        for (what, extra, want) in &cases {
+            let old = old_spec(extra.clone());
+            assert_eq!(schedule_pin(&old, 24), *want, "{what}");
+            let now = Settings {
+                schedule: SCHEDULE,
+                ..old
+            };
+            let pin = schedule_pin(&now, 24);
+            if what.starts_with("grid-specific") {
+                assert_ne!(pin, *want, "{what}, made now");
+                let s = Search::new(now, Saved::default()).unwrap();
+                assert_eq!(s.tiling_count(), 1, "only the square grid, made now");
+            } else {
+                assert_eq!(pin, *want, "{what}, made now");
+            }
+        }
     }
 
     #[test]

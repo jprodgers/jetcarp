@@ -471,7 +471,7 @@ Strategies (search_start takes one, as a key holding its settings)
 - pile: one large sandpile, built by doubling (pictures in its folder under the output folder).
 - collide: one pattern shot into another at every offset and phase; new products are stored.
 - evolve: the evolutionary glider search (rules that make seeds travel).
-- explore: the broad search over tilings, rule families, rules and seeds, keeping the best of each kind of behaviour (not deterministic; it runs in a process of its own where it can).
+- explore: the broad search over tilings, rule families, rules and seeds, keeping the best of each kind of behaviour (not deterministic; it runs in a process of its own where it can). `tilings`, `tiling_groups` (square, hexagon, triangle, pentagon, archimedean, k-uniform, isohedral, aperiodic) and `families` keep it to those; `skip_tilings`, `skip_tiling_groups` and `skip_families` leave some out. Isotropic rules (`isotropic`) are searched only when named.
 
 Watch, read, stop
 - job_status {"job": 3}: progress now; {"job": 3, "wait_s": 300} waits up to 5 minutes for it to end; {"job": 3, "finds": 10} adds its newest and rarest finds; {"job": 3, "report": true} a report of what it found; job_status {} lists jobs ({"kind": "ants"} only ant searches).

@@ -245,7 +245,9 @@ described with the method.
   that is not stopped makes the same runs, ids and confirmations whatever the length of its steps
   and however its threads take up its runs, for the same seed, settings and number of threads (its
   rounds of runs are sized to its threads), as long as no run meets its time cap. Each run it stores
-  can be replayed exactly from its tiling, rule, seed, random state and generations.
+  can be replayed exactly from its tiling, rule, seed, random state and generations. The tilings and
+  families a search was told to search are kept in its spec, and a search made before 0.4.3 keeps
+  the schedule it had ([Search methods](search-methods.md#explore)).
 - **Before 1.0.** The scene format, and the behaviour of a rule or a tiling, may still change between
   releases. Such changes are deliberate, show up in the pins and are listed in the changelog, but an
   old scene may then reach a different state. The Penrose rhombs already lay out their tiles

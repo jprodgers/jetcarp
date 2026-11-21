@@ -641,7 +641,11 @@ Options:
       --quiet                          No progress on stderr
       --hours <HOURS>                  Hours to run (the same as --minutes 60 x HOURS)
       --tilings <TILINGS>              Only these tilings: ids, comma separated (square,hex,trihex,ih28,k2-001; default: every tiling the search knows, 1,359 today; the progress line counts them)
-      --families <FAMILIES>            Only these rule families, comma separated (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider; default: all)
+      --tiling-groups <GROUPS>         Only the tilings of these groups, comma separated: square, hexagon, triangle, pentagon, archimedean, k-uniform, isohedral, aperiodic (default: every group)
+      --skip-tilings <TILINGS>         Leave out these tilings (ids, comma separated)
+      --skip-tiling-groups <GROUPS>    Leave out the tilings of these groups (comma separated)
+      --families <FAMILIES>            Only these rule families, comma separated: life_like, generations, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, spectre_glider, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, forest_fire, sandpile, table, ltl, isotropic (default: every family but isotropic, which is searched only when named). Tilings none of them can run on are left out
+      --skip-families <FAMILIES>       Leave out these rule families (comma separated)
       --screen-cells <SCREEN_CELLS>    About this many cells in a screening run's grid (an aperiodic patch is the level nearest it: 4,000 tiles for 16,000) [default: 16000]
       --screen-gens <SCREEN_GENS>      [default: 1024]
       --confirm-cells <CONFIRM_CELLS>  Cells of a confirmation run (the best runs again, on a bigger grid; an aperiodic patch is the level nearest it, and bigger than the screening patch) [default: 64000]
@@ -1678,16 +1682,20 @@ Build Quick Start entries of your own: an explore search of MINUTES in all (on t
 Usage: jetcarp quickstart build [OPTIONS]
 
 Options:
-      --json                 Print the result as JSON instead of text (commands that report a result)
-      --minutes <MINUTES>    Minutes to search before publishing [default: 10]
-      --tilings <TILINGS>    Only these tilings (ids such as hex or k2-017, separated by commas or spaces; default: every one)
-      --families <FAMILIES>  Only these rule families (default: every one)
-      --no-gpu               Run on the CPU only
-      --threads <THREADS>    Worker threads (default: every core but two, a third of them for the GPU's batches)
-      --detach               Run in a process of its own, and return once that process has taken the job
-      --library <LIBRARY>    Catalog: a .sqlite file, or a folder holding library.sqlite
-      --quiet                No progress on standard error
-  -h, --help                 Print help
+      --json                         Print the result as JSON instead of text (commands that report a result)
+      --minutes <MINUTES>            Minutes to search before publishing [default: 10]
+      --tilings <TILINGS>            Only these tilings: ids, comma separated (square,hex,trihex,ih28,k2-001; default: every tiling the search knows, 1,359 today; the progress line counts them)
+      --tiling-groups <GROUPS>       Only the tilings of these groups, comma separated: square, hexagon, triangle, pentagon, archimedean, k-uniform, isohedral, aperiodic (default: every group)
+      --skip-tilings <TILINGS>       Leave out these tilings (ids, comma separated)
+      --skip-tiling-groups <GROUPS>  Leave out the tilings of these groups (comma separated)
+      --families <FAMILIES>          Only these rule families, comma separated: life_like, generations, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, spectre_glider, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, forest_fire, sandpile, table, ltl, isotropic (default: every family but isotropic, which is searched only when named). Tilings none of them can run on are left out
+      --skip-families <FAMILIES>     Leave out these rule families (comma separated)
+      --no-gpu                       Run on the CPU only
+      --threads <THREADS>            Worker threads (default: every core but two, a third of them for the GPU's batches)
+      --detach                       Run in a process of its own, and return once that process has taken the job
+      --library <LIBRARY>            Catalog: a .sqlite file, or a folder holding library.sqlite
+      --quiet                        No progress on standard error
+  -h, --help                         Print help
 ```
 
 ## Packs

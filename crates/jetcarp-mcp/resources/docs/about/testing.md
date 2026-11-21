@@ -25,6 +25,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   resumed (on the same runner or another), must end with exactly the results of one that ran through;
   the exploratory search continues from its saved archive instead
   ([what is not guaranteed yet](../research/reproducibility.md#what-is-not-guaranteed-yet)).
+- **Explore searches keep to what they were told, and older ones to what they did.** A search told
+  which tilings, groups of tilings and rule families to search, or to leave out, must draw only
+  from them, on the processor and beside a GPU, through the search itself, the operations, the
+  command line, MCP, scripts and the app's form (whose checkboxes a test reaches with Tab and
+  ticks with Space, reading their names from the screen-reader tree). Isotropic rules must come
+  only when named. The tiling list, catalogue rules and first candidates of an older search, and
+  of one that chooses nothing, are pinned as 0.4.2's code made them (`an_old_spec_replays_as_before`,
+  `jetcarp-search/src/explore/job.rs`): with isotropic rules in the default schedule, or an older
+  search's tiling list cut to its families' grids, it fails.
 - **Exact verification.** Every object a hunt keeps is run again alone and compared cell by cell.
 - **Golly agrees.** [Golly](https://golly.sourceforge.io/)'s command-line program, `bgolly`, reads
   the RLE JETCARP writes as the same cells, and writes it back as JETCARP reads it. It runs the

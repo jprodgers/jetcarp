@@ -647,6 +647,108 @@ fn explore_runs_with_measures_as_csv_and_json() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// `jetcarp search explore` told which tilings and families to search, and which to leave out
+/// (#239): the job keeps the choice and its runs keep to it; `jetcarp quickstart build` takes
+/// the same flags.
+#[test]
+fn explore_searches_the_tilings_and_families_chosen() {
+    let dir = out_root().join(format!("cli-explore-choice-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let lib = dir.join("lib");
+    let l = lib.to_str().unwrap();
+    let e = json_of(&[
+        "search",
+        "explore",
+        "--library",
+        l,
+        "--tiling-groups",
+        "square,triangle",
+        "--skip-tilings",
+        "quad",
+        "--families",
+        "isotropic,life_like,generations",
+        "--skip-families",
+        "generations",
+        "--screen-cells",
+        "400",
+        "--screen-gens",
+        "64",
+        "--confirm-cells",
+        "400",
+        "--confirm-gens",
+        "64",
+        "--limit",
+        "60",
+        "--threads",
+        "2",
+        "--quiet",
+        "--json",
+    ]);
+    let job = e["job"].to_string();
+    let st = json_of(&["jobs", "--library", l, "status", &job, "--json"]);
+    let sp = &st["spec"];
+    assert_eq!(sp["tiling_groups"], json!(["square", "triangle"]), "{st}");
+    assert_eq!(sp["skip_tilings"], json!(["quad"]));
+    assert_eq!(
+        sp["families"],
+        json!(["isotropic", "life_like", "generations"])
+    );
+    assert_eq!(sp["skip_families"], json!(["generations"]));
+    let j = json_of(&[
+        "jobs",
+        "--library",
+        l,
+        "runs",
+        &job,
+        "--limit",
+        "0",
+        "--format",
+        "json",
+    ]);
+    let runs = j["runs"].as_array().unwrap();
+    assert!(runs.len() >= 60, "{} runs", runs.len());
+    for r in runs {
+        let (f, t) = (r["family"].as_str().unwrap(), r["tiling"].as_str().unwrap());
+        assert!(f == "isotropic" || f == "life_like", "{f}");
+        assert!(
+            ["square", "glide", "fourfold", "triangle"].contains(&t),
+            "{t}"
+        );
+        assert!(f != "isotropic" || t == "square", "{f} on {t}");
+    }
+    // Wrong names are refused, with the names there are.
+    let o = jetcarp(&[
+        "search",
+        "explore",
+        "--library",
+        l,
+        "--tiling-groups",
+        "squares",
+        "--limit",
+        "1",
+    ]);
+    assert!(!o.status.success());
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("no tiling group 'squares'"), "{err}");
+    assert!(err.contains("k-uniform"), "{err}");
+    for cmd in [["search", "explore"], ["quickstart", "build"]] {
+        let o = jetcarp(&[cmd[0], cmd[1], "--help"]);
+        let help = String::from_utf8_lossy(&o.stdout);
+        for flag in [
+            "--tilings",
+            "--tiling-groups",
+            "--skip-tilings",
+            "--skip-tiling-groups",
+            "--families",
+            "--skip-families",
+        ] {
+            assert!(help.contains(flag), "{cmd:?} {flag}: {help}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// A pack carries every run of a stopped explore search that never sealed (one under a million
 /// runs keeps them all in its working database), its screened runs and its confirmation runs:
 /// publishing seals them first (#35), and the imported library lists them.
