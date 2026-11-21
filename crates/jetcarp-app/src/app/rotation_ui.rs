@@ -570,10 +570,13 @@ fn editor(
                 }
             }
         });
-        if ui.button("Add scene…").clicked()
-            && let Some(ps) = rfd::FileDialog::new()
-                .add_filter("JETCARP scene", &["json"])
-                .pick_files()
+        let clicked = ui.button("Add scene…").clicked();
+        if let Some(ps) =
+            crate::file_dialog::on_click(ui.ctx(), "rotation.add_scene", clicked, || {
+                rfd::FileDialog::new()
+                    .add_filter("JETCARP scene", &["json"])
+                    .pick_files()
+            })
         {
             for p in ps {
                 r.items.push(Item::new(Source::Scene {

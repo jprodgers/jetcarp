@@ -135,7 +135,11 @@ impl JetcarpApp {
         let want = (
             self.motion_reduced(),
             self.contrast_high(),
-            self.a11y.settings.brightness,
+            brightness_shown(
+                self.a11y.settings.brightness,
+                self.a11y.watch.reading.dark,
+                ctx.system_theme(),
+            ),
         );
         if self.a11y.applied == Some(want) {
             return;
@@ -191,6 +195,20 @@ impl JetcarpApp {
 }
 
 /// What the system says, in words.
+/// Light or dark as shown: the choice, except that *Follow the system* takes the style the app
+/// read itself (Linux, #137) where egui has none from winit.
+fn brightness_shown(
+    chosen: theme::Brightness,
+    read: Option<bool>,
+    from_winit: Option<egui::Theme>,
+) -> theme::Brightness {
+    match (chosen, read, from_winit) {
+        (theme::Brightness::System, Some(true), None) => theme::Brightness::Dark,
+        (theme::Brightness::System, Some(false), None) => theme::Brightness::Light,
+        (b, _, _) => b,
+    }
+}
+
 fn system_word(v: Option<bool>, on: &str, off: &str) -> String {
     match v {
         Some(true) => format!("Your system asks for {on}."),
@@ -379,6 +397,7 @@ pub(super) mod tests {
         Reading {
             reduce_motion: on,
             high_contrast: None,
+            dark: None,
         }
     }
 
@@ -433,6 +452,7 @@ pub(super) mod tests {
         sys.set(Reading {
             reduce_motion: Some(true),
             high_contrast: Some(true),
+            dark: None,
         });
         // Read again after a couple of seconds of the app's clock.
         app.started -= std::time::Duration::from_secs(5);
@@ -539,5 +559,22 @@ pub(super) mod tests {
         .sanitize();
         assert_eq!(odd.palette, None);
         assert_eq!(odd.jaca_neg.as_deref(), Some("Saffron"));
+    }
+
+    /// On Linux, where winit says nothing of the style, *Follow the system* follows what the app
+    /// read from the portal (#137); a choice, or winit's own answer, wins.
+    #[test]
+    fn follow_the_system_takes_the_style_read_on_linux() {
+        use crate::theme::Brightness::*;
+        use eframe::egui::Theme;
+        assert_eq!(brightness_shown(System, Some(false), None), Light);
+        assert_eq!(brightness_shown(System, Some(true), None), Dark);
+        assert_eq!(brightness_shown(System, None, None), System);
+        assert_eq!(
+            brightness_shown(System, Some(false), Some(Theme::Dark)),
+            System
+        );
+        assert_eq!(brightness_shown(Dark, Some(false), None), Dark);
+        assert_eq!(brightness_shown(Light, Some(true), None), Light);
     }
 }
