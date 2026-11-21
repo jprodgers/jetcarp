@@ -454,7 +454,8 @@ end, so two such searches differ.) When a search's time is up, runs still going 
 processor are given up unrecorded, and the GPU's last batches are sized from its pace so far to
 end in time (Larger than Life on aperiodic patches paced apart, since it runs far slower there); a
 batch that runs on past the end, or past a stop, is given up between two of its submissions. The
-job's progress is written every two seconds while a step runs. Like the other searches it runs as
+job's progress, its memory reading and the runs that have ended since are written every two
+seconds while a step runs. Like the other searches it runs as
 a job, but it keeps its runs in a folder of its own, `searches/<uuid>/` beside the library. Every million
 runs are sealed into a compressed Parquet file that DuckDB, Polars or pyarrow can read directly (see
 [Search runs](../reference/search-runs.md)). A small SQLite database, `search.sqlite`, holds the

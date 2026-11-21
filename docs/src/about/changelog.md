@@ -103,6 +103,14 @@ day later (0.4.2: 17 November here, 18 November there).
   whatever the length of its steps and however its threads take up its runs.
   ([Search methods](../research/search-methods.md#explore),
   [#83](https://github.com/jprodgers/jetcarp/issues/83))
+- **An explore search's memory reading, memory cap and stored runs keep up with steps that run
+  long.** A step is meant to last 2 seconds, but a round of slow runs on the processor runs to its
+  end, and steps lasted from 10 seconds to more than two minutes: the memory `jetcarp jobs status`
+  showed and the cap read were taken at each step's start, so the status could be a minute old and a
+  peak inside a step went unseen, and a step's runs were written only at its end. The job now reads
+  its memory every half second, shows the newest reading and the session's highest, acts on the cap
+  at the reading that goes over it, and writes the runs that have ended every two seconds.
+  ([Searching](../guides/searching.md), [#129](https://github.com/jprodgers/jetcarp/issues/129))
 - **An explore search's aperiodic patches are the size asked for, and its confirming patch is
   bigger than its screening one.** A patch comes in levels of about 500, 4,000, 35,000 and 280,000
   tiles, and a search took the first level with at least half the cells asked, so the default

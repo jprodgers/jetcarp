@@ -131,11 +131,12 @@ It prints:
   used up, a resume runs until it is stopped. Either way it says which.
 - **Memory.** `--max-rss-gb GB` pauses a hunt, a bounded search or an explore search, still
   resumable, once JETCARP uses more memory than that. The job keeps the cap, so a resumed run keeps
-  to it too, and `jetcarp jobs status JOB` says why it paused. An explore search keeps the grids it
-  has built for reuse, up to about 3 GB, so over hours its memory grows towards that as it reaches
-  more tilings; on Linux it gives the memory it has freed back to the system between its steps.
-  "Memory" is the physical footprint on macOS, the figure Activity Monitor shows, and the resident
-  size elsewhere (the working set on Windows).
+  to it too, and `jetcarp jobs status JOB` says why it paused. An explore search reads its memory
+  every half second, even inside a step of a minute; `jetcarp jobs status` shows that reading and
+  the session's highest. It keeps the grids it has built for reuse, up to about 3 GB, so over hours
+  its memory grows towards that as it reaches more tilings; on Linux it gives the memory it has
+  freed back to the system between its steps. "Memory" is the physical footprint on macOS, the
+  figure Activity Monitor shows, and the resident size elsewhere (the working set on Windows).
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB` carries it on from there. It ends exactly where an
@@ -227,8 +228,9 @@ A screening run's grid has about 16,000 cells (`--screen-cells`), and an elite i
 of about 64,000 (`--confirm-cells`). An aperiodic patch comes only in levels of about 500, 4,000,
 35,000 and 280,000 tiles, so it is the level nearest: 4,000 tiles to screen and 35,000 to confirm
 (a search made before 0.4.3 runs both on 35,000).
-Its progress (time and runs) is written every two seconds, and `jetcarp jobs stop` stops it within
-seconds. Unless given `--threads`, it leaves two of the computer's cores free for other work, and a
+Its progress (time, runs and memory) is written every two seconds, with the runs that have ended
+since, so a search that is killed loses at most those two seconds, and `jetcarp jobs stop` stops it
+within seconds. Unless given `--threads`, it leaves two of the computer's cores free for other work, and a
 third of the rest prepare the GPU's batches; `jetcarp jobs status` says how many. A search of a few
 minutes sees only a handful of tilings. While it runs, or once it has stopped:
 

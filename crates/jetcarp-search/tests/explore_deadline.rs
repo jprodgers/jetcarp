@@ -267,3 +267,46 @@ fn a_long_step_writes_its_progress_and_sees_a_pause() {
     let p = progress(&out.progress);
     assert!(p.given_up > 0 && p.capped == 0, "{p:?}");
 }
+
+/// The runs that have ended are written while a step runs, every couple of seconds, so a search
+/// killed part way through a long step keeps them (#129): here each run takes two seconds and a
+/// round of 16 on two threads sixteen, and the working database holds runs well before the round
+/// (and its step) ends. Before, a step's runs were written at its end.
+#[test]
+fn a_long_steps_runs_are_written_while_it_runs() {
+    let dir = scratch("written");
+    let lib = Library::open(dir.join("library.sqlite"));
+    let job = make(&lib, slow(json!({ "screen_gens": 50 })));
+    let h = Runner::new(Library::open(lib.path()))
+        .spawn(
+            job,
+            RunOptions {
+                threads: 2,
+                budget: Budget::default(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let other = Library::open(lib.path());
+    let wait = Instant::now();
+    while other.job(job).unwrap().status != JobStatus::Running {
+        assert!(wait.elapsed() < Duration::from_secs(60), "it did not start");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let t0 = Instant::now();
+    let path = db_path(&other, &other.job(job).unwrap()).unwrap();
+    let stored = || -> i64 {
+        rusqlite::Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .and_then(|c| c.query_row("SELECT COUNT(*) FROM runs", [], |r| r.get(0)))
+            .unwrap_or(0)
+    };
+    let mut n = 0;
+    while n < 4 && t0.elapsed() < Duration::from_secs(10) {
+        n = stored();
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let at = t0.elapsed().as_secs_f64();
+    jobs::kind("explore").request_stop(&other, job).unwrap();
+    h.wait().unwrap();
+    assert!(n >= 4, "{n} runs stored after {at:.1} s");
+}

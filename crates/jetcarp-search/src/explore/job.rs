@@ -493,6 +493,14 @@ enum Ran {
 #[doc(hidden)]
 pub static SLOW_GENERATION_MS: AtomicU64 = AtomicU64::new(0);
 
+/// For tests: each of the next [`HOLD_RUNS`] runs on the processor holds this many MB of memory
+/// of its own (written, so resident) while it runs (0: none), so a test can make the search's
+/// memory rise and fall.
+#[doc(hidden)]
+pub static HOLD_MB: AtomicU64 = AtomicU64::new(0);
+#[doc(hidden)]
+pub static HOLD_RUNS: AtomicI64 = AtomicI64::new(0);
+
 /// Work on the processor under way on this thread (a run, or an elite's confirmation), while it
 /// lives. A thread waiting inside a run's parallel step may take up other work of the pool
 /// meanwhile, another run or a confirmation, which holds the first until it ends; the time the
@@ -812,13 +820,20 @@ impl Search {
     /// What was measured and changed since the last call: the runs, the identities tried, the
     /// coverage and family totals added, the elites added and dropped, the elites confirmed, and
     /// the counters and random states (`meta`).
+    ///
+    /// It may be taken while a step runs (a job writes one every couple of seconds): the runs,
+    /// the elites they changed, the elites confirmed and the counters are taken under the lock
+    /// that publishing holds, so they always agree.
     pub fn take_delta(&self) -> Delta {
-        let p = std::mem::take(&mut *self.pending.lock().unwrap());
+        let mut pending = self.pending.lock().unwrap();
+        let p = std::mem::take(&mut *pending);
         let elites = self.archive.lock().unwrap().take_changes();
+        let (screened, confirmed) = (self.screened(), self.confirmed());
+        drop(pending);
         let seen = std::mem::take(&mut self.seen.lock().unwrap().new);
         let meta = vec![
-            ("screened".to_string(), self.screened().to_string()),
-            ("confirmed".to_string(), self.confirmed().to_string()),
+            ("screened".to_string(), screened.to_string()),
+            ("confirmed".to_string(), confirmed.to_string()),
             (
                 "rng_gpu".to_string(),
                 self.rng_gpu.lock().unwrap().state.to_string(),
@@ -1941,6 +1956,13 @@ impl Search {
         let mut cut: Option<&'static str> = None;
         let busy = Busy::enter();
         let slow = SLOW_GENERATION_MS.load(Ordering::Relaxed);
+        let hold = HOLD_MB.load(Ordering::Relaxed);
+        // In blocks of 4 MB, as a run's own memory comes (a thread's heap holds such blocks).
+        let _held: Vec<Vec<u8>> = if hold > 0 && HOLD_RUNS.fetch_sub(1, Ordering::Relaxed) > 0 {
+            (0..hold.div_ceil(4)).map(|_| vec![1; 4 << 20]).collect()
+        } else {
+            Vec::new()
+        };
         let r = catch_unwind(AssertUnwindSafe(|| {
             let mut world = prepare(grid, &c).ok()?;
             // A Lenia kernel on an aperiodic patch takes seconds to build (14 s on one thread
