@@ -17,7 +17,8 @@ day later (0.4.2: 17 November here, 18 November there).
   deuteranopia, tritanopia and their milder forms (simulated with Machado, Oliveira and Fernandes'
   model), with lightness falling steadily along each ramp. The same check is run on every built-in
   palette: `jetcarp palettes` and `reference.palettes` give each one's result (Tide, Phosphor, Koi
-  and Verdigris pass too), and the palettes reference marks them. In the app, *Settings →
+  and Verdigris pass too), and the palettes reference marks them. The three join the pack
+  format's frozen palette registry, so packs may name them. In the app, *Settings →
   Accessibility* makes them, or any palettes, the defaults for scenes that name none.
   ([Palettes](../reference/palettes.md#colour-vision-deficiency),
   [#217](https://github.com/jprodgers/jetcarp/issues/217))
