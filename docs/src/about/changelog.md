@@ -46,6 +46,14 @@ that will declare them stable.
   key; a known key, your own publisher key and the packs that came with JETCARP are each said as
   such. Before, the app showed only a pack's name and size, and the command line the key alone.
   ([Packs](../guides/packs.md#check-a-pack))
+- **For someone who answered the seizure warning *at risk*, the strobe guard is stricter about
+  patterns.** Their guard, which can never be turned off, also veils any pattern of similar parts,
+  regular or not, as EA's IRIS counts one (at least six parts alike in shape over a quarter of the
+  screen, light parts at least 0.25 and 0.1 brighter than the dark ones, for half a second): soups,
+  waves and mazes are often shown dimmed for them. Everyone else keeps the regular-stripes rule. It
+  applies in the app, full screen, the desktop background and the screen savers, and their exported
+  animations; with it on, IRIS passes every recording of the test corpus, for flashes and for
+  patterns. ([Stricter for someone at risk](../guides/strobe-guard.md#stricter-for-someone-at-risk))
 - **Cell outlines over a large, even, bright field are drawn faint, so they make no strong
   stripes.** Zoomed in on a field of bright live cells (or a light background) on a square or
   hexagonal grid, the outlines were a strong grid, which the strobe guard measured as stripes and

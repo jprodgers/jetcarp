@@ -149,6 +149,14 @@ impl Painter {
         }
     }
 
+    /// The saved answer to the seizure warning is *at risk* (or no longer is): the guard's
+    /// stricter stripe rule, similar parts regular or not ([`jetcarp_core::strobe::similar`]).
+    pub fn set_guard_at_risk(&mut self, at_risk: bool) {
+        if let Some(g) = &mut self.guard {
+            g.guard.set_at_risk(at_risk);
+        }
+    }
+
     /// What the strobe guard is doing (None: this painter has none).
     pub fn guard_report(&self) -> Option<Report> {
         self.guard.as_ref().map(|g| g.guard.report())

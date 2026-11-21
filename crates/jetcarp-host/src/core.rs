@@ -234,6 +234,8 @@ pub struct Core {
     /// The strobe guard's setting for the desktop background and the screen saver (#97), and
     /// when it was last read.
     desktop_guard: bool,
+    /// The saved answer is *at risk*: the guard's stricter stripe rule.
+    desktop_at_risk: bool,
     guard_at: f64,
 }
 
@@ -457,6 +459,7 @@ impl Core {
             retune_tried: None,
             warning_at: 0.0,
             desktop_guard: jetcarp_core::photosensitivity::guard_on(GuardPlace::Desktop),
+            desktop_at_risk: jetcarp_core::photosensitivity::at_risk(),
             guard_at: 0.0,
         };
         if let Some(w) = warning {
@@ -818,6 +821,16 @@ impl Core {
         if now - self.guard_at >= GUARD_CHECK {
             self.guard_at = now;
             let on = jetcarp_core::photosensitivity::guard_on(GuardPlace::Desktop);
+            let strict = jetcarp_core::photosensitivity::at_risk();
+            if strict != self.desktop_at_risk {
+                self.desktop_at_risk = strict;
+                self.note(if strict {
+                    "the strobe guard is stricter for someone at risk: patterns of similar parts \
+                     are veiled too"
+                } else {
+                    "the strobe guard's stripe rule is the usual one"
+                });
+            }
             if on != self.desktop_guard {
                 self.desktop_guard = on;
                 self.note(if on {
@@ -869,6 +882,11 @@ impl Core {
     /// Whether the strobe guard is on for the desktop background and the screen saver.
     pub fn desktop_guard_on(&self) -> bool {
         self.desktop_guard
+    }
+
+    /// Whether the saved answer is *at risk*, so the guard uses its stricter stripe rule.
+    pub fn desktop_guard_at_risk(&self) -> bool {
+        self.desktop_at_risk
     }
 
     /// The pause rules: on battery, and while the processor is busy with something else.
@@ -943,6 +961,7 @@ impl Core {
             "strobe_guard": json!({
                 "on": self.desktop_guard,
                 "for": GuardPlace::Desktop.words(),
+                "at_risk": self.desktop_at_risk,
             }),
             "rotations": rotation_names(),
             "login": self.login,

@@ -11,7 +11,7 @@
 //! The sandpile preview changes at most four times a second and the HashLife view only when a jump
 //! is asked for, so neither can flash more than twice a second on its own.
 
-use jetcarp_core::photosensitivity::{GuardPlace, guard_on};
+use jetcarp_core::photosensitivity::{GuardPlace, at_risk, guard_on};
 use jetcarp_core::render::Image;
 use jetcarp_core::strobe::Viewing;
 use jetcarp_core::strobe::export::{check, slowed_delay, soften};
@@ -26,7 +26,8 @@ pub fn guard_frames(frames: Vec<Image>, delay_ms: u32) -> (Vec<Image>, u32) {
         return (frames, delay_ms);
     }
     let refs: Vec<&Image> = frames.iter().collect();
-    let before = check(&refs, delay_ms);
+    let strict = at_risk();
+    let before = check(&refs, delay_ms, strict);
     if !before.harmful {
         return (frames, delay_ms);
     }
@@ -34,13 +35,13 @@ pub fn guard_frames(frames: Vec<Image>, delay_ms: u32) -> (Vec<Image>, u32) {
     if before.stripes.level != jetcarp_core::strobe::pattern::PatternLevel::Fail {
         let d = slowed_delay(&before, delay_ms);
         if d <= delay_ms.saturating_mul(jetcarp_core::strobe::export::MAX_SLOWER)
-            && !check(&refs, d).harmful
+            && !check(&refs, d, strict).harmful
         {
             return (frames, d);
         }
     }
-    let soft = soften(&frames, delay_ms);
-    let after = check(&soft.iter().collect::<Vec<_>>(), delay_ms);
+    let soft = soften(&frames, delay_ms, strict);
+    let after = check(&soft.iter().collect::<Vec<_>>(), delay_ms, strict);
     if after.harmful {
         let d = slowed_delay(&after, delay_ms);
         (soft, d)
@@ -64,8 +65,10 @@ impl Default for LiveGuard {
 
 impl LiveGuard {
     pub fn new() -> LiveGuard {
+        let mut guard = Guard::new(Viewing::screen(1.0), None, true);
+        guard.set_at_risk(at_risk());
         LiveGuard {
-            guard: Guard::new(Viewing::screen(1.0), None, true),
+            guard,
             soft: Softener::new(),
             last: None,
         }
@@ -159,7 +162,7 @@ mod tests {
             .collect();
         let (out, d) = guard_frames(frames.clone(), 50);
         if guard_on(GuardPlace::App) {
-            assert!(!check(&out.iter().collect::<Vec<_>>(), d).harmful);
+            assert!(!check(&out.iter().collect::<Vec<_>>(), d, at_risk()).harmful);
             // A flip every frame needs far more than four times as long: softened.
             assert_ne!(out[1].rgba, frames[1].rgba);
         }

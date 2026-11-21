@@ -8,6 +8,10 @@
 //! carrying out the guard's plan, its readings two frames late, and its pace cap holding the
 //! generations back. What that shows must never fail.
 //!
+//! Each verdict is pinned twice for stripes: by the usual rule, and by the stricter rule for
+//! someone who answered the seizure warning *at risk*, which counts similar parts regular or not
+//! ([`jetcarp_core::strobe::similar`]). The guarded runs use each rule in turn.
+//!
 //! `JETCARP_STROBE_PRINT=1` prints every case's readings (to see why a pin moved).
 
 use jetcarp_core::render::{self, RenderOptions, ViewOptions};
@@ -39,6 +43,16 @@ struct Case {
     flash: Level,
     red: Level,
     stripes: PatternLevel,
+    /// The stripe verdict by the at-risk rule.
+    at_risk: PatternLevel,
+}
+
+impl Case {
+    /// The at-risk rule's verdict, where it differs from the usual one.
+    const fn risk(mut self, at_risk: PatternLevel) -> Case {
+        self.at_risk = at_risk;
+        self
+    }
 }
 
 const fn case(
@@ -59,6 +73,7 @@ const fn case(
         flash,
         red,
         stripes,
+        at_risk: stripes,
     }
 }
 
@@ -73,11 +88,12 @@ const fn sized(scene: &'static str, cell_px: f64, stripes: PatternLevel) -> Case
         flash: Pass,
         red: Pass,
         stripes,
+        at_risk: stripes,
     }
 }
 
 use Level::{Extended, Fail, Pass, Warning};
-use PatternLevel::{Fail as SFail, Pass as SPass};
+use PatternLevel::{Fail as SFail, Harmful as SHarmful, Pass as SPass};
 
 /// JETCARP's verdicts, pinned.
 const CASES: &[Case] = &[
@@ -88,12 +104,14 @@ const CASES: &[Case] = &[
     // field swings between healthy and ill every ten generations or so as it settles, so at 60
     // generations a second its worst second has 8 transitions (four flashes), at 30 it has 6, and
     // at 15, 3.
-    case("hodgepodge", 60.0, 4.0, None, Fail, Pass, SPass),
-    case("hodgepodge", 30.0, 4.0, None, Warning, Pass, SPass),
-    case("hodgepodge", 15.0, 4.0, None, Pass, Pass, SPass),
+    // By the at-risk rule its waves are similar parts at any speed.
+    case("hodgepodge", 60.0, 4.0, None, Fail, Pass, SPass).risk(SFail),
+    case("hodgepodge", 30.0, 4.0, None, Warning, Pass, SPass).risk(SFail),
+    case("hodgepodge", 15.0, 4.0, None, Pass, Pass, SPass).risk(SFail),
     // Tron's rectilinear pattern, grown from the blob, is regular stripes too.
     case("tron-blob", 30.0, 3.0, None, Fail, Pass, SFail),
-    case("seeds-soup", 30.0, 3.0, None, Fail, Pass, SPass),
+    // A soup of square cells: no stripes, but similar parts by the at-risk rule (IRIS fails it).
+    case("seeds-soup", 30.0, 3.0, None, Fail, Pass, SPass).risk(SFail),
     // Just over and just under the rate: six generations a second flip the field six times (three
     // flashes, a warning), seven fail; six a second for longer is the extended failure.
     case("tron-field", 7.0, 3.0, None, Fail, Pass, SPass),
@@ -109,10 +127,13 @@ const CASES: &[Case] = &[
     case("stripes-still", 10.0, 2.0, None, Pass, Pass, SFail),
     case("tron-checkerboard", 30.0, 2.0, None, Pass, Pass, SFail),
     // Ordinary scenes.
-    case("life-soup", 30.0, 4.0, None, Pass, Pass, SPass),
-    case("brians-brain", 30.0, 4.0, None, Pass, Pass, SPass),
-    case("maze", 30.0, 4.0, None, Pass, Pass, SPass),
-    case("cyclic-waves", 15.0, 4.0, None, Pass, Pass, SPass),
+    // Ordinary scenes, which the at-risk rule counts as similar parts: the soups and the waves
+    // (IRIS fails the waves), Brian's Brain and the maze's corridors for less than half a second at
+    // a time.
+    case("life-soup", 30.0, 4.0, None, Pass, Pass, SPass).risk(SFail),
+    case("brians-brain", 30.0, 4.0, None, Pass, Pass, SPass).risk(SHarmful),
+    case("maze", 30.0, 4.0, None, Pass, Pass, SPass).risk(SHarmful),
+    case("cyclic-waves", 15.0, 4.0, None, Pass, Pass, SPass).risk(SFail),
     // Still fields with thin lines over them: live cells at a fractional size (no seams), and
     // with cell outlines as a desktop picture or an exported animation draws them, which over
     // bright cells are drawn faint enough to make no strong stripes; and outlines over a light
@@ -120,8 +141,9 @@ const CASES: &[Case] = &[
     sized("live-field", 4.37, SPass),
     sized("live-field", 8.0, SPass),
     sized("live-field", 16.0, SPass),
-    sized("paper-field", 8.0, SPass),
-    sized("paper-field", 16.0, SPass),
+    // Paper's scattered dark cells are similar parts by the at-risk rule (IRIS fails them at 16).
+    sized("paper-field", 8.0, SPass).risk(SFail),
+    sized("paper-field", 16.0, SPass).risk(SFail),
 ];
 
 fn scene(name: &str) -> Scene {
@@ -175,10 +197,13 @@ fn worse_red(a: &FlashReading, b: &FlashReading) -> bool {
 }
 
 /// Runs a case unguarded; the worst general, red and stripe readings.
-fn verdict(c: &Case) -> (FlashReading, FlashReading, PatternReading) {
+fn verdict(c: &Case) -> (FlashReading, FlashReading, PatternReading, PatternReading) {
     let mut world = World::from_scene(&scene(c.scene)).unwrap();
     let mut meter = FlashMeter::new(Viewing::screen(1.0), None);
     let mut pattern = PatternMeter::new(None);
+    let mut strict = PatternMeter::new(None);
+    strict.set_at_risk(true);
+    let mut at_risk = PatternReading::default();
     let mut last_pattern = f64::NEG_INFINITY;
     let mut seen = Seen {
         flash: FlashReading::default(),
@@ -207,19 +232,25 @@ fn verdict(c: &Case) -> (FlashReading, FlashReading, PatternReading) {
             if p.level > seen.stripes.level {
                 seen.stripes = p;
             }
+            let p = strict.update(&half, t);
+            if p.level > at_risk.level {
+                at_risk = p;
+            }
         }
     }
-    (seen.flash, red, seen.stripes)
+    (seen.flash, red, seen.stripes, at_risk)
 }
 
 /// Runs a case through the guard; the most transitions a second that reached the screen, the
 /// worst level, and the worst stripe level of what was shown.
-fn guarded(c: &Case) -> (u32, Level, PatternLevel) {
+fn guarded(c: &Case, at_risk: bool) -> (u32, Level, PatternLevel) {
     let mut world = World::from_scene(&scene(c.scene)).unwrap();
     let mut guard = Guard::new(Viewing::screen(1.0), None, true);
+    guard.set_at_risk(at_risk);
     let mut soft = Softener::new();
     let mut shown = FlashMeter::new(Viewing::screen(1.0), None);
     let mut shown_pattern = PatternMeter::new(None);
+    shown_pattern.set_at_risk(at_risk);
     let mut queue = VecDeque::new();
     let (mut due, mut most, mut level, mut stripes) = (0.0f64, 0, Pass, SPass);
     let mut last_pattern = f64::NEG_INFINITY;
@@ -269,7 +300,7 @@ fn the_corpus_verdicts_are_pinned() {
     let print = std::env::var_os("JETCARP_STROBE_PRINT").is_some();
     let mut wrong = vec![];
     for c in CASES {
-        let (flash, red, stripes) = verdict(c);
+        let (flash, red, stripes, at_risk) = verdict(c);
         let label = format!(
             "{} at {} gen/s for {} s{}",
             c.scene,
@@ -281,7 +312,7 @@ fn the_corpus_verdicts_are_pinned() {
         );
         if print {
             eprintln!(
-                "{label}: flash {:?} ({} transitions: area {}, screen {}, share {:.2}); red {:?} ({}); stripes {:?} (share {:.2}, contrast {:.2}, period {:.1} px)",
+                "{label}: flash {:?} ({} transitions: area {}, screen {}, share {:.2}); red {:?} ({}); stripes {:?} (share {:.2}, contrast {:.2}, period {:.1} px); at risk {:?} ({} similar parts)",
                 flash.level,
                 flash.transitions,
                 flash.area_transitions,
@@ -292,11 +323,13 @@ fn the_corpus_verdicts_are_pinned() {
                 stripes.level,
                 stripes.share,
                 stripes.contrast,
-                stripes.period_px
+                stripes.period_px,
+                at_risk.level,
+                at_risk.parts
             );
         }
-        let got = (flash.level, red.red_level, stripes.level);
-        let want = (c.flash, c.red, c.stripes);
+        let got = (flash.level, red.red_level, stripes.level, at_risk.level);
+        let want = (c.flash, c.red, c.stripes, c.at_risk);
         if got != want {
             wrong.push(format!("{label}: got {got:?}, pinned {want:?}"));
         }
@@ -304,18 +337,68 @@ fn the_corpus_verdicts_are_pinned() {
     assert!(wrong.is_empty(), "verdicts moved:\n{}", wrong.join("\n"));
 }
 
+/// Exported animations of the still fields, saved through the at-risk guard, for the IRIS
+/// comparison (ignored, and needs `JETCARP_STROBE_RECORD=DIR`): each field drawn as an export
+/// draws it, held for 60 frames at 10 a second, saved as WebP through the guard with its stricter
+/// stripe rule, and read back: `DIR/export-risk/<scene>-<px>px/00000.png`, and
+/// `DIR/exports.json` with the check of each file as saved.
+#[test]
+#[ignore]
+fn record_at_risk_exports_for_iris() {
+    use jetcarp_core::media::encode;
+    let Some(dir) = std::env::var_os("JETCARP_STROBE_RECORD").map(PathBuf::from) else {
+        eprintln!("skipped: set JETCARP_STROBE_RECORD to a folder");
+        return;
+    };
+    let mut out = serde_json::Map::new();
+    for c in CASES.iter().filter(|c| c.cell_px.is_some_and(|p| p >= 8.0)) {
+        let world = World::from_scene(&scene(c.scene)).unwrap();
+        let px = c.cell_px.unwrap();
+        let img = jetcarp_core::render::Image {
+            width: W,
+            height: H,
+            rgba: draw(&world, c),
+        };
+        let frames = vec![img; 60];
+        let bg = [frames[0].rgba[0], frames[0].rgba[1], frames[0].rgba[2], 255];
+        let enc = |f: &[&jetcarp_core::render::Image], d: u32| encode::webp(f, d, bg);
+        let g = jetcarp_core::strobe::export::guard(
+            &frames,
+            100,
+            true,
+            true,
+            &enc,
+            &encode::decode_webp,
+        )
+        .unwrap();
+        let name = format!("{}-{px}px", c.scene);
+        let sub = dir.join("export-risk").join(&name);
+        std::fs::create_dir_all(&sub).unwrap();
+        for (k, f) in encode::decode_webp(&g.bytes).unwrap().iter().enumerate() {
+            render::write_png(&sub.join(format!("{k:05}.png")), f, &[]).unwrap();
+        }
+        out.insert(name, g.record());
+    }
+    std::fs::write(
+        dir.join("exports.json"),
+        serde_json::to_string_pretty(&out).unwrap() + "\n",
+    )
+    .unwrap();
+}
+
 #[test]
 fn with_the_guard_on_nothing_in_the_corpus_fails_on_screen() {
     let mut wrong = vec![];
-    for c in CASES {
-        let (most, level, stripes) = guarded(c);
+    for (c, at_risk) in CASES.iter().flat_map(|c| [(c, false), (c, true)]) {
+        let (most, level, stripes) = guarded(c, at_risk);
         if level.fails() || stripes == SFail {
             wrong.push(format!(
-                "{} at {} gen/s{}: {most} transitions a second on screen, {level:?}, stripes {stripes:?}",
+                "{} at {} gen/s{}{}: {most} transitions a second on screen, {level:?}, stripes {stripes:?}",
                 c.scene,
                 c.speed,
                 c.inset.map_or(String::new(), |s| format!(", {s} px inset"))
-                    + &c.cell_px.map_or(String::new(), |p| format!(", {p} px a cell"))
+                    + &c.cell_px.map_or(String::new(), |p| format!(", {p} px a cell")),
+                if at_risk { ", at risk" } else { "" }
             ));
         }
     }

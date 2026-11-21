@@ -100,6 +100,33 @@ they go, so it never flashes itself.
 The guard changes only what is shown and how fast generations are shown. A world computes the same
 generations whatever the guard does, and a scene's hash is the same.
 
+## Stricter for someone at risk
+
+For someone who answered the warning *I have, or may have, a seizure disorder*, whose guard can
+never be turned off, the guard is stricter about patterns. Besides regular stripes, it veils any
+**pattern of similar parts**, regular or not, as EA's IRIS counts one: at least six parts alike in
+shape (a soup of square cells, scattered dark cells on a light ground, a field of waves) that
+together cover a quarter of the screen or more, their light parts at least 0.25 in brightness and
+at least 0.1 brighter than the dark ones, for half a second. It veils them where they are, as
+stripes are, and far enough that their light parts drop below 0.25. Flashes are measured as for
+everyone.
+
+So for them ordinary soups, waves and mazes are often shown dimmed, where for anyone else they are
+shown as drawn. It applies wherever their answer does: the app's view, full screen and the outputs,
+the desktop background and the screen savers (whose own switch, always on for them, uses the
+stricter rule while the saved answer is *at risk*; macOS's screen saver bakes it in when installed),
+and the animations they export. Checked against IRIS, the stricter guard leaves IRIS nothing to
+fail, for flashes or for patterns, on any recording of the test corpus
+([Comparing with IRIS](../about/testing.md#comparing-with-iris)). It still does not make JETCARP
+safe for someone with a seizure disorder.
+
+How it is measured: the half-resolution copy of the frame (halved again until it is at most 480
+samples wide) is cut into light and dark at Otsu's threshold, as IRIS cuts it; each connected light
+or dark part from 0.155% to a sixth of the copy is taken as its convex hull, and two parts are alike
+when their Hu moments differ by less than 0.7 (OpenCV's `matchShapes`, IRIS's measure and
+threshold). The most parts alike to one of them, and the rectangle around them, are the pattern. A
+check costs a millisecond or two, four times a second, and only for someone at risk.
+
 ## Where it works
 
 | Where | Which switch |

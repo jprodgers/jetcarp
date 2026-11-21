@@ -97,8 +97,9 @@ struct Shared {
     fps: f32,
     caption: jetcarp_display::caption::CaptionSettings,
     use_gpu: bool,
-    /// The strobe guard's setting, baked in.
+    /// The strobe guard's setting, baked in, and whether it uses the stricter at-risk rule.
     strobe_guard: bool,
+    strobe_at_risk: bool,
     stage: Option<Stage>,
     sim: SimBackend,
     started: Instant,
@@ -260,6 +261,7 @@ impl Shared {
             caption: baked.caption,
             use_gpu: baked.gpu,
             strobe_guard: baked.strobe_guard,
+            strobe_at_risk: baked.strobe_at_risk,
             baked: Some(baked),
             stage: None,
             sim: SimBackend::unavailable("no GPU yet".into()),
@@ -654,13 +656,14 @@ impl JetcarpSaverView {
                 .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(ptr))
                 .map_err(|e| format!("no surface: {e}"))?
         };
-        let strobe_guard = sh.strobe_guard;
+        let (strobe_guard, strobe_at_risk) = (sh.strobe_guard, sh.strobe_at_risk);
         let gpu = sh.gpu_for(&surface)?;
         let caps = surface.get_capabilities(&gpu.adapter);
         let mut config = painter::surface_config(&caps, size)?;
         // The strobe guard (#97) reads each frame where it is drawn, if the layer lets it.
         let readable = painter::readable(&mut config, &caps, &gpu.adapter);
         let mut painter = Painter::guarded(&gpu.device, config.format, strobe_guard);
+        painter.set_guard_at_risk(strobe_at_risk);
         painter.set_readable(readable);
         let s = Surface {
             painter,
