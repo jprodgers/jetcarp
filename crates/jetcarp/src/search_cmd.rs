@@ -95,7 +95,7 @@ pub struct JobFlags {
     #[arg(long)]
     limit: Option<u64>,
     /// Worker threads (default: all cores; an explore search leaves two free). Results do not
-    /// depend on this.
+    /// depend on this, but for an explore search's: its rounds of runs are sized to its threads.
     #[arg(long)]
     threads: Option<usize>,
     /// Run in a process of its own, and return once that process has taken the job (`jetcarp jobs

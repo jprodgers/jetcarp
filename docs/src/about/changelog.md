@@ -90,6 +90,19 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **An explore search's screening goes on while it confirms elites.** Every fourth CPU round
+  confirmed twice the threads' number of elites after its screening, each elite's seeds one after
+  another, and nothing was screened meanwhile; on the GPU a batch of confirmation runs took every
+  elite of a tiling waiting. A laptop's search screened nothing for a minute. Each CPU round now
+  confirms its share of those elites, started first, each elite's seeds side by side, beside the
+  round's screening runs, which are counted and stored as they end; a GPU batch of confirmation
+  runs is sized to about 8 seconds of the GPU's time by its pace. A run on the processor's time cap
+  now counts its own time only, not a run its thread took up while waiting inside it (runs were
+  capped at their 8th generation that way). A round's runs reach the archive in the order they were
+  made, with their ids, so a search on the processor alone makes the same runs and confirmations
+  whatever the length of its steps and however its threads take up its runs.
+  ([Search methods](../research/search-methods.md#explore),
+  [#83](https://github.com/jprodgers/jetcarp/issues/83))
 - **An explore search's aperiodic patches are the size asked for, and its confirming patch is
   bigger than its screening one.** A patch comes in levels of about 500, 4,000, 35,000 and 280,000
   tiles, and a search took the first level with at least half the cells asked, so the default

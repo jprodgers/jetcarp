@@ -427,7 +427,9 @@ impl Archive {
         let mut fams: Vec<(usize, Fam, Vec<(i64, f32)>)> = pending
             .into_iter()
             .map(|(f, mut v)| {
-                v.sort_by(|a, b| b.1.total_cmp(&a.1));
+                // Best first, the lower id first of runs that score the same, so the order does
+                // not depend on the map's.
+                v.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
                 (done.get(&f).copied().unwrap_or(0), f, v)
             })
             .collect();

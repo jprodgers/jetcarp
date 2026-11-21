@@ -438,8 +438,19 @@ current best. A GPU loop runs the rules the graphics card
 supports in large batches while a CPU loop runs the rest. A run on the processor that would take
 longer than 8 seconds (a sandpile, which takes tens of seconds on the default grid; a confirmation
 run gets 32) stops there and is kept as a run of the generations it reached, so it still replays
-exactly. An elite's confirmation does not start on a thread that is waiting inside another run,
-which would hold that run past its cap. When a search's time is up, runs still going on the
+exactly. A run's time is its own: while it waits for its step's parallel work, its thread may take
+up another run, and the time spent on that one does not count against the first one's cap. An
+elite is confirmed beside the screening rather than after it: each CPU round confirms its share of
+the elites (twice the threads every four rounds), started first, each elite's seeds side by side,
+while the round's screening runs go on beside them, so the runs screened keep coming while elites
+are confirmed. On the GPU a batch of confirmation runs is sized to about 8 seconds of the GPU's time
+by its pace so far, so its screening never waits long either. A round's screened runs reach the
+archive, with their ids, in the order they were made, and its confirmations at its end in the order
+their elites were picked, so on the processor alone a search makes the same runs and confirms the
+same elites whatever the length of its steps and however its threads take up its runs: the same
+seed, settings and number of threads give the same search, as long as no run meets its cap, which
+is wall time. (With a GPU, the GPU's batches and the processor's rounds share the archive as they
+end, so two such searches differ.) When a search's time is up, runs still going on the
 processor are given up unrecorded, and the GPU's last batches are sized from its pace so far to
 end in time (Larger than Life on aperiodic patches paced apart, since it runs far slower there); a
 batch that runs on past the end, or past a stop, is given up between two of its submissions. The
