@@ -996,20 +996,34 @@ impl BatchSim {
     /// Fill the first state buffer from the jobs' starting states, in bounded submissions.
     fn upload_init(&mut self, job: &BatchJob, stride: usize) -> Result<(), String> {
         let buf = self.state[0].get();
+        // A B0 world on a patch carries its background in bit 8, from its start: live when it
+        // turns live for good at the first step (`jetcarp_core::b0`), else empty.
+        let explicit = matches!(job.topo.storage, jetcarp_core::Storage::Explicit(_));
+        let starts: Vec<u32> = job
+            .worlds
+            .iter()
+            .map(|w| match w.rule.b0_masks() {
+                Some((b, s)) if explicit => {
+                    (jetcarp_core::b0::patch_starts_live(&job.topo, job.nb, b, s) as u32) << 8
+                }
+                _ => 0,
+            })
+            .collect();
         let per_world = stride * 4;
         // Worlds per submission; a world larger than the chunk size goes alone.
         let per_submit = (UPLOAD_BYTES / per_world).max(1);
         let mut words: Vec<u32> = Vec::new();
         for (c, part) in job.worlds.chunks(per_submit).enumerate() {
             let at = (c * per_submit * per_world) as u64;
+            let bg = &starts[c * per_submit..c * per_submit + part.len()];
             words.clear();
             words.resize(part.len() * stride, 0);
             words
                 .par_chunks_mut(stride)
-                .zip(part.par_iter())
-                .for_each(|(out, w)| {
+                .zip(part.par_iter().zip(bg.par_iter()))
+                .for_each(|(out, (w, &b))| {
                     for (x, &s) in out.iter_mut().zip(&w.init) {
-                        *x = s as u32;
+                        *x = s as u32 | b;
                     }
                 });
             self.queue

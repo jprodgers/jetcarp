@@ -152,6 +152,13 @@ fn cells_next(topo: &Topology, nb: Nb, birth: u32, survive: u32, b: &[u8]) -> Ve
         .collect()
 }
 
+/// Whether the background of `(birth, survive)` on a patch starts live (see the module notes):
+/// every cell, live with its neighbours live, survives. For steppers that keep a patch's
+/// background themselves.
+pub fn patch_starts_live(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> bool {
+    cells_start(topo, nb, birth, survive).first() == Some(&1)
+}
+
 /// A patch's background at the start: every cell live when the first step's live background
 /// lasts (every cell, live with its neighbours live, survives), else the empty world.
 fn cells_start(topo: &Topology, nb: Nb, birth: u32, survive: u32) -> Vec<u8> {
