@@ -115,6 +115,9 @@ pub struct Screen {
     pub due: bool,
     /// Frames it has drawn.
     frames: u64,
+    /// No surface shows it: its monitor isn't connected, and another screen is on the one it
+    /// would move to. It neither steps nor draws until its monitor comes back (#130).
+    pub unseen: bool,
 }
 
 /// A rotation and its expanded items, as text to compare.
@@ -140,6 +143,7 @@ impl Screen {
             monitor,
             place,
             made_from,
+            unseen: false,
             clock: FrameClock::default(),
             due: false,
             frames: 0,
@@ -729,9 +733,10 @@ impl Core {
         autostart::set(on, &autostart::login_command()?)
     }
 
-    /// Whether screen `s` is left unseen: a window screen of a host started at login.
+    /// Whether screen `s` is left unseen: a window screen of a host started at login, or a
+    /// screen whose monitor isn't connected and has nowhere else to show (#130).
     pub fn hidden(&self, s: &Screen) -> bool {
-        self.login && s.place != Place::Wallpaper
+        (self.login && s.place != Place::Wallpaper) || s.unseen
     }
 
     /// Shows every screen as a wallpaper, or back in a window (saved).
@@ -835,7 +840,8 @@ impl Core {
         let login = self.login;
         for (s, pacer) in self.screens.iter_mut().zip(pacers) {
             s.due = false;
-            if login && s.place != Place::Wallpaper {
+            // Nobody can see it: neither stepped nor drawn (#130).
+            if (login && s.place != Place::Wallpaper) || s.unseen {
                 continue;
             }
             s.stage.set_pacer(pacer);
@@ -929,6 +935,7 @@ impl Core {
                 "monitor": s.monitor,
                 "place": s.place,
                 "hidden": self.hidden(s),
+                "waiting_for_monitor": s.unseen,
                 "frames": s.frames,
                 "stage": s.stage.status(),
                 // What its world steps on now, and why, as the settings say since they last

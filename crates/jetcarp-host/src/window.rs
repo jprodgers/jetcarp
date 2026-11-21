@@ -507,6 +507,15 @@ impl App {
             return;
         }
         let wanted = self.targets(el);
+        // A host's screen that no surface shows (its monitor has gone and it could not move) is
+        // held, not stepped and drawn for nobody (#130). A login host's window screens are
+        // already unseen by their own rule.
+        if self.mode == Mode::Host {
+            let unseen = targets::unseen(&wanted, self.core.screens.len());
+            for (s, u) in self.core.screens.iter_mut().zip(unseen) {
+                s.unseen = u && !(self.core.login && s.place != Place::Wallpaper);
+            }
+        }
         let mut old: Vec<Option<Output>> = std::mem::take(&mut self.outputs)
             .into_iter()
             .map(Some)

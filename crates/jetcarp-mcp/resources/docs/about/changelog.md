@@ -79,6 +79,10 @@ that will declare them stable.
   see the live wallpaper on your desktop", the window's title says the same, and the host's note no
   longer says to install an extension that setup already installed.
   ([#139](https://github.com/jprodgers/jetcarp/issues/139))
+- **The background host no longer steps and draws a screen nobody can see.** A screen kept for a
+  monitor that wasn't connected when the host started, with the main monitor taken by another
+  screen, had no window but went on stepping and drawing on the GPU. It now waits until its monitor
+  comes back, and `jetcarp host status` says so. ([#130](https://github.com/jprodgers/jetcarp/issues/130))
 
 ## [0.4.2] – 2026-11-17
 

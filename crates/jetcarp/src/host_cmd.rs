@@ -333,6 +333,9 @@ fn status_lines(v: &Value) -> Vec<String> {
                 Some(name) => format!("{shown} on monitor {m} ({name})"),
                 // A host just started may not have read its monitors yet.
                 None if monitors.is_empty() => format!("{shown} on monitor {m}"),
+                None if s["waiting_for_monitor"] == true => format!(
+                    "{shown} on monitor {m} (not connected: waiting for it, neither stepping nor drawing)"
+                ),
                 None => format!("{shown} on monitor {m} (not connected)"),
             },
             None if shown == "wallpaper" && monitors.len() > 1 => {
@@ -1256,6 +1259,25 @@ mod tests {
         assert_eq!(
             first(json!("M2 Max"), "found"),
             "running, pid 7, up 4.0s, 19 MB, GPU M2 Max"
+        );
+    }
+
+    /// A screen whose monitor isn't connected, held until it comes back, says so (#130).
+    #[test]
+    fn a_screen_waiting_for_its_monitor_says_so() {
+        let stage = json!({"rotation": "Desktop art", "label": "Life", "number": 1,
+            "count": 3, "generation": 5, "cells": 230400, "cell_px": 3.0});
+        let v = json!({"pid": 7, "uptime_s": 9.0, "memory_mb": 300, "gpu": "M2 Max",
+            "monitors": ["Built-in Retina Display"], "screens": [
+                {"place": "wallpaper", "monitor": 1, "waiting_for_monitor": true, "stage": stage,
+                 "simulation": {"on": "gpu", "adapter": "Apple M2 Max", "why": null}}],
+            "log": []});
+        let lines = status_lines(&v);
+        assert!(
+            lines[1].contains(
+                "wallpaper on monitor 1 (not connected: waiting for it, neither stepping nor drawing)"
+            ),
+            "{lines:?}"
         );
     }
 
