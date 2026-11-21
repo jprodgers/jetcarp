@@ -7,7 +7,7 @@ use jetcarp_display::pace::FrameClock;
 use jetcarp_display::rotation::Rotation;
 use jetcarp_display::simgpu::SimBackend;
 use jetcarp_display::stage::{Lookup, Stage};
-use jetcarp_display::tuning::{Pick, RUNG_SECONDS, TuneEvent, TuneRequest};
+use jetcarp_display::tuning::{Pick, TRIAL_SECONDS, TuneEvent, TuneRequest};
 
 mod sweep;
 use jetcarp_gpu::select;
@@ -121,6 +121,9 @@ pub struct Screen {
     /// No surface shows it: its monitor isn't connected, and another screen is on the one it
     /// would move to. It neither steps nor draws until its monitor comes back (#130).
     pub unseen: bool,
+    /// This frame's work so far, seconds: its stepping, and its surfaces' drawing as the window
+    /// side reports it ([`Core::painted`]); not the wait to present (#106).
+    work: f64,
 }
 
 /// A rotation and its expanded items, as text to compare.
@@ -150,6 +153,7 @@ impl Screen {
             clock: FrameClock::default(),
             due: false,
             frames: 0,
+            work: 0.0,
         }
     }
 
@@ -246,22 +250,33 @@ pub struct Core {
     guard_at: f64,
 }
 
-/// The tuned desktop background screens whose canvas is not the one their tuning was found for,
-/// with the canvas each has now: what a tune by itself would be for. `screens` gives each running
-/// screen's place, canvas, and whether it shows.
-pub fn retune_wanted(
-    settings: &HostSettings,
-    screens: &[(Place, [f64; 2], bool)],
-) -> Vec<(usize, [u32; 2])> {
+/// A running screen's monitor, as a fit by itself compares it with the one it was fitted for.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Monitor {
+    pub place: Place,
+    /// Its canvas, in physical pixels.
+    pub canvas: [f64; 2],
+    /// Pixels per point.
+    pub scale: f64,
+    /// Its monitor's refresh rate (None: not known).
+    pub hz: Option<f32>,
+    /// It shows.
+    pub shown: bool,
+}
+
+/// The fitted desktop background screens whose monitor is not the one their fit was found for (in
+/// size, pixels per point or refresh rate), with the canvas each has now: the screens a fit by
+/// itself sweeps; the others keep their fit (#110).
+pub fn retune_wanted(settings: &HostSettings, screens: &[Monitor]) -> Vec<(usize, [u32; 2])> {
     screens
         .iter()
         .enumerate()
-        .filter(|(_, (place, _, shown))| *place == Place::Wallpaper && *shown)
-        .filter_map(|(i, &(_, canvas, _))| {
+        .filter(|(_, m)| m.place == Place::Wallpaper && m.shown)
+        .filter_map(|(i, m)| {
             let s = settings.screens.get(i)?;
             let t = s.tuning.as_ref().filter(|t| t.rotation == s.rotation)?;
-            (!t.fits_canvas(canvas))
-                .then(|| (i, [canvas[0].round() as u32, canvas[1].round() as u32]))
+            (!t.fits_monitor(m.canvas, m.scale, m.hz))
+                .then(|| (i, [m.canvas[0].round() as u32, m.canvas[1].round() as u32]))
         })
         .collect()
 }
@@ -327,13 +342,28 @@ const WALLPAPER_TAG: &str = "@jetcarp-wallpaper";
 /// Give the memory allocator's free pages back to the system. glibc keeps the memory the host
 /// frees (a sweep's trial grids of up to millions of cells, a scene let go) in its arenas, which
 /// give memory back only from their top, so the host grew by about 100 MB with each Fit sweep and
-/// kept it (#69). Called after a sweep, and before the memory limit lets a scene go, so memory
-/// the host no longer holds is never counted against it. Elsewhere this does nothing.
+/// kept it (#69). macOS's allocator keeps freed pages the same way, and the host grew over
+/// two-screen fits there (#111): `malloc_zone_pressure_relief` gives them back. Called after a
+/// fit, and before the memory limit lets a scene go, so memory the host no longer holds is never
+/// counted against it. Elsewhere this does nothing.
 pub(crate) fn release_free_memory() {
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
     // SAFETY: malloc_trim only returns free memory to the system; it is safe to call at any time.
     unsafe {
         libc::malloc_trim(0);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            /// `<malloc/malloc.h>`: frees what it can of every zone (`zone` null) back to the
+            /// system, up to `goal` bytes (0: as much as it can); returns the bytes freed.
+            fn malloc_zone_pressure_relief(zone: *mut std::ffi::c_void, goal: usize) -> usize;
+        }
+        // SAFETY: a null zone means every zone, and the call only returns free pages to the
+        // system; it is safe to call at any time.
+        unsafe {
+            malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
+        }
     }
 }
 
@@ -540,6 +570,9 @@ impl Core {
             .collect();
         let mut out = Vec::with_capacity(self.settings.screens.len());
         let mut first_error = None;
+        // A screen a fit is measuring shows a trial's size; its own sizes come back with its own
+        // stage when the fit ends.
+        let fitting: Vec<usize> = self.sweep.as_ref().map_or(vec![], |s| s.fitting());
         for i in 0..self.settings.screens.len() {
             let want = self.wanted_rotation(i);
             let (monitor, place) = (
@@ -559,7 +592,9 @@ impl Core {
             if let Some(mut s) = kept.filter(unchanged) {
                 s.monitor = monitor;
                 s.place = place;
-                s.stage.set_tuned(tuned);
+                if !fitting.contains(&i) {
+                    s.stage.set_tuned(tuned);
+                }
                 out.push(s);
                 continue;
             }
@@ -643,12 +678,12 @@ impl Core {
 
     fn apply_pause(&mut self) {
         let paused = self.user_paused || self.held();
-        // A sweep runs its screen whatever else holds it, and pauses the others, so the host's
-        // load is the swept scene's.
-        let swept = self.sweep.as_ref().and_then(|s| s.screen());
+        // A fit runs the screens it measures whatever else holds them, and pauses the others, so
+        // the host's load is the measured scenes'.
+        let on_show = self.sweep.as_ref().map(|s| s.screens());
         for (i, s) in self.screens.iter_mut().enumerate() {
-            s.stage.set_paused(match swept {
-                Some(k) => i != k,
+            s.stage.set_paused(match &on_show {
+                Some(on) => !on.contains(&i),
                 None => paused,
             });
         }
@@ -887,7 +922,9 @@ impl Core {
             s.frames += 1;
             // Each screen's share of the time its frame leaves for stepping.
             let budget = Duration::from_secs_f32(STEP_SHARE / rate / count);
+            let t0 = Instant::now();
             s.stage.tick(now, &mut s.sim, budget);
+            s.work += t0.elapsed().as_secs_f64();
             notes.extend(s.stage.take_notes());
         }
         for n in notes {
@@ -1204,15 +1241,18 @@ impl Core {
                 let seconds = a
                     .get("seconds")
                     .and_then(Value::as_f64)
-                    .unwrap_or(RUNG_SECONDS);
+                    .unwrap_or(TRIAL_SECONDS);
+                let flag = |k: &str| a.get(k).and_then(Value::as_bool).unwrap_or(false);
                 self.start_sweep(
                     TuneRequest {
                         cpu_percent: num("cpu_limit"),
                         gpu_percent: num("gpu_limit"),
                         fps: num("fps"),
                         screen,
+                        screens: vec![],
                         pick,
-                        dry_run: a.get("dry_run").and_then(Value::as_bool).unwrap_or(false),
+                        fresh: flag("fresh"),
+                        dry_run: flag("dry_run"),
                         auto: false,
                     },
                     seconds,
@@ -1300,7 +1340,14 @@ impl Core {
         let screens: Vec<_> = self
             .screens
             .iter()
-            .map(|s| (s.place, s.stage.canvas(), !self.hidden(s)))
+            .enumerate()
+            .map(|(i, s)| Monitor {
+                place: s.place,
+                canvas: s.stage.canvas(),
+                scale: s.stage.status().scale,
+                hz: self.screen_hz(i),
+                shown: !self.hidden(s),
+            })
             .collect();
         let want = retune_wanted(&self.settings, &screens);
         let now = self.now();
@@ -1318,16 +1365,20 @@ impl Core {
             return;
         }
         self.retune_since = None;
-        self.retune_tried = Some(want);
+        // Only the screens whose monitor changed; the others keep their fit (#110).
         let req = TuneRequest {
             auto: true,
+            screens: want.iter().map(|w| w.0).collect(),
             ..Default::default()
         };
-        match self.start_sweep(req, RUNG_SECONDS) {
-            Ok(()) => {
-                self.note("the monitors changed; sweeping the desktop background's sizes again")
-            }
-            Err(e) => self.note(format!("could not sweep again for the new monitors: {e}")),
+        let which: Vec<String> = want.iter().map(|w| w.0.to_string()).collect();
+        self.retune_tried = Some(want);
+        match self.start_sweep(req, TRIAL_SECONDS) {
+            Ok(()) => self.note(format!(
+                "the monitor changed under screen {}; fitting it again",
+                which.join(", ")
+            )),
+            Err(e) => self.note(format!("could not fit again for the new monitors: {e}")),
         }
     }
 
@@ -1340,6 +1391,7 @@ impl Core {
             "auto": self.sweep.as_ref().is_some_and(|s| s.auto()),
         });
         if let Some(sw) = &self.sweep {
+            v["screens"] = json!(sw.fitting());
             v["sweep"] = sw.progress();
             v["progress"] = json!(
                 self.sweep_events
@@ -1415,7 +1467,7 @@ impl GpuState {
 
 #[cfg(test)]
 mod tests {
-    use super::{GpuState, hold_reasons, made_from, pause_reasons, retune_wanted};
+    use super::{GpuState, Monitor, hold_reasons, made_from, pause_reasons, retune_wanted};
 
     /// A screen of a host that hasn't opened its GPU yet says so, not "no GPU" (#141).
     #[test]
@@ -1465,6 +1517,7 @@ mod tests {
         let tuned = |rotation: &str| Tuning {
             rotation: rotation.into(),
             canvas: [2560, 1440],
+            hz: Some(60.0),
             ..Default::default()
         };
         let screen = |rotation: &str, t: Option<Tuning>| ScreenSettings {
@@ -1481,7 +1534,14 @@ mod tests {
             ],
             ..Default::default()
         };
-        let wall = |w: f64, h: f64| (Place::Wallpaper, [w, h], true);
+        let mon = |place, w: f64, h: f64, shown| Monitor {
+            place,
+            canvas: [w, h],
+            scale: 1.0,
+            hz: Some(60.0),
+            shown,
+        };
+        let wall = |w: f64, h: f64| mon(Place::Wallpaper, w, h, true);
         // The size it was tuned for: nothing to do.
         let same = [wall(2560.0, 1440.0); 3];
         assert!(retune_wanted(&s, &same).is_empty());
@@ -1489,13 +1549,67 @@ mod tests {
         let moved = [wall(1920.0, 1080.0); 3];
         assert_eq!(retune_wanted(&s, &moved), [(0, [1920, 1080])]);
         // Not while it is in a window, or not shown.
-        let window = [(Place::Window, [1920.0, 1080.0], true)];
+        let window = [mon(Place::Window, 1920.0, 1080.0, true)];
         assert!(retune_wanted(&s, &window).is_empty());
-        let hidden = [(Place::Wallpaper, [1920.0, 1080.0], false)];
+        let hidden = [mon(Place::Wallpaper, 1920.0, 1080.0, false)];
         assert!(retune_wanted(&s, &hidden).is_empty());
         // Never tuned: never by itself.
         s.screens.iter_mut().for_each(|x| x.tuning = None);
         assert!(retune_wanted(&s, &moved).is_empty());
+    }
+
+    /// An automatic fit sweeps only the screens whose monitor changed, in size, pixels per point
+    /// or refresh rate; a screen whose monitor didn't change keeps its fit (#110). The Mac's built-in
+    /// screen waited behind its 40 Wolfram rules when only the other monitor's resolution changed.
+    #[test]
+    fn only_the_screens_whose_monitor_changed_are_fitted_again() {
+        let fitted = |rotation: &str, canvas: [u32; 2], scale: f64, hz: f32| ScreenSettings {
+            rotation: rotation.into(),
+            place: Place::Wallpaper,
+            tuning: Some(Tuning {
+                rotation: rotation.into(),
+                canvas,
+                scale,
+                hz: Some(hz),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let s = HostSettings {
+            screens: vec![
+                fitted("retina", [3024, 1964], 2.0, 120.0),
+                fitted("aoc", [2560, 1440], 1.0, 60.0),
+            ],
+            ..Default::default()
+        };
+        let mon = |w: f64, h: f64, scale: f64, hz: f32| Monitor {
+            place: Place::Wallpaper,
+            canvas: [w, h],
+            scale,
+            hz: Some(hz),
+            shown: true,
+        };
+        let retina = mon(3024.0, 1964.0, 2.0, 120.0);
+        // The AOC's resolution changed: only screen 1.
+        assert_eq!(
+            retune_wanted(&s, &[retina, mon(1920.0, 1080.0, 1.0, 60.0)]),
+            [(1, [1920, 1080])]
+        );
+        // Its refresh rate, or its scale: only screen 1 again.
+        assert_eq!(
+            retune_wanted(&s, &[retina, mon(2560.0, 1440.0, 1.0, 144.0)]),
+            [(1, [2560, 1440])]
+        );
+        assert_eq!(
+            retune_wanted(&s, &[retina, mon(2560.0, 1440.0, 1.25, 60.0)]),
+            [(1, [2560, 1440])]
+        );
+        // Nothing changed: nothing to fit; a rate not known is not a change.
+        let unknown = Monitor {
+            hz: None,
+            ..mon(2560.0, 1440.0, 1.0, 60.0)
+        };
+        assert!(retune_wanted(&s, &[retina, unknown]).is_empty());
     }
 
     /// A pause (by hand, or nothing to show) and a hold are told apart, so `paused` and

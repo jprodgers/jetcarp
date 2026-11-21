@@ -2,9 +2,10 @@
 //! which runs scenes as the desktop background (or in windows) as its own program. Start and stop
 //! it, choose each screen's rotation and monitor, the lock screen, the still picture, the frame
 //! rate and the GPU, the pauses, start at login, GNOME's extension, and *Fit to this computer*,
-//! which tunes each scene's cell size to the processor and GPU limits set here. Fit is switched
-//! off in 0.4.2 ([`jetcarp_core::fit::FIT`], #112): the pane shows neither it nor its limits and
-//! cards, and returns in 0.4.3 (#113).
+//! which finds each scene's cell size within the processor and GPU limits set here, in about ten
+//! seconds (#113): each screen's most demanding scene is measured, its cards scroll sideways and
+//! open at the chosen one (#108), and the rest of the rotation takes its size from it. With
+//! [`jetcarp_core::fit::FIT`] off (0.4.2, #112) the pane shows neither it nor its limits and cards.
 //!
 //! The host is its own program, so all of this works over the link and the settings file
 //! (`host.json`); closing this window leaves it running. Rotations and profiles are shared with
@@ -60,6 +61,8 @@ pub(super) struct HostPanel {
     /// Each rotation's scenes (its items' labels) by name, with the rotation they were expanded
     /// from, for Fit's cards; emptied whenever the settings are read again.
     scene_labels: std::collections::HashMap<String, (String, Vec<String>)>,
+    /// The rows of cards already scrolled to their chosen card, so each is scrolled once (#108).
+    scrolled: std::collections::HashSet<String>,
 }
 
 /// The caption's options. True when one changed.
@@ -745,7 +748,9 @@ impl JetcarpApp {
         // ---------------------------------------------- performance
         ui.separator();
         let crops = &mut h.crops;
+        let scrolled = &mut h.scrolled;
         let mut crop = |ctx: &egui::Context, name: &str| crop_texture(crops, ctx, name);
+        let mut first_seen = |key: &str| scrolled.insert(key.to_string());
         let (start_tune, stop_tune, forget) = performance_ui(
             ui,
             view,
@@ -754,6 +759,7 @@ impl JetcarpApp {
             &shown,
             &mut changed,
             &mut crop,
+            &mut first_seen,
         );
         // ---------------------------------------------- apply
         if forget {
@@ -790,10 +796,7 @@ impl JetcarpApp {
         }
         if stop_tune && let Some(mut f) = h.feed.take() {
             f.stop();
-            h.tune_note = Some((
-                "Stopped; the scenes already swept keep their cards.".into(),
-                false,
-            ));
+            h.tune_note = Some(("Stopped; nothing was saved.".into(), false));
             h.settings = None;
         }
         if install {
@@ -1020,36 +1023,48 @@ impl HostPanel {
             self.settings = None;
         }
         if let Some(outcome) = f.outcome() {
-            let scenes = f
-                .events()
-                .iter()
-                .filter(|e| matches!(e, TuneEvent::Scene { .. }))
-                .count();
-            self.tune_note = Some(match outcome {
-                Ok(()) => (
+            let done = f.events().iter().rev().find_map(|e| match e {
+                TuneEvent::Done {
+                    scenes,
+                    trials,
+                    seconds,
+                    ..
+                } => Some((*scenes, *trials, *seconds)),
+                _ => None,
+            });
+            self.tune_note = Some(match (outcome, done) {
+                (Ok(()), Some((scenes, trials, Some(secs)))) if trials > 0 => (
                     format!(
-                        "Swept {scenes} scene(s). Each shows at the recommended size unless you choose another card."
+                        "Fitted {scenes} scene(s) in {secs:.0} s, {trials} size(s) tried. Each \
+                         shows at its size unless you choose another."
                     ),
                     false,
                 ),
-                Err(e) => (
-                    format!("The sweep stopped: {e}. The scenes done are saved."),
-                    true,
+                (Ok(()), Some((scenes, _, _))) => (
+                    format!(
+                        "Placed the sizes the last fit found for {scenes} scene(s): nothing has \
+                         changed since."
+                    ),
+                    false,
                 ),
+                (Ok(()), None) => ("Fitted.".into(), false),
+                (Err(e), _) => (format!("The fit stopped: {e}. Nothing was saved."), true),
             });
             self.feed = None;
             self.settings = None;
+            // A new fit's cards are scrolled into view again (#108).
+            self.scrolled.clear();
         }
     }
 }
 
-/// What the Performance group shows of a sweep under way.
+/// What the Performance group shows of a fit under way.
 struct TuneView {
     running: bool,
     on_screen: bool,
     progress: Option<String>,
-    /// The scene on show, and its cards so far: (screen, scene, cards).
-    live: Option<(usize, String, Vec<Rung>)>,
+    /// Each screen being measured, its scene, and its cards so far: (screen, scene, cards).
+    live: Vec<(usize, String, Vec<Rung>)>,
     note: Option<(String, bool)>,
 }
 
@@ -1059,7 +1074,7 @@ fn h_tune_view(h: &HostPanel) -> TuneView {
             running: false,
             on_screen: false,
             progress: None,
-            live: None,
+            live: vec![],
             note: h.tune_note.clone(),
         };
     };
@@ -1069,28 +1084,25 @@ fn h_tune_view(h: &HostPanel) -> TuneView {
         .rev()
         .find(|e| matches!(e, TuneEvent::Rung { .. } | TuneEvent::Start { .. }))
         .map(TuneEvent::describe);
-    // The cards of the scene on show: those measured since it started.
-    let mut live: Option<(usize, String, Vec<Rung>)> = None;
+    // Each measured screen's cards so far: every screen is measured at once (#113).
+    let mut live: Vec<(usize, String, Vec<Rung>)> = vec![];
     for e in events {
         match e {
             TuneEvent::Rung { screen, scene, .. } => {
-                if live
-                    .as_ref()
-                    .is_none_or(|(s, n, _)| s != screen || n != scene)
-                {
-                    live = Some((*screen, scene.clone(), vec![]));
+                if !live.iter().any(|(s, _, _)| s == screen) {
+                    live.push((*screen, scene.clone(), vec![]));
                 }
             }
-            TuneEvent::Measured { rung, .. } => {
-                if let Some((_, _, cards)) = &mut live {
+            TuneEvent::Measured { screen, rung, .. } => {
+                if let Some((_, _, cards)) = live.iter_mut().find(|(s, _, _)| s == screen) {
                     cards.push(rung.clone());
                 }
             }
-            TuneEvent::Scene { .. } => live = None,
+            TuneEvent::Scene { screen, .. } => live.retain(|(s, _, _)| s != screen),
             _ => {}
         }
     }
-    if let Some((_, _, cards)) = &mut live {
+    for (_, _, cards) in &mut live {
         cards.sort_by(|a, b| a.size.px.total_cmp(&b.size.px));
     }
     TuneView {
@@ -1104,7 +1116,7 @@ fn h_tune_view(h: &HostPanel) -> TuneView {
 
 /// What a click in the cards asks for.
 enum CardDo {
-    /// Show screen `0`'s scene `1` at this card's size.
+    /// Show screen `0`'s scene `1` at this size (the measured scene's: the rest follow it).
     Choose(usize, String, Size),
     /// Show every scene on this tiling (screen, tiling) at this cell size.
     AllOnTiling(usize, String, f32),
@@ -1112,10 +1124,45 @@ enum CardDo {
     RecommendedForRest,
 }
 
+/// How the limits are shared between the screens, for the pane (#107): a line for each screen
+/// fitted, once there is more than one.
+fn share_lines(settings: &HostSettings) -> Vec<String> {
+    let fitted: Vec<(usize, &Tuning)> = settings
+        .screens
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| {
+            s.tuning
+                .as_ref()
+                .filter(|t| t.rotation == s.rotation && t.share > 0.0)
+                .map(|t| (i, t))
+        })
+        .collect();
+    if fitted.len() < 2 {
+        return vec![];
+    }
+    let l = &settings.tune;
+    fitted
+        .iter()
+        .map(|(i, t)| {
+            format!(
+                "Screen {}: {} × {}, {:.0}% of the area: processor {}, GPU {}",
+                i + 1,
+                t.canvas[0],
+                t.canvas[1],
+                t.share * 100.0,
+                tuning::percent(l.cpu_percent as f64 / 100.0 * t.share),
+                tuning::percent(l.gpu_percent as f64 / 100.0 * t.share),
+            )
+        })
+        .collect()
+}
+
 /// The pacing, then the limits, *Fit to this computer*, and the cards (these three not while Fit
-/// is switched off, #112). Returns whether to start a sweep, stop the one running, or forget the
-/// sizes found; a card chosen is put in `settings` (`changed`).
+/// is switched off, #112). Returns whether to start a fit, stop the one running, or forget the
+/// sizes found; a card or size chosen is put in `settings` (`changed`).
 /// `shown` gives the scenes each screen's rotation shows now: only they get rows (#73).
+/// `first_seen` says whether a row of cards is new, so it is scrolled to its chosen card (#108).
 #[allow(clippy::too_many_arguments)]
 fn performance_ui(
     ui: &mut egui::Ui,
@@ -1125,6 +1172,7 @@ fn performance_ui(
     shown: &[Option<Vec<String>>],
     changed: &mut bool,
     crop: &mut dyn FnMut(&egui::Context, &str) -> Option<egui::TextureHandle>,
+    first_seen: &mut dyn FnMut(&str) -> bool,
 ) -> (bool, bool, bool) {
     let (mut start, mut stop, mut forget) = (false, false, false);
     ui.label(RichText::new("Performance").strong());
@@ -1245,6 +1293,18 @@ fn performance_ui(
             });
             ui.end_row();
         });
+    // One set of limits for the whole desktop, shared by pixel area (#107).
+    ui.label(
+        RichText::new(
+            "The limits are for the whole desktop: with several screens, each gets a share by its \
+             pixel area.",
+        )
+        .small()
+        .weak(),
+    );
+    for line in share_lines(settings) {
+        ui.label(RichText::new(line).small());
+    }
     ui.horizontal_wrapped(|ui| {
         if view.running {
             crate::a11y::spinner(ui);
@@ -1254,9 +1314,10 @@ fn performance_ui(
         } else if ui
             .button(RichText::new("Fit to this computer…").strong())
             .on_hover_text(
-                "Show each scene of the desktop background at each size from 1 pixel a cell up, \
-                 a couple of seconds each, measuring the processor, the GPU and the frame rate; \
-                 then choose a card for each scene. The rules and colours stay as they are",
+                "Measure the most demanding scene of each screen's rotation at a few sizes, about \
+                 a second each and every screen at once (a few seconds), within the processor \
+                 and GPU limits at a smooth frame rate. The size found serves the whole rotation: \
+                 a cheaper scene goes finer. The rules and colours stay as they are",
             )
             .clicked()
         {
@@ -1267,7 +1328,7 @@ fn performance_ui(
             && tuned
             && ui
                 .small_button("Use the scenes' own sizes")
-                .on_hover_text("Forget the sweep; each scene shows at its own cell size")
+                .on_hover_text("Forget the fit; each scene shows at its own cell size")
                 .clicked()
         {
             forget = true;
@@ -1276,11 +1337,12 @@ fn performance_ui(
     *changed |= ui
         .checkbox(
             &mut settings.tune.auto,
-            "Measure again by itself when the monitors change",
+            "Measure again by itself when a monitor changes",
         )
         .on_hover_text(
-            "Once swept: a size you chose is kept while it is still within the limits, else the \
-             recommended one shows. Not while on battery or busy",
+            "Once fitted: only the screens whose monitor changed (its size, scale or refresh rate) \
+             are measured again; a size you chose is kept while it is still within the limits, \
+             else the recommended one shows. Not while on battery or busy",
         )
         .changed();
     if view.running {
@@ -1305,7 +1367,8 @@ fn performance_ui(
         };
         ui.label(RichText::new(t).small().color(crate::theme::ink(ui, c)));
     }
-    // The cards: each scene's saved sweep (choosable), and the scene on show (not yet).
+    // The cards: each screen's measured scene (choosable; the rest follow it), the other scenes'
+    // sizes, and the screens being measured (not yet).
     let ppp = ui.ctx().pixels_per_point();
     let ctx = ui.ctx().clone();
     let mut todo: Option<CardDo> = None;
@@ -1315,11 +1378,15 @@ fn performance_ui(
         let Some(t) = s.tuning.as_ref().filter(|t| t.rotation == s.rotation) else {
             continue;
         };
+        // A screen being measured shows its cards so far, below.
+        if view.live.iter().any(|(sc, _, _)| *sc == i) {
+            continue;
+        }
         // Only the scenes of the rotation shown: a size fitted while another was shown stays
         // saved, but is not one of these (#73).
         let labels = shown.get(i).and_then(Option::as_deref);
         let scenes: Vec<&TunedScene> = t.scenes_shown(labels).collect();
-        if scenes.iter().all(|x| x.rungs.is_empty()) {
+        if scenes.is_empty() || scenes.iter().all(|x| x.rungs.is_empty() && x.cost == 0.0) {
             continue;
         }
         any = true;
@@ -1332,7 +1399,7 @@ fn performance_ui(
                 && ui
                     .small_button("Use the recommended size for the rest")
                     .on_hover_text(
-                        "Every scene you have not chosen a card for keeps its recommended size, \
+                        "Every scene you have not chosen a size for keeps its recommended size, \
                          as your choice",
                     )
                     .clicked()
@@ -1348,27 +1415,49 @@ fn performance_ui(
                     .color(crate::theme::ink(ui, WARN)),
             );
         }
-        for scene in scenes {
-            if view
-                .live
-                .as_ref()
-                .is_some_and(|(sc, n, _)| *sc == i && *n == scene.scene)
-            {
-                continue;
+        // The measured scene's cards (and a fit's from before 0.4.3: every scene's).
+        let measured = scenes.iter().any(|x| x.measured);
+        for scene in scenes.iter().filter(|x| !x.rungs.is_empty()) {
+            if let Some(d) = scene_row(ui, &ctx, ppp, i, scene, !view.running, crop, first_seen) {
+                todo = Some(d);
             }
-            if let Some(d) = scene_row(ui, &ctx, ppp, i, scene, !view.running, crop) {
+        }
+        let rest: Vec<&TunedScene> = scenes
+            .iter()
+            .filter(|x| x.rungs.is_empty())
+            .copied()
+            .collect();
+        if !rest.is_empty() {
+            ui.label(
+                RichText::new(if measured {
+                    "The other scenes take their sizes from it, by their cost:"
+                } else {
+                    "The other scenes:"
+                })
+                .small()
+                .weak(),
+            );
+            if let Some(d) = other_scenes(ui, i, t, &rest, !view.running) {
                 todo = Some(d);
             }
         }
     }
-    if let Some((i, name, cards)) = &view.live {
+    for (i, name, cards) in &view.live {
         any = true;
         let scene = TunedScene {
             scene: name.clone(),
             rungs: cards.clone(),
             ..Default::default()
         };
-        ui.label(RichText::new("Measuring…").small().weak());
+        ui.label(
+            RichText::new(if screens > 1 {
+                format!("Screen {}: measuring…", i + 1)
+            } else {
+                "Measuring…".into()
+            })
+            .small()
+            .weak(),
+        );
         if gpu_unmeasured(&scene) {
             ui.label(
                 RichText::new(GPU_UNMEASURED)
@@ -1376,26 +1465,29 @@ fn performance_ui(
                     .color(crate::theme::ink(ui, WARN)),
             );
         }
-        let _ = scene_row(ui, &ctx, ppp, *i, &scene, false, crop);
+        let _ = scene_row(ui, &ctx, ppp, *i, &scene, false, crop, &mut |_| false);
     }
     if !any && !view.running {
         ui.label(
-            RichText::new("Not swept: each scene shows at its own cell size.")
+            RichText::new("Not fitted: each scene shows at its own cell size.")
                 .small()
                 .weak(),
         );
     }
     match todo {
         Some(CardDo::Choose(i, name, size)) => {
-            if let Some(scene) = settings.screens[i]
-                .tuning
-                .as_mut()
-                .and_then(|t| t.scenes.iter_mut().find(|x| x.scene == name))
+            if let Some(t) = settings.screens[i].tuning.as_mut()
+                && let Some(scene) = t.scenes.iter_mut().find(|x| x.scene == name)
             {
-                let own = scene.rungs.iter().any(|r| r.own && r.size.same(&size));
+                let own = scene.rungs.iter().any(|r| r.own && r.size.same(&size))
+                    || (size.level.is_none() && (size.px - scene.design_px).abs() < 1e-3);
                 scene.set_size(if own { Size::px(scene.design_px) } else { size });
                 scene.chosen = true;
                 scene.note = None;
+                // The measured scene's size serves the rest of the rotation.
+                if scene.measured {
+                    tuning::rederive(t);
+                }
                 *changed = true;
             }
         }
@@ -1441,7 +1533,22 @@ fn performance_ui(
     (start, stop, forget)
 }
 
-/// One scene's cards in a row, its name and note above. `choosable`: a click chooses a card.
+/// The key a row of cards is scrolled into view by once (#108): a new fit, or another size
+/// chosen, scrolls it again.
+fn row_key(screen: usize, scene: &TunedScene) -> String {
+    format!(
+        "{screen}|{}|{}|{:?}|{:?}",
+        scene.scene,
+        scene.rungs.len(),
+        scene.size(),
+        scene.recommended
+    )
+}
+
+/// One scene's cards in a row, its name and note above. `choosable`: a click chooses a card. The
+/// row scrolls sideways (a trackpad's sideways swipe, or shift and the wheel), and the first time
+/// it is seen (`first_seen`) it is scrolled to the chosen card, else the recommended one (#108).
+#[allow(clippy::too_many_arguments)]
 fn scene_row(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
@@ -1450,12 +1557,33 @@ fn scene_row(
     scene: &TunedScene,
     choosable: bool,
     crop: &mut dyn FnMut(&egui::Context, &str) -> Option<egui::TextureHandle>,
+    first_seen: &mut dyn FnMut(&str) -> bool,
 ) -> Option<CardDo> {
     let mut todo = None;
     let showing = scene.size();
     ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new(&scene.scene).strong());
+        if !scene.also.is_empty() {
+            ui.label(
+                RichText::new(format!(
+                    "and the {} other rules of its series",
+                    scene.also.len()
+                ))
+                .small(),
+            );
+        }
+        if scene.measured && choosable {
+            ui.label(
+                RichText::new("measured: its rotation's most demanding scene")
+                    .small()
+                    .weak(),
+            )
+            .on_hover_text(
+                "Fit measures one scene a screen, the one with the most work a cell; the size \
+                 chosen here serves the whole rotation, each cheaper scene going finer by its cost",
+            );
+        }
         if scene.placed {
             ui.label(
                 RichText::new("a placed pattern: its own size unless you choose")
@@ -1492,11 +1620,13 @@ fn scene_row(
     if let Some(n) = &scene.note {
         ui.label(RichText::new(n).small().color(crate::theme::ink(ui, WARN)));
     }
+    let scroll_now = choosable && first_seen(&row_key(screen, scene));
     egui::ScrollArea::horizontal()
         .id_salt(("tune-cards", screen, &scene.scene))
         .auto_shrink([false, true])
         .show(ui, |ui| {
             ui.horizontal(|ui| {
+                let mut target: Option<(bool, egui::Response)> = None;
                 for r in &scene.rungs {
                     let picked = choosable
                         && (r.size.same(&showing)
@@ -1504,7 +1634,7 @@ fn scene_row(
                     let recommended = choosable && r.size.same(&scene.recommended);
                     // A sweep from before 0.4.2 kept the unjudged share as a number.
                     let unknown = r.gpu_unmeasured || scene.gpu_timing.unmeasured();
-                    if card(
+                    let (clicked, resp) = card(
                         ui,
                         ctx,
                         ppp,
@@ -1514,18 +1644,98 @@ fn scene_row(
                         unknown,
                         choosable,
                         crop,
-                    ) {
+                    );
+                    if clicked {
                         todo = Some(CardDo::Choose(screen, scene.scene.clone(), r.size));
                     }
+                    // The chosen card, else the recommended one.
+                    if picked || (recommended && target.as_ref().is_none_or(|t| !t.0)) {
+                        target = Some((picked, resp));
+                    }
+                }
+                // Only this row scrolls: a scroll area takes both of a target's directions, so
+                // the pane itself stays where it is.
+                if scroll_now && let Some((_, resp)) = target {
+                    resp.scroll_to_me(Some(egui::Align::Center));
                 }
             });
         });
     todo
 }
 
+/// The scenes a fit sized from the measured one, each with its size and a choice of the others
+/// (`choosable`); a placed pattern, or a scene that is not rebuilt to fill the screen, at its
+/// own size.
+fn other_scenes(
+    ui: &mut egui::Ui,
+    screen: usize,
+    t: &Tuning,
+    rest: &[&TunedScene],
+    choosable: bool,
+) -> Option<CardDo> {
+    let mut todo = None;
+    egui::Grid::new(("tune-others", screen))
+        .num_columns(3)
+        .spacing([8.0, 2.0])
+        .show(ui, |ui| {
+            for x in rest {
+                let name = if x.also.is_empty() {
+                    x.scene.clone()
+                } else {
+                    format!("{} and its series' {} other rules", x.scene, x.also.len())
+                };
+                ui.label(RichText::new(name).small());
+                let size = x.size();
+                let sizes = tuning::scene_sizes(t, x);
+                let words = |s: &Size| {
+                    let mut w = s.describe();
+                    if s.same(&x.recommended) {
+                        w.push_str(", recommended");
+                    }
+                    if s.level.is_none() && (s.px - x.design_px).abs() < 1e-3 {
+                        w.push_str(", its own");
+                    }
+                    w
+                };
+                if choosable && !sizes.is_empty() {
+                    egui::ComboBox::from_id_salt(("tune-size", screen, &x.scene))
+                        .selected_text(words(&size))
+                        .show_ui(ui, |ui| {
+                            for s in &sizes {
+                                if ui.selectable_label(s.same(&size), words(s)).clicked() {
+                                    todo = Some(CardDo::Choose(screen, x.scene.clone(), *s));
+                                }
+                            }
+                        });
+                } else {
+                    ui.label(RichText::new(size.describe()).small());
+                }
+                let why = if x.chosen {
+                    "your choice".to_string()
+                } else if x.placed {
+                    "a placed pattern: its own size unless you choose".to_string()
+                } else if sizes.is_empty() {
+                    "its own size".to_string()
+                } else if (x.cost - 1.0).abs() < 0.005 {
+                    "the same work a cell as the measured scene".to_string()
+                } else if x.cost < 1.0 {
+                    format!("{:.0}% of the measured scene's work a cell", x.cost * 100.0)
+                } else {
+                    format!("{:.1} times the measured scene's work a cell", x.cost)
+                };
+                let l = ui.label(RichText::new(why).small().weak());
+                if let Some(n) = &x.note {
+                    l.on_hover_text(n);
+                }
+                ui.end_row();
+            }
+        });
+    todo
+}
+
 /// One card: the picture at the screen's own pixels, the size and cells, the numbers, and whether
 /// it is within the limits. `gpu_unknown`: its GPU share wasn't measured, so it shows as unknown
-/// (#72). True when it was clicked.
+/// (#72). Whether it was clicked, and its response.
 #[allow(clippy::too_many_arguments)]
 fn card(
     ui: &mut egui::Ui,
@@ -1537,7 +1747,7 @@ fn card(
     gpu_unknown: bool,
     choosable: bool,
     crop: &mut dyn FnMut(&egui::Context, &str) -> Option<egui::TextureHandle>,
-) -> bool {
+) -> (bool, egui::Response) {
     let accent = ui.visuals().selection.stroke.color;
     let stroke = if picked {
         egui::Stroke::new(2.0, accent)
@@ -1589,7 +1799,24 @@ fn card(
                     numbers.on_hover_text(GPU_UNMEASURED);
                 }
                 ui.horizontal(|ui| {
-                    if r.fits {
+                    if r.at_limit {
+                        // Within the measurement's noise of a limit: a fit repeated may find it
+                        // either side, so the size recommended last time is kept (#94).
+                        ui.label(
+                            RichText::new("at the limit")
+                                .small()
+                                .color(crate::theme::ink(ui, WARN)),
+                        )
+                        .on_hover_text(format!(
+                            "Within the measurement's noise of a limit ({}): measured again it \
+                             may come out either side, so a fit keeps the size it recommended \
+                             before{}",
+                            tuning::percent(tuning::NOISE),
+                            r.over
+                                .as_deref()
+                                .map_or(String::new(), |o| format!("; this time {o}"))
+                        ));
+                    } else if r.fits {
                         ui.label(
                             RichText::new("within the limits")
                                 .small()
@@ -1621,7 +1848,7 @@ fn card(
         })
         .response;
     if !choosable {
-        return false;
+        return (false, resp);
     }
     let resp = resp.interact(egui::Sense::click()).on_hover_text(format!(
         "{}; frames {:.1} ms (95th percentile); stepped on the {}{}. Click to choose",
@@ -1634,7 +1861,7 @@ fn card(
             String::new()
         }
     ));
-    resp.clicked()
+    (resp.clicked(), resp)
 }
 
 /// Whether a scene's GPU share wasn't measured: its sweep's clock, or any of its cards (a scene
@@ -1704,5 +1931,133 @@ mod tests {
         assert!(gpu_unmeasured(&scene(GpuTiming::None, true)), "measuring");
         assert!(!gpu_unmeasured(&scene(GpuTiming::Kernel, false)));
         assert!(!gpu_unmeasured(&scene(GpuTiming::Counters, false)));
+    }
+
+    /// Where a text starting `start` is drawn and can be seen on a 400 x 300 screen: its rect,
+    /// within its clip and the screen (None: not drawn, or out of sight).
+    fn seen(shapes: &[egui::epaint::ClippedShape], start: &str) -> Option<egui::Rect> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0));
+        shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().starts_with(start) => {
+                let r = t.galley.rect.translate(t.pos.to_vec2());
+                let shown = r.intersect(c.clip_rect).intersect(screen);
+                (shown.width() > 1.0 && shown.height() > 1.0).then_some(r)
+            }
+            _ => None,
+        })
+    }
+
+    /// A scene's row of cards runs past the pane's edge, so it scrolls sideways: with shift and
+    /// the wheel, or a trackpad's sideways swipe, inside the pane's own up and down scrolling. It
+    /// opens scrolled to the chosen card, and the pane itself stays where it was (#108): on the
+    /// Mac, none of the chosen cards could be seen, and the row would not scroll.
+    #[test]
+    fn the_cards_scroll_sideways_and_open_at_the_chosen_card() {
+        let rungs: Vec<Rung> = (1..=12)
+            .map(|k| Rung {
+                size: Size::px(k as f32),
+                cells: 1000 + k,
+                fits: true,
+                ..Rung::default()
+            })
+            .collect();
+        let mut scene = TunedScene {
+            scene: "Life".into(),
+            design_px: 3.0,
+            recommended: Size::px(11.0),
+            rungs,
+            measured: true,
+            ..Default::default()
+        };
+        // The coarsest card chosen: the far end of the row.
+        scene.set_size(Size::px(12.0));
+        scene.chosen = true;
+        let ctx = egui::Context::default();
+        let mut first = std::collections::HashSet::new();
+        let mut t = 0.0;
+        let mut frame = |events: Vec<egui::Event>, _modifiers: egui::Modifiers| {
+            t += 0.1;
+            let raw = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 300.0),
+                )),
+                time: Some(t),
+                predicted_dt: 0.1,
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let c = ui.ctx().clone();
+                // The pane's own scrolling, as `pane_scroll` has it.
+                egui::ScrollArea::vertical()
+                    .id_salt("pane")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.label("Performance");
+                        let _ =
+                            scene_row(ui, &c, 1.0, 0, &scene, true, &mut |_, _| None, &mut |k| {
+                                first.insert(k.to_string())
+                            });
+                        for _ in 0..40 {
+                            ui.label("more of the pane");
+                        }
+                    });
+            });
+            // Nothing draws the fonts' textures here.
+            out.textures_delta.clear();
+            out.shapes
+        };
+        let mut shapes = vec![];
+        for _ in 0..8 {
+            shapes = frame(vec![], egui::Modifiers::NONE);
+        }
+        let chosen = seen(&shapes, "12 px · 1,012");
+        assert!(
+            chosen.is_some(),
+            "the chosen card, at the far end, is in view"
+        );
+        assert!(
+            seen(&shapes, "1 px · 1,001").is_none(),
+            "the first is scrolled away"
+        );
+        let top = seen(&shapes, "Performance").expect("the pane did not scroll");
+        assert!(top.min.y < 20.0, "{top:?}");
+        // Shift and the wheel, over the row, scroll it back to the first card.
+        let over = chosen.unwrap().center();
+        frame(vec![egui::Event::PointerMoved(over)], egui::Modifiers::NONE);
+        let wheel = |delta: egui::Vec2, modifiers| egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta,
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Wheel,
+            modifiers,
+        };
+        for _ in 0..12 {
+            frame(
+                vec![wheel(egui::vec2(0.0, 400.0), egui::Modifiers::SHIFT)],
+                egui::Modifiers::SHIFT,
+            );
+        }
+        for _ in 0..4 {
+            shapes = frame(vec![], egui::Modifiers::NONE);
+        }
+        assert!(
+            seen(&shapes, "1 px · 1,001").is_some(),
+            "shift and the wheel"
+        );
+        assert!(seen(&shapes, "Performance").is_some_and(|r| r.min.y < 20.0));
+        // A sideways swipe takes it back along, without being scrolled back to the chosen card.
+        for _ in 0..12 {
+            frame(
+                vec![wheel(egui::vec2(-400.0, 0.0), egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+        }
+        for _ in 0..4 {
+            shapes = frame(vec![], egui::Modifiers::NONE);
+        }
+        assert!(seen(&shapes, "1 px · 1,001").is_none(), "a sideways swipe");
+        assert!(seen(&shapes, "12 px · 1,012").is_some());
     }
 }

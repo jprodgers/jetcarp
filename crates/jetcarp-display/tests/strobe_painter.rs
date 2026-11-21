@@ -89,6 +89,7 @@ fn stage_at(sc: Scene, speed: f32, cell_px: f32) -> Stage {
         hold_s: 0.0,
         schedule: None,
         n: None,
+        series: None,
     };
     let rotation = Rotation {
         name: "test".into(),

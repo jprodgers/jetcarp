@@ -51,7 +51,7 @@ fn host_control_definition() -> Value {
     actions.extend(["scene", "quit"]);
     let (tune, with_on, every_screen) = if fit {
         (
-            "; tune sweeps cell sizes on screen (pick: recommended, finest, own or px)",
+            "; tune: fit cell sizes on screen (pick: recommended, finest, own or px)",
             "With wallpaper, login or tune",
             "next, previous and tune",
         )
@@ -59,21 +59,20 @@ fn host_control_definition() -> Value {
         ("", "With wallpaper or login", "next and previous")
     };
     let mut properties = json!({
-        "action": {"type": "string", "enum": actions, "description": format!("Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json{tune}; scene: a screen's scene.")},
-        "on": {"type": "boolean", "description": format!("{with_on}: on or off. Default on.")},
-        "name": {"type": "string", "description": "With rotation: the one to run (saved)."},
-        "screen": {"type": "integer", "minimum": 0, "description": format!("Counted from 0. Default: every screen for {every_screen}, else the first.")},
+        "action": {"type": "string", "enum": actions, "description": format!("Default status. wallpaper: on the desktop (GNOME: its extension) or windows; login: at login or not; open_app: the app; reload rereads host.json{tune}; scene: a screen's scene.")},
+        "on": {"type": "boolean", "description": format!("{with_on}: on or off (default on).")},
+        "name": {"type": "string", "description": "With rotation: its name (saved)."},
+        "screen": {"type": "integer", "minimum": 0, "description": format!("From 0. Default: all for {every_screen}, else the first.")},
     });
     if fit {
         properties["cpu_limit"] = json!({"type": "number"});
         properties["gpu_limit"] = json!({"type": "number"});
-        properties["fps"] = json!({"type": "number"});
         properties["pick"] = json!({"type": ["string", "number"]});
     }
     json!({
         "name": crate::link::HOST_TOOL,
         "title": "JETCARP background host",
-        "description": "Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Refuses scenes until the user accepts the seizure warning.",
+        "description": "Runs the JETCARP background host (live wallpapers or windows, no app needed); returns its status. Fails if it isn't running (`jetcarp host start`). Refuses scenes until the seizure warning is accepted.",
         "inputSchema": {"type": "object", "properties": properties, "additionalProperties": false},
         "annotations": crate::tools::annotations("JETCARP background host", false, false, false),
     })
@@ -407,6 +406,24 @@ mod tests {
             );
         }
         assert!(!host_call_fits(&json!({"action": "status"})));
+    }
+
+    /// With Fit in the release (0.4.3, #113), `host_control` offers `tune` with its limits and a
+    /// pick, placed from the last fit while it is current (#77); `tune` without one measures.
+    #[test]
+    fn fit_is_offered_with_its_options() {
+        if !jetcarp_core::fit::FIT {
+            return;
+        }
+        let d = host_control_definition();
+        let props = &d["inputSchema"]["properties"];
+        let actions = props["action"]["enum"].as_array().unwrap();
+        assert!(actions.iter().any(|a| a == "tune"), "{actions:?}");
+        for k in ["cpu_limit", "gpu_limit", "pick"] {
+            assert!(props.get(k).is_some(), "{k} in {props}");
+        }
+        let words = props["action"]["description"].as_str().unwrap();
+        assert!(words.contains("tune: fit cell sizes on screen"), "{words}");
     }
 
     /// The `host_control` calls that start showing scenes wait for the photosensitive seizure

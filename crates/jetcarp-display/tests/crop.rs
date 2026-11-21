@@ -73,6 +73,7 @@ fn checkerboard(w: u32, h: u32, px: f32) -> Stage {
         hold_s: 0.0,
         schedule: None,
         n: None,
+        series: None,
     };
     let rotation = Rotation {
         name: "test".into(),
