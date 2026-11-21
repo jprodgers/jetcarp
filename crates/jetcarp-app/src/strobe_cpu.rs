@@ -107,11 +107,6 @@ impl LiveGuard {
         );
         s.shown
     }
-
-    /// Whether the guard is acting on this picture.
-    pub fn acting(&self) -> bool {
-        self.guard.plan().active()
-    }
 }
 
 #[cfg(test)]
@@ -137,16 +132,17 @@ mod tests {
             field_px: ((w * h) as f64 * 4.0 / std::f64::consts::PI).sqrt(),
         };
         let mut meter = FlashMeter::new(field, None);
-        let mut most = 0;
+        let (mut most, mut softened) = (0, false);
         for k in 0..100 {
             let t = k as f64 / 10.0;
             let src = if k % 2 == 0 { &b } else { &wh };
             let shown = g.show(src, w, h, t, true);
+            softened |= shown.is_some();
             let px = shown.as_deref().unwrap_or(src);
             most = most.max(meter.update(&reduce(px, w, h), t).transitions);
         }
         assert!(most <= 6, "{most}");
-        assert!(g.acting());
+        assert!(softened, "the guard softened the card");
         // Switched off, the card shows what it draws.
         assert!(g.show(&b, w, h, 20.0, false).is_none());
     }
