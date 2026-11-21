@@ -3,9 +3,9 @@
 **JETCARP's animations can flash and flicker rapidly, and can trigger seizures in people with
 photosensitive epilepsy.**
 
-Some rules change most of the screen every generation. A rule with B0, for example, turns the whole
-field over at each step. Run fast, full screen or as the desktop background, such a rule can flicker
-many times a second.
+Some rules change most of the screen every generation. Hodgepodge, for example, can flicker across
+the whole field at each step. Run fast, full screen or as the desktop background, such a rule can
+flicker many times a second.
 
 Flashing like this can also trigger a seizure, occasionally, in someone with no history of seizures.
 
@@ -116,13 +116,14 @@ For `at_risk` the guard is on whatever the file says. A new answer starts with b
 
 Fast, large changes of brightness are what can trigger a seizure. Guidance on flashing content, such
 as [WCAG 2.3.1](https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html),
-allows no more than three flashes a second over a large part of the screen. A B0 rule run at 30
-generations a second flips the whole field 30 times a second.
+allows no more than three flashes a second over a large part of the screen. Hodgepodge started from
+random states swings the whole field between healthy and ill every ten generations or so as it
+settles: run at 60 generations a second, it flashes about four times a second.
 
 JETCARP's [strobe guard](../guides/strobe-guard.md) watches every frame it draws, and softens, slows
 or pauses a scene before it flashes more than three times a second over a large part of the
 screen, or shows strong regular stripes. It is on for everyone unless turned off in the app.
 
-Slower speeds, smaller windows, low-power pacing (`jetcarp host pacing low-power`) and rules
-without B0 all flash less. None of this, the guard included, makes JETCARP safe for someone with a
+Slower speeds, smaller windows, low-power pacing (`jetcarp host pacing low-power`) and calmer
+rules all flash less. None of this, the guard included, makes JETCARP safe for someone with a
 seizure disorder.

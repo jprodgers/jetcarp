@@ -62,13 +62,19 @@ with the guard already on.
   slowed and never shows more than three flashes a second, at any frame rate; flashing that slowing
   cannot stop is paused; small flashing and slow fades are left alone; switched off, it does
   nothing.
-- **The GPU and the processor agree**: the GPU's tile maps, half-resolution image and softened
-  frames match the processor's, to the texture unit's sRGB decoding.
+- **The GPU and the processor agree**, on any driver (CI runs this on Mesa's llvmpipe as well as
+  the test machines' GPUs): the GPU's tile maps and half-resolution image match the processor's
+  to the rounding of the sums, and its softened frames byte for byte. The GPU decodes pixels with
+  the processor's own tables, not the texture unit's sRGB decoding, which differs by driver, and
+  makes the red measure's saturation test in whole numbers: the measure steps from 0 to over 100
+  there, so a pixel decoded a little differently could move a tile's mean by a whole step (it did,
+  on llvmpipe).
 - **The corpus** (`docs/scenes/strobe/`): scenes made to flash (a Margolus Tron field, which flips
   every generation, in grey and in a saturated red-orange; Tron from a blob, whose rectilinear
-  growth is regular stripes as well; a Seeds soup), the Tron field just under and just over the
-  rate (six and seven generations a second, and six for long enough to be the extended failure)
-  and the area (shown 112 and 128 pixels across), striped scenes (still stripes, a reversing
+  growth is regular stripes as well; a Seeds soup; Hodgepodge as Quick Start shows it, the seizure
+  warning's example, which fails at 60 generations a second, is a warning at 30 and passes at 15),
+  the Tron field just under and just over the rate (six and seven generations a second, and six
+  for long enough to be the extended failure) and the area (shown 112 and 128 pixels across), striped scenes (still stripes, a reversing
   checkerboard of squares smaller than a tile) and ordinary scenes (a Life soup, Brian's Brain, a
   maze, Greenberg-Hastings waves). Each is drawn frame by frame on the processor, at a fixed speed,
   at 320 by 240 and 60 frames a second, and JETCARP's verdict on each is pinned

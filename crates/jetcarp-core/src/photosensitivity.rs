@@ -38,8 +38,8 @@ pub const KEY: &str = "JETCARP's animations can flash and flicker rapidly, and c
 
 /// The rest of the warning, a paragraph each.
 pub const DETAILS: [&str; 3] = [
-    "Some rules change most of the screen every generation. A rule with B0, for example, turns \
-     the whole field over at each step. Run fast, full screen or as the desktop background, such \
+    "Some rules change most of the screen every generation. Hodgepodge, for example, can flicker \
+     across the whole field at each step. Run fast, full screen or as the desktop background, such \
      a rule can flicker many times a second.",
     "Flashing like this can also trigger a seizure, occasionally, in someone with no history of \
      seizures.",
@@ -394,7 +394,7 @@ mod tests {
             e.starts_with("JETCARP won't start the background host until"),
             "{e}"
         );
-        assert!(e.contains(KEY) && e.contains("B0"), "{e}");
+        assert!(e.contains(KEY) && e.contains("Hodgepodge"), "{e}");
         assert!(e.contains("--seizure-warning no-disorder"), "{e}");
         // A file that cannot be read is no answer either.
         std::fs::create_dir_all(&d).unwrap();

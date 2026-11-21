@@ -175,8 +175,9 @@ fn from16(v: u16) -> f32 {
     v as f32 / 65535.0
 }
 
-/// sRGB bytes of every 16-bit linear value.
-fn encode_table() -> &'static [u8] {
+/// sRGB bytes of every 16-bit linear value (65,536 of them): how the softener writes the frame
+/// it shows, on the processor and on the GPU alike.
+pub fn encode_table() -> &'static [u8] {
     static T: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
     T.get_or_init(|| {
         (0..=65535u32)

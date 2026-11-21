@@ -566,7 +566,7 @@ fn nothing_starts_on_screen_before_the_warning_is_accepted() {
             )),
             "{args:?}: {err}"
         );
-        assert!(err.contains("B0"), "the warning itself: {err}");
+        assert!(err.contains("Hodgepodge"), "the warning itself: {err}");
     }
     let o = run(&["host", "status"]);
     assert!(String::from_utf8_lossy(&o.stderr).contains("not running"));

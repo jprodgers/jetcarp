@@ -159,9 +159,66 @@ pub fn red_measure_linear(r: f32, g: f32, b: f32) -> f32 {
     }
 }
 
-/// The red measure of an sRGB colour.
+/// Full light in the fixed-point linear values of [`linear_fixed`].
+pub const FIXED_ONE: u32 = 1 << 24;
+
+/// sRGB bytes decoded to linear light in fixed point ([`FIXED_ONE`] is full light), rounded.
+fn fixed_table() -> &'static [u32; 256] {
+    static T: OnceLock<[u32; 256]> = OnceLock::new();
+    T.get_or_init(|| {
+        let mut t = [0u32; 256];
+        for (i, v) in t.iter_mut().enumerate() {
+            let c = i as f64 / 255.0;
+            let l = if c <= 0.04045 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            };
+            *v = (l * FIXED_ONE as f64).round() as u32;
+        }
+        t
+    })
+}
+
+/// An sRGB byte's linear value in fixed point ([`FIXED_ONE`] is full light).
+pub fn linear_fixed(byte: u8) -> u32 {
+    fixed_table()[byte as usize]
+}
+
+/// Every sRGB byte's linear value, as [`linear`] gives it, and then as [`linear_fixed`] gives
+/// it: the table a GPU decodes drawn pixels with, so that it measures exactly what the processor
+/// measures.
+pub fn decode_tables() -> [u32; 512] {
+    let mut t = [0u32; 512];
+    for i in 0..256 {
+        t[i] = linear(i as u8).to_bits();
+        t[256 + i] = linear_fixed(i as u8);
+    }
+    t
+}
+
+/// The red measure of fixed-point linear red, green and blue ([`linear_fixed`]): as
+/// [`red_measure_linear`], with the saturation test (red at least four fifths of the sum, which
+/// is [`RED_SATURATION`]) in whole numbers. The measure steps from 0 to over 100 at that test, so
+/// it is made exact: the processor and every GPU classify a drawn pixel alike.
+pub fn red_measure_fixed(r: u32, g: u32, b: u32) -> f32 {
+    let s = r + g + b;
+    if s > 0 && 5 * r >= 4 * s {
+        // Red is at least four times green and blue together, so this is not negative; under
+        // 2^24, it converts exactly, and the scale is a power of two times 5.
+        (r - g - b) as f32 * (RED_SCALE / FIXED_ONE as f32)
+    } else {
+        0.0
+    }
+}
+
+/// The red measure of an sRGB colour, worked out exactly ([`red_measure_fixed`]).
 pub fn red_measure(rgb: [u8; 3]) -> f32 {
-    red_measure_linear(linear(rgb[0]), linear(rgb[1]), linear(rgb[2]))
+    red_measure_fixed(
+        linear_fixed(rgb[0]),
+        linear_fixed(rgb[1]),
+        linear_fixed(rgb[2]),
+    )
 }
 
 /// How a screen is watched, as far as the area rule needs it: how many pixels a 10° field of
@@ -217,6 +274,37 @@ impl Viewing {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_exact_red_measure_is_the_formula() {
+        // The whole-number test is red at least four fifths of the sum.
+        assert_eq!(RED_SATURATION, 0.8);
+        assert_eq!((linear_fixed(0), linear_fixed(255)), (0, FIXED_ONE));
+        // Over a grid of colours, the measure in floating point, but at the saturation test
+        // itself, where floating point may round either way.
+        for r in (0..=255u8).step_by(5) {
+            for g in (0..=255u8).step_by(5) {
+                for b in (0..=255u8).step_by(15) {
+                    let (lr, lg, lb) = (linear(r), linear(g), linear(b));
+                    let s = lr + lg + lb;
+                    if s > 0.0 && (lr / s - RED_SATURATION).abs() < 1e-4 {
+                        continue;
+                    }
+                    let (exact, float) = (red_measure([r, g, b]), red_measure_linear(lr, lg, lb));
+                    assert!(
+                        (exact - float).abs() < 1e-3,
+                        "{r} {g} {b}: {exact} vs {float}"
+                    );
+                }
+            }
+        }
+        // The tables a GPU decodes with are the processor's values.
+        let t = decode_tables();
+        for i in [0u8, 1, 10, 128, 200, 255] {
+            assert_eq!(f32::from_bits(t[i as usize]), linear(i));
+            assert_eq!(t[256 + i as usize], linear_fixed(i));
+        }
+    }
 
     #[test]
     fn luminance_follows_the_srgb_definition() {

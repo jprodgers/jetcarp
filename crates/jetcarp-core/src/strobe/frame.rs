@@ -7,7 +7,7 @@
 //! light, since a mean of sRGB values is not the mean of the light. Each tile's sums run in pixel
 //! order, so the result does not depend on the thread count.
 
-use super::{TILE, linear, luminance_linear, red_measure_linear};
+use super::{TILE, linear, luminance_linear, red_measure};
 use rayon::prelude::*;
 
 /// Each tile's means, for one frame. Tiles are [`TILE`] pixels square, row by row from the top
@@ -100,11 +100,14 @@ impl LumImage {
     }
 }
 
-/// One pixel's luminance and red measure.
+/// One pixel's luminance and red measure (worked out exactly, [`super::red_measure_fixed`]).
 #[inline]
 fn pixel(px: &[u8]) -> (f32, f32) {
     let (r, g, b) = (linear(px[0]), linear(px[1]), linear(px[2]));
-    (luminance_linear(r, g, b), red_measure_linear(r, g, b))
+    (
+        luminance_linear(r, g, b),
+        red_measure([px[0], px[1], px[2]]),
+    )
 }
 
 /// The tile map of an RGBA frame (`width * height * 4` bytes, sRGB; alpha is ignored).

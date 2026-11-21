@@ -1,0 +1,22 @@
+{
+  "name": "Hodgepodge",
+  "description": "Hodgepodge 200/3/3/28 from random states, as Quick Start shows it: before its spirals form, the whole field swings between healthy and ill together, many times a second when run fast.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 180,
+        "h": 120
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 1,
+  "cas": [
+    {
+      "rule": "Hodgepodge 200/3/3/28",
+      "seed": "random_states",
+      "palette": "Tide"
+    }
+  ]
+}
