@@ -3326,6 +3326,8 @@ mod tests {
             confirm_cells: 600,
             confirm_gens: 96,
             confirm_seeds: 1,
+            // Small GPU batches, so the GPU's runs come in many rounds beside the processor's.
+            batch: 64,
             ..Settings::default()
         })
         .unwrap();
@@ -3335,11 +3337,18 @@ mod tests {
         serde_json::from_value(v).unwrap()
     }
 
-    /// The runs of a search, screened and confirming, until `n` are screened (or two minutes
-    /// pass), with a GPU (a stand-in that runs its batches on the processor, beside the CPU
-    /// rounds) or on the processor alone.
+    /// The runs of a search, screened and confirming, until `n` are screened and (when the
+    /// processor has families to run) eight CPU rounds have run, so its rounds for the families
+    /// tied to one grid have come whatever the GPU did meanwhile (or two minutes pass); with a
+    /// GPU (a stand-in that runs its batches on the processor, beside the CPU rounds) or on the
+    /// processor alone.
     fn sampled(set: &Settings, gpu: bool, n: u64) -> Vec<RunOut> {
         let s = Search::new(set.clone(), Saved::default()).unwrap();
+        let cpu = !families(&set.families, &set.skip_families, gpu)
+            .1
+            .is_empty();
+        let rounds = || s.cpu_rounds.load(Ordering::Relaxed);
+        let enough = || s.screened() >= n && (!cpu || rounds() >= 8);
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(2)
             .build()
@@ -3352,18 +3361,23 @@ mod tests {
         let stop = AtomicBool::new(false);
         let mut rows = Vec::new();
         let t0 = Instant::now();
-        while s.screened() < n && t0.elapsed() < Duration::from_secs(120) {
+        while !enough() && t0.elapsed() < Duration::from_secs(120) {
             let lim = StepLimits {
                 until: Instant::now() + Duration::from_millis(200),
                 end: None,
                 stop: &stop,
-                max_screened: Some(n),
+                max_screened: None,
             };
             let backend = gpu.then_some((&mut be as &mut dyn Backend, &gpu_pool));
             assert!(s.step(&pool, backend, &lim).is_none());
             rows.extend(s.take_delta().rows);
         }
-        assert!(s.screened() >= n, "{} screened", s.screened());
+        assert!(
+            enough(),
+            "{} screened, {} CPU rounds",
+            s.screened(),
+            rounds()
+        );
         rows
     }
 
@@ -3456,16 +3470,23 @@ mod tests {
         let s = Search::new(unnamed.clone(), Saved::default()).unwrap();
         let iso = |n: &String| matches!(Rule::parse(n), Ok((Rule::Isotropic(_), _)));
         assert!(!s.named.lock().unwrap().iter().any(|(_, n)| iso(n)));
-        let named = Settings {
-            // Every family that runs on these two tilings, isotropic rules among them.
+        // Named beside every family that runs on these two tilings, the catalogue's isotropic
+        // rules come too.
+        let every = Settings {
             families: sampled_families()
                 .into_iter()
                 .filter(|f| f.runs_on("square") || f.runs_on("hex"))
                 .collect(),
             ..unnamed.clone()
         };
-        let s = Search::new(named.clone(), Saved::default()).unwrap();
+        let s = Search::new(every, Saved::default()).unwrap();
         assert!(s.named.lock().unwrap().iter().any(|(_, n)| iso(n)));
+        // Named beside families of any tiling: a quarter of the processor's rounds (every one
+        // of them with a GPU, which runs the others) go to isotropic rules on the square grid.
+        let named = Settings {
+            families: vec![Fam::LifeLike, Fam::Generations, Fam::Cyclic, Fam::Isotropic],
+            ..unnamed.clone()
+        };
         let alone = choosing(serde_json::json!({"families": ["isotropic"], "seed": 34}));
         let s = Search::new(alone.clone(), Saved::default()).unwrap();
         assert_eq!(s.tiling_count(), 1, "only the square grid");
