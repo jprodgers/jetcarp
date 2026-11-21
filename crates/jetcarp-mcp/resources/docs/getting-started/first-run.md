@@ -9,9 +9,10 @@ The first time you open the app, before anything else, it shows the
 seizure disorder. It shows once; setup comes after it.
 
 Then JETCARP asks a few questions in a small *Set up JETCARP* window: what you would like it for,
-where its data should go, which packs to import and whether to use it on your desktop. Your answers choose a *setup profile*. Setup then imports packs and searches for Quick
-Start entries of your own, as background jobs, while you use the app. Nothing is downloaded:
-everything comes with JETCARP or stays on your computer.
+where its data should go, which packs to import and whether to use it on your desktop. Your answers choose a *setup profile*. Setup then measures your computer (about a
+minute, unless you untick it), and imports packs and searches for Quick Start entries of your own,
+as background jobs, while you use the app. Nothing is downloaded: everything comes with JETCARP or
+stays on your computer.
 
 You can skip all of it. **Later** closes the window and asks again next time; the *Blank slate*
 profile sets nothing up and never asks again. **Help → Setup…** opens the window whenever you like,
@@ -96,8 +97,17 @@ signed.
 
 <img src="../images/getting-started/setup-5-desktop.png" alt="The desktop page: Show a live wallpaper on the desktop ticked, Start the live wallpaper when you log in, and Use JETCARP as the screen saver greyed out on Linux" width="600">
 
-**Summary.** What setup will do: the data folder, the packs, and the Quick Start build, which you
-can switch off (Explorer) or lengthen and shorten, from 1 minute to 600. It also shows whether the
+**This computer** (every profile). Setup measures your computer first, unless you untick **Measure
+this computer first**: about a minute of JETCARP's own work, with nothing drawn but a progress bar,
+for the [JETCARP Hardware Score](../guides/this-computer.md) and limits that fit the computer. It
+runs before the jobs start, so they do not slow it. Without it, the limits come from the computer's
+memory alone, and **Tools → This computer…** measures it whenever you like.
+
+<img src="../images/getting-started/setup-5b-measure.webp" alt="The This computer page: Measure this computer first, ticked, and what the limits are without measuring: 8 GB reserved for JETCARP, worlds of up to 4 GB" width="600">
+
+**Summary.** What setup will do: the data folder, the packs, whether it measures the computer first,
+and the Quick Start build, which you can switch off (Explorer) or lengthen and shorten, from 1
+minute to 600. It also shows whether the
 build runs on the GPU, and roughly what it all takes. **Start** begins; for a profile with nothing to
 import or build the button says **Finish**.
 

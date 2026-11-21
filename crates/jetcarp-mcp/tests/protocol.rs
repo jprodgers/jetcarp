@@ -866,6 +866,46 @@ fn errors_are_useful_not_fatal() {
     assert_eq!(h.world.generation, 0);
 }
 
+/// `reference {"what": "machine"}`: the machine, its score and limits, and the AI's own limits,
+/// read only (the tools never run the benchmark: nothing is written, and no tool takes it).
+#[test]
+fn the_tools_read_the_machine_and_never_measure_it() {
+    let (mut s, mut h) = new();
+    let root = setup("protocol");
+    let t = ok(&call(
+        &mut s,
+        &mut h,
+        "reference",
+        json!({"what": "machine"}),
+    ));
+    assert!(t.starts_with("This computer\n  system:"), "{t}");
+    assert!(
+        t.contains("JETCARP Hardware Score: not measured yet"),
+        "{t}"
+    );
+    assert!(
+        t.contains("Your limits as an AI (an AI's share: small"),
+        "{t}"
+    );
+    // The tests' limits are the reference machine's: the 4 million cells of before.
+    assert!(
+        t.contains("worlds of at most 4,000,000 cells (4,096 unit cells a side)"),
+        "{t}"
+    );
+    assert!(!root.join("config").join("machine.json").exists());
+    // No tool, and no action of one, runs the benchmark.
+    let list = s
+        .handle(&mut h, &req(3, "tools/list", json!({})))
+        .unwrap()
+        .to_string()
+        .to_ascii_lowercase();
+    for word in ["machine.score", "benchmark\":", "\"score\":"] {
+        assert!(!list.contains(word), "tools/list offers {word}");
+    }
+    // The limits in the descriptions are the live ones.
+    assert!(list.contains("up to 4000000"), "world_new's description");
+}
+
 /// A wrong-typed argument is named with what to give, not as a Rust type; a value below the
 /// schema's minimum, or of the wrong type where a tool would have ignored it, is refused; and
 /// world_read's formats are all named (#68).

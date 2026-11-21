@@ -77,7 +77,7 @@ fn plane(c: &Arc<Ctx>, s: &Shared, gens: Dynamic, m: &Map) -> R<Shared> {
     let opts = Options {
         node_cap: int(m, "node_cap")?
             .map(|v| v.max(4096) as usize)
-            .unwrap_or(hashlife::DEFAULT_NODE_CAP),
+            .unwrap_or_else(hashlife::default_node_cap),
         ..Options::default()
     };
     let g = s.lock();

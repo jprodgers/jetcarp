@@ -697,7 +697,7 @@ impl CliProgress {
                         "\nCtrl-C: stopping at the next checkpoint (press Ctrl-C again to quit now; `jetcarp jobs resume JOB` continues)"
                     );
                 } else {
-                    std::process::exit(130);
+                    jetcarp_core::machine::pool::exit(130);
                 }
             });
         }

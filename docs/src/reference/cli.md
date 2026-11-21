@@ -52,7 +52,9 @@ Commands:
   media       Media for the catalog: per-step frames, a GIF or animated WebP, a poster, and a thumbnail for a pattern (alone), a Quick Start entry (from the seed), an ant run, or a scene; `--missing` renders everything missing or stale
   site        Website export: the public catalog as JSON and media with a manifest and a viewer page, incrementally
   tilings     List tiling families with their neighbour counts
-  doctor      What JETCARP sees on this machine: version, folders, graphics adapters, desktop integration. Include it in bug reports
+  doctor      What JETCARP sees on this machine: version, the hardware and its score, folders, graphics adapters, desktop integration. Include it in bug reports
+  score       Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for the JETCARP Hardware Score and its parts. Kept in machine.json; `--report FILE` also writes a report. It never runs by itself
+  limits      This machine's limits (the largest world, the desktop background's, HashLife's, an AI's share...): each your own value if you set one, else the machine's suggestion from its memory, never above a ceiling. `set NAME VALUE`, `reset [NAME]`
   guard       The strobe guard's switches: on for the app and for the desktop background and screen saver unless turned off in the app (Settings → Safety). `--on` turns them back on; nothing here turns them off
   uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes. The program itself stays; this ends with the command that removes it
   paths       Print the settings, data, output, and runtime folders JETCARP uses (environment overrides included), and the folder of packs that came with the program
@@ -130,7 +132,7 @@ App options (with no subcommand):
 - **Scripts**: [`script`](#jetcarp-script). See [Scripting (Rhai) API](scripting.md), [Scripting a rule sweep](../tutorials/scripting-a-sweep.md).
 - **The app, the background host and AI assistants**: [`app`](#jetcarp-app), [`shortcuts`](#jetcarp-shortcuts), [`host`](#jetcarp-host), [`mcp`](#jetcarp-mcp). See [Wallpapers, screensavers and the background host](../guides/wallpapers.md), [Using the app from the keyboard](../guides/keyboard.md), [Driving JETCARP from an AI assistant](../tutorials/mcp.md), [MCP tools](mcp.md).
 - **Lists**: [`rules`](#jetcarp-rules), [`tilings`](#jetcarp-tilings), [`isohedral`](#jetcarp-isohedral), [`palettes`](#jetcarp-palettes). See [Named rule catalogue](../automata/named-rules.md), [Rule notation](rule-notation.md), [Tiling catalogue](../tilings/catalogue.md), [Palettes](palettes.md).
-- **Setup and upkeep**: [`setup`](#jetcarp-setup), [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`guard`](#jetcarp-guard), [`uninstall`](#jetcarp-uninstall). See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
+- **Setup and upkeep**: [`setup`](#jetcarp-setup), [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`score`](#jetcarp-score), [`limits`](#jetcarp-limits), [`guard`](#jetcarp-guard), [`uninstall`](#jetcarp-uninstall). See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [This computer: the score and the limits](../guides/this-computer.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
 
 ## Worlds and scenes
 
@@ -225,7 +227,7 @@ Options:
       --scale <SCALE>            Pixels per world unit for the JETCARP renderer (default: fit --max-side)
       --max-cells <MAX_CELLS>    Regions with more cells than this are drawn as a density map [default: 16000000]
       --save <SAVE>              Save the result as a scene (plane mode: the region as a new world)
-      --node-cap <NODE_CAP>      Live nodes before a garbage collection (each node is about 40 bytes with its table slot) [default: 48000000]
+      --node-cap <NODE_CAP>      Live nodes before a garbage collection (each node is about 45 bytes with its table slot). Default: this machine's `hashlife-nodes` limit (`jetcarp limits`; 48 million on a 16 GB machine). Results never depend on it
       --leaf-level <LEAF_LEVEL>  Largest node level stepped by the bit-parallel leaf (B/S and Generations rules without B0; at most 6, 0 = off). Results never depend on it [default: 6]
       --compare <COMPARE>        Also run the ordinary engine (`cpu` or `gpu`) and compare cell states (torus mode, or plane mode with `--region world`)
       --json                     
@@ -2858,12 +2860,16 @@ MCP server on stdin/stdout so AI assistants (Claude Code, Claude Desktop, LM Stu
 Usage: jetcarp mcp [OPTIONS]
 
 Options:
-      --app            Act on the world in the running JETCARP app (switch on AI control there first)
-      --json           Print the result as JSON instead of text (commands that report a result)
-      --allow <DIR>    Let the tools read and write in this folder too (repeatable)
-      --port <PORT>    App port (default: the one the app recorded when AI control was switched on)
-      --token <TOKEN>  App token (default: the recorded one)
-  -h, --help           Print help
+      --app                 Act on the world in the running JETCARP app (switch on AI control there first)
+      --json                Print the result as JSON instead of text (commands that report a result)
+      --allow <DIR>         Let the tools read and write in this folder too (repeatable)
+      --port <PORT>         App port (default: the one the app recorded when AI control was switched on)
+      --token <TOKEN>       App token (default: the recorded one)
+      --http [<PORT>]       Serve MCP over HTTP (Streamable HTTP) instead of standard input and output, at http://127.0.0.1:PORT/mcp on this computer only (default port 47812, or a free one when that is taken). Clients send the token it prints as an `Authorization: Bearer` header. With --json, prints the URL and token as JSON. Ctrl-C stops it
+      --keep-token          With --http: keep the token for the next start, and take the one kept. It is kept in a private file in the settings folder, survives restarts and reboots, and stays valid until --new-token. Without it, the kept token is deleted
+      --new-token           With --http: make a new token even when one is kept, and keep it; the old one stops working
+      --allow-origin <URL>  With --http: let web pages from this exact origin connect, such as https://client.example or http://localhost:6274 (repeatable; no wildcards). They still need the token
+  -h, --help                Print help
 ```
 
 ## Lists
@@ -2925,7 +2931,7 @@ Options:
 
 ## Setup and upkeep
 
-Set JETCARP up for what you want it for, where it keeps its files, what it sees on this machine, the strobe guard's switches, and how to take it off again. See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
+Set JETCARP up for what you want it for, where it keeps its files, what it sees on this machine, its score and limits, the strobe guard's switches, and how to take it off again. See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [This computer: the score and the limits](../guides/this-computer.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
 
 ### `jetcarp setup`
 
@@ -2972,6 +2978,9 @@ Options:
       --quiet
           No progress on standard error
 
+      --no-measure
+          Do not measure this computer (the JETCARP Hardware Score, about a minute, which setup does first unless told not to: asked in a terminal, done with --yes)
+
   -h, --help
           Print help (see a summary with '-h')
 ```
@@ -2991,9 +3000,74 @@ Options:
 ### `jetcarp doctor`
 
 ```text
-What JETCARP sees on this machine: version, folders, graphics adapters, desktop integration. Include it in bug reports
+What JETCARP sees on this machine: version, the hardware and its score, folders, graphics adapters, desktop integration. Include it in bug reports
 
 Usage: jetcarp doctor [OPTIONS]
+
+Options:
+      --json  Print the result as JSON instead of text (commands that report a result)
+  -h, --help  Print help
+```
+
+### `jetcarp score`
+
+```text
+Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for the JETCARP Hardware Score and its parts. Kept in machine.json; `--report FILE` also writes a report. It never runs by itself
+
+Usage: jetcarp score [OPTIONS]
+
+Options:
+      --json           Print the result as JSON instead of text (commands that report a result)
+      --report <FILE>  Also write a report here, in Markdown and JSON (`report.md` and `report.json`), to compare machines. Nothing is sent anywhere
+      --quick          Each workload once, for its answers alone (seconds, not a minute; the rates mean little)
+      --no-gpu         Leave the GPU out (default: measured when the GPU setting allows it)
+      --no-save        Do not keep the score in machine.json
+  -h, --help           Print help
+```
+
+### `jetcarp limits`
+
+```text
+This machine's limits (the largest world, the desktop background's, HashLife's, an AI's share...): each your own value if you set one, else the machine's suggestion from its memory, never above a ceiling. `set NAME VALUE`, `reset [NAME]`
+
+Usage: jetcarp limits [OPTIONS]
+       jetcarp limits <COMMAND>
+
+Commands:
+  set    Set a limit to a value of your own (kept in limits.json): memory as 24GB or 512MB, counts as 64000000 or 64M, an AI's share as 0.25, 25%, small or all. Setting reserved-system or reserved-jetcarp sets the other
+  reset  Put a limit back to the machine's suggestion (with no name: every one)
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --json  Print the result as JSON instead of text (commands that report a result)
+  -h, --help  Print help
+```
+
+#### `jetcarp limits set`
+
+```text
+Set a limit to a value of your own (kept in limits.json): memory as 24GB or 512MB, counts as 64000000 or 64M, an AI's share as 0.25, 25%, small or all. Setting reserved-system or reserved-jetcarp sets the other
+
+Usage: jetcarp limits set [OPTIONS] <NAME> <VALUE>
+
+Arguments:
+  <NAME>   reserved-system, reserved-jetcarp, world, gpu-world, host-cells, host-memory, hashlife-nodes, hunt-cache, media-pixels, wallpaper-cells, animation-frames, ai-share
+  <VALUE>  The value in the limit's unit: 24GB, 64M, 25%...
+
+Options:
+      --json  Print the result as JSON instead of text (commands that report a result)
+  -h, --help  Print help
+```
+
+#### `jetcarp limits reset`
+
+```text
+Put a limit back to the machine's suggestion (with no name: every one)
+
+Usage: jetcarp limits reset [OPTIONS] [NAME]
+
+Arguments:
+  [NAME]  
 
 Options:
       --json  Print the result as JSON instead of text (commands that report a result)

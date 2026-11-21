@@ -360,7 +360,7 @@ pub(crate) fn max_cells(settings: &HostSettings, gpu: Option<&SharedGpu>) -> u64
         let l = g.device.limits();
         l.max_storage_buffer_binding_size.min(l.max_buffer_size) / 4
     });
-    SWEEP_MAX_CELLS.min(settings.max_cells).min(gpu)
+    SWEEP_MAX_CELLS.min(settings.cell_limit()).min(gpu)
 }
 
 /// Saves a size's picture beside the host's settings (and in `extra`), and says its file's name.
@@ -927,7 +927,7 @@ impl Rig {
             1,
             job.canvas,
             self.lookup.clone(),
-            self.settings.max_cells,
+            self.settings.cell_limit(),
         )?;
         stage.resize(job.canvas, job.scale, 0.0);
         stage.set_tuned(showing(

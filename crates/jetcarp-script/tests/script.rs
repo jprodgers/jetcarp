@@ -706,6 +706,22 @@ fn evolve_and_track_mover_builtins() {
     assert_eq!(s.log[3], "true target 1500 true string");
 }
 
+/// A mover's cell past what 32 bits hold is refused, never wrapped round onto another tile
+/// (cell 2^32 + 300 was tracked as cell 300).
+#[test]
+fn track_mover_refuses_cells_past_32_bits() {
+    let root = temp_root("track-wrap");
+    let mut o = opts(&root);
+    o.library = Some(root.join("lib"));
+    let s = run(
+        r#"track_mover(#{ rule: "B3/S23", tiling: "spectre", level: 3, cells: [[4294967596, 1]] });"#,
+        o,
+    );
+    assert!(!s.ok);
+    let e = s.error.unwrap().message;
+    assert!(e.contains("more than"), "{e}");
+}
+
 #[test]
 fn scripts_promote_sweep_runs() {
     let root = temp_root("promote-run");

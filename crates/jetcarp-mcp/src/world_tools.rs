@@ -37,8 +37,9 @@ pub(crate) fn tools() -> Vec<Tool> {
             destructive: true,
             description: || {
                 format!(
-                    "Replaces the current world. Build one from a tiling (the grid of cells) and the CAs (cellular automata) that run on it: {{\"tiling\": \"hex\", \"width\": 60, \"height\": 60, \"boundary\": \"wrap\", \"cas\": [\"B24/S35\"]}}. Each CA starts from its rule's default seed (a random soup for Life-like rules) unless given one: {{\"cas\": [{{\"rule\": \"Life\", \"seed\": \"empty\"}}]}} is a blank field to draw on (reference {{\"what\": \"seeds\"}} lists the seeds, {{\"what\": \"tilings\"}} the tilings). Size: width and height (8 to 4096 unit cells each), or `cells` (about that many, up to {}), or `level` on aperiodic tilings. Or open one: `quickstart` (a Quick Start entry by handle, e.g. \"life\"), `pattern` (a library pattern on a grid sized for it, e.g. \"glider\"), `scene` (scene JSON, as world_status {{\"scene\": true}} returns it) or `path` (a scene file). Returns the world's status with each CA's id. Next: world_edit, world_step, world_read, world_render.",
-                    crate::tools::MAX_CELLS
+                    "Replaces the current world. Build one from a tiling (the grid of cells) and the CAs (cellular automata) that run on it: {{\"tiling\": \"hex\", \"width\": 60, \"height\": 60, \"boundary\": \"wrap\", \"cas\": [\"B24/S35\"]}}. Each CA starts from its rule's default seed (a random soup for Life-like rules) unless given one: {{\"cas\": [{{\"rule\": \"Life\", \"seed\": \"empty\"}}]}} is a blank field to draw on (reference {{\"what\": \"seeds\"}} lists the seeds, {{\"what\": \"tilings\"}} the tilings). Size: width and height (8 to {} unit cells each), or `cells` (about that many, up to {}), or `level` on aperiodic tilings. Or open one: `quickstart` (a Quick Start entry by handle, e.g. \"life\"), `pattern` (a library pattern on a grid sized for it, e.g. \"glider\"), `scene` (scene JSON, as world_status {{\"scene\": true}} returns it) or `path` (a scene file). Returns the world's status with each CA's id. Next: world_edit, world_step, world_read, world_render.",
+                    crate::tools::max_grid_side(),
+                    crate::tools::max_cells()
                 )
             },
             schema: || {

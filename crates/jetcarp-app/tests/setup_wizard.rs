@@ -55,27 +55,33 @@ fn wizard(dir: &Path, mock: Mock) -> Wizard {
 fn pages_follow_the_profile() {
     let d = scratch("pages");
     let mut w = wizard(&d, Mock::default());
-    use Page::{Data, Desktop, Packs, Progress, Summary, Welcome};
+    use Page::{Data, Desktop, Measure, Packs, Progress, Summary, Welcome};
     let pf = Page::Profile;
-    assert_eq!(w.pages(), [Welcome, pf, Summary, Progress]);
+    // Every profile measures the computer first, unless unticked (#213).
+    assert_eq!(w.pages(), [Welcome, pf, Measure, Summary, Progress]);
     let want = [
         (
             Profile::DesktopArt,
-            vec![Welcome, pf, Desktop, Summary, Progress],
+            vec![Welcome, pf, Desktop, Measure, Summary, Progress],
         ),
         (
             Profile::Explorer,
-            vec![Welcome, pf, Packs, Summary, Progress],
+            vec![Welcome, pf, Packs, Measure, Summary, Progress],
         ),
         (
             Profile::Researcher,
-            vec![Welcome, pf, Data, Packs, Summary, Progress],
+            vec![Welcome, pf, Data, Packs, Measure, Summary, Progress],
         ),
         (
             Profile::Everything,
-            vec![Welcome, pf, Data, Packs, Desktop, Summary, Progress],
+            vec![
+                Welcome, pf, Data, Packs, Desktop, Measure, Summary, Progress,
+            ],
         ),
-        (Profile::BlankSlate, vec![Welcome, pf, Summary, Progress]),
+        (
+            Profile::BlankSlate,
+            vec![Welcome, pf, Measure, Summary, Progress],
+        ),
     ];
     for (p, pages) in want {
         w.choose(p);
@@ -114,7 +120,10 @@ fn forward_back_and_later() {
     w.next();
     assert_eq!(w.page(), Page::Packs);
     w.next();
+    assert_eq!(w.page(), Page::Measure);
+    w.next();
     assert_eq!(w.page(), Page::Summary);
+    w.back();
     w.back();
     assert_eq!(w.page(), Page::Packs);
     // Later closes and records nothing.
@@ -180,6 +189,9 @@ fn desktop_offers_are_off_until_ticked_and_only_ticked_ones_run() {
     // The saver is not available on the stand-in: ticking it does nothing.
     w.offers.insert("saver", true);
     assert_eq!(w.offers_on(), [Offer::Wallpaper]);
+    // Not measuring here: applying with it ticked ran the minute-long benchmark in the background,
+    // whose scratch files went to the user's own data folder (CI's default-folders step caught it).
+    w.measure_on = false;
     w.apply();
     assert_eq!(*mock.0.lock().unwrap(), [Offer::Wallpaper]);
     assert_eq!(w.page(), Page::Progress);
@@ -200,6 +212,14 @@ fn applying_blank_slate_records_it_and_shows_it_done() {
     w.open = true;
     w.next();
     w.choose(Profile::BlankSlate);
+    w.next();
+    // Measuring is ticked by default, and goes into what setup does; unticked here, so the test
+    // does not run the minute-long benchmark.
+    assert_eq!(w.page(), Page::Measure);
+    assert!(w.measure_on);
+    assert_eq!(w.apply_input().unwrap().measure, Some(true));
+    w.measure_on = false;
+    assert_eq!(w.apply_input().unwrap().measure, Some(false));
     w.next();
     assert_eq!(w.page(), Page::Summary);
     w.next();

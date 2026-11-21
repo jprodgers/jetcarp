@@ -53,13 +53,36 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run, and Golly)
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run, and zlib for Golly)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
-            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers golly
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers zlib1g-dev
+      - name: Golly's bgolly 4.0 and 5.0, built from their source (#145)
+        # Ubuntu packages only Golly 3.3, which can't read Larger than Life's R2,C2,S3-6,B3-4
+        # notation, so the two versions that matter are built instead: 4.0, the oldest that reads
+        # everything JETCARP writes, and 5.0, the newest. Each download is checked against its
+        # SHA-256. bgolly needs neither wxWidgets nor Python (Golly's docs/Build.html).
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/golly"
+          cd "$RUNNER_TEMP/golly"
+          build() {
+            local v=$1 sum=$2 src="golly-$1-src"
+            curl -fsSL --retry 3 -o "$src.tar.gz" \
+              "https://sourceforge.net/projects/golly/files/golly/golly-$v/$src.tar.gz/download"
+            echo "$sum  $src.tar.gz" | sha256sum -c -
+            tar -xzf "$src.tar.gz"
+            make -s -j"$(nproc)" -C "$src/gui-wx" -f makefile-gtk bgolly
+            # `bgolly -h` exits with status 10, so its words are read from a file.
+            "$src/bgolly" -h > "$src.help" 2>&1 || true
+            head -1 "$src.help" | grep -F "This is bgolly $v"
+          }
+          build 4.0 45a8595c9f7064de029f05d339e3fca3776b5a0c36fef95712e697f154d82ae5
+          build 5.0 5835cde428153f9b840ba94a4359e5cb26eb302e7ac01a097cd7f5a5c8303611
       - name: The Windows installer parses, and a refusal is one clean line (#117)
         # Windows PowerShell 5.1, as people run it. Nothing else checks install.ps1.
         if: runner.os == 'Windows'
@@ -126,25 +149,19 @@ jobs:
         run: |
           cargo test --workspace --release ${{ matrix.features }} --test folders -- --nocapture
           cargo test --workspace --release ${{ matrix.features }} --test hostile -- --nocapture a_link_out
-      - name: Golly reads JETCARP's RLE as the same cells and runs it to the same generations (#145)
+      - name: Golly 4.0 and 5.0 read JETCARP's RLE as the same cells and run it to the same generations (#145)
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          command -v bgolly || { echo "::error::the golly package has no bgolly"; exit 1; }
-          # `bgolly -h` exits with status 10, which pipefail would take for a failure.
-          version=$( (bgolly -h 2>&1 || true) | sed -n 's/^This is bgolly \([0-9.]*\).*/\1/p')
-          echo "bgolly ${version:-of an unknown version}"
-          # Every Golly test but the library one, which needs a library of finds (JETCARP_GOLLY_LIBRARY).
-          skip=(--skip golly_agrees_on_a_library_s_finds)
-          # Ubuntu packages Golly 3.3, which predates Larger than Life's R2,C2,S3-6,B3-4 notation
-          # (Golly 4.0), so that test runs only with a newer Golly (it passes with Golly 5.0).
-          case "$version" in
-            [0-3].*)
-              echo "::notice::Golly $version can't read Larger than Life's notation (Golly 4.0 can): its test is skipped here"
-              skip+=(--skip golly_agrees_on_larger_than_life)
-              ;;
-          esac
-          cargo test --workspace --release ${{ matrix.features }} --test golly -- --ignored "${skip[@]}"
+          # Every Golly test but the library one, which needs a library of finds
+          # (JETCARP_GOLLY_LIBRARY), once with each Golly built above.
+          for v in 4.0 5.0; do
+            echo "::group::Golly $v"
+            JETCARP_BGOLLY="$RUNNER_TEMP/golly/golly-$v-src/bgolly" \
+              cargo test --workspace --release ${{ matrix.features }} --test golly -- --ignored \
+              --skip golly_agrees_on_a_library_s_finds
+            echo "::endgroup::"
+          done
       - name: The tests left no folders or files of theirs in the temp folder (#121)
         shell: bash
         run: |
@@ -165,6 +182,29 @@ jobs:
           python3 docs/tools/gen-palettes.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/gen-shortcuts.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/check-rule-notation.py --jetcarp target/release/jetcarp
+
+  debug:
+    # Release builds check neither arithmetic for overflow nor debug assertions, so the tests run
+    # again in the dev profile (optimised a little, its dependencies fully). A WebP bug hid from
+    # the release run that way until 0.4.3 (#243).
+    name: Test in a debug build (Linux x86_64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      JETCARP_GPU: software
+      JETCARP_REQUIRE_GPU: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+      - name: Test (debug build)
+        run: cargo test --workspace --no-fail-fast
 
   fmt:
     name: Formatting

@@ -336,7 +336,10 @@ pub fn encode(img: &Image) -> Option<Vec<u8>> {
     // Palette in first-seen order, as ARGB.
     let mut pal: Vec<u32> = Vec::new();
     let mut idx = Vec::with_capacity(w * h);
-    let mut last = (u32::MAX, 0u8);
+    // The colour last seen and its index, starting at one no pixel has: every colour here is
+    // opaque (alpha 0xff), so 0 is never one. (`u32::MAX` is opaque white, which then took index
+    // 0 without entering the palette.)
+    let mut last = (0u32, 0u8);
     for p in img.rgba.as_chunks::<4>().0 {
         let argb = 0xff00_0000 | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32;
         if argb != last.0 {
@@ -419,6 +422,72 @@ mod tests {
             };
             assert_eq!(back, v, "value {v}");
             assert_eq!(eb, if p < 4 { 0 } else { (p as u32 - 2) >> 1 });
+        }
+    }
+
+    /// `img` encoded, wrapped in a WebP file, and decoded by `image_webp` as RGB.
+    fn round_trip(img: &Image) -> Vec<u8> {
+        let data = encode(img).unwrap();
+        let mut file = b"RIFF".to_vec();
+        let pad = data.len() % 2;
+        file.extend(((data.len() + pad + 12) as u32).to_le_bytes());
+        file.extend(b"WEBPVP8L");
+        file.extend((data.len() as u32).to_le_bytes());
+        file.extend(&data);
+        file.extend(std::iter::repeat_n(0, pad));
+        let mut d = image_webp::WebPDecoder::new(std::io::Cursor::new(file)).unwrap();
+        let mut buf = vec![0; (img.width * img.height * 3) as usize];
+        d.read_image(&mut buf).unwrap();
+        buf
+    }
+
+    fn rgb(img: &Image) -> Vec<u8> {
+        img.rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[1], p[2]])
+            .collect()
+    }
+
+    /// White first: the colour cache once started at `u32::MAX`, which is opaque white, so white
+    /// pixels at the start took index 0 without white entering the palette. An all-white image
+    /// had an empty palette (a subtraction overflow, or a malformed file), and white before other
+    /// colours came out in the first of them.
+    #[test]
+    fn white_first_keeps_white() {
+        let (w, h) = (40u32, 24u32);
+        let image = |f: &dyn Fn(u32, u32) -> [u8; 3]| Image {
+            width: w,
+            height: h,
+            rgba: (0..h)
+                .flat_map(|y| (0..w).map(move |x| (x, y)))
+                .flat_map(|(x, y)| {
+                    let [r, g, b] = f(x, y);
+                    [r, g, b, 255]
+                })
+                .collect(),
+        };
+        let cases: [(&str, Image); 3] = [
+            ("all white", image(&|_, _| [255; 3])),
+            (
+                "white, then black",
+                image(&|x, _| if x < 20 { [255; 3] } else { [0; 3] }),
+            ),
+            (
+                "white among many",
+                image(&|x, y| {
+                    if (x + y) % 3 == 0 {
+                        [255; 3]
+                    } else {
+                        // 48 colours beside white, within the palette's 256.
+                        [(x % 8 * 30) as u8, (y % 6 * 40) as u8, 90]
+                    }
+                }),
+            ),
+        ];
+        for (name, img) in cases {
+            assert!(round_trip(&img) == rgb(&img), "{name}");
         }
     }
 

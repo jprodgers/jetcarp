@@ -40,6 +40,7 @@
 - [Aperiodic patches and following movers](guides/aperiodic-patches.md)
 - [Website export](guides/website-export.md)
 - [The GPU](guides/gpu.md)
+- [This computer: the score and the limits](guides/this-computer.md)
 - [Uninstalling](guides/uninstalling.md)
 
 # Cellular automata
@@ -108,4 +109,5 @@
 - [How JETCARP is tested](about/testing.md)
 - [Changelog](about/changelog.md)
 - [Roadmap](about/roadmap.md)
+- [Accessibility](about/accessibility.md)
 - [Contributing](about/contributing.md)

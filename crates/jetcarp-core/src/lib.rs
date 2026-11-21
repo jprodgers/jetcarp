@@ -29,6 +29,7 @@ pub mod json_int;
 pub mod lenia;
 pub mod looks;
 pub mod ltl;
+pub mod machine;
 pub mod media;
 pub mod objects;
 pub mod patch;
