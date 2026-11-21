@@ -1134,6 +1134,17 @@ fn help_and_reference() {
     }
     let t = ok(&call(&mut s, &mut h, "help", json!({"topic": "setup"})));
     assert!(t.contains("setup.status") && t.contains("profiles:"), "{t}");
+    // The background host's actions and Fit's options, which `host_control` names rather than
+    // carrying in tools/list.
+    let t = ok(&call(&mut s, &mut h, "help", json!({"topic": "host"})));
+    for w in ["host_control", "wallpaper", "login", "rotation", "scene"] {
+        assert!(t.contains(w), "{w} in {t}");
+    }
+    if jetcarp_core::fit::FIT {
+        for w in ["tune", "cpu_limit", "fps", "pick", "fresh", "pixel area"] {
+            assert!(t.contains(w), "{w} in {t}");
+        }
+    }
     let t = ok(&call(
         &mut s,
         &mut h,
