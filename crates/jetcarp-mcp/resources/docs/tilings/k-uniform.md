@@ -95,9 +95,13 @@ group.
 ## What is new here
 
 The catalogue is Galebach's, and the data and its representation are Soto Sánchez and colleagues'.
-What JETCARP adds is running cellular automata on all of it. Our prior-art search found no published
-cellular automaton work on k-uniform tilings with k of 2 or more. JETCARP has computed sandpile
-identities and piles across the catalogue, and its searches have found Life-like spaceships on 2- and
+What JETCARP adds is running cellular automata on all of it. Our prior-art search found no paper that
+runs a cellular automaton on any particular k-uniform tiling with k of 2 or more; a 2019 study of
+bootstrap percolation covers a wide class of tilings by regular polygons at once, these among them
+([Bushaw and Cranston 2019](../research/bibliography.md#bushaw2019note)). Hobbyist work on two
+2-uniform tilings, k2-001 and k2-007, is described in
+[What is new in JETCARP](../research/contributions.md#4-spaceships-on-non-square-tilings). JETCARP
+has computed sandpile identities and piles across the catalogue, and its searches have found Life-like spaceships on 2- and
 3-uniform tilings. No 2- or 3-uniform tiling has the neighbour graph of a lattice, of Cairo or of an
 Archimedean tiling (the k-uniform tilings with k from 4 to 6 have not been surveyed), so a ship found on
 one is not a lattice ship in disguise.
@@ -163,3 +167,4 @@ Treating the tiling as a dimension of an exploratory search also depends on havi
 - [Soto Sánchez et al. 2021](../research/bibliography.md#sotosanchez2021integer);
   [Medeiros e Sá et al. 2018](../research/bibliography.md#medeirosesa2018synthesizing);
   [Soto Sánchez, tiling viewer](../research/bibliography.md#sotosancheznd_tiling)
+- [Bushaw and Cranston 2019](../research/bibliography.md#bushaw2019note)

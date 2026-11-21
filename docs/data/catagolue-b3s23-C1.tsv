@@ -1,0 +1,39 @@
+# The 30 commonest objects of Catagolue's census of Conway's Life from asymmetric 16 x 16 soups
+# (rule b3s23, symmetry C1), pinned for docs/tools/check-catagolue.py.
+# Source: https://catagolue.hatsya.com/textcensus/b3s23/C1, fetched 2026-11-20 at 20:56 EST
+# (15,299,022 bytes, SHA-256 7635584f5243f0d9ab0262bcc6417f7aa437ffb80fff6e5884113c7383ab8923).
+# Catagolue is Adam P. Goucher's census, fed mainly by his apgsearch; see the book's
+# research/search-methods.md. Columns: apgcode, occurrences.
+# total: the occurrences of all 556,090 object codes (xs, xp and xq) in that file; the file's other
+# rows (linear growth, oversized and pathological soups) are left out of the total.
+total	7425010913015739
+xs4_33	2293393360970896
+xp2_7	2129881755110075
+xs6_696	1215321945061800
+xq4_153	652753447303168
+xs7_2596	358546243068411
+xs5_253	330893069625763
+xs6_356	228400744020010
+xs4_252	72184038458393
+xs8_6996	70207347790100
+xs7_25ac	23250758862618
+xp2_7e	16250084529012
+xs12_g8o653z11	11797198187084
+xp2_318c	5081700555216
+xs6_25a4	4883781153159
+xs14_g88m952z121	3995304986074
+xs8_69ic	1798957453270
+xs7_178c	1158768060056
+xq4_6frc	953708329751
+xs8_25ak8	652802946300
+xs6_39c	564038970403
+xp3_co9nas0san9oczgoldlo0oldlogz1047210127401	523559111962
+xs14_69bqic	327518334148
+xq4_27dee6	251259914103
+xs8_35ac	222894347633
+xs9_31ego	205158570807
+xs8_3pm	176946535367
+xs10_g8o652z01	173353341861
+xs6_bd	155009999582
+xs14_g88b96z123	154880538973
+xs16_g88m996z1221	134859604562

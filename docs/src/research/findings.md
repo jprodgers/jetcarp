@@ -64,11 +64,22 @@ type is a known lattice object, and none is claimed.
 
 ### How the list was cut
 
-Of the 103 spaceship records, 35 were known objects of the square and triangular grids (every ship
-on an isohedral type among them) and 5 were H. S. Guttesen's kagome glider, alone, in
-pairs or in corridors of kagome tiles. Fresh soup searches in November 2026 re-found Guttesen's
-snub-square glider and added 16 objects. That left 72 candidates, which a second, deliberately
-skeptical pass and then a looser congruence test examined:
+The candidates came from 137 spaceship records: the 103 of CART's catalogue, and 34 more from fresh
+soup searches in November 2026 (20,000 soups each of `B3/S23` and `B36/S23` on the snub square and
+kagome tilings, and of `B2/S34` on 4.8.8). Each record was classed, and a record that is two ships
+flying together, or a second record of one object, counted under the object it holds. Every step
+below can be checked by subtraction:
+
+| From | Records | Taken out | Left |
+| --- | --- | --- | --- |
+| CART's catalogue | 103 | 35 known objects of the square and triangular grids, every ship on an isohedral type among them (21 distinct objects, 13 records of two ships together, 1 second record) | 68 |
+| | 68 | 5 of H. S. Guttesen's kagome glider: 3 records of the glider (on the kagome tiling, and in kagome corridors of k3-030 and k3-039) and 2 of two of them flying together | 63 |
+| | 63 | 7 records of two candidate ships flying together | **56 candidates** |
+| The fresh searches | 34 | 16 of Guttesen's gliders: his snub-square glider, re-found (1 record), 9 records of two of them flying together, 1 more record of the kagome glider and 5 of two kagome gliders together | 18 |
+| | 18 | 2 second records of candidates already counted above | **16 candidates** |
+| Both | | | **56 + 16 = 72 candidates** |
+
+The 72 then went through a second, deliberately skeptical pass and a looser congruence test:
 
 | Step | Result |
 | --- | --- |

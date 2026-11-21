@@ -12,10 +12,16 @@
 //! 2. more than `pop_cap` live cells, or a bounding box wider or taller than `max_span`: it
 //!    **exploded** (no census);
 //! 3. every `cut_every` generations, if anything lies outside the **region** (the soup's box plus
-//!    a margin) and the bounding box changed since the last look: every group of the cells outside
-//!    the region that is a spaceship on its own and is flying away from everything else (beyond
-//!    the region and every other such group by a gap, on an axis it moves outwards along) is
-//!    counted and erased;
+//!    a margin) and the bounding box changed since the last look: the cells outside the region
+//!    are split into groups, and every group that is a spaceship on its own (or several flying
+//!    together) and that nothing else can reach is counted, as the ships it is made of, and
+//!    erased. Nothing can reach it when it lies beyond the region by a gap on an axis it moves
+//!    outwards along, and beyond each other group in the same way. Far from the region (by more
+//!    than half its longer side), and while at most `FEW_OUT` groups lie out beyond it, groups
+//!    that no gap separates are also taken together (two gliders on parallel lanes a few cells
+//!    apart), and a group that is not beyond another in that way is still clear of it when the
+//!    other is a far ship that cannot close the gap: one with the same velocity (gliders flying
+//!    the same way, however far apart), or one slower along an axis this one is beyond it on;
 //! 4. the state hash is recorded; if it equals the hash `p` generations earlier (with the same
 //!    population) for some `p` up to `settle_period`, the soup **settled** with period `p`;
 //! 5. at `max_gens` the soup is **unsettled**.
@@ -349,9 +355,42 @@ impl SoupRun {
         // Only cells outside the region can be cut; the region stands for everything inside it
         // (a conservative "rest of the soup").
         let cells = self.u.cells_outside(self.region);
-        let groups = c.groups(&cells);
         let gap_i = 2 * c.plan.reach_i + 2;
         let gap_j = 2 * c.plan.reach_j + 2;
+        let gap = [gap_i, gap_j];
+        let region = self.region;
+        // Out: beyond the region by the gap on some side (a ship flying away, perhaps). Far: out
+        // by more than half the region's longer side again, well clear of anything the soup is
+        // still doing next to the region.
+        let reach = (region[1] - region[0]).max(region[3] - region[2]) / 2;
+        let far_gap = [gap_i + reach, gap_j + reach];
+        let is_out = |b: [i32; 4]| beyond(b, region, gap).iter().any(|&s| s);
+        let is_far = |b: [i32; 4]| beyond(b, region, far_gap).iter().any(|&s| s);
+        let groups = c.groups(&cells);
+        // Few groups out there (ships flying off, not a soup spreading far): then far out,
+        // groups that no gap separates are taken together (two gliders on parallel lanes a few
+        // cells apart are never a gap from each other, and are cut as one group of two ships),
+        // and ships that cannot reach each other are told apart by their velocities (below).
+        let few = groups.iter().filter(|g| is_out(g.bbox)).count() <= FEW_OUT;
+        // With the cells of the groups each was taken together from (none when it is one).
+        let (groups, parts): (Vec<Group>, Vec<Vec<Vec<LCell>>>) = if few {
+            flocks(groups, gap_i, gap_j, &is_far).into_iter().unzip()
+        } else {
+            let n = groups.len();
+            (groups, vec![Vec::new(); n])
+        };
+        // A group taken together from several is run as one only when each of them is a ship
+        // (a ship passing debris is not, and would be run for nothing).
+        let ship_at = |cache: &mut Cache, x: usize| {
+            if parts[x]
+                .iter()
+                .all(|p| super::gun::ship_of(c, cache, p).is_some())
+            {
+                super::gun::ship_of(c, cache, &groups[x].cells)
+            } else {
+                None
+            }
+        };
         let mut erase: Vec<LCell> = Vec::new();
         // The bounding box of every group but one, from prefix and suffix unions.
         let n = groups.len();
@@ -370,31 +409,63 @@ impl SoupRun {
             pre[x + 1] = union(pre[x], groups[x].bbox);
             suf[n - 1 - x] = union(suf[n - x], groups[n - 1 - x].bbox);
         }
+        let far: Vec<bool> = groups.iter().map(|g| few && is_far(g.bbox)).collect();
+        // Each far group's velocity when it is a ship (period, displacement), found when needed.
+        let mut vel: Vec<Option<Option<(u64, [i32; 2])>>> = vec![None; n];
         for (x, g) in groups.iter().enumerate() {
             let b = g.bbox;
-            if inside(b, self.region) {
+            // Beyond the region on some side (cheap; most groups fail here).
+            let off = beyond(b, region, gap);
+            if !off.iter().any(|&s| s) {
                 continue;
             }
-            let rest = union(self.region, union(pre[x], suf[x + 1]));
-            // Beyond everything else on some side (cheap; most groups fail here).
-            let beyond = [
-                b[0] > rest[1] + gap_i,
-                b[1] < rest[0] - gap_i,
-                b[2] > rest[3] + gap_j,
-                b[3] < rest[2] - gap_j,
-            ];
-            if !beyond.iter().any(|&x| x) {
+            // Beyond everything else on some side, as a ship must be to be cut, unless it is
+            // far out, where the velocity test below may clear it.
+            let ahead = beyond(b, union(pre[x], suf[x + 1]), gap);
+            if !far[x] && (!parts[x].is_empty() || !ahead.iter().any(|&s| s)) {
                 continue;
             }
-            let Some(ship) = super::gun::ship_of(c, cache, &g.cells) else {
+            let Some(ship) = ship_at(cache, x) else {
                 continue;
             };
-            let d = ship.d;
-            let away = (d[0] > 0 && beyond[0])
-                || (d[0] < 0 && beyond[1])
-                || (d[1] > 0 && beyond[2])
-                || (d[1] < 0 && beyond[3]);
-            if away && !bound(c, &groups, x) {
+            let (p, d) = (ship.period, ship.d);
+            vel[x] = Some(Some((p, d)));
+            if !away(d, off) {
+                continue;
+            }
+            // Nothing else can reach it: it is beyond everything else on a side it moves out
+            // along (the common case, from the unions), or, far out, beyond each other group
+            // so, or that group is a far ship that cannot close the gap. A ship with the same
+            // velocity never can (every two far groups are a gap apart), so gliders flying the
+            // same way on lanes far apart are cut too; nor can one slower along an axis this one
+            // is beyond it on.
+            let clear = away(d, ahead)
+                || far[x]
+                    && (0..n).filter(|&y| y != x).all(|y| {
+                        let side = beyond(b, groups[y].bbox, gap);
+                        if away(d, side) {
+                            return true;
+                        }
+                        if !far[y] {
+                            return false;
+                        }
+                        let v = *vel[y]
+                            .get_or_insert_with(|| ship_at(cache, y).map(|s| (s.period, s.d)));
+                        let Some((q, e)) = v else {
+                            return false;
+                        };
+                        // Velocities d / p and e / q, compared along each axis and side.
+                        let (vg, vh) = (
+                            [d[0] as i64 * q as i64, d[1] as i64 * q as i64],
+                            [e[0] as i64 * p as i64, e[1] as i64 * p as i64],
+                        );
+                        vg == vh
+                            || (0..4).any(|k| {
+                                let (a, s) = (k / 2, if k % 2 == 0 { 1 } else { -1 });
+                                side[k] && s * vg[a] > 0 && s * vg[a] >= s * vh[a]
+                            })
+                    });
+            if clear && !bound(c, &groups, x) {
                 self.cut.push((ship.found.clone(), d, ship.parts.clone()));
                 erase.extend_from_slice(&g.cells);
             }
@@ -403,6 +474,112 @@ impl SoupRun {
             self.u.erase(&erase);
         }
     }
+}
+
+/// Groups out beyond the region above which a look cuts only a group beyond everything else (a
+/// soup spreading far, with many groups out there: taking them together, and running each to
+/// learn its velocity, would cost much and cut little).
+const FEW_OUT: usize = 128;
+
+/// On which sides box `b` lies beyond box `o` by more than the gap: `[+i, -i, +j, -j]`.
+fn beyond(b: [i32; 4], o: [i32; 4], gap: [i32; 2]) -> [bool; 4] {
+    [
+        b[0] > o[1] + gap[0],
+        b[1] < o[0] - gap[0],
+        b[2] > o[3] + gap[1],
+        b[3] < o[2] - gap[1],
+    ]
+}
+
+/// Does displacement `d` carry a box outward on a side where it is beyond (`[+i, -i, +j, -j]`)?
+fn away(d: [i32; 2], side: [bool; 4]) -> bool {
+    (d[0] > 0 && side[0]) || (d[0] < 0 && side[1]) || (d[1] > 0 && side[2]) || (d[1] < 0 && side[3])
+}
+
+/// Far groups (`far` of their boxes) merged until every two are separated by more than the gap
+/// (`gap_i`, `gap_j`) on some axis, so each one left is either beyond another by the gap or not
+/// apart from it at all; the other groups are left alone. Each merged group's cells are sorted and
+/// its touching parts are not kept (cutting needs only the cells and the box); with it come the
+/// cells of the groups it was merged from (none for a group left alone). Groups stay in order of
+/// their first cell.
+fn flocks(
+    groups: Vec<Group>,
+    gap_i: i32,
+    gap_j: i32,
+    far: &dyn Fn([i32; 4]) -> bool,
+) -> Vec<(Group, Vec<Vec<LCell>>)> {
+    let mut groups: Vec<(Group, Vec<Vec<LCell>>)> =
+        groups.into_iter().map(|g| (g, Vec::new())).collect();
+    loop {
+        let n = groups.len();
+        let mut at: Vec<usize> = (0..n).collect();
+        let mut any = false;
+        // Sweep in order of the boxes' least i: a later box that starts more than the gap past
+        // this one's end, and every box after it, is apart from it along i.
+        let mut order: Vec<usize> = (0..n).filter(|&x| far(groups[x].0.bbox)).collect();
+        order.sort_by_key(|&x| (groups[x].0.bbox[0], x));
+        for (k, &x) in order.iter().enumerate() {
+            let a = groups[x].0.bbox;
+            for &y in &order[k + 1..] {
+                let b = groups[y].0.bbox;
+                if b[0] > a[1] + gap_i {
+                    break;
+                }
+                if b[2] > a[3] + gap_j || a[2] > b[3] + gap_j {
+                    continue;
+                }
+                let (rx, ry) = (root(&mut at, x), root(&mut at, y));
+                if rx != ry {
+                    at[rx.max(ry)] = rx.min(ry);
+                    any = true;
+                }
+            }
+        }
+        if !any {
+            return groups;
+        }
+        // Merge each set into its first group (a merged box may now meet another: go again).
+        let mut out: Vec<(Group, Vec<Vec<LCell>>)> = Vec::new();
+        let mut slot: Vec<Option<usize>> = vec![None; n];
+        for (x, (g, from)) in groups.into_iter().enumerate() {
+            let r = root(&mut at, x);
+            match slot[r] {
+                None => {
+                    slot[r] = Some(out.len());
+                    out.push((g, from));
+                }
+                Some(s) => {
+                    let (o, o_from) = &mut out[s];
+                    if o_from.is_empty() {
+                        o_from.push(o.cells.clone());
+                    }
+                    if from.is_empty() {
+                        o_from.push(g.cells.clone());
+                    } else {
+                        o_from.extend(from);
+                    }
+                    o.cells.extend(g.cells);
+                    o.cells.sort_unstable();
+                    o.subs.clear();
+                    o.bbox = [
+                        o.bbox[0].min(g.bbox[0]),
+                        o.bbox[1].max(g.bbox[1]),
+                        o.bbox[2].min(g.bbox[2]),
+                        o.bbox[3].max(g.bbox[3]),
+                    ];
+                }
+            }
+        }
+        groups = out;
+    }
+}
+
+fn root(at: &mut [usize], mut x: usize) -> usize {
+    while at[x] != x {
+        at[x] = at[at[x]];
+        x = at[x];
+    }
+    x
 }
 
 /// Is group `x` (a ship) one half of a bound object: with a group near it (within
