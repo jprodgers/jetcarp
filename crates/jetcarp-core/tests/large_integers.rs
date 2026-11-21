@@ -70,6 +70,7 @@ fn every_large_integer_in_a_scene_reads_back() {
     s.record = Some(jetcarp_core::world::Record {
         generation: (1 << 60) + 7,
         hash: "x".into(),
+        hash_version: 2,
         jetcarp_version: "0".into(),
         dead_boundary: false,
     });

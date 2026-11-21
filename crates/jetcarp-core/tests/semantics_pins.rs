@@ -9,7 +9,8 @@
 //! - Each scene starts from cells this test chooses with its own random-number generator (or,
 //!   for ants, sandpiles, Lenia and the row rules, a fixed start of the engine's), so only the
 //!   rule, the tiles and the forest fire's own randomness decide where it goes.
-//! - The hash covers what a rule decides: each field's states, grain heights, continuous values
+//! - The hash (SHA-256, all 64 hexadecimal digits; the first 16 before 0.4.3) covers what a rule
+//!   decides: each field's states, grain heights, continuous values
 //!   (by their bits) and lost grains, and every ant's cell, heading and state; not ages or
 //!   bookkeeping.
 //! - `tests/data/semantics_pins.txt` holds, per family, the version it was pinned at and the hash.
@@ -277,7 +278,7 @@ fn state_hash(w: &World) -> String {
             h.update(&[a.state]);
         }
     }
-    hex(&h.finish()[..8])
+    hex(&h.finish())
 }
 
 /// Is anything left: a live cell, a grain, a value, or an ant?
@@ -380,7 +381,11 @@ fn every_rule_family_has_a_pinned_scene() {
         let refused: Vec<String> = got
             .iter()
             .filter_map(|(f, h)| match pinned.get(*f) {
-                Some((v, old)) if old != h && v == table[f] => Some(bump(f, v, old, h)),
+                // A pin of 16 digits (before 0.4.3) is the first 8 bytes of the same SHA-256: one
+                // the new hash begins with is the same state, written in full.
+                Some((v, old)) if old != h && !h.starts_with(old.as_str()) && v == table[f] => {
+                    Some(bump(f, v, old, h))
+                }
                 _ => None,
             })
             .collect();

@@ -279,8 +279,10 @@ fn check_scene(q: &QuickStartRow) -> Result<(), String> {
         w.apply(jetcarp_core::Command::Step {
             gens: rec.generation.saturating_sub(w.generation),
         })?;
-        let h = w.hash_hex();
-        if !rec.hash.is_empty() && h != rec.hash {
+        // In the version the record names (no version: 1).
+        let version = jetcarp_core::world::HashVersion::of_record(rec.hash_version)?;
+        let h = w.hash_hex_as(version);
+        if !rec.hash.is_empty() && h != rec.hash.trim().to_ascii_lowercase() {
             return Err(format!(
                 "at generation {} its state hash is {h}, the scene recorded {}",
                 rec.generation, rec.hash

@@ -30,6 +30,9 @@ mod done;
 // Automatic reseeding and the activity history. See `world/reseeding.rs`.
 mod reseeding;
 pub use reseeding::{ACTIVITY_HISTORY, Activity};
+// The state hash, versions 1 and 2. See `world/hash.rs`.
+mod hash;
+pub use hash::{HashVersion, STATE_HASH_VERSION};
 
 // ---------------------------------------------------------------------------------------------
 // Fields
@@ -693,6 +696,10 @@ pub struct Record {
     #[serde(with = "crate::json_int::uint")]
     pub generation: u64,
     pub hash: String,
+    /// The state-hash version `hash` is in ([`HashVersion`]): 2 since 0.4.3; absent in older
+    /// records, which are version 1.
+    #[serde(default = "hash_v1")]
+    pub hash_version: u32,
     pub jetcarp_version: String,
     /// True when some cells have missing neighbours (dead edges or a patch boundary).
     pub dead_boundary: bool,
@@ -743,6 +750,9 @@ pub struct Scene {
 }
 fn fmt1() -> u32 {
     SCENE_FORMAT
+}
+fn hash_v1() -> u32 {
+    1
 }
 
 impl Scene {
@@ -1042,6 +1052,7 @@ impl World {
         Record {
             generation: self.generation,
             hash: self.hash_hex(),
+            hash_version: STATE_HASH_VERSION,
             jetcarp_version: crate::VERSION.into(),
             dead_boundary: self.topo.has_boundary(),
         }
@@ -2222,45 +2233,6 @@ impl World {
             return Status::Empty;
         }
         Status::Running
-    }
-
-    /// FNV-1a over generation, every field, and every CA's dynamic state.
-    pub fn state_hash(&self) -> u64 {
-        let mut h = Fnv::default();
-        h.u64(self.generation);
-        for f in &self.fields {
-            h.bytes(format!("{:?}{}", f.kind, f.shared).as_bytes());
-            h.bytes(&f.state);
-            h.u16s(&f.age);
-            h.u32s(&f.height);
-            // Continuous values by their exact bits (empty for other fields).
-            h.f32s(&f.value);
-            h.u64(f.lost);
-        }
-        if self.script.is_some() {
-            h.u64(self.script_state.step as u64);
-            h.u64(self.script_state.started);
-            h.u64(self.script_state.finished as u64);
-        }
-        for st in &self.reseed_status {
-            h.u64(st.since);
-            h.u64(st.streak);
-            h.u64(st.fired);
-        }
-        for c in &self.cas {
-            h.u64(c.id as u64);
-            h.u64(c.cursor as u64);
-            h.u64(c.ticks);
-            h.u64(c.enabled as u64);
-            for a in &c.agents {
-                h.u64(a.cell as u64);
-                h.u64(a.heading as u64);
-            }
-        }
-        h.0
-    }
-    pub fn hash_hex(&self) -> String {
-        format!("{:016x}", self.state_hash())
     }
 
     /// FNV-1a over every field's cell states only (no generation, ages, heights, values, or CA

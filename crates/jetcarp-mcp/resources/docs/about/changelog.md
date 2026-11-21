@@ -24,6 +24,24 @@ day later (0.4.2: 17 November here, 18 November there).
   such. Before, the app showed only a pack's name and size, and the command line the key alone.
   ([Packs](../guides/packs.md#check-a-pack))
 
+### Changed
+
+- **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
+  64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
+  (the random-number generator, a turmite's internal state, a layered rule's layers, a forest fire's
+  noise seed, a script's streak, the automata's rules and settings), so two different worlds could
+  share it. Version 2 hashes every piece of state that decides what a world does next, and a digest
+  of its tiling: changing any one of them changes the hash, and a world reopened from its saved scene
+  at any generation hashes as the one that ran straight through. `jetcarp run` and `verify`, scene
+  records, PNG metadata, `--json`, the MCP tools and *Copy state hash* carry all 64 digits; the app's
+  menu bar shows the first 16. Records now say `"hash_version": 2`; those written before carry no
+  version, and JETCARP checks them with version 1, kept unchanged, so old scenes, figures and packs
+  still verify. `--expect` takes either version, by length (16 or 64 digits), and refuses anything
+  else. The pinned hashes of every Quick Start entry, the rule-semantics scenes and the portable
+  Lenia runs are now version 2; their version 1 hashes are the old pins, so no state changed.
+  ([The state hash](../research/reproducibility.md#the-state-hash),
+  [#173](https://github.com/jprodgers/jetcarp/issues/173))
+
 ### Fixed
 
 - **A world with a B0 rule is said to repeat only when it does.** The period check compared the

@@ -59,13 +59,14 @@ same scene with every default filled in, the command log, and a record:
      "seed": {"ants": {"count": 3}}}
   ],
   "commands": [{"op": "step", "gens": 100}],
-  "record": {"generation": 100, "hash": "1adf6e3234b7f199", "jetcarp_version": "0.4.0",
-             "dead_boundary": true}
+  "record": {"generation": 100,
+             "hash": "bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b9",
+             "hash_version": 2, "jetcarp_version": "0.4.3", "dead_boundary": true}
 }
 ```
 
 (JETCARP writes the file with one field per line; it is folded here to fit.) `jetcarp verify out.json`
-replays it and answers `ok: generation 100 hash 1adf6e3234b7f199`.
+replays it and answers `ok: generation 100 hash bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b9`.
 
 ## The top-level fields
 
@@ -223,17 +224,19 @@ built-in scene `script-five.json` is a complete example. Reseed policies (`resee
 | Field | Meaning |
 | --- | --- |
 | `generation` | The generation the world had reached |
-| `hash` | The world's state hash then, 16 hexadecimal digits |
+| `hash` | The world's state hash then: 64 hexadecimal digits (version 2), or 16 in a record written before 0.4.3 (version 1) |
+| `hash_version` | `2`: the hash is SHA-256 over the whole state. Absent in records written before 0.4.3, which are version 1 (a 64-bit FNV-1a hash); JETCARP checks each record with the version it names |
 | `jetcarp_version` | The version that saved it |
 | `dead_boundary` | Whether some cells have missing neighbours (dead edges or a patch boundary) |
 
 `jetcarp verify scene.json` (or the `scene.verify` operation) replays the scene and reports whether it
-reaches the same generation and hash. The hash covers every field's states and ages, sandpile heights,
-Lenia's exact values, the generation number, ants, and the progress of scripts and reseed policies,
-so two worlds with the same hash are in the same state; see
-[Reproducibility](../research/reproducibility.md). A PNG written by `jetcarp run --png` carries the
+reaches the same generation and hash. The hash covers everything that decides what the world does
+next (every field's states and ages, sandpile heights, Lenia's exact values, the generation, the
+random-number generator, each automaton's rule and settings, ants, and the progress of scripts,
+reseed policies and the period check) and a digest of the tiling, so two worlds with the same hash
+are in the same state; see [Reproducibility](../research/reproducibility.md#the-state-hash). A PNG written by `jetcarp run --png` carries the
 same information in text chunks: `jetcarp:scene` (the whole scene), `jetcarp:version`,
-`jetcarp:generation`, `jetcarp:hash` and `jetcarp:dead_boundary`.
+`jetcarp:generation`, `jetcarp:hash`, `jetcarp:hash_version` and `jetcarp:dead_boundary`.
 
 ## Versions
 
