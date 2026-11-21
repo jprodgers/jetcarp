@@ -133,11 +133,15 @@ jobs:
             echo "$left"
             exit 1
           fi
-      - name: The generated reference pages match the program (MCP tools, command line)
+      - name: The generated book pages, and the rule notation table, match the program
         if: runner.os == 'Linux'
         run: |
           python3 docs/tools/gen-mcp.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/gen-cli.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/gen-named-rules.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/gen-tiling-catalogue.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/gen-palettes.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/check-rule-notation.py --jetcarp target/release/jetcarp
 
   fmt:
     name: Formatting

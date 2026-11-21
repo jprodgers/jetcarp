@@ -154,15 +154,18 @@ JETCARP does not pretend otherwise:
 - [Margolus block rules](margolus.md) update 2 × 2 blocks of squares on alternating offsets.
 - [Von Neumann's 29-state automaton](von-neumann.md) depends on the four compass directions; JETCARP
   refuses to place it on another tiling.
+- [Larger than Life](larger-than-life.md)'s cross-shaped neighbourhood (`N+`) has no meaning off the
+  square grid, though its other neighbourhoods run anywhere.
 
 ## What is new here
 
 None of the ingredients on this page is new on its own, as the history above shows: Ready runs
 arbitrary rules on meshes, HatLife, SpectreLife and Edmond's work run several families on the hat and spectre,
 and many single families have been run on hexagons, triangles or Penrose tilings. What JETCARP
-adds, to our knowledge, is breadth: one engine that runs every family listed here on every class of
-tiling it supports (lattices, the 1,248 k-uniform tilings, 81 isohedral types, drawn tiles, and the
-Penrose, hat and spectre tilings), with the same neighbour model throughout. Not all of these are
+adds, to our knowledge, is breadth: one engine that runs every family listed here but those that stay on their own grid (above) on
+every class of tiling it supports (lattices, the 1,248 k-uniform tilings, 81 isohedral types, drawn
+tiles, and the Penrose, hat and spectre tilings), with the same neighbour graph throughout (Lenia
+alone measures the distance between tile centres instead). Not all of these are
 different graphs: the 81 isohedral types have only the eleven graphs of the Laves tilings, and several
 drawn families copy the square or hexagonal grid (see [Isohedral tilings](../tilings/isohedral.md)).
 Tests check that results agree across thread counts and, where available, between CPU and GPU.

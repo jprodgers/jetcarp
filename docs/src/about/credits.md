@@ -20,11 +20,11 @@ knowledge, new, each with its evidence on [What is new in JETCARP](../research/c
   (`HexT`); the underlying rules are standard second-order automata, and the two-parent rules are
   Wolfram's.
 - The spaceships on Archimedean and k-uniform tilings listed on the [Findings](../research/findings.md)
-  page, found with JETCARP by Jimmie Rodgers; 29 of them are claimed, to our knowledge, as not
+  page, found with JETCARP by Jimmie Rodgers; 25 of them are claimed, to our knowledge, as not
   reported before.
 - Sandpile identities and large piles on the hat and spectre and across the tiling catalogues, the
-  tiling as a dimension of an exploratory search, and one engine running every family on every
-  tiling.
+  tiling as a dimension of an exploratory search, and one engine running nearly every family on every
+  tiling (the few tied to one grid stay on it).
 
 ## Acknowledgements
 

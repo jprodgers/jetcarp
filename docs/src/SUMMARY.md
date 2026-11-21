@@ -103,4 +103,5 @@
 - [How JETCARP was made](about/how-made.md)
 - [How JETCARP is tested](about/testing.md)
 - [Changelog](about/changelog.md)
+- [Roadmap](about/roadmap.md)
 - [Contributing](about/contributing.md)

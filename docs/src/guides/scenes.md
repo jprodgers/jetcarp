@@ -143,8 +143,8 @@ as PNG text chunks: `jetcarp:scene` (the whole scene), `jetcarp:version`, `jetca
 that made it. (Animations, from *File → Export animation…* or `jetcarp media`, and the frames
 `jetcarp media` writes do not carry them.)
 
-JETCARP does not yet open a scene from a PNG itself, but any program that reads PNG text chunks can
-take it out. With Python and the Pillow library:
+JETCARP opens such a picture as it opens a scene file (`jetcarp run picture.png`, `jetcarp verify
+picture.png`), and any other program that reads PNG text chunks can take the scene out too. With Python and the Pillow library:
 
 ```python
 from PIL import Image

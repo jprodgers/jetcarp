@@ -28,7 +28,8 @@ release does, and [How JETCARP was made](about/how-made.md) tells where it came 
   Start with [Life on a new tiling](tutorials/life-on-a-new-tiling.md).
 - **Research.** Every run is a [scene](reference/scene-format.md) that replays bit for bit and records
   its state hash; every catalogued pattern has been verified exactly; the searches are resumable jobs
-  whose results do not depend on the thread count and are designed not to depend on the machine; and
+  whose results do not depend on the thread count and are designed not to depend on the machine
+  (all but the exploratory search, which [continues rather than resumes exactly](research/reproducibility.md#what-is-not-guaranteed-yet)); and
   everything can be scripted.
   Start with [Core ideas](getting-started/core-ideas.md) and [Reproducibility](research/reproducibility.md).
 
@@ -80,8 +81,12 @@ tiling, which builds a highway after about 2,600 steps of disorder. Scene
 spectre tiling. Scene <code>docs/scenes/automata/layered-spectre.json</code>.</figcaption>
 </figure>
 
-Every picture in this book is made by JETCARP from the scene named under it, so you can run any of
-them yourself: `jetcarp run <scene> --gens N --png out.png`.
+Every picture of a world in this book is made by JETCARP from the scene named under it, so you can
+run any of them yourself: `jetcarp run <scene> --gens N --png out.png`. The scenes are in the
+[`docs/scenes`](https://github.com/jprodgers/jetcarp/tree/main/docs/scenes) folder of JETCARP's
+repository. Most still pictures also carry their scene inside them, so you can download one and run
+the picture itself (`jetcarp run figure.png`). The pictures of the app's windows are screenshots,
+with no scene.
 
 ## Two ways through this book
 

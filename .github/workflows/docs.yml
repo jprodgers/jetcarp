@@ -47,6 +47,9 @@ jobs:
       - name: The scripting reference matches the program's function list
         run: python3 docs/tools/gen-scripting.py --check
 
+      - name: The bibliography page matches its BibTeX file
+        run: python3 docs/tools/gen-bibliography.py --check
+
       - name: Build
         run: mdbook build docs
 

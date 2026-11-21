@@ -242,7 +242,9 @@ von Neumann's rule fix their own neighbourhood, and the setting is ignored for t
 <div class="checked">
 
 Every example on this page was parsed by JETCARP 0.4.0 through `jetcarp api call world.new` (each on
-a tiling it can run on), and the refusals were checked to fail with the messages quoted. The
+a tiling it can run on), and the refusals were checked to fail with the messages quoted; the
+November 2026 audit parsed them again on 0.4.2. The table below is checked against the program on
+every change, by `docs/tools/check-rule-notation.py` in CI. The
 neighbourhood names are covered by JETCARP's unit tests, and `moore`, `von-neumann` and a refused
 `hex` were also tried on `jetcarp search census --nb`; the scene-file cases were run with
 `jetcarp run`. This table shows what JETCARP writes back for the examples whose canonical form
@@ -266,7 +268,7 @@ differs from what was typed:
 | `JACA B3/S23 blast=2`, `JACA B3/S23 x2` | `JACA B3/S23 blast 2` |
 | `Ant`, `Ant: RL`, `Turmite R1L1` | `Ant RL` (named *Langton's ant*) |
 | `Cyclic`, `GH`, `RPS`, `ForestFire`, `Hodgepodge` | `Cyclic 16/1`, `GH 3/1`, `RPS 3/3`, `ForestFire 0.01/0.0001`, `Hodgepodge 200/3/3/28` |
-| `Margolus BBM`, `Margolus BilliardBall`, `MS,D0;8;4;…` | `Margolus 0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15` |
+| `Margolus BBM`, `Margolus BilliardBall`, `MS,D0;8;4;3;2;5;9;7;1;6;10;11;12;13;14;15` | `Margolus 0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15` |
 | `Lenia`, `Lenia R=13,T=10,b=[1/2,1],m=0.15,s=0.015` | `Lenia R=13,T=10,b=1,m=0.15,s=0.015`, `Lenia R=13,T=10,b=1/2,1,m=0.15,s=0.015` |
 | `PT 4: 0\|n0>=3&n1>=1->3` | `Priority 4: 0\|n0>=3&n1>=1->3` |
 | `table:spectre-glider` | `SpectreGlider` |
