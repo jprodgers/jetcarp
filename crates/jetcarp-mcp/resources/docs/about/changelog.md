@@ -134,6 +134,12 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **An adapter named in `JETCARP_GPU` is looked for again before another is used.** On a laptop
+  whose discrete GPU sleeps when idle, one run in 335 with `JETCARP_GPU=RTX` on DirectX 12 didn't
+  find it and ran on the integrated GPU, saying so only in its backend note. When the adapter asked
+  for isn't there, JETCARP now looks twice more, a quarter of a second apart, before falling back,
+  and says so on the error stream too. ([GPU](../guides/gpu.md),
+  [#82](https://github.com/jprodgers/jetcarp/issues/82))
 - **An explore search's screening goes on while it confirms elites.** Every fourth CPU round
   confirmed twice the threads' number of elites after its screening, each elite's seeds one after
   another, and nothing was screened meanwhile; on the GPU a batch of confirmation runs took every
