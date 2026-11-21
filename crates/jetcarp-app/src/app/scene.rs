@@ -1,6 +1,11 @@
 //! Scenes and files: load, show, save, open, export, rule tables, pasting library patterns.
 
 use super::*;
+use crate::file_dialog;
+use std::path::{Path, PathBuf};
+
+/// A contact sheet waiting for a file: its kind, first rule, palette and random row.
+pub(super) type PendingSheet = (jetcarp_core::sheet::SheetKind, u64, String, bool);
 
 impl JetcarpApp {
     /// Load a scene now (AI control expects the world in place when this returns). The UI uses
@@ -125,14 +130,41 @@ impl JetcarpApp {
         s
     }
 
+    /// The context file dialogs ask to repaint when they answer (#136).
+    pub(super) fn dialog_ctx(&self) -> egui::Context {
+        self.ctx.clone().unwrap_or_default()
+    }
+
+    /// The answers of the File menu's dialogs and the rule table's, picked up each frame (#136).
+    pub(super) fn file_dialog_answers(&mut self) {
+        if let Some(p) = file_dialog::take::<PathBuf>("scene.save") {
+            self.save_scene_to(&p);
+        }
+        if let Some(p) = file_dialog::take::<PathBuf>("scene.open") {
+            self.open_scene_from(&p);
+        }
+        if let Some(p) = file_dialog::take::<PathBuf>("scene.export_png") {
+            self.export_png_to(&p);
+        }
+        if let Some(p) = file_dialog::take::<PathBuf>("scene.export_view") {
+            self.export_view_to(&p);
+        }
+        if let Some(p) = file_dialog::take::<PathBuf>("scene.load_table") {
+            self.load_table_from(&p);
+        }
+        self.anim_export_answer();
+    }
+
     pub(super) fn save_scene(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("JETCARP scene", &["json"])
-            .set_file_name("scene.json")
-            .save_file()
-        else {
-            return;
-        };
+        file_dialog::open(&self.dialog_ctx(), "scene.save", || {
+            rfd::FileDialog::new()
+                .add_filter("JETCARP scene", &["json"])
+                .set_file_name("scene.json")
+                .save_file()
+        });
+    }
+
+    fn save_scene_to(&mut self, path: &Path) {
         match std::fs::write(&path, self.current_scene().to_json()) {
             Ok(()) => {
                 self.message = Some((
@@ -147,13 +179,15 @@ impl JetcarpApp {
     /// *File → Open scene…*: the scene opens paused at the generation it was saved at, so that
     /// is what shows (Quick Start entries and the rest start running).
     pub(super) fn open_scene(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("JETCARP scene", &["json"])
-            .pick_file()
-        else {
-            return;
-        };
-        match std::fs::read_to_string(&path)
+        file_dialog::open(&self.dialog_ctx(), "scene.open", || {
+            rfd::FileDialog::new()
+                .add_filter("JETCARP scene", &["json"])
+                .pick_file()
+        });
+    }
+
+    fn open_scene_from(&mut self, path: &Path) {
+        match std::fs::read_to_string(path)
             .map_err(|e| e.to_string())
             .and_then(|t| Scene::from_json(&t))
         {
@@ -163,19 +197,21 @@ impl JetcarpApp {
     }
 
     pub(super) fn export_png(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG image", &["png"])
-            .set_file_name("jetcarp.png")
-            .save_file()
-        else {
-            return;
-        };
+        file_dialog::open(&self.dialog_ctx(), "scene.export_png", || {
+            rfd::FileDialog::new()
+                .add_filter("PNG image", &["png"])
+                .set_file_name("jetcarp.png")
+                .save_file()
+        });
+    }
+
+    fn export_png_to(&mut self, path: &Path) {
         let opts = self.export_options();
         let mut meta = render::png_metadata(&self.world);
         if let Some(m) = meta.iter_mut().find(|m| m.0 == "jetcarp:scene") {
             m.1 = self.current_scene().to_json();
         }
-        match render::write_png_streaming(&path, &self.world, &opts, &meta) {
+        match render::write_png_streaming(path, &self.world, &opts, &meta) {
             Ok((w, h)) => {
                 self.message = Some((
                     format!(
@@ -194,15 +230,17 @@ impl JetcarpApp {
     /// *Export the view as PNG…*: what the grid shows now (the camera's centre and zoom), at the
     /// canvas's size in physical pixels, with the scene in its metadata as the world export has.
     pub(super) fn export_view(&mut self) {
+        file_dialog::open(&self.dialog_ctx(), "scene.export_view", || {
+            rfd::FileDialog::new()
+                .add_filter("PNG image", &["png"])
+                .set_file_name("jetcarp-view.png")
+                .save_file()
+        });
+    }
+
+    fn export_view_to(&mut self, path: &Path) {
         let [cw, ch] = self.canvas_px();
         let (w, h) = (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32);
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG image", &["png"])
-            .set_file_name("jetcarp-view.png")
-            .save_file()
-        else {
-            return;
-        };
         let outline = if self.shell.cell_outlines {
             RenderOptions::default().outline_min_px
         } else {
@@ -219,7 +257,7 @@ impl JetcarpApp {
             colors: None,
         };
         let img = render::render_view(&self.world, w, h, self.cam, self.zoom, &opts);
-        let res = render::write_png(&path, &img, &meta);
+        let res = render::write_png(path, &img, &meta);
         self.message = Some(match res {
             Ok(_) => (
                 format!(
@@ -244,17 +282,27 @@ impl JetcarpApp {
         }
     }
 
+    /// Called every frame: asks where to save a contact sheet that is waiting for a file, and makes
+    /// it once the dialog answers.
     pub(super) fn export_sheet(&mut self) {
-        let Some((kind, first, palette, random)) = self.pending_sheet.take() else {
+        if let Some(answer) = file_dialog::answered::<PathBuf>("scene.sheet") {
+            if let (Some(path), Some(sheet)) = (answer, self.pending_sheet.take()) {
+                self.export_sheet_to(&path, sheet);
+            }
             return;
-        };
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG image", &["png"])
-            .set_file_name("contact-sheet.png")
-            .save_file()
-        else {
-            return;
-        };
+        }
+        if self.pending_sheet.is_some() {
+            // No second dialog while one is open.
+            file_dialog::open(&self.dialog_ctx(), "scene.sheet", || {
+                rfd::FileDialog::new()
+                    .add_filter("PNG image", &["png"])
+                    .set_file_name("contact-sheet.png")
+                    .save_file()
+            });
+        }
+    }
+
+    fn export_sheet_to(&mut self, path: &Path, (kind, first, palette, random): PendingSheet) {
         let count = if kind == jetcarp_core::sheet::SheetKind::HexBinary {
             16
         } else {
@@ -280,7 +328,7 @@ impl JetcarpApp {
                     format!("{kind:?} from {} count {count}", o.first),
                 ),
             ];
-            render::write_png(&path, &img, &meta).map(|_| img)
+            render::write_png(path, &img, &meta).map(|_| img)
         });
         self.message = Some(match res {
             Ok(img) => (
@@ -297,13 +345,15 @@ impl JetcarpApp {
     }
 
     pub(super) fn load_table(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("JETCARP rule table", &["json"])
-            .pick_file()
-        else {
-            return;
-        };
-        let parsed = std::fs::read_to_string(&path)
+        file_dialog::open(&self.dialog_ctx(), "scene.load_table", || {
+            rfd::FileDialog::new()
+                .add_filter("JETCARP rule table", &["json"])
+                .pick_file()
+        });
+    }
+
+    fn load_table_from(&mut self, path: &Path) {
+        let parsed = std::fs::read_to_string(path)
             .map_err(|e| e.to_string())
             .and_then(|t| {
                 serde_json::from_str::<jetcarp_core::table::RuleTable>(&t)

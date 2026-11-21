@@ -408,9 +408,11 @@ impl ResultsBrowser {
                 })
                 .response
                 .on_hover_text("Sweep folders in the output folder, newest first");
-            if ui.button("Open folder…").clicked()
-                && let Some(p) = rfd::FileDialog::new().set_directory(root).pick_folder()
-            {
+            let clicked = ui.button("Open folder…").clicked();
+            let start = root.to_path_buf();
+            if let Some(p) = crate::file_dialog::on_click(ui.ctx(), "results.open_folder", clicked, move || {
+                rfd::FileDialog::new().set_directory(start).pick_folder()
+            }) {
                 self.open_folder(&p);
             }
             if !self.favs.items.is_empty() {

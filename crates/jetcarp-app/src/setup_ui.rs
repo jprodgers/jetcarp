@@ -882,10 +882,12 @@ impl Wizard {
             changed |= ui
                 .add(egui::TextEdit::singleline(&mut self.data_dir).desired_width(w))
                 .lost_focus();
-            if ui.button("Choose…").clicked()
-                && let Some(d) = rfd::FileDialog::new()
-                    .set_directory(self.data_dir.trim())
-                    .pick_folder()
+            let clicked = ui.button("Choose…").clicked();
+            let start = self.data_dir.trim().to_string();
+            if let Some(d) =
+                crate::file_dialog::on_click(ui.ctx(), "setup.data_dir", clicked, move || {
+                    rfd::FileDialog::new().set_directory(start).pick_folder()
+                })
             {
                 self.data_dir = d.display().to_string();
                 changed = true;
@@ -1027,11 +1029,14 @@ impl Wizard {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
                 ui.label(RichText::new("From your own folders").strong());
-                if ui
+                let clicked = ui
                     .button("Add packs from a folder…")
                     .on_hover_text("A pack store, an export, or a folder that holds several")
-                    .clicked()
-                    && let Some(d) = rfd::FileDialog::new().pick_folder()
+                    .clicked();
+                if let Some(d) =
+                    crate::file_dialog::on_click(ui.ctx(), "setup.pack_folder", clicked, || {
+                        rfd::FileDialog::new().pick_folder()
+                    })
                 {
                     self.add_pack_folder(d);
                 }
