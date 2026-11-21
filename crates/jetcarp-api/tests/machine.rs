@@ -105,9 +105,15 @@ fn limits_set_and_reset_in_the_settings_folder() {
 #[test]
 fn a_short_score_is_kept_and_reported() {
     let dir = scratch("machine-score");
+    // Every folder of the test's own: the benchmark's scratch files go in the data folder, so
+    // without one chosen here it would make the user's own (CI's default-folders step catches it).
+    std::fs::create_dir_all(dir.join("settings")).unwrap();
+    jetcarp_core::paths::set_chosen_data_dir(&dir.join("settings"), Some(&dir.join("data")))
+        .unwrap();
     let cx = Ctx::new()
         .with_settings_dir(Some(dir.join("settings")))
         .with_out_root(Some(dir.join("out")));
+    assert_eq!(cx.paths().data, dir.join("data"));
     let info = MachineInfo::run(&cx, NoInput {}, &Quiet).unwrap();
     assert!(info.score.is_none());
     assert!(info.text().contains("not measured yet"), "{}", info.text());

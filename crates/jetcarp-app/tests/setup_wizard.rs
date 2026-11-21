@@ -189,6 +189,9 @@ fn desktop_offers_are_off_until_ticked_and_only_ticked_ones_run() {
     // The saver is not available on the stand-in: ticking it does nothing.
     w.offers.insert("saver", true);
     assert_eq!(w.offers_on(), [Offer::Wallpaper]);
+    // Not measuring here: applying with it ticked ran the minute-long benchmark in the background,
+    // whose scratch files went to the user's own data folder (CI's default-folders step caught it).
+    w.measure_on = false;
     w.apply();
     assert_eq!(*mock.0.lock().unwrap(), [Offer::Wallpaper]);
     assert_eq!(w.page(), Page::Progress);
