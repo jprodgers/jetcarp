@@ -114,12 +114,12 @@ const CASES: &[Case] = &[
     case("maze", 30.0, 4.0, None, Pass, Pass, SPass),
     case("cyclic-waves", 15.0, 4.0, None, Pass, Pass, SPass),
     // Still fields with thin lines over them: live cells at a fractional size (no seams), and
-    // with cell outlines as a desktop picture or an exported animation draws them, a strong grid,
-    // rows of repeated squares, which counts (IRIS passes it: a false alarm, see testing.md); and
-    // outlines over a light ground with scattered cells on it, which do not.
+    // with cell outlines as a desktop picture or an exported animation draws them, which over
+    // bright cells are drawn faint enough to make no strong stripes; and outlines over a light
+    // ground with scattered cells on it.
     sized("live-field", 4.37, SPass),
-    sized("live-field", 8.0, SFail),
-    sized("live-field", 16.0, SFail),
+    sized("live-field", 8.0, SPass),
+    sized("live-field", 16.0, SPass),
     sized("paper-field", 8.0, SPass),
     sized("paper-field", 16.0, SPass),
 ];

@@ -467,10 +467,10 @@ fn a_live_field_at_a_fractional_size_draws_no_seams() {
     }
 }
 
-/// The app's view with cell outlines, pinned: over a field of white live cells the outlines are a
-/// strong grid, rows of repeated squares, which the stripe check counts from 8 pixels a cell (IRIS
-/// passes them; see testing.md); over a light ground with scattered cells (the Paper field) they
-/// do not count. With the guard on, nothing shown fails.
+/// The app's view with cell outlines, pinned: over a field of white live cells, and over a light
+/// ground with scattered cells (the Paper field), the outlines are drawn faint enough over bright
+/// cells to make no strong stripes, at 8 and at 16 pixels a cell, where they are drawn fully over
+/// dark cells. With the guard on, nothing shown fails.
 #[test]
 fn outlines_in_the_app_s_view_are_pinned() {
     use jetcarp_core::strobe::frame::reduce_both;
@@ -480,8 +480,8 @@ fn outlines_in_the_app_s_view_are_pinned() {
     };
     let corpus = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/scenes/strobe");
     for (scene, cell_px, want) in [
-        ("live-field", 8.0, PatternLevel::Fail),
-        ("live-field", 16.0, PatternLevel::Fail),
+        ("live-field", 8.0, PatternLevel::Pass),
+        ("live-field", 16.0, PatternLevel::Pass),
         ("paper-field", 8.0, PatternLevel::Pass),
         ("paper-field", 16.0, PatternLevel::Pass),
     ] {

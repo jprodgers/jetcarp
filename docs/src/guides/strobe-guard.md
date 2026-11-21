@@ -62,8 +62,13 @@ when its light and dark parts differ by at least 0.05 in brightness (the dark on
 its rows or its columns cross from light to dark regularly, the same number of times in each line
 and a period apart; and when it matches itself shifted by a period and is its own negative shifted
 by half of one. Stripes at any angle, checkerboards and rows of dots all count; noise, random cells,
-and cell outlines over dead cells do not. Outlines over a large, even area of bright live cells do
-count, as rows of repeated squares, so zoomed in on such a field the guard dims it. Stripes covering more than a quarter of the screen, with
+and cell outlines over dead cells do not. Over a large, even, bright field (a quarter of the view
+or more, of cells within 0.1 of each other's brightness), the outlines of a regular grid (squares,
+and hexagons from about 12 pixels a cell) would be strong stripes, rows of repeated squares, so
+JETCARP draws them there no more than 0.06 darker than the cells: under the stripe check's limit,
+and still visible. Elsewhere, beside darker cells, over small bright shapes, and on tilings whose
+outlines make no stripes, outlines look as they always have. Stripes covering more than a quarter
+of the screen, with
 more than five light-dark pairs across them, are a harmful pattern; harmful for half a second, they
 fail, as IRIS counts them. The guidance allows still stripes over up to 40% of the screen; JETCARP,
 like IRIS, uses a quarter for still and moving stripes alike. Stripes finer than 4 pixels a pair

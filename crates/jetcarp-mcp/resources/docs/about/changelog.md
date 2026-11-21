@@ -46,6 +46,14 @@ that will declare them stable.
   key; a known key, your own publisher key and the packs that came with JETCARP are each said as
   such. Before, the app showed only a pack's name and size, and the command line the key alone.
   ([Packs](../guides/packs.md#check-a-pack))
+- **Cell outlines over a large, even, bright field are drawn faint, so they make no strong
+  stripes.** Zoomed in on a field of bright live cells (or a light background) on a square or
+  hexagonal grid, the outlines were a strong grid, which the strobe guard measured as stripes and
+  dimmed. Where such a field covers more than a quarter of the picture or view, and the tiling's
+  outlines make stripes at that size, outlines are now drawn no more than 0.06 darker than the
+  cells: in the app's view, pictures, desktop pictures, exported animations, sandpile exports and
+  the HashLife view. Everywhere else they are as before; no picture in this book changed.
+  ([The strobe guard](../guides/strobe-guard.md#what-it-measures))
 
 ### Fixed
 

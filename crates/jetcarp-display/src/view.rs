@@ -16,7 +16,40 @@ struct ViewCpu {
 }
 
 /// Lattice colours of one window at one colour epoch.
-type ColorCache = (Window, u64, Arc<Vec<[u8; 4]>>);
+/// A window's colours, the epoch they are for, and whether faint outlines are marked in them.
+type ColorCache = (Window, u64, bool, Arc<Vec<[u8; 4]>>);
+
+/// The tile shaders' outline colour, as bytes on a plain target.
+const LINE: [u8; 4] = [51, 56, 69, 255];
+
+/// Marks, in the colours of `cells`, the cells whose outlines the shaders draw faint (alpha 0):
+/// where outlines would form strong stripes, as the processor's pictures draw them
+/// ([`render::fade_striped_outlines`]): cells of an even bright field
+/// ([`render::outline_faint`]), when such cells cover more than a quarter of the view (`view_px`
+/// pixels, at `zoom` pixels per world unit) and the tiling's outlines, drawn at `line_alpha`, make
+/// stripes at this size ([`render::outlines_make_stripes`]). The fill shaders draw every cell
+/// opaque whatever its alpha.
+fn mark_faint(
+    world: &World,
+    cells: &[u32],
+    colors: &mut [[u8; 4]],
+    zoom: f64,
+    view_px: f64,
+    line_alpha: f32,
+) {
+    let faint = render::outline_faint_cells(world, cells, LINE);
+    let cell_px = cell_unit(world) * zoom;
+    let share = faint.iter().filter(|f| **f).count() as f64 * cell_px * cell_px / view_px.max(1.0);
+    // Both cells beside an edge draw it: the line over white, as a plain target blends it.
+    let both = 1.0 - (1.0 - line_alpha) * (1.0 - line_alpha);
+    let mix = |l: u8| (255.0 + (l as f32 - 255.0) * both).round() as u8;
+    let line = [mix(LINE[0]), mix(LINE[1]), mix(LINE[2]), 255];
+    let on = share > jetcarp_core::strobe::AREA_SHARE
+        && render::outlines_make_stripes(world, zoom, line);
+    for (c, f) in colors.iter_mut().zip(faint) {
+        c[3] = if on && f { 0 } else { 255 };
+    }
+}
 
 /// One view of a world for this frame.
 #[derive(Clone, Copy, Debug)]
@@ -47,6 +80,8 @@ pub struct Views {
     slot_cap: usize,
     patch_valid: SlotSet,
     patch_epoch: u64,
+    /// Whether the patch colours on the GPU have faint outlines marked.
+    patch_faint: bool,
 }
 
 impl Views {
@@ -58,6 +93,7 @@ impl Views {
             slot_cap,
             patch_valid: Default::default(),
             patch_epoch: 0,
+            patch_faint: false,
         }
     }
 
@@ -77,6 +113,14 @@ impl Views {
             size,
             outlines,
         } = req;
+        let line_alpha = if outlines {
+            let tile_px = cell_unit(world) * zoom;
+            ((tile_px - 6.0) / 10.0).clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        };
+        // Outlines are drawn: mark where they are drawn faint.
+        let faint = line_alpha > 0.01;
         let px = size[0] as f64 * size[1] as f64;
         let budget = window_budget(px, self.slot_cap);
         // Lattices: colour only the window of cells in view (sampled when huge).
@@ -95,11 +139,16 @@ impl Views {
             if lost || st.epoch != epoch || st.last_window != Some(w) {
                 // Views with the same window (mirrors of one size) share the colours.
                 let c = match &self.color_cache {
-                    Some((cw, ce, c)) if *cw == w && *ce == epoch => c.clone(),
+                    Some((cw, ce, cf, c)) if *cw == w && *ce == epoch && *cf == faint => c.clone(),
                     _ => {
-                        let c = Arc::new(render::colors_for(world, &w.cells(g)));
+                        let cells = w.cells(g);
+                        let mut v = render::colors_for(world, &cells);
+                        if faint {
+                            mark_faint(world, &cells, &mut v, zoom, px, line_alpha);
+                        }
+                        let c = Arc::new(v);
                         colored = c.len();
-                        self.color_cache = Some((w, epoch, c.clone()));
+                        self.color_cache = Some((w, epoch, faint, c.clone()));
                         c
                     }
                 };
@@ -110,13 +159,18 @@ impl Views {
             // Colours of explicit patches are per instance slot, shared by every view: colour
             // the slots in view that are not current (all after a change, the ones that came
             // into view after a pan, none otherwise).
-            let reset = self.patch_epoch != epoch;
+            let reset = self.patch_epoch != epoch || self.patch_faint != faint;
             if reset {
                 self.patch_epoch = epoch;
+                self.patch_faint = faint;
                 self.patch_valid.clear();
             }
             let missing = self.patch_valid.missing(&v.slots(), 4096);
-            let all = render::colors_for(world, &geom.slot_cells(&missing));
+            let cells = geom.slot_cells(&missing);
+            let mut all = render::colors_for(world, &cells);
+            if faint {
+                mark_faint(world, &cells, &mut all, zoom, px, line_alpha);
+            }
             colored = all.len();
             let mut rest = all.as_slice();
             let chunks = missing
@@ -136,12 +190,6 @@ impl Views {
         let work = ColorWork {
             cells: colored,
             secs: t0.elapsed().as_secs_f64(),
-        };
-        let line_alpha = if outlines {
-            let tile_px = cell_unit(world) * zoom;
-            ((tile_px - 6.0) / 10.0).clamp(0.0, 1.0) as f32
-        } else {
-            0.0
         };
         let draw = TileDraw {
             geometry: geom.clone(),

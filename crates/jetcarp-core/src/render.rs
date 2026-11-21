@@ -347,6 +347,373 @@ impl Palette {
     }
 }
 
+/// The most a cell's outline may lower the luminance of the cell it is drawn over (relative
+/// luminance, 0 to 1). Outlines are lines a period apart, and over a field of bright cells darker
+/// lines make stripes: at this contrast they stay well under the strobe guard's stripe limit
+/// (half-resolution windows need a contrast of [`crate::strobe::pattern::MIN_CONTRAST`], 0.05,
+/// and a one-pixel line shows in them at about half of what it takes away), and still show. Over
+/// dark cells outlines take away less than this and look as they always have.
+pub const OUTLINE_MAX_DROP: f32 = 0.06;
+
+/// Cells this close in luminance make an even field, over which outlines repeat as stripes.
+pub const OUTLINE_EVEN: f32 = 0.1;
+
+/// Whether cell `i`'s outline is drawn faint ([`outline_over`]): where outlines would form strong
+/// stripes, over an even bright field. The cell is bright against `outline` (the outline would
+/// take away more than [`OUTLINE_MAX_DROP`]), and every cell sharing an edge with it is within
+/// [`OUTLINE_EVEN`] of its luminance. Elsewhere, beside darker cells or among cells of other
+/// brightness, outlines look as they always have.
+pub fn outline_faint(
+    world: &World,
+    color: &(dyn Fn(usize) -> Rgba + Sync),
+    i: usize,
+    outline: Rgba,
+) -> bool {
+    use crate::strobe::luminance;
+    let lum = |c: Rgba| luminance([c[0], c[1], c[2]]);
+    let l = lum(color(i));
+    if l - lum(outline) <= OUTLINE_MAX_DROP {
+        return false;
+    }
+    let mut even = true;
+    world.topo.for_each_neighbor(i, Nb::Edge, |j| {
+        if even && (lum(color(j)) - l).abs() > OUTLINE_EVEN {
+            even = false;
+        }
+    });
+    even
+}
+
+/// Whether outlines of colour `outline`, drawn over an even white field of `world`'s tiling at
+/// `scale` pixels per world unit, make a pattern the strobe guard's stripe check counts as harmful
+/// ([`crate::strobe::pattern`]): a regular grid's outlines do (squares, and hexagons from about 12
+/// pixels a cell), most tilings' do not. The answer comes from a 320 by 240 test picture, and is
+/// kept for the last few tilings and sizes asked about.
+pub fn outlines_make_stripes(world: &World, scale: f64, outline: Rgba) -> bool {
+    use std::sync::{Mutex, OnceLock};
+    type Key = (usize, usize, [u64; 4], u64, Rgba);
+    static SEEN: OnceLock<Mutex<Vec<(Key, bool)>>> = OnceLock::new();
+    let b = world.topo.bounds;
+    let key: Key = (
+        std::sync::Arc::as_ptr(&world.topo) as usize,
+        world.topo.len(),
+        b.map(f64::to_bits),
+        scale.to_bits(),
+        outline,
+    );
+    let seen = SEEN.get_or_init(Default::default);
+    if let Some(&(_, v)) = seen.lock().unwrap().iter().find(|(k, _)| *k == key) {
+        return v;
+    }
+    const WHITE: Rgba = [0xff, 0xff, 0xff, 0xff];
+    let (w, h) = (320, 240);
+    let center = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
+    let opts = ViewOptions {
+        outline_min_px: f64::MIN_POSITIVE,
+        repeat: true,
+        colors: Some(ViewColors {
+            stage: WHITE,
+            outline,
+        }),
+    };
+    let img = render_view_plain(world, &|_| WHITE, w, h, center, scale, &opts);
+    let (_, half) = crate::strobe::frame::reduce_both(&img.rgba, w, h);
+    let level = crate::strobe::pattern::PatternMeter::new(None)
+        .update(&half, 0.0)
+        .level;
+    let v = level >= crate::strobe::pattern::PatternLevel::Harmful;
+    let mut seen = seen.lock().unwrap();
+    if seen.len() >= 32 {
+        seen.remove(0);
+    }
+    seen.push((key, v));
+    v
+}
+
+/// A share of the picture over which an even bright field must lie for its outlines to be drawn
+/// faint: the stripe check's quarter ([`crate::strobe::AREA_SHARE`]). A small bright object's
+/// outlines cannot make strong stripes, and look as they always have.
+fn field_share_for_faint() -> f64 {
+    crate::strobe::AREA_SHARE
+}
+
+/// Outlines where they would form strong stripes, in a finished picture `img` (drawn at `scale`
+/// pixels per world unit, outlines of colour `outline`), drawn faint ([`outline_over`]): where
+/// a line divides an even bright field (its pixel's cell bright against the outline, and every
+/// pixel around it, across the line as well, within [`OUTLINE_EVEN`] of it, in `fills`, the
+/// picture without outlines), when such fields cover more than a quarter of the picture and the
+/// tiling's outlines make stripes at this size ([`outlines_make_stripes`]). Anywhere else, and in
+/// any other picture, outlines are as they always were.
+pub fn fade_striped_outlines(
+    world: &World,
+    img: &mut Image,
+    fills: &Image,
+    scale: f64,
+    outline: Rgba,
+) {
+    fade_striped_outlines_if(img, fills, outline, &|| {
+        outlines_make_stripes(world, scale, outline)
+    });
+}
+
+/// [`fade_striped_outlines`], for a renderer without a [`World`]: `stripes` says whether its
+/// tiling's outlines make stripes at this size.
+pub fn fade_striped_outlines_if(
+    img: &mut Image,
+    fills: &Image,
+    outline: Rgba,
+    stripes: &dyn Fn() -> bool,
+) {
+    use crate::strobe::luminance;
+    let (w, h) = (img.width as usize, img.height as usize);
+    if fills.width as usize != w || fills.height as usize != h || w == 0 || h == 0 {
+        return;
+    }
+    let lum: Vec<f32> = fills
+        .rgba
+        .chunks_exact(4)
+        .map(|c| luminance([c[0], c[1], c[2]]))
+        .collect();
+    let line = luminance([outline[0], outline[1], outline[2]]);
+    let even = |x: usize, y: usize| {
+        let l = lum[y * w + x];
+        if l - line <= OUTLINE_MAX_DROP {
+            return false;
+        }
+        for yy in y.saturating_sub(1)..(y + 2).min(h) {
+            for xx in x.saturating_sub(1)..(x + 2).min(w) {
+                if (lum[yy * w + xx] - l).abs() > OUTLINE_EVEN {
+                    return false;
+                }
+            }
+        }
+        true
+    };
+    let field: Vec<bool> = (0..h)
+        .into_par_iter()
+        .flat_map_iter(|y| (0..w).map(move |x| (x, y)))
+        .map(|(x, y)| even(x, y))
+        .collect();
+    let share = field.iter().filter(|e| **e).count() as f64 / (w * h) as f64;
+    if share <= field_share_for_faint() || !stripes() {
+        return;
+    }
+    fade_in_field(img, fills, &field, outline);
+}
+
+/// Each pixel of `fills` (a picture without outlines) whose cell is bright against `outline` and
+/// whose neighbours are all within [`OUTLINE_EVEN`] of it: inside an even bright field.
+fn even_field(fills: &Image, outline: Rgba) -> Vec<bool> {
+    use crate::strobe::luminance;
+    let (w, h) = (fills.width as usize, fills.height as usize);
+    let lum: Vec<f32> = fills
+        .rgba
+        .chunks_exact(4)
+        .map(|c| luminance([c[0], c[1], c[2]]))
+        .collect();
+    let line = luminance([outline[0], outline[1], outline[2]]);
+    (0..h)
+        .into_par_iter()
+        .flat_map_iter(|y| (0..w).map(move |x| (x, y)))
+        .map(|(x, y)| {
+            let l = lum[y * w + x];
+            if l - line <= OUTLINE_MAX_DROP {
+                return false;
+            }
+            for yy in y.saturating_sub(1)..(y + 2).min(h) {
+                for xx in x.saturating_sub(1)..(x + 2).min(w) {
+                    if (lum[yy * w + xx] - l).abs() > OUTLINE_EVEN {
+                        return false;
+                    }
+                }
+            }
+            true
+        })
+        .collect()
+}
+
+/// The outline pixels of `img` (where it differs from `fills`) inside `field`, faint.
+fn fade_in_field(img: &mut Image, fills: &Image, field: &[bool], outline: Rgba) {
+    for (p, &e) in field.iter().enumerate() {
+        let o = p * 4;
+        if e && img.rgba[o..o + 4] != fills.rgba[o..o + 4] {
+            let c = outline_over(
+                [fills.rgba[o], fills.rgba[o + 1], fills.rgba[o + 2], 255],
+                outline,
+            );
+            img.rgba[o..o + 3].copy_from_slice(&c[..3]);
+        }
+    }
+}
+
+/// Whether a picture at `scale` draws outlines, as [`draw_rows_at`] decides.
+fn draws_outlines(world: &World, scale: f64, outline_min_px: f64) -> bool {
+    let tile_px = crate::geom::area(&world.topo.shapes[0]).sqrt() * scale;
+    outline_min_px > 0.0 && tile_px >= outline_min_px
+}
+
+/// [`outline_faint`] for each of `cells`, for a renderer that colours them itself.
+pub fn outline_faint_cells(world: &World, cells: &[u32], outline: Rgba) -> Vec<bool> {
+    let c = Colorer::new(world);
+    let color = |i: usize| c.color(i);
+    cells
+        .par_iter()
+        .with_min_len(4096)
+        .map(|&i| outline_faint(world, &color, i as usize, outline))
+        .collect()
+}
+
+/// The colour to draw an outline of colour `outline` over a cell of colour `cell`: the outline
+/// itself, or, where it would lower the cell's luminance by more than [`OUTLINE_MAX_DROP`], the
+/// outline mixed with the cell's colour (in sRGB, as a blend on a plain target mixes them) as far
+/// as takes away no more than that. Renderers use it where outlines divide an even bright field
+/// ([`outline_faint`], [`fade_even_outlines`]).
+pub fn outline_over(cell: Rgba, outline: Rgba) -> Rgba {
+    use crate::strobe::luminance;
+    let lum = |c: Rgba| luminance([c[0], c[1], c[2]]);
+    let mix = |t: f32| -> Rgba {
+        let m = |a: u8, b: u8| {
+            (a as f32 + (b as f32 - a as f32) * t)
+                .round()
+                .clamp(0.0, 255.0) as u8
+        };
+        [
+            m(cell[0], outline[0]),
+            m(cell[1], outline[1]),
+            m(cell[2], outline[2]),
+            cell[3],
+        ]
+    };
+    let base = lum(cell);
+    if base - lum(outline) <= OUTLINE_MAX_DROP {
+        return outline;
+    }
+    // The furthest mix that takes away no more than the limit (luminance falls as t grows).
+    let (mut lo, mut hi) = (0f32, 1f32);
+    for _ in 0..16 {
+        let t = 0.5 * (lo + hi);
+        if base - lum(mix(t)) <= OUTLINE_MAX_DROP {
+            lo = t;
+        } else {
+            hi = t;
+        }
+    }
+    mix(lo)
+}
+
+#[cfg(test)]
+mod outline_tests {
+    use super::*;
+    use crate::strobe::luminance;
+
+    fn drop(cell: Rgba, line: Rgba) -> f32 {
+        luminance([cell[0], cell[1], cell[2]]) - luminance([line[0], line[1], line[2]])
+    }
+
+    #[test]
+    fn outlines_over_bright_cells_take_away_little_and_still_show() {
+        // White, the newest Ember cell, a light background: capped, close to the limit.
+        for cell in [
+            [0xf2, 0xf2, 0xf2, 0xff],
+            [0xff, 0xd2, 0x7a, 0xff],
+            [0xf6, 0xf2, 0xe9, 0xff],
+        ] {
+            for line in [OUTLINE, outline_for([0xf6, 0xf2, 0xe9, 0xff])] {
+                let o = outline_over(cell, line);
+                let d = drop(cell, o);
+                assert!(d <= OUTLINE_MAX_DROP, "{cell:?}: takes away {d}");
+                assert!(d > OUTLINE_MAX_DROP * 0.8, "{cell:?}: still shows ({d})");
+            }
+        }
+        // Over the dark background, and over a dark cell, the outline is as it always was.
+        assert_eq!(outline_over(BACKGROUND, OUTLINE), OUTLINE);
+        assert_eq!(outline_over([0x2b, 0x2d, 0x6e, 0xff], OUTLINE), OUTLINE);
+    }
+
+    /// A world of `family` with every cell live and white, or only a small blob of them.
+    fn white(family: &str, blob: bool) -> World {
+        let spec = crate::TilingSpec::new(family).with_size(crate::SizeSpec::Cells(6000));
+        let mut sc = crate::Scene::new(spec);
+        let seed = if blob {
+            crate::SeedSpec::Blob {
+                radius: 0.05,
+                density: 1.0,
+            }
+        } else {
+            crate::SeedSpec::Random { density: 1.0 }
+        };
+        let mut ca = crate::CaSpec::new("B/S012345678").seed(seed);
+        ca.palette = Some("Mono".into());
+        ca.color_by = ColorBy::State;
+        sc.cas = vec![ca];
+        World::from_scene(&sc).unwrap()
+    }
+
+    fn view(w: &World, px: f64) -> Image {
+        let b = w.topo.bounds;
+        let c = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
+        let unit = crate::world::cell_size(&w.topo);
+        render_view(w, 320, 240, c, px / unit, &ViewOptions::default())
+    }
+
+    fn striped(img: &Image) -> bool {
+        let (_, half) = crate::strobe::frame::reduce_both(&img.rgba, img.width, img.height);
+        crate::strobe::pattern::PatternMeter::new(None)
+            .update(&half, 0.0)
+            .level
+            >= crate::strobe::pattern::PatternLevel::Harmful
+    }
+
+    #[test]
+    fn only_a_regular_grid_s_outlines_make_stripes() {
+        for (family, px, want) in [
+            ("square", 8.0, true),
+            ("square", 16.0, true),
+            ("hex", 16.0, true),
+            ("triangle", 16.0, false),
+            ("cairo", 16.0, false),
+            ("penrose-rhomb", 16.0, false),
+        ] {
+            let w = white(family, false);
+            let unit = crate::world::cell_size(&w.topo);
+            assert_eq!(
+                outlines_make_stripes(&w, px / unit, OUTLINE),
+                want,
+                "{family} at {px} px"
+            );
+        }
+    }
+
+    #[test]
+    fn outlines_over_a_large_even_bright_field_are_faint_and_elsewhere_unchanged() {
+        // A white field: faint outlines that still show, and no stripes.
+        for px in [8.0, 16.0] {
+            let img = view(&white("square", false), px);
+            assert!(!striped(&img), "{px} px");
+            let mid = &img.rgba[((120 * 320 + 160) * 4) as usize..][..4];
+            assert_eq!(mid[3], 255);
+            assert!(
+                img.rgba.chunks(4).any(|p| p[0] < 0xf2),
+                "{px} px: no outlines"
+            );
+        }
+        // A small white blob, and a white field of triangles: outlines as they always were.
+        for (family, blob) in [("square", true), ("triangle", false)] {
+            let img = view(&white(family, blob), 16.0);
+            let o = OUTLINE;
+            assert!(
+                img.rgba.chunks(4).any(|p| p[..3] == o[..3]),
+                "{family}: the outline colour is drawn"
+            );
+            let faint = outline_over([0xf2, 0xf2, 0xf2, 0xff], OUTLINE);
+            assert!(
+                !img.rgba.chunks(4).any(|p| p[..3] == faint[..3]),
+                "{family}: nothing faint"
+            );
+        }
+    }
+}
+
 /// An outline colour that shows faintly on background `bg`.
 pub fn outline_for(bg: Rgba) -> Rgba {
     if bg == BACKGROUND {
@@ -967,7 +1334,34 @@ pub fn render_rect(
 ) -> Image {
     let b = world.topo.bounds;
     let origin = [(b[0] - view[0]) * scale, (b[1] - view[1]) * scale];
-    render_rows_at(world, color, opts, 0, height, width, scale, origin, colors)
+    render_at_checked(world, color, opts, width, height, scale, origin, colors)
+}
+
+/// [`render_rows_at`] for a whole picture, outlines faint where they would form strong stripes
+/// ([`fade_striped_outlines`]).
+#[allow(clippy::too_many_arguments)]
+fn render_at_checked(
+    world: &World,
+    color: &(dyn Fn(usize) -> Rgba + Sync),
+    opts: &RenderOptions,
+    width: u32,
+    height: u32,
+    scale: f64,
+    origin: [f64; 2],
+    colors: &ViewColors,
+) -> Image {
+    let mut img = render_rows_at(world, color, opts, 0, height, width, scale, origin, colors);
+    if draws_outlines(world, scale, opts.outline_min_px) {
+        let plain = RenderOptions {
+            outline_min_px: 0.0,
+            ..opts.clone()
+        };
+        let fills = render_rows_at(
+            world, color, &plain, 0, height, width, scale, origin, colors,
+        );
+        fade_striped_outlines(world, &mut img, &fills, scale, colors.outline);
+    }
+    img
 }
 
 /// Render pixel rows `y0..y1` of an image `width` pixels wide at scale `s`, with the tiling's
@@ -1079,9 +1473,28 @@ fn draw_rows_at(
 
 /// Rasterise the world: each cell's (curved) outline filled with its colour.
 pub fn render(world: &World, opts: &RenderOptions) -> Image {
-    let (_, h, _) = render_size(&world.topo, opts);
     let c = Colorer::new(world);
-    render_rows(world, &|i| c.color(i), opts, 0, h)
+    render_whole(world, &|i| c.color(i), opts)
+}
+
+/// The whole tiling at `opts`, outlines faint where they would form strong stripes.
+fn render_whole(
+    world: &World,
+    color: &(dyn Fn(usize) -> Rgba + Sync),
+    opts: &RenderOptions,
+) -> Image {
+    let (_, h, s) = render_size(&world.topo, opts);
+    let mut img = render_rows(world, color, opts, 0, h);
+    if draws_outlines(world, s, opts.outline_min_px) {
+        let plain = RenderOptions {
+            outline_min_px: 0.0,
+            ..opts.clone()
+        };
+        let fills = render_rows(world, color, &plain, 0, h);
+        let outline = ViewColors::for_world(world).outline;
+        fade_striped_outlines(world, &mut img, &fills, s, outline);
+    }
+    img
 }
 
 /// Render into an image of exactly `width` x `height` pixels: the whole tiling as large as fits,
@@ -1095,13 +1508,12 @@ pub fn render_fitted(world: &World, width: u32, height: u32, opts: &RenderOption
         ((height as f64 - bh * s) / 2.0).floor(),
     ];
     let c = Colorer::new(world);
-    render_rows_at(
+    render_at_checked(
         world,
         &|i| c.color(i),
         opts,
-        0,
-        height,
         width,
+        height,
         s,
         origin,
         &ViewColors::for_world(world),
@@ -1170,6 +1582,32 @@ pub fn render_view(
 /// [`render_view`] with each cell's colour from `color` (a cell index map, for instance, as the
 /// Quick Start cards' framed previews use).
 pub fn render_view_with(
+    world: &World,
+    color: &(dyn Fn(usize) -> Rgba + Sync),
+    width: u32,
+    height: u32,
+    center: P,
+    scale: f64,
+    opts: &ViewOptions,
+) -> Image {
+    let mut img = render_view_plain(world, color, width, height, center, scale, opts);
+    if draws_outlines(world, scale, opts.outline_min_px) {
+        let plain = ViewOptions {
+            outline_min_px: 0.0,
+            ..opts.clone()
+        };
+        let fills = render_view_plain(world, color, width, height, center, scale, &plain);
+        let outline = opts
+            .colors
+            .unwrap_or_else(|| ViewColors::for_world(world))
+            .outline;
+        fade_striped_outlines(world, &mut img, &fills, scale, outline);
+    }
+    img
+}
+
+/// [`render_view_with`], outlines drawn as they come.
+fn render_view_plain(
     world: &World,
     color: &(dyn Fn(usize) -> Rgba + Sync),
     width: u32,
@@ -1272,13 +1710,10 @@ fn view_rows(
 
 /// Render with given per-cell colours (e.g. objects coloured by class).
 pub fn render_with_colors(world: &World, colors: &[Rgba], opts: &RenderOptions) -> Image {
-    let (_, h, _) = render_size(&world.topo, opts);
-    render_rows(
+    render_whole(
         world,
         &|i| colors.get(i).copied().unwrap_or(BACKGROUND),
         opts,
-        0,
-        h,
     )
 }
 
@@ -1307,6 +1742,25 @@ pub fn write_png_streaming(
     let mut wr = enc.write_header().map_err(|e| e.to_string())?;
     let mut stream = wr.stream_writer().map_err(|e| e.to_string())?;
     let c = Colorer::new(world);
+    // Outlines faint where they would form strong stripes, decided for the whole picture: cells
+    // of even bright fields over more than a quarter of it, on a tiling whose outlines make
+    // stripes at this size; each strip then fades its own outline pixels inside such fields.
+    let (_, _, s) = render_size(&world.topo, opts);
+    let outline = ViewColors::for_world(world).outline;
+    let fade = draws_outlines(world, s, opts.outline_min_px) && {
+        let all: Vec<u32> = (0..world.topo.len() as u32).collect();
+        let n = outline_faint_cells(world, &all, outline)
+            .iter()
+            .filter(|f| **f)
+            .count();
+        let px = crate::world::cell_size(&world.topo) * s;
+        n as f64 * px * px / (w as f64 * h as f64) > field_share_for_faint()
+            && outlines_make_stripes(world, s, outline)
+    };
+    let plain = RenderOptions {
+        outline_min_px: 0.0,
+        ..opts.clone()
+    };
     // About 16 MB per strip, a batch of strips per thread.
     let strip = ((16 << 20) / (w as usize * 4)).clamp(16, 4096) as u32;
     let batch = rayon::current_num_threads().max(1) as u32;
@@ -1318,7 +1772,16 @@ pub fn write_png_streaming(
             .collect();
         let imgs: Vec<Image> = starts
             .par_iter()
-            .map(|&s| render_rows(world, &|i| c.color(i), opts, s, (s + strip).min(h)))
+            .map(|&y0| {
+                let y1 = (y0 + strip).min(h);
+                let mut img = render_rows(world, &|i| c.color(i), opts, y0, y1);
+                if fade {
+                    let fills = render_rows(world, &|i| c.color(i), &plain, y0, y1);
+                    let field = even_field(&fills, outline);
+                    fade_in_field(&mut img, &fills, &field, outline);
+                }
+                img
+            })
             .collect();
         for img in imgs {
             std::io::Write::write_all(&mut stream, &img.rgba).map_err(|e| e.to_string())?;
