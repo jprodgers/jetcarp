@@ -133,7 +133,7 @@ Every column is required (never null) except `parent` and the sign columns.
 | `rule` | string | The rule, in [rule notation](rule-notation.md) |
 | `seed` | string | The starting pattern, as JSON (a scene's seed) |
 | `seed_kind` | string | Its kind: `soup`, `mutated` (an elite's seed, changed), `blobs`, `symmetric`, `point` (one cell), `circuit` (WireWorld), `confirm` (a confirmation run), `transplant` (a transplanted pair's own seed), `balance` (a balance variant's, perhaps with more of the weaker sign), ... |
-| `cells` | int32 | The grid size asked for. The grid is the tiling's nearest fit, so it has about this many cells, and an aperiodic patch (the nearest level) can have half as many or twice as many. The measures use the real count |
+| `cells` | int32 | The grid's size, from which the tiling rebuilds the run's grid. On a periodic tiling it is the size asked for, and the grid, the tiling's nearest fit, has about this many cells. On an aperiodic patch, in a search made with 0.4.3 or later, it is the patch's own tile count: the level nearest the size asked, of about 500, 4,000, 35,000, 280,000 and 2 million tiles (4,000 for the default 16,000 screening cells, 35,000 for the 64,000 confirming cells), the confirming patch a level bigger than the screening one when both would be the same. A search made before 0.4.3 keeps its sizing when it carries on: there `cells` is the size asked for, and the patch is the first level from about 500 tiles up with at least half as many, so 16,000 and 64,000 both run on 35,000 tiles. The measures use the real count |
 | `gens` | int32 | Generations run |
 | `steps` | int32 | Steps per generation |
 | `rng` | uint64 | The random seed: with the columns above it replays the run exactly |

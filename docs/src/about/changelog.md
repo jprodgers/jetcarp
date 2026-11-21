@@ -73,6 +73,16 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **An explore search's aperiodic patches are the size asked for, and its confirming patch is
+  bigger than its screening one.** A patch comes in levels of about 500, 4,000, 35,000 and 280,000
+  tiles, and a search took the first level with at least half the cells asked, so the default
+  16,000 screening cells and 64,000 confirming cells both ran on 35,000 tiles: screening cost about
+  twice what was asked, and a confirmation on the "bigger grid" ran on the same patch. A new
+  search takes the level nearest the cells asked, 4,000 and 35,000 tiles, and the confirming patch
+  a level up whenever both would be the same. Its runs record the patch's tiles as their `cells`, so
+  any JETCARP rebuilds the patch they ran on; a search made before keeps its sizing (its spec has
+  no `sizing`, read as 1), so its runs and the ones it adds replay as before.
+  ([Search runs](../reference/search-runs.md), [#55](https://github.com/jprodgers/jetcarp/issues/55))
 - **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
   with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
   with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's

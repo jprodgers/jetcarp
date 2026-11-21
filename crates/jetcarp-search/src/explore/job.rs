@@ -56,6 +56,11 @@ fn d_confirm_seeds() -> u32 {
 fn d_batch() -> usize {
     1024
 }
+/// A spec without `sizing` is a search made before it: it keeps the sizing its runs were made
+/// with.
+fn d_old_sizing() -> u32 {
+    1
+}
 
 /// Cells the search's cache of grids holds at most, in all. A grid costs about 87 bytes a cell
 /// (the 1,359 tilings' grids counted by allocation: 1.91 GB for 21.8 million cells at 16,000,
@@ -165,6 +170,11 @@ pub struct Settings {
     /// JACA rules another job found (`--parents-from`), transplanted and tuned early.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parents: Vec<Parent>,
+    /// How its grids are sized from the cells asked ([`space::SIZING`]): 2 for a search made
+    /// now (an aperiodic patch is the level nearest the cells asked), 1 for one made before
+    /// JETCARP 0.4.3, which keeps its sizing when it carries on.
+    #[serde(default = "d_old_sizing")]
+    pub sizing: u32,
 }
 
 impl Default for Settings {
@@ -181,6 +191,7 @@ impl Default for Settings {
             families: vec![],
             score: None,
             parents: vec![],
+            sizing: space::SIZING,
         }
     }
 }
@@ -201,6 +212,13 @@ impl Settings {
         }
         if self.batch == 0 {
             return Err("a GPU batch needs at least one world".into());
+        }
+        if !(1..=space::SIZING).contains(&self.sizing) {
+            return Err(format!(
+                "sizing must be 1 to {}, not {}",
+                space::SIZING,
+                self.sizing
+            ));
         }
         for t in &self.tilings {
             if !all.iter().any(|x| &x.key == t) {
@@ -828,6 +846,24 @@ impl Search {
         Ok(self.grids.lock().unwrap().insert(k, g))
     }
 
+    /// A screening grid of this tiling, sized by the search's sizing
+    /// ([`space::search_cells`]).
+    fn screen_grid(&self, key: &str) -> Result<Arc<Grid>, String> {
+        self.grid(
+            key,
+            space::search_cells(key, self.set.screen_cells, self.set.sizing),
+        )
+    }
+
+    /// A confirming grid of this tiling ([`space::confirm_cells`]).
+    fn confirm_grid(&self, key: &str) -> Result<Arc<Grid>, String> {
+        let s = &self.set;
+        self.grid(
+            key,
+            space::confirm_cells(key, s.screen_cells, s.confirm_cells, s.sizing),
+        )
+    }
+
     /// The grid cache's size and how it has done ([`GRID_CACHE_CELLS`]).
     pub fn grid_cache(&self) -> GridCacheStats {
         let c = self.grids.lock().unwrap();
@@ -1183,7 +1219,7 @@ impl Search {
         if let Some(d) = self.degrees.lock().unwrap().get(&k) {
             return Some(*d);
         }
-        let g = self.grid(key, self.set.screen_cells).ok()?;
+        let g = self.screen_grid(key).ok()?;
         let d = (g.mean_deg[nb as usize], g.max_deg[nb as usize]);
         self.degrees.lock().unwrap().insert(k, d);
         Some(d)
@@ -1468,7 +1504,7 @@ impl Search {
             self.pick_tiling(rng)
         };
         let key = self.tilings[ti].key.clone();
-        let grid = self.grid(&key, self.set.screen_cells)?;
+        let grid = self.screen_grid(&key)?;
         let nb = if grid.has_edge && rng.below(4) == 0 {
             Nb::Edge
         } else {
@@ -1570,7 +1606,7 @@ impl Search {
         let Some((key, nb, ltl)) = first else {
             return Ok(true);
         };
-        let grid = self.grid(&key, self.set.confirm_cells)?;
+        let grid = self.confirm_grid(&key)?;
         let reach = ltl.map(|(hood, r)| grid.reach_size(hood, r).max(1));
         let seeds = self.set.confirm_seeds.max(1) as usize;
         let gens = picked.first().map_or(self.set.confirm_gens, |(_, e)| {
@@ -1608,7 +1644,7 @@ impl Search {
             .map(|sd| {
                 let mut c = e.cand.clone();
                 let (g2, st) = run_len(c.fam, grid, self.set.confirm_gens);
-                c.cells = self.set.confirm_cells;
+                c.cells = grid.cells_target;
                 c.gens = g2;
                 c.steps = st;
                 c.rng = e.cand.rng.wrapping_add(sd as u64 + 1);
@@ -1659,7 +1695,7 @@ impl Search {
             _ => (self.pick_tiling(rng), fams.to_vec()),
         };
         let key = self.tilings[ti].key.clone();
-        let Ok(grid) = self.grid(&key, self.set.screen_cells) else {
+        let Ok(grid) = self.screen_grid(&key) else {
             return;
         };
         let nb = if grid.has_edge && rng.below(4) == 0 {
@@ -1851,7 +1887,7 @@ impl Search {
                 if lim.cut() || InRun::now() {
                     return None;
                 }
-                let grid = self.grid(&e.cand.tiling, self.set.confirm_cells).ok()?;
+                let grid = self.confirm_grid(&e.cand.tiling).ok()?;
                 let mut rows = Vec::new();
                 for c in self.confirmations(e, &grid) {
                     match self.cpu_eval(&grid, c, "confirm".into(), Some(*id), 2, lim) {
@@ -2279,7 +2315,7 @@ mod tests {
                             None => s.pick_tiling(&mut rng),
                         };
                         let key = s.tilings[ti].key.clone();
-                        let Ok(grid) = s.grid(&key, s.set.screen_cells) else {
+                        let Ok(grid) = s.screen_grid(&key) else {
                             continue;
                         };
                         let nb = if grid.has_edge && rng.below(4) == 0 {
@@ -2309,7 +2345,7 @@ mod tests {
                         if ts > worst.0 {
                             worst = (ts, format!("screen {what}"));
                         }
-                        let Ok(big) = s.grid(&key, s.set.confirm_cells) else {
+                        let Ok(big) = s.confirm_grid(&key) else {
                             continue;
                         };
                         let Some(c2) = s.confirmations(&r.ev, &big).into_iter().next() else {
@@ -2455,6 +2491,73 @@ mod tests {
             rows.iter()
                 .filter(|r| r.ev.cand.origin == "balance")
                 .all(|r| r.ev.cand.fam == Fam::Jaca)
+        );
+    }
+
+    /// Runs of a search on one tiling until a confirmation run comes (or a minute passes): its
+    /// screened runs' and confirmation runs' grids, as their candidates rebuild them.
+    fn grid_sizes(set: Settings) -> (HashSet<usize>, HashSet<usize>) {
+        let s = Search::new(set, Saved::default()).unwrap();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let stop = AtomicBool::new(false);
+        let (mut screened, mut confirmed) = (HashSet::new(), HashSet::new());
+        let t0 = Instant::now();
+        while confirmed.is_empty() && t0.elapsed() < Duration::from_secs(60) {
+            let lim = StepLimits {
+                until: Instant::now() + Duration::from_millis(50),
+                end: None,
+                stop: &stop,
+                max_screened: None,
+            };
+            assert!(s.step(&pool, None, &lim).is_none());
+            for r in s.take_delta().rows {
+                let c = &r.ev.cand;
+                let n = Grid::build(&c.tiling, c.cells).unwrap().topo.len();
+                if r.stage == 1 {
+                    screened.insert(n);
+                } else {
+                    confirmed.insert(n);
+                }
+            }
+        }
+        (screened, confirmed)
+    }
+
+    /// An aperiodic patch comes in levels of about 500, 4,000, 35,000 and 280,000 tiles. A
+    /// search's screening patch is the level nearest the cells asked (4,000 for the default
+    /// 16,000) and its confirming patch is bigger (35,000 for 64,000), as periodic grids are;
+    /// both were the 35,000-tile level (#55). A run records its patch's tiles, so it rebuilds
+    /// that patch. A search made before keeps its sizing (a spec without `sizing`).
+    #[test]
+    fn aperiodic_patches_are_sized_to_the_nearest_level() {
+        let set = Settings {
+            tilings: vec!["penrose-rhomb".into()],
+            families: vec![Fam::LifeLike],
+            screen_gens: 48,
+            confirm_gens: 48,
+            confirm_seeds: 1,
+            seed: 7,
+            ..Settings::default()
+        };
+        let (screened, confirmed) = grid_sizes(set.clone());
+        assert_eq!(screened, HashSet::from([4000]), "screening patches");
+        assert_eq!(confirmed, HashSet::from([35000]), "confirming patches");
+        let mut old = serde_json::to_value(&set).unwrap();
+        old.as_object_mut().unwrap().remove("sizing");
+        let old: Settings = serde_json::from_value(old).unwrap();
+        let (screened, confirmed) = grid_sizes(old);
+        assert_eq!(
+            screened,
+            HashSet::from([35000]),
+            "an older search's screening"
+        );
+        assert_eq!(
+            confirmed,
+            HashSet::from([35000]),
+            "an older search's confirming"
         );
     }
 

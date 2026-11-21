@@ -223,6 +223,10 @@ jetcarp search explore --minutes 60 --label first-look
 A budget ends it on time: the GPU's last batch is sized to end before it (and given up if it runs
 on), and runs still going on the processor then are given up, unrecorded. A run on the processor
 stops at 8 seconds (a confirmation run at 32) and is kept as a run of the generations it reached.
+A screening run's grid has about 16,000 cells (`--screen-cells`), and an elite is confirmed on one
+of about 64,000 (`--confirm-cells`). An aperiodic patch comes only in levels of about 500, 4,000,
+35,000 and 280,000 tiles, so it is the level nearest: 4,000 tiles to screen and 35,000 to confirm
+(a search made before 0.4.3 runs both on 35,000).
 Its progress (time and runs) is written every two seconds, and `jetcarp jobs stop` stops it within
 seconds. Unless given `--threads`, it leaves two of the computer's cores free for other work, and a
 third of the rest prepare the GPU's batches; `jetcarp jobs status` says how many. A search of a few

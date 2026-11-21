@@ -639,9 +639,9 @@ Options:
       --hours <HOURS>                  Hours to run (the same as --minutes 60 x HOURS)
       --tilings <TILINGS>              Only these tilings: ids, comma separated (square,hex,trihex,ih28,k2-001; default: every tiling the search knows, 1,359 today; the progress line counts them)
       --families <FAMILIES>            Only these rule families, comma separated (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider; default: all)
-      --screen-cells <SCREEN_CELLS>    About this many cells in a screening run's grid [default: 16000]
+      --screen-cells <SCREEN_CELLS>    About this many cells in a screening run's grid (an aperiodic patch is the level nearest it: 4,000 tiles for 16,000) [default: 16000]
       --screen-gens <SCREEN_GENS>      [default: 1024]
-      --confirm-cells <CONFIRM_CELLS>  Cells of a confirmation run (the best runs again, on a bigger grid) [default: 64000]
+      --confirm-cells <CONFIRM_CELLS>  Cells of a confirmation run (the best runs again, on a bigger grid; an aperiodic patch is the level nearest it, and bigger than the screening patch) [default: 64000]
       --confirm-gens <CONFIRM_GENS>    [default: 4096]
       --confirm-seeds <CONFIRM_SEEDS>  Seeds an elite is confirmed with [default: 3]
       --batch <BATCH>                  Most worlds in a GPU batch [default: 1024]

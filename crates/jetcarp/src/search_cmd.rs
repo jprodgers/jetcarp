@@ -556,12 +556,14 @@ pub struct ExploreArgs {
     /// spectre_glider; default: all).
     #[arg(long)]
     families: Option<String>,
-    /// About this many cells in a screening run's grid.
+    /// About this many cells in a screening run's grid (an aperiodic patch is the level nearest
+    /// it: 4,000 tiles for 16,000).
     #[arg(long, default_value_t = 16000)]
     screen_cells: u32,
     #[arg(long, default_value_t = 1024)]
     screen_gens: u32,
-    /// Cells of a confirmation run (the best runs again, on a bigger grid).
+    /// Cells of a confirmation run (the best runs again, on a bigger grid; an aperiodic patch is
+    /// the level nearest it, and bigger than the screening patch).
     #[arg(long, default_value_t = 64000)]
     confirm_cells: u32,
     #[arg(long, default_value_t = 4096)]
