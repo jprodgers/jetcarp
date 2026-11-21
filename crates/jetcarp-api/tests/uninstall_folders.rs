@@ -84,6 +84,8 @@ fn data_of_jetcarps(d: &Path) {
         "host-endpoint.json",
         ".host-endpoint.json.4242.tmp",
         "JETCARP.scr",
+        "mcp-http-endpoint.json",
+        "app-http-endpoint.json",
         ".DS_Store",
         "Thumbs.db",
         "media/desktop.ini",
@@ -116,6 +118,8 @@ fn settings_of_jetcarps(d: &Path) {
         "pack/publisher.json",
         "pack/raters.json",
         "pack/raters.tmp4242",
+        "http-tokens/mcp-http.json",
+        "http-tokens/app-http.json",
         ".DS_Store",
         "desktop.ini",
     ] {

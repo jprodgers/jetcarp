@@ -9,7 +9,7 @@ see [Driving JETCARP from an AI assistant](../tutorials/mcp.md).
 ## Connecting
 
 The server runs over standard input and output: the assistant starts `jetcarp mcp` and talks to it
-as long as it runs.
+as long as it runs. A client that connects to a URL instead uses the server [over HTTP](#over-http).
 
 - **Claude Code:** `claude mcp add --scope user jetcarp -- jetcarp mcp` (for every folder; check
   it with `/mcp`, remove it with `claude mcp remove jetcarp`)
@@ -37,6 +37,125 @@ as long as it runs.
 | `--app` | Start attached to the running JETCARP app, so the world tools act on the world in its window (switch on *AI control* there first). The `use_app` tool does the same during a session |
 | `--allow DIR` | Let the tools read and write in this folder too (repeatable) |
 | `--port N`, `--token T` | The app's port and token, when they are not the ones it recorded |
+| `--http [PORT]` | Serve over HTTP instead, at `http://127.0.0.1:PORT/mcp` ([below](#over-http)); with the global `--json`, print the URL and token as JSON |
+| `--keep-token` | With `--http`: keep the token for the next start, and take the one kept ([below](#keeping-the-token)) |
+| `--new-token` | With `--http`: make a new token even when one is kept, and keep it; the old one stops working |
+| `--allow-origin URL` | With `--http`: let web pages from this exact origin connect, with the token (repeatable; [below](#web-pages-allowed-origins)) |
+
+### Over HTTP
+
+`jetcarp mcp --http [PORT]` serves the same tools over MCP's Streamable HTTP transport, for clients
+that connect to a URL rather than start a program (Postman, web-based tools, remote setups). It runs
+until Ctrl-C, which stops it as a closed stdio session does: its searches at their next checkpoint,
+paused and resumable. The app serves the same endpoint for the world in its window, from its AI
+control window ([Over HTTP](../tutorials/mcp.md#over-http) in the tutorial).
+
+| | |
+| --- | --- |
+| URL | `http://127.0.0.1:PORT/mcp`: port 47812 unless you give one (another, free, port when 47812 is taken; `--http 0` takes any free port). Only programs on this computer can reach it |
+| Header | `Authorization: Bearer TOKEN`, with the token it prints at the start: 32 hexadecimal digits, new each time it starts unless it is [kept](#keeping-the-token). It is also recorded, with the URL, in `mcp-http-endpoint.json` in JETCARP's [runtime folder](folders.md#runtime-folder), which only you can read (the app's is `app-http-endpoint.json`) |
+| Requests | One JSON-RPC message per `POST`, as `Content-Type: application/json`, with `Accept: application/json, text/event-stream` |
+| Sessions | `initialize` starts one, and its answer's `Mcp-Session-Id` header goes with every later request. `DELETE` with that header ends it |
+
+Each session is a client of its own, as each `jetcarp mcp` over stdio is: a private world, a
+`use_app` of its own (`--http --app` starts each one attached to the app), and the same tools and
+folders. Requests are answered one at a time, in the order they come. A request's answer is JSON,
+or, when it is a `tools/call` with a progress token and the client accepts an event stream,
+`text/event-stream`: the call's progress, then its answer. A notification (a cancellation, say) is
+answered `202 Accepted`, and a cancellation reaches the call it names while it runs. A client that
+names the protocol version in each request's `_meta` (MCP 2026-07-28) needs no session.
+
+A session by hand, with `curl`:
+
+```sh
+TOKEN=3f9c0a5e2b7d41c8a6e09f1d2c4b8a73    # the token it printed
+curl -si http://127.0.0.1:47812/mcp -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "curl", "version": "1"}}}' \
+  | grep -i '^mcp-session-id'
+```
+
+```text
+Mcp-Session-Id: 6e1f0c9b2a8d47e3b5c4a1f09d8e7c62
+```
+
+```sh
+SESSION=6e1f0c9b2a8d47e3b5c4a1f09d8e7c62    # the id it gave
+curl -s http://127.0.0.1:47812/mcp -H "Authorization: Bearer $TOKEN" -H "Mcp-Session-Id: $SESSION" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "world_status", "arguments": {}}}'
+curl -s -X DELETE http://127.0.0.1:47812/mcp -H "Authorization: Bearer $TOKEN" -H "Mcp-Session-Id: $SESSION"
+```
+
+The second answers with the world's status as a tool result; the third ends the session. In
+Windows PowerShell, `curl` is another command: type `curl.exe`, and give the JSON from a file
+(`-d '@init.json'`) so that its quotes survive.
+
+What the endpoint refuses, with a JSON-RPC error (no id) saying what to do:
+
+| Answer | When |
+| --- | --- |
+| `401` | No `Authorization: Bearer` header, or another token |
+| `403` | A `Host` other than `127.0.0.1:PORT` or `localhost:PORT`, or an `Origin` other than `http://` one of those and not [allowed](#web-pages-allowed-origins): a web page elsewhere, DNS rebinding included |
+| `400` | No `Mcp-Session-Id` once a session is needed, a batch (an array of messages), JSON that does not parse, or an `MCP-Protocol-Version` the server does not speak |
+| `404` | A session that has ended, or never was (start a new one with `initialize`), or a path other than `/mcp` |
+| `405` | `GET` (the server sends nothing unasked), and any method but `POST` and `DELETE` |
+| `406`, `415` | An `Accept` that allows neither JSON nor an event stream; a body not sent as `application/json` |
+| `408` | A request head not sent within 10 seconds of its first byte, or a body within 30 |
+| `413`, `431` | A body over 16 MiB; a request head over 16 KiB, or of more than 64 headers |
+| `503` | More than 16 connections at once (try again a moment later), or 16 sessions all busy |
+
+A connection with no request for 30 seconds is closed, and a session unused for an hour is ended;
+a 17th session ends the one unused longest.
+
+#### Keeping the token
+
+By default the token is new each time the endpoint starts, so a client has to be given the new one
+each time. `jetcarp mcp --http --keep-token` keeps it, in a private file in JETCARP's
+[settings folder](folders.md#what-lives-in-each-folder): `http-tokens/mcp-http.json` (the app's is
+`http-tokens/app-http.json`), holding the token alone (`{"token": "...", "kept": true}`). The next
+start with `--keep-token` takes it back, so a kept token survives restarts, logouts and reboots,
+and stays valid until a new one is made. Each start that keeps it says so, on one line of its
+standard error, with the file's name:
+
+```text
+jetcarp mcp: the token is kept in /home/ada/.config/jetcarp/http-tokens/mcp-http.json, in JETCARP's settings folder: it survives restarts and reboots, and stays valid until a new one is made (--new-token)
+```
+
+`--new-token` makes a new token and keeps that: the kept file is replaced, and the old token is
+refused from then on. A start without `--keep-token` makes a new token and deletes the kept file.
+In the app, *Keep this token for next time* does the same for its endpoint, and says the same
+under the box while it is ticked; unticking it deletes the kept file, and *New token* replaces the
+token while the endpoint runs, ending the sessions started with the old one.
+
+The folder is made readable by you alone (on Linux and macOS, mode 0700, and the file 0600), and a
+kept token is taken back only from a file that is still private (not a link, the folder 0700 and
+the file 0600) and was written as kept; otherwise the start makes a new one. On Windows the file
+has the permissions of your own profile folder, as the runtime folder's files do. The token is
+shown only where it always was: the startup lines, `--json` and the files, never in the warning.
+`jetcarp uninstall --settings` deletes the kept tokens with the rest of the settings folder.
+[`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says what keeping it
+gives up.
+
+#### Web pages (allowed origins)
+
+A client that runs in a web browser (the MCP Inspector, a web-based assistant) sends the origin of
+its page with every request, and the endpoint refuses every origin but its own, so that no website
+you visit can reach it. `--allow-origin URL` names one you trust, exactly: `http://` or `https://`,
+a host, and a port when it is not the scheme's own, such as `http://localhost:6274` or
+`https://client.example`. Give it once for each. A wildcard (`*`, `https://*.example.com`), `null`,
+a path, a query or a user name is refused, and the server does not start; scheme and host are
+compared without regard to case, and a scheme's own port (80, 443) may be given or left out. In
+the app, the origins go under *Web pages that may connect*, and are saved with its settings.
+
+A page from an allowed origin still needs the token. Its browser's preflight (`OPTIONS`, sent
+without the token) is answered `204` with `Access-Control-Allow-Origin` naming that origin, the
+methods `POST` and `DELETE`, the headers MCP uses (`Authorization`, `Content-Type`, `Accept`,
+`Mcp-Session-Id`, `MCP-Protocol-Version`, `Last-Event-ID`), and, when Chrome asks for a public page
+to reach this computer, `Access-Control-Allow-Private-Network: true`. Every answer to such a page,
+refusals included, names its origin and lets it read `Mcp-Session-Id` and `WWW-Authenticate`. No
+answer carries a CORS header for any other origin, or for any request at all while no origin is
+allowed.
 
 ## What the tools may do
 
@@ -925,7 +1044,7 @@ Example:
 
 **Attach to the JETCARP app.** Chooses which world the other tools act on. attach=true: the world in the JETCARP desktop app the user is watching, so they see every change as it happens (the user must first switch it on in the app: Tools, AI control..., Allow AI control; or start the app with `jetcarp --control`. The app then also offers app_display, its displays and screensaver). attach=false: this server's own private world (the default unless the server was started with --app). Returns the attached world's status.
 
-*`jetcarp mcp` (stdio) only.*
+*`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint.*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
@@ -948,7 +1067,7 @@ Example:
 
 **JETCARP background host.** Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Refuses scenes until the user accepts the seizure warning.
 
-*`jetcarp mcp` (stdio) only.*
+*`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint.*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
@@ -972,7 +1091,7 @@ Example:
 
 **The app's displays and screensaver.** Reads and changes how the JETCARP app shows the grid. With no arguments it returns the state: where the grid shows (the window, full screen, or outputs: chrome-less full-screen windows on chosen monitors, spanning one canvas or mirroring one view), the monitors (by the index `monitors` takes), the canvas and cell size, running state and speed, the menu and panes, keep-awake, and the screensaver: its mode, rotation and profiles. Arguments change those, several at once, in a sensible order (outputs and cell size before the screensaver starts). Examples: {"screensaver": true, "profile": "Hodgepodge"}, {"saver": {"source": "rotation", "rotation": "Classics, hourly"}}, {"mode": "outputs", "monitors": [0, 1], "arrangement": "span"}, {"cell_px": 1, "refill": true}, {"skip": "next"}.
 
-*Listed by the app's own server, and by `jetcarp mcp`, which passes it to the app once attached (`use_app`); an error otherwise.*
+*Listed by the app's own server (AI control, and its HTTP endpoint), and by `jetcarp mcp`, which passes it to the app once attached (`use_app`); an error otherwise.*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |

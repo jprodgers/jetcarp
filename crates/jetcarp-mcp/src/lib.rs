@@ -3,9 +3,11 @@
 //!
 //! Everything here is transport independent. [`Server::handle`] takes one JSON-RPC message and
 //! returns the reply; [`Host`] (from `jetcarp_api::world`) is the world it acts on. The CLI
-//! (`jetcarp mcp`) runs it over stdio against a headless [`Session`]; the app runs it on its UI
-//! thread against the world the user is watching, fed by the local [`link`] endpoint. Every world
-//! change a tool makes is a [`jetcarp_core::Command`] applied through the host.
+//! (`jetcarp mcp`) runs it over stdio against a headless [`Session`], or over HTTP ([`http`],
+//! `jetcarp mcp --http`) with a headless session per client; the app runs it on its UI thread
+//! against the world the user is watching, fed by the local [`link`] endpoint (and, when the user
+//! asks, by its own [`http`] endpoint). Every world change a tool makes is a
+//! [`jetcarp_core::Command`] applied through the host.
 //!
 //! [`tools`] lists the tools and what each calls; [`resources`] the resources.
 
@@ -17,6 +19,7 @@ mod compounds;
 pub mod docs;
 pub mod files_tools;
 mod help_tools;
+pub mod http;
 pub mod job_tools;
 mod library_tools;
 pub mod link;

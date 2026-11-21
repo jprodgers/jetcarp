@@ -1059,7 +1059,9 @@ enum Inside {
 /// The files JETCARP keeps at the top of a data folder: the library and what SQLite keeps beside
 /// it; and, on Windows, where the data folder is also the runtime folder and the screen saver's
 /// (`%LOCALAPPDATA%\jetcarp`, whose name Windows reads in any case), the host's and the tuner's
-/// locks, the app's and the host's endpoint files, and `JETCARP.scr`.
+/// locks, the app's and the host's endpoint files, the HTTP endpoints' files (the MCP crate's
+/// `CLI_ENDPOINT` and `APP_ENDPOINT`, which this crate cannot see: the names must stay in step),
+/// and `JETCARP.scr`.
 const DATA_FILES: &[&str] = &[
     "library.sqlite",
     "library.sqlite-wal",
@@ -1069,6 +1071,8 @@ const DATA_FILES: &[&str] = &[
     "tune.lock",
     "host-endpoint.json",
     "app-endpoint.json",
+    "mcp-http-endpoint.json",
+    "app-http-endpoint.json",
     "JETCARP.scr",
 ];
 
@@ -1109,14 +1113,20 @@ const PACK_FILES: &[&str] = &[
     "raters.json",
 ];
 
+/// The MCP server's kept HTTP tokens (`<settings>/http-tokens/`, a private folder), when the user
+/// chose to keep them: `jetcarp mcp --http --keep-token`'s and the app's.
+const HTTP_TOKEN_FILES: &[&str] = &["mcp-http.json", "app-http.json"];
+
 /// The folders JETCARP keeps in the settings folder: screensaver profiles, rotations, the
-/// pictures of *Fit to this computer*, the host's desktop stills, and the publisher's files.
+/// pictures of *Fit to this computer*, the host's desktop stills, the publisher's files, and the
+/// kept HTTP tokens.
 const SETTINGS_FOLDERS: &[(&str, Inside)] = &[
     ("screensavers", Inside::Files),
     ("rotations", Inside::Files),
     ("tune", Inside::Anything),
     ("desktop-pictures", Inside::Anything),
     ("pack", Inside::Named(PACK_FILES)),
+    ("http-tokens", Inside::Named(HTTP_TOKEN_FILES)),
 ];
 
 /// A temporary file JETCARP writes beside one of `names` and then renames into place

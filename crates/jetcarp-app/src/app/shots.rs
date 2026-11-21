@@ -441,7 +441,8 @@ fn shots_photosensitivity_warning() {
 
 /// Not a picture: the AI control window opens on the Quick Start, with no world open, and its
 /// checkbox opens the endpoint (issue #1: the window was drawn only with a world open, so the menu
-/// item ticked a window that never showed).
+/// item ticked a window that never showed). The HTTP endpoint's checkbox shows once AI control is
+/// on, opens it with its URL, and AI control switched off closes both (#115).
 #[test]
 #[ignore]
 fn ai_control_window_on_the_quick_start() {
@@ -454,31 +455,54 @@ fn ai_control_window_on_the_quick_start() {
     h.click("Allow AI control (127.0.0.1 only)");
     assert!(h.app.ai_port().is_some(), "the endpoint opened");
     h.find("Address");
+    assert!(h.app.ai_http_port().is_none(), "HTTP is off until ticked");
+    h.click("Also serve MCP over HTTP (127.0.0.1 only)");
+    let port = h.app.ai_http_port().expect("HTTP opened");
+    h.find(&format!("http://127.0.0.1:{port}/mcp"));
+    // Keeping the token says what it means while it is ticked (#236).
+    let warning = "The token is stored in JETCARP's settings folder, survives restarts and reboots";
+    assert!(h.o.find(warning).is_none(), "no warning until ticked");
+    h.click("Keep this token for next time");
+    h.run(0.3, 0.05, |_| false);
+    h.find(warning);
+    h.click("Keep this token for next time");
+    h.run(0.3, 0.05, |_| false);
+    assert!(h.o.find(warning).is_none(), "and none once unticked");
     h.click("Allow AI control (127.0.0.1 only)");
     assert!(h.app.ai_port().is_none(), "and closed again");
+    assert!(h.app.ai_http_port().is_none(), "HTTP with it");
     assert!(h.app.screen == Screen::Start);
 }
 
 /// The AI control window with AI control allowed (`tutorials/mcp.md`, #114): how to connect an
 /// assistant (`jetcarp mcp --app`, with its Copy button), the address and token, and the note that
-/// the address is the MCP server's private link to the app, not an endpoint for HTTP clients. Over
-/// the Quick Start, so it needs no library of its own.
+/// the address is the MCP server's private link to the app, not an endpoint for HTTP clients; then
+/// MCP over HTTP ticked, with its URL, token and header (#115). Over the Quick Start, so it needs
+/// no library of its own.
 #[test]
 #[ignore]
 fn shots_ai_control() {
-    let Some(mut h) = Harness::new(1200, 800) else {
+    let Some(mut h) = Harness::new(1200, 1000) else {
         return;
     };
     h.action(menu::Action::Tool(menu::ToolWin::AiControl));
     h.run(1.0, 0.05, |_| false);
     h.click("Allow AI control (127.0.0.1 only)");
     assert!(h.app.ai_port().is_some(), "the endpoint opened");
+    h.click("Also serve MCP over HTTP (127.0.0.1 only)");
+    assert!(h.app.ai_http_port().is_some(), "and the HTTP endpoint");
+    // One page allowed, as a browser-based client the user trusts would be (#236).
+    h.app
+        .ai
+        .allow_http_origin("http://localhost:6274")
+        .expect("an exact origin");
+    h.run(0.5, 0.05, |_| false);
     // Down from the menu bar by its title bar ("AI control" is the whole window), so the picture
     // shows the window alone, and the pointer out of it, so nothing in it is highlighted.
     let win = h.find("AI control");
     let bar = egui::pos2(win.center().x, win.min.y + 10.0);
     h.drag(bar, bar + egui::vec2(0.0, 140.0));
-    h.hover(egui::pos2(2.0, 798.0));
+    h.hover(egui::pos2(2.0, 998.0));
     let win = h.find("AI control");
     assert!(win.min.y > 100.0, "the window was dragged down: {win:?}");
     h.shot_part("mcp-ai-control", Harness::around(&[win], 2.0));

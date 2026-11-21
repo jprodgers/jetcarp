@@ -2,7 +2,8 @@
 //! static binary (`--target x86_64-unknown-linux-musl`) that runs inside sandboxed apps such as
 //! the LM Studio Flatpak. Same tools and options as `jetcarp mcp`.
 //!
-//! Usage: `jetcarp-mcp [--app] [--allow DIR]... [--port N] [--token T]`
+//! Usage: `jetcarp-mcp [--app] [--allow DIR]... [--port N] [--token T] [--http [PORT]] [--json]
+//! [--keep-token] [--new-token] [--allow-origin URL]...`
 
 // No unsafe code here, and the compiler keeps it so: this crate takes in other people's data.
 #![forbid(unsafe_code)]
@@ -13,7 +14,12 @@ fn main() {
     let mut app = false;
     let (mut port, mut token) = (None, None);
     let mut allow = vec![];
-    let mut args = std::env::args().skip(1);
+    // `--http` with or without a port: Some(None) is the default port.
+    let mut http: Option<Option<u16>> = None;
+    let mut json = false;
+    let (mut keep_token, mut new_token) = (false, false);
+    let mut allow_origins = vec![];
+    let mut args = std::env::args().skip(1).peekable();
     while let Some(a) = args.next() {
         match a.as_str() {
             "--app" => app = true,
@@ -26,10 +32,36 @@ fn main() {
             },
             "--port" => port = args.next().and_then(|p| p.parse().ok()),
             "--token" => token = args.next(),
+            "--http" => {
+                http = Some(
+                    args.next_if(|p| p.parse::<u16>().is_ok())
+                        .and_then(|p| p.parse().ok()),
+                )
+            }
+            "--json" => json = true,
+            "--keep-token" => keep_token = true,
+            "--new-token" => new_token = true,
+            "--allow-origin" => match args.next() {
+                Some(o) => allow_origins.push(o),
+                None => {
+                    eprintln!(
+                        "jetcarp-mcp: --allow-origin needs an origin, such as https://example.com"
+                    );
+                    std::process::exit(2);
+                }
+            },
             "-h" | "--help" => {
                 println!(
-                    "jetcarp-mcp [--app] [--allow DIR]... [--port N] [--token T]: JETCARP's MCP server on stdin/stdout.\n\
-                     Its tools read and write files only in JETCARP's output and library folders, and in each --allow DIR."
+                    "jetcarp-mcp [--app] [--allow DIR]... [--port N] [--token T] [--http [PORT]] [--json]\n\
+                     [--keep-token] [--new-token] [--allow-origin URL]...: JETCARP's MCP server on stdin/stdout.\n\
+                     Its tools read and write files only in JETCARP's output and library folders, and in each --allow DIR.\n\
+                     --http [PORT]: serve MCP over HTTP instead, at http://127.0.0.1:PORT/mcp (default port {}), on this computer only;\n\
+                     clients send the token it prints as an Authorization: Bearer header. --json prints the endpoint as JSON.\n\
+                     --keep-token keeps the token in the settings folder, across restarts and reboots, until --new-token\n\
+                     makes a new one (and keeps it).\n\
+                     --allow-origin URL lets web pages from that exact origin connect (with the token), repeatable.\n\
+                     --port and --token are the app's, for --app.",
+                    jetcarp_mcp::http::DEFAULT_PORT
                 );
                 return;
             }
@@ -43,8 +75,28 @@ fn main() {
             }
         }
     }
+    if http.is_none() && (keep_token || new_token || !allow_origins.is_empty()) {
+        eprintln!("jetcarp-mcp: --keep-token, --new-token and --allow-origin go with --http");
+        std::process::exit(2);
+    }
     jetcarp_mcp::tools::allow_dirs(allow);
-    if let Err(e) = jetcarp_mcp::stdio::run(app, port, token) {
+    let r = match http {
+        None => jetcarp_mcp::stdio::run(app, port, token),
+        Some(http_port) => jetcarp_mcp::http::serve(
+            jetcarp_mcp::http::Serve {
+                port: http_port,
+                app,
+                app_port: port,
+                app_token: token,
+                json,
+                keep_token,
+                new_token,
+                allow_origins,
+            },
+            jetcarp_mcp::http::stop_on_ctrl_c(),
+        ),
+    };
+    if let Err(e) = r {
         eprintln!("jetcarp-mcp: {e}");
         std::process::exit(1);
     }
