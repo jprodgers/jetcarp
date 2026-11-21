@@ -33,7 +33,7 @@ impl Scratch {
     }
 
     /// `jetcarp ARGS` with every folder in the scratch folder (none inherited: not CI's, not
-    /// the user's), and no terminal to ask in.
+    /// the user's), the home folders the launcher goes in among them, and no terminal to ask in.
     fn run(&self, args: &[&str]) -> Output {
         let d = &self.0;
         Command::new(env!("CARGO_BIN_EXE_jetcarp"))
@@ -43,6 +43,11 @@ impl Scratch {
             .env("JETCARP_OUT", d.join("out"))
             .env("JETCARP_RUNTIME_DIR", d.join("runtime"))
             .env("JETCARP_BUNDLED_PACKS", d.join("bundled"))
+            .env("HOME", d.join("home"))
+            .env("USERPROFILE", d.join("home"))
+            .env("XDG_DATA_HOME", d.join("home/share"))
+            .env("APPDATA", d.join("home/AppData/Roaming"))
+            .env("LOCALAPPDATA", d.join("home/AppData/Local"))
             .env_remove("JETCARP_LIBRARY")
             .stdin(std::process::Stdio::null())
             .output()
@@ -126,6 +131,12 @@ fn setup_explorer_yes_end_to_end() {
     assert!(out.contains("minimal imported: 3 patterns new"), "{out}");
     assert!(out.contains("Quick Start build"), "{out}");
     assert!(out.contains("recorded Explorer"), "{out}");
+    // It added JETCARP to the system's apps, as the app's setup does by default (#105): said in
+    // the plan, then done.
+    assert!(err.contains("add JETCARP to "), "{err}");
+    let o = s.run(&["launcher", "status"]);
+    let said = String::from_utf8_lossy(&o.stdout);
+    assert!(said.contains("JETCARP is in"), "{said}");
     assert!(
         s.0.join("config/setup.json").is_file(),
         "the choice is recorded"
@@ -174,6 +185,7 @@ fn setup_with_the_at_risk_answer_goes_on_and_saves_it() {
         "blank-slate",
         "--yes",
         "--no-measure",
+        "--no-launcher",
         "--seizure-warning",
         "at-risk",
     ]);
@@ -184,7 +196,20 @@ fn setup_with_the_at_risk_answer_goes_on_and_saves_it() {
     assert!(saved.contains("\"answer\": \"at_risk\""), "{saved}");
     assert!(saved.contains(env!("CARGO_PKG_VERSION")), "{saved}");
     assert!(s.0.join("config/setup.json").is_file());
-    // Answered once, `--yes` needs no answer again.
-    let o = s.run(&["setup", "--profile", "blank-slate", "--yes", "--no-measure"]);
-    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    // Answered once, `--yes` needs no answer again; `--no-launcher` leaves the system's apps as
+    // they were.
+    let o = s.run(&[
+        "setup",
+        "--profile",
+        "blank-slate",
+        "--yes",
+        "--no-measure",
+        "--no-launcher",
+    ]);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(o.status.success(), "{err}");
+    assert!(!err.contains("add JETCARP to "), "{err}");
+    let o = s.run(&["launcher", "status"]);
+    let said = String::from_utf8_lossy(&o.stdout);
+    assert!(said.contains("JETCARP is not in"), "{said}");
 }

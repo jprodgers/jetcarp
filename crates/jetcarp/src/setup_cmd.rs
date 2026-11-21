@@ -3,7 +3,9 @@
 //! terminal; with `--profile NAME --yes` it asks nothing (scripts, tests). Either way it prints
 //! what it will do, then does it, the jobs' progress on standard error. The desktop offers
 //! (Desktop art, Everything) are questions in a terminal and printed commands otherwise: setup
-//! never changes the desktop unasked.
+//! never changes the desktop unasked. Adding JETCARP to the system's apps, for every profile, is
+//! like measuring the computer instead, as in the app: when it isn't there yet it is asked in a
+//! terminal (yes by default) and done with `--yes`, unless `--no-launcher` (#105).
 //!
 //! Before anything else it asks the photosensitive seizure warning (#96), unless it was answered
 //! before; `--seizure-warning` answers it instead, and `--yes` needs one or the other.
@@ -65,6 +67,11 @@ pub struct SetupArgs {
     /// does first unless told not to: asked in a terminal, done with --yes).
     #[arg(long)]
     no_measure: bool,
+    /// Do not add JETCARP to the system's apps (the Start menu, Launchpad, the apps menu), which
+    /// setup does when it isn't there yet unless told not to: asked in a terminal, done with
+    /// --yes (`jetcarp launcher install`).
+    #[arg(long)]
+    no_launcher: bool,
     /// Measure with the short run, each workload once (tests).
     #[arg(long, hide = true)]
     measure_quick: bool,
@@ -202,6 +209,15 @@ fn capitalise(s: &str) -> String {
     }
 }
 
+/// `s` with its first letter in lower case, to go on a sentence ("Add JETCARP to …" as "add …").
+fn lower_first(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_lowercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}
+
 /// Ask for a profile (Explorer by default).
 fn ask_profile(st: &SetupStatus) -> Result<Profile> {
     print_profiles(st);
@@ -328,6 +344,12 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
         );
         measure = yes_no("Measure it?", true);
     }
+    // JETCARP among the system's apps, for every profile, when it isn't there yet (#105).
+    let mut add_launcher = !a.no_launcher && !jetcarp_display::launcher::installed();
+    if interactive && add_launcher {
+        eprintln!("\n{}", Offer::Launcher.detail());
+        add_launcher = yes_no(&format!("{}?", Offer::Launcher.title()), true);
+    }
     let input = ApplyIn {
         measure: Some(measure),
         measure_quick: a.measure_quick,
@@ -358,6 +380,13 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
     if !json {
         eprintln!();
         eprint!("{}", plan.text());
+        if add_launcher {
+            eprintln!(
+                "and {} (`{}`)",
+                lower_first(Offer::Launcher.title()),
+                Offer::Launcher.commands()
+            );
+        }
         eprint!("{}", plan.notes());
     }
     if interactive && !yes_no("Go ahead?", true) {
@@ -380,6 +409,17 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
         eprint!("{}", done.notes());
         if let Some(r) = &done.record {
             println!("recorded {} in {r}", profile.title());
+        }
+    }
+    if add_launcher {
+        // Reported on standard error with --json, which keeps standard output for the result.
+        match Offer::Launcher.accept() {
+            Ok(m) if json => eprintln!("{m}"),
+            Ok(m) => println!("{m}"),
+            Err(e) => eprintln!(
+                "could not add JETCARP to the system's apps: {e} (`{}` tries again)",
+                Offer::Launcher.commands()
+            ),
         }
     }
     if profile.desktop_offers() {
