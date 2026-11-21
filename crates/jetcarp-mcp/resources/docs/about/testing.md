@@ -60,8 +60,13 @@ with the guard already on.
   slowed and never shows more than three flashes a second, at any frame rate; flashing that slowing
   cannot stop is paused; small flashing and slow fades are left alone; switched off, it does
   nothing.
-- **The GPU and the processor agree**: the GPU's tile maps, half-resolution image and softened
-  frames match the processor's, to the texture unit's sRGB decoding.
+- **The GPU and the processor agree**, on any driver (CI runs this on Mesa's llvmpipe as well as
+  the test machines' GPUs): the GPU's tile maps and half-resolution image match the processor's
+  to the rounding of the sums, and its softened frames byte for byte. The GPU decodes pixels with
+  the processor's own tables, not the texture unit's sRGB decoding, which differs by driver, and
+  makes the red measure's saturation test in whole numbers: the measure steps from 0 to over 100
+  there, so a pixel decoded a little differently could move a tile's mean by a whole step (it did,
+  on llvmpipe).
 - **The corpus** (`docs/scenes/strobe/`): scenes made to flash (a Margolus Tron field, which flips
   every generation, in grey and in a saturated red-orange; Tron from a blob, whose rectilinear
   growth is regular stripes as well; a Seeds soup; Hodgepodge as Quick Start shows it, the seizure

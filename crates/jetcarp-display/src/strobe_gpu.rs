@@ -1,17 +1,25 @@
 //! The strobe guard on the GPU (#146, #148): where a frame is drawn on the GPU, it is measured
 //! there, and softened there, in one compute pass over the frame.
 //!
-//! The pass reads the frame through an sRGB view, so the texture unit decodes each pixel to linear
-//! light for free, and gives each tile ([`jetcarp_core::strobe::TILE`] pixels square) its mean relative luminance and mean red
+//! The pass reads the frame's bytes and decodes each pixel to linear light with the processor's
+//! own tables ([`jetcarp_core::strobe::decode_tables`]), and gives each tile
+//! ([`jetcarp_core::strobe::TILE`] pixels square) its mean relative luminance and mean red
 //! measure: the same [`TileMap`] the processor's reduction gives
-//! ([`jetcarp_core::strobe::frame::reduce`]). On the frames the stripe check wants, it also writes
-//! the half-resolution luminance image. One workgroup is one tile: 64 threads, each reading a 2 by 2
+//! ([`jetcarp_core::strobe::frame::reduce`]). It decodes by table rather than through an sRGB
+//! view because a texture unit's sRGB decoding differs by driver, and the red measure steps from
+//! 0 to over 100 at its saturation test, so a pixel decoded a little differently can change a
+//! tile's mean by a whole step; with the same tables, and that test in whole numbers
+//! ([`jetcarp_core::strobe::red_measure_fixed`]), every driver measures what the processor does,
+//! to the rounding of the sums. On the frames the stripe check wants, it also writes the
+//! half-resolution luminance image. One workgroup is one tile: 64 threads, each reading a 2 by 2
 //! block of pixels once. When the guard's [`Plan`] softens or veils anything, the same pass then
-//! carries it out exactly as [`jetcarp_core::strobe::soften::Softener`] does: it keeps the last
-//! frame shown in linear light (16 bits a channel; while nothing is softened, only each tile's
-//! mean), moves each softened tile towards the new frame by the fraction that keeps its mean
-//! within the step, veils, writes the frame to show, and measures that too. With nothing to soften the frame is shown as drawn and nothing is written
-//! but the tile means.
+//! carries it out as [`jetcarp_core::strobe::soften::Softener`] does: it keeps the last frame
+//! shown in linear light (16 bits a channel; while nothing is softened, only each tile's mean),
+//! moves each softened tile towards the new frame by the fraction that keeps its mean within the
+//! step, veils (interpolating the plan between tiles by hand, as the processor does, rather than
+//! with a sampler, whose filtering precision is the driver's), writes the frame to show (each
+//! byte from the processor's table) and measures that too. With nothing to soften the frame is
+//! shown as drawn and nothing is written but the tile means.
 //!
 //! The maps come back to the processor through a ring of [`SLOTS`] readback buffers, a frame or two
 //! later, never blocking a frame: the guard decides on the frames already shown, and the softening
@@ -48,15 +56,18 @@ struct P {
 @group(0) @binding(3) var<storage, read_write> halfimg: array<f32>;
 @group(0) @binding(4) var<storage, read_write> state: array<vec2<u32>>;
 @group(0) @binding(5) var<storage, read_write> prev: array<vec2<f32>>;
-@group(0) @binding(6) var plan: texture_2d<f32>;
+@group(0) @binding(6) var<storage, read> plan: array<vec4<f32>>;
 @group(0) @binding(7) var shown: texture_storage_2d<rgba8unorm, write>;
-@group(0) @binding(8) var samp: sampler;
+@group(0) @binding(8) var<storage, read> lut: array<u32>;
 
 const GUARD: u32 = 1u;
 const FRESH: u32 = 2u;
 const HALF: u32 = 4u;
 const DECODE: u32 = 8u;
 const PREV: u32 = 16u;
+const TABLE: u32 = 32u;
+// Where the 16-bit to sRGB byte table starts in `lut` (after the two decode tables).
+const ENC_AT: u32 = 512u;
 
 var<workgroup> acc: array<vec4<f32>, 64>;
 var<workgroup> cnt: array<f32, 64>;
@@ -65,10 +76,39 @@ fn dec(x: f32) -> f32 {
   if (x <= 0.04045) { return x / 12.92; }
   return pow((x + 0.055) / 1.055, 2.4);
 }
-fn enc(x: f32) -> f32 {
-  let v = clamp(x, 0.0, 1.0);
-  if (v <= 0.0031308) { return v * 12.92; }
-  return 1.055 * pow(v, 1.0 / 2.4) - 0.055;
+// An sRGB byte's linear value, from the processor's own table.
+fn lin8(b: u32) -> f32 { return bitcast<f32>(lut[b]); }
+// The red measure of fixed-point linear values (the processor's `red_measure_fixed`): the
+// saturation test in whole numbers, so every driver classifies a pixel as the processor does.
+fn red_fixed(r: u32, g: u32, b: u32) -> f32 {
+  let s = r + g + b;
+  if (s > 0u && 5u * r >= 4u * s) { return f32(r - g - b) * 0.000019073486328125; }
+  return 0.0;
+}
+// A linear value's sRGB byte (as 0 to 1), from the processor's table of 16-bit values.
+fn enc8(x: f32) -> f32 {
+  let i = pack2x16unorm(vec2<f32>(x, 0.0)) & 0xffffu;
+  let b = (lut[ENC_AT + (i >> 2u)] >> ((i & 3u) * 8u)) & 0xffu;
+  return f32(b) / 255.0;
+}
+// The veil at pixel q, interpolated between tile centres as the processor's `Plan::veil_at`
+// does (by hand: a sampler's filtering precision is the driver's).
+fn veil_at(q: vec2<u32>) -> vec2<f32> {
+  let u = clamp((f32(q.x) + 0.5) * 0.0625 - 0.5, 0.0, f32(p.cols - 1u));
+  let v = clamp((f32(q.y) + 0.5) * 0.0625 - 0.5, 0.0, f32(p.rows - 1u));
+  let c0 = u32(floor(u));
+  let r0 = u32(floor(v));
+  let c1 = min(c0 + 1u, p.cols - 1u);
+  let r1 = min(r0 + 1u, p.rows - 1u);
+  let fu = u - f32(c0);
+  let fv = v - f32(r0);
+  let a = plan[r0 * p.cols + c0].yz;
+  let b = plan[r0 * p.cols + c1].yz;
+  let c = plan[r1 * p.cols + c0].yz;
+  let d = plan[r1 * p.cols + c1].yz;
+  let top = a + (b - a) * fu;
+  let bottom = c + (d - c) * fu;
+  return top + (bottom - top) * fv;
 }
 fn lum(c: vec3<f32>) -> f32 { return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722)); }
 fn red(c: vec3<f32>) -> f32 {
@@ -105,10 +145,17 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
     px[k] = vec3<f32>(0.0);
     if (ok[k]) {
       var c = textureLoad(src, vec2<i32>(q), 0).rgb;
-      if ((p.mode & DECODE) != 0u) { c = vec3<f32>(dec(c.r), dec(c.g), dec(c.b)); }
+      if ((p.mode & TABLE) != 0u) {
+        // 8-bit sRGB values: back to their bytes, decoded with the processor's tables.
+        let b = vec3<u32>(round(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)) * 255.0));
+        c = vec3<f32>(lin8(b.x), lin8(b.y), lin8(b.z));
+        r += red_fixed(lut[256u + b.x], lut[256u + b.y], lut[256u + b.z]);
+      } else {
+        if ((p.mode & DECODE) != 0u) { c = vec3<f32>(dec(c.r), dec(c.g), dec(c.b)); }
+        r += red(c);
+      }
       px[k] = c;
       l += lum(c);
-      r += red(c);
       n += 1.0;
     }
   }
@@ -132,7 +179,7 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
   // Everyone has read the sums before the arrays are used again.
   workgroupBarrier();
   var beta = 1.0;
-  let pl = textureLoad(plan, vec2<i32>(i32(wg.x), i32(wg.y)), 0);
+  let pl = plan[tile];
   let pv = prev[tile];
   if ((p.mode & PREV) != 0u && pl.x > 0.5) {
     let dl = abs(lin - pv.x);
@@ -140,7 +187,6 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
     if (dl > p.lum_step) { beta = min(beta, p.lum_step / dl); }
     if (dr > p.red_step) { beta = min(beta, p.red_step / dr); }
   }
-  let grid = vec2<f32>(f32(p.cols) * 16.0, f32(p.rows) * 16.0);
   var sums = vec4<f32>(0.0);
   for (var k = 0u; k < 4u; k++) {
     if (ok[k]) {
@@ -158,10 +204,10 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
       }
       state[i] = vec2<u32>(pack2x16unorm(s.rg), pack2x16unorm(vec2<f32>(s.b, 0.0)));
       s = q16(s);
-      let v = textureSampleLevel(plan, samp, (vec2<f32>(q) + 0.5) / grid, 0.0);
-      let o = s * (1.0 - v.y) + vec3<f32>(v.z);
+      let v = veil_at(q);
+      let o = s * (1.0 - v.x) + vec3<f32>(v.y);
       sums += vec4<f32>(lum(s), red(s), lum(o), red(o));
-      textureStore(shown, vec2<i32>(q), vec4<f32>(enc(o.r), enc(o.g), enc(o.b), 1.0));
+      textureStore(shown, vec2<i32>(q), vec4<f32>(enc8(o.r), enc8(o.g), enc8(o.b), 1.0));
     }
   }
   acc[lx] = sums;
@@ -199,6 +245,7 @@ const FRESH: u32 = 2;
 const HALF: u32 = 4;
 const DECODE: u32 = 8;
 const PREV: u32 = 16;
+const TABLE: u32 = 32;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -276,8 +323,8 @@ struct Soft {
     shown_store: wgpu::TextureView,
     shown_plain: wgpu::TextureView,
     shown_srgb: wgpu::TextureView,
-    plan: wgpu::Texture,
-    plan_view: wgpu::TextureView,
+    /// The plan, a tile's `[soften, veil amount, amount times grey, 0]` each.
+    plan: wgpu::Buffer,
     /// The plan last uploaded.
     plan_now: Option<Plan>,
 }
@@ -288,7 +335,9 @@ struct Scene {
     render: wgpu::TextureView,
     decode: wgpu::TextureView,
     plain: wgpu::TextureView,
-    manual: bool,
+    /// The view the pass measures through, and how it reads it ([`measuring_view`]).
+    measure: wgpu::TextureView,
+    read: u32,
 }
 
 /// The strobe guard's GPU half, for one view.
@@ -299,10 +348,11 @@ pub struct StrobeGpu {
     blit_module: wgpu::ShaderModule,
     blits: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
     params: wgpu::Buffer,
-    sampler: wgpu::Sampler,
+    /// The processor's decode tables and its 16-bit to sRGB byte table.
+    lut: wgpu::Buffer,
     dummy_state: wgpu::Buffer,
     dummy_shown: wgpu::TextureView,
-    dummy_plan: wgpu::TextureView,
+    dummy_plan: wgpu::Buffer,
     sized: Option<Sized>,
     soft: Option<Soft>,
     scene: Option<Scene>,
@@ -318,31 +368,25 @@ pub struct StrobeGpu {
     too_large: bool,
 }
 
-/// `v` as a 16-bit float's bits (for values from 0 to a few thousand).
-fn f16_bits(v: f32) -> u16 {
-    let x = v.to_bits();
-    let sign = ((x >> 16) & 0x8000) as u16;
-    let exp = ((x >> 23) & 0xff) as i32 - 127 + 15;
-    let mant = x & 0x7f_ffff;
-    if v == 0.0 || exp < -10 {
-        return sign;
-    }
-    if exp <= 0 {
-        let m = (mant | 0x80_0000) >> (1 - exp);
-        return sign | ((m + 0x1000) >> 13) as u16;
-    }
-    if exp >= 31 {
-        return sign | 0x7c00;
-    }
-    sign | ((((exp as u32) << 10) | (mant >> 13)) + ((mant >> 12) & 1)) as u16
-}
-
 fn storage(binding: u32) -> wgpu::BindGroupLayoutEntry {
     wgpu::BindGroupLayoutEntry {
         binding,
         visibility: wgpu::ShaderStages::COMPUTE,
         ty: wgpu::BindingType::Buffer {
             ty: wgpu::BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
+fn read_only(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: true },
             has_dynamic_offset: false,
             min_binding_size: None,
         },
@@ -363,9 +407,9 @@ fn texture(binding: u32, filterable: bool, vis: wgpu::ShaderStages) -> wgpu::Bin
     }
 }
 
-/// A view of `tex` whose reads give linear light, and whether the shader must decode by hand
-/// (formats with no sRGB twin).
-fn decoding_view(tex: &wgpu::Texture) -> (wgpu::TextureView, bool) {
+/// A view of `tex` whose reads give linear light (for drawing it to targets that encode sRGB),
+/// where its format has an sRGB twin; else its plain view.
+fn decoding_view(tex: &wgpu::Texture) -> wgpu::TextureView {
     let f = tex.format();
     let s = f.add_srgb_suffix();
     if s.is_srgb() {
@@ -375,9 +419,28 @@ fn decoding_view(tex: &wgpu::Texture) -> (wgpu::TextureView, bool) {
             usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
             ..Default::default()
         });
-        (v, false)
+        v
     } else {
-        (tex.create_view(&Default::default()), true)
+        tex.create_view(&Default::default())
+    }
+}
+
+/// The view of `tex` the pass measures through, and how the shader reads it: 8-bit formats
+/// with an sRGB twin as their bytes, decoded with the processor's own tables, so the GPU
+/// measures exactly what the processor measures from the same pixels (a texture unit's sRGB
+/// decoding, and `pow`, differ by driver); other formats decoded by hand.
+fn measuring_view(tex: &wgpu::Texture) -> (wgpu::TextureView, u32) {
+    let f = tex.format();
+    if f.add_srgb_suffix().is_srgb() {
+        let v = tex.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("strobe guard: measuring view"),
+            format: Some(f.remove_srgb_suffix()),
+            usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
+            ..Default::default()
+        });
+        (v, TABLE)
+    } else {
+        (tex.create_view(&Default::default()), DECODE)
     }
 }
 
@@ -414,7 +477,7 @@ impl StrobeGpu {
                 storage(3),
                 storage(4),
                 storage(5),
-                texture(6, true, cs),
+                read_only(6),
                 wgpu::BindGroupLayoutEntry {
                     binding: 7,
                     visibility: cs,
@@ -425,12 +488,7 @@ impl StrobeGpu {
                     },
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 8,
-                    visibility: cs,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
+                read_only(8),
             ],
         });
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -464,12 +522,20 @@ impl StrobeGpu {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("strobe guard plan"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+        let lut = {
+            use wgpu::util::DeviceExt;
+            let mut words: Vec<u32> = jetcarp_core::strobe::decode_tables().to_vec();
+            words.extend(
+                jetcarp_core::strobe::soften::encode_table()
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])),
+            );
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("strobe guard tables"),
+                contents: bytemuck::cast_slice(&words),
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+        };
         let dummy_state = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("strobe guard: no state"),
             size: 16,
@@ -498,10 +564,12 @@ impl StrobeGpu {
             wgpu::TextureFormat::Rgba8Unorm,
             wgpu::TextureUsages::STORAGE_BINDING,
         );
-        let dummy_plan = tiny(
-            wgpu::TextureFormat::Rgba16Float,
-            wgpu::TextureUsages::TEXTURE_BINDING,
-        );
+        let dummy_plan = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("strobe guard: no plan"),
+            size: 16,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
         StrobeGpu {
             layout,
             pipeline,
@@ -509,7 +577,7 @@ impl StrobeGpu {
             blit_module,
             blits: HashMap::new(),
             params,
-            sampler,
+            lut,
             dummy_state,
             dummy_shown,
             dummy_plan,
@@ -562,7 +630,8 @@ impl StrobeGpu {
                 view_formats: &formats,
             });
             let render = tex.create_view(&Default::default());
-            let (decode, manual) = decoding_view(&tex);
+            let decode = decoding_view(&tex);
+            let (measure, read) = measuring_view(&tex);
             let plain = tex.create_view(&wgpu::TextureViewDescriptor {
                 format: Some(format.remove_srgb_suffix()),
                 usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
@@ -573,7 +642,8 @@ impl StrobeGpu {
                 render,
                 decode,
                 plain,
-                manual,
+                measure,
+                read,
             });
             self.blit_bind = None;
         }
@@ -679,21 +749,12 @@ impl StrobeGpu {
             usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
             ..Default::default()
         });
-        let plan = device.create_texture(&wgpu::TextureDescriptor {
+        let plan = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("strobe guard: plan"),
-            size: wgpu::Extent3d {
-                width: s.cols,
-                height: s.rows,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+            size: (s.cols as u64 * s.rows as u64 * 16).max(16),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
-        let plan_view = plan.create_view(&Default::default());
         self.soft = Some(Soft {
             state,
             shown,
@@ -701,7 +762,6 @@ impl StrobeGpu {
             shown_plain,
             shown_srgb,
             plan,
-            plan_view,
             plan_now: None,
         });
         true
@@ -712,37 +772,14 @@ impl StrobeGpu {
         if soft.plan_now.as_ref() == Some(plan) {
             return;
         }
-        let mut data = Vec::with_capacity(plan.soften.len() * 8);
-        for (s, v) in plan.soften.iter().zip(&plan.veil) {
-            let amount = v[0].clamp(0.0, 1.0);
-            for x in [
-                if *s { 1.0 } else { 0.0 },
-                amount,
-                amount * v[1].clamp(0.0, 1.0),
-                0.0,
-            ] {
-                data.extend_from_slice(&f16_bits(x).to_le_bytes());
-            }
-        }
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &soft.plan,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &data,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(plan.cols * 8),
-                rows_per_image: Some(plan.rows),
-            },
-            wgpu::Extent3d {
-                width: plan.cols,
-                height: plan.rows,
-                depth_or_array_layers: 1,
-            },
-        );
+        // As the processor's `Plan::veil_at` takes them: the amount, and the grey times it.
+        let data: Vec<[f32; 4]> = plan
+            .soften
+            .iter()
+            .zip(&plan.veil)
+            .map(|(s, v)| [if *s { 1.0 } else { 0.0 }, v[0], v[0] * v[1], 0.0])
+            .collect();
+        queue.write_buffer(&soft.plan, 0, bytemuck::cast_slice(&data));
         soft.plan_now = Some(plan.clone());
     }
 
@@ -767,16 +804,16 @@ impl StrobeGpu {
         time: f64,
         want_half: bool,
     ) -> Shown {
-        let (src_view, manual, w, h) = match source {
+        let (src_view, read, w, h) = match source {
             Some(t) => {
-                let (v, m) = decoding_view(t);
+                let (v, m) = measuring_view(t);
                 (v, m, t.width(), t.height())
             }
             None => {
                 let Some(s) = &self.scene else {
                     return Shown::Drawn;
                 };
-                (s.decode.clone(), s.manual, s.tex.width(), s.tex.height())
+                (s.measure.clone(), s.read, s.tex.width(), s.tex.height())
             }
         };
         self.sized(device, w, h);
@@ -798,9 +835,7 @@ impl StrobeGpu {
         if want_half {
             mode |= HALF;
         }
-        if manual {
-            mode |= DECODE;
-        }
+        mode |= read;
         if self.prev_valid {
             mode |= PREV;
         }
@@ -850,9 +885,9 @@ impl StrobeGpu {
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
-                    resource: wgpu::BindingResource::TextureView(
-                        soft.map_or(&self.dummy_plan, |x| &x.plan_view),
-                    ),
+                    resource: soft
+                        .map_or(&self.dummy_plan, |x| &x.plan)
+                        .as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
@@ -862,7 +897,7 @@ impl StrobeGpu {
                 },
                 wgpu::BindGroupEntry {
                     binding: 8,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    resource: self.lut.as_entire_binding(),
                 },
             ],
         });
@@ -1178,26 +1213,6 @@ impl GuardedGpu {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn half_floats_round_trip_the_plan_s_values() {
-        let back = |b: u16| {
-            let sign = if b & 0x8000 != 0 { -1.0 } else { 1.0 };
-            let e = ((b >> 10) & 0x1f) as i32;
-            let m = (b & 0x3ff) as f32;
-            sign * if e == 0 {
-                m / 1024.0 * 2f32.powi(-14)
-            } else {
-                (1.0 + m / 1024.0) * 2f32.powi(e - 15)
-            }
-        };
-        for v in [0.0f32, 1.0, 0.5, 0.25, 0.3, 0.999, 1e-3, 1e-5, 2.0, 100.0] {
-            let r = back(f16_bits(v));
-            assert!((r - v).abs() <= v.abs() / 1000.0 + 1e-7, "{v} -> {r}");
-        }
-        assert_eq!(f16_bits(1.0), 0x3c00);
-        assert_eq!(f16_bits(0.0), 0);
-    }
 
     #[test]
     fn view_formats_pair_srgb_twins() {
