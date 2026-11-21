@@ -59,7 +59,7 @@ pub mod verify;
 
 pub use canon::CanonicalForm;
 pub use paste::{PasteAt, PatternSource};
-pub use range::{RuleRange, content_id, identity, pattern_id, record_pin};
+pub use range::{IsoRange, RuleRange, content_id, identity, pattern_id, record_pin};
 pub use site::Site;
 pub use symmetry::CellMap;
 pub use verify::{Verification, default_periods, verify};
@@ -265,6 +265,10 @@ pub struct PatternRecord {
     /// B/S and Generations patterns: every rule it runs identically in ([`range`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub range: Option<RuleRange>,
+    /// Patterns on the square grid's touching neighbours: every isotropic rule (Hensel's
+    /// notation) it runs identically in ([`range::iso_range`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iso_range: Option<IsoRange>,
     pub neighborhood: Nb,
     #[serde(default = "one32")]
     pub steps_per_gen: u32,
@@ -399,17 +403,30 @@ impl PatternRecord {
         self.site.is_some()
     }
     /// Does it run exactly as stored in this rule (same neighbourhood)? True when it was
-    /// verified there or the rule is inside its rule range.
+    /// verified there or the rule is inside its rule range or its isotropic rule range.
     pub fn works_in(&self, rule: &str) -> bool {
-        let Ok((r, _)) = crate::rules::Rule::parse(rule) else {
+        let Ok((r, nb)) = crate::rules::Rule::parse(rule) else {
             return false;
         };
+        let touch = nb != Some(Nb::Edge) && self.neighborhood == Nb::Touch;
         let n = r.notation();
         n == crate::rules::Rule::parse(&self.rule)
             .map(|x| x.0.notation())
             .unwrap_or_default()
             || self.rules.contains(&n)
             || self.range.as_ref().is_some_and(|x| x.contains(&r))
+            || (touch && self.iso_range.as_ref().is_some_and(|x| x.contains(&r)))
+    }
+    /// The rules it works in, for people: its B/S range and its isotropic one, as each has.
+    pub fn works_in_text(&self) -> Option<String> {
+        let parts: Vec<String> = [
+            self.range.as_ref().map(|x| x.describe()),
+            self.iso_range.as_ref().map(|x| x.describe()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        (!parts.is_empty()).then(|| parts.join("; "))
     }
     /// The record set to run in another rule it works in ([`works_in`](Self::works_in)).
     pub fn in_rule(&self, rule: &str) -> Result<PatternRecord, String> {
@@ -418,9 +435,8 @@ impl PatternRecord {
                 "{} does not run as stored in {rule} (it works in {}{})",
                 self.label(),
                 self.rule,
-                self.range
-                    .as_ref()
-                    .map(|r| format!(", {}", r.describe()))
+                self.works_in_text()
+                    .map(|r| format!(", {r}"))
                     .unwrap_or_default()
             ));
         }
@@ -948,6 +964,7 @@ pub fn build_record(
     let mut rec = build_record_with(topo, None, what, phases, provenance, discovered_by)?;
     // A candidate that later fails verification may have no consistent range.
     rec.range = range::rule_range(&rec).ok().flatten();
+    rec.iso_range = range::iso_range(&rec).ok().flatten();
     Ok(rec)
 }
 
@@ -1029,6 +1046,7 @@ pub fn build_record_with(
         rule,
         rules: vec![],
         range: None,
+        iso_range: None,
         neighborhood: what.nb,
         steps_per_gen: what.steps_per_gen,
         tiling_name: tiling_display_name(&tiling),

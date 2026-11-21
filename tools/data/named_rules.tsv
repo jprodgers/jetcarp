@@ -161,3 +161,10 @@ Coexistence	R4,C2,S9,14,16-17,21,23-24,30-31,37-38,44-45,51-52,58-59,B3,10,17,21
 Hash	R2,C2,S4-6,B5-6,N#	Higher-range outer-totalistic (HROT)	b-engine	Chaotic; uses the hash-shaped (#) neighbourhood.		https://conwaylife.com/wiki/Larger_than_Life	VERIFIED
 Hexagonal Life	B2/S34H	Hexagonal		Life-like rule on hexagons: birth on 2, survival on 3 or 4.		https://conwaylife.com/wiki/Hexagonal_neighbourhood	UNVERIFIED
 Gnarl (von Neumann)	B1/S0V	Von Neumann	Kellie Evans	Gnarl on the four edge neighbours: born with one live neighbour, survives only with none.	single cell	https://conwaylife.com/wiki/Gnarl	VERIFIED
+Just Friends	B2-a/S12	Isotropic non-totalistic	David Bell	Birth on two live neighbours, unless they are a corner and the edge beside it; survival on one or two.		http://www.ibiblio.org/lifepatterns/neighbors.html	VERIFIED
+tlife	B3/S2-i34q	Isotropic non-totalistic		Life, except that a cell whose two live neighbours face each other across it dies, and one with four in the q arrangement survives.		https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules	
+qlife	B3-q/S23	Isotropic non-totalistic		Life without birth on three live neighbours in the q arrangement.		https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules	
+LeapLife	B2n3/S23-q	Isotropic non-totalistic		Life with birth on two opposite corners as well, and without survival on three in the q arrangement.		https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules	
+Salad	B2i34c/S2-i3	Isotropic non-totalistic		Birth on two facing edges, on three, or on the four corners; survival on two, unless they face each other, or three.		https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules	
+Goat Flock	B2in3/S123a	Isotropic non-totalistic		Birth on two facing edges, two opposite corners, or three; survival on one, two, or a corner with its two edges.		https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules	
+Logic Rule	B2ae/S	Isotropic non-totalistic		Birth on two live neighbours side by side (a corner and the edge beside it, or two edges round a corner); nothing survives.		https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules	

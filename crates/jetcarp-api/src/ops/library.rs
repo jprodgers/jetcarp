@@ -497,8 +497,8 @@ impl Report for RecordView {
         if r.rules.len() > 1 {
             let _ = writeln!(s, "verified in: {}", r.rules.join(", "));
         }
-        if let Some(x) = &r.range {
-            let _ = writeln!(s, "works in:    {}", x.describe());
+        if let Some(x) = r.works_in_text() {
+            let _ = writeln!(s, "works in:    {x}");
         }
         if let (Some(d), Some(xy)) = (r.displacement, r.displacement_xy) {
             let _ = writeln!(

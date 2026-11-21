@@ -908,9 +908,9 @@ fn existing_scenes_still_load() {
     );
 }
 
-/// Rules that run on one grid only (`reference/rule-notation.md`): elementary and Margolus rules
-/// and von Neumann's 29 states on squares, the hexagon row rules on their hexagon grids, and Larger
-/// than Life's cross neighbourhood on squares.
+/// Rules that run on one grid only (`reference/rule-notation.md`): elementary, Margolus and
+/// isotropic rules and von Neumann's 29 states on squares, the hexagon row rules on their hexagon
+/// grids, and Larger than Life's cross neighbourhood on squares.
 fn tied_to_one_grid(rule: &rules::Rule) -> bool {
     use rules::Rule;
     match rule {
@@ -918,6 +918,7 @@ fn tied_to_one_grid(rule: &rules::Rule) -> bool {
         | Rule::HexWolfram { .. }
         | Rule::HexTri { .. }
         | Rule::Margolus(_)
+        | Rule::Isotropic(_)
         | Rule::VonNeumann => true,
         Rule::Ltl(l) => l.hood == ltl::Hood::Cross,
         _ => false,

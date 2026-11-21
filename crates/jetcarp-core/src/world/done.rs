@@ -215,9 +215,8 @@ impl World {
 
 fn is_b0(r: &Rule) -> bool {
     match r {
-        Rule::LifeLike { birth, .. } | Rule::Generations { birth, .. } => birth & 1 == 1,
         Rule::Ltl(l) => l.birth.first().copied().unwrap_or(false),
-        _ => false,
+        _ => r.is_b0(),
     }
 }
 
@@ -225,7 +224,9 @@ fn is_b0(r: &Rule) -> bool {
 fn quiescent(r: &Rule, topo: &Topology) -> bool {
     let live = topo.live_edges();
     match r {
-        Rule::LifeLike { .. } | Rule::Generations { .. } | Rule::Ltl(_) => !is_b0(r) && !live,
+        Rule::LifeLike { .. } | Rule::Generations { .. } | Rule::Isotropic(_) | Rule::Ltl(_) => {
+            !is_b0(r) && !live
+        }
         Rule::WireWorld | Rule::SpectreGlider | Rule::VonNeumann | Rule::Hodgepodge { .. } => true,
         Rule::Rps { .. } => true,
         // Block rules that keep an empty block empty.

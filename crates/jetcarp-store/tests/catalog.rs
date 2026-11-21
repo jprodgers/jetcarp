@@ -90,6 +90,48 @@ fn step(cells: &HashSet<(i32, i32)>, b: u32, s: u32) -> HashSet<(i32, i32)> {
 
 const GLIDER: &str = ".o./..o/ooo";
 
+/// Objects of isotropic rules (#70) are stored like any others. A rule range is a set of B/S rules:
+/// an object whose evolution a B/S rule could give has one, and one whose evolution needs and
+/// forbids the same count (a dead cell born on two neighbours here, not there) has none, rather
+/// than failing to store.
+#[test]
+fn isotropic_objects_store_with_a_range_or_without() {
+    let mut w = World::new(TilingSpec::rect("square", 160, 100, Boundary::Wrap), 7).unwrap();
+    w.apply(Command::AddCa {
+        ca: CaSpec::new("B2-a/S12").seed(SeedSpec::Random { density: 0.3 }),
+    })
+    .unwrap();
+    w.apply(Command::Step { gens: 300 }).unwrap();
+    let r = find_objects(&w, &ObjectOptions::default()).unwrap();
+    let recs: Vec<PatternRecord> = r
+        .objects
+        .iter()
+        .filter(|o| !matches!(o.class, ObjClass::Other { .. }))
+        .map(|o| record_from_object(&w, w.cas[0].id, o, prov(), DiscoveredBy::User).unwrap())
+        .collect();
+    let lib = temp_lib("isotropic");
+    let (mut with, mut without) = (0, 0);
+    for rec in recs {
+        assert_eq!(rec.rule, "B2-a/S12");
+        let ranged = pattern::range::rule_range(&rec).unwrap();
+        match &ranged {
+            Some(x) => {
+                with += 1;
+                assert!(
+                    !x.contains_notation("B2-a/S12"),
+                    "a range holds B/S rules only"
+                );
+            }
+            None => without += 1,
+        }
+        lib.add(rec).unwrap_or_else(|e| panic!("{e}"));
+    }
+    assert!(
+        with > 0 && without > 0,
+        "{with} with a range, {without} without"
+    );
+}
+
 #[test]
 fn glider_has_one_id_across_rules_and_its_hand_derived_range() {
     let life = one("B3/S23", GLIDER);
@@ -564,4 +606,211 @@ fn catalog_speed_100k_sightings() {
     assert!(rate > 5_000.0, "{rate:.0} sightings/s");
     let info = lib.info().unwrap();
     assert_eq!(info.sightings, 100_000 + 2000);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Isotropic rule ranges (#238)
+
+use jetcarp_core::isotropic::{ALL_CLASSES, IsoRule};
+use jetcarp_core::pattern::IsoRange;
+
+/// Records of every periodic object a soup of `rule` leaves after `gens` generations, on a
+/// wrapped square grid.
+fn soup_records(rule: &str, w: u32, h: u32, gens: u64, seed: u64) -> Vec<PatternRecord> {
+    let mut world = World::new(TilingSpec::rect("square", w, h, Boundary::Wrap), seed).unwrap();
+    world
+        .apply(Command::AddCa {
+            ca: CaSpec::new(rule).seed(SeedSpec::Random { density: 0.3 }),
+        })
+        .unwrap();
+    world.apply(Command::Step { gens }).unwrap();
+    let r = find_objects(&world, &ObjectOptions::default()).unwrap();
+    r.objects
+        .iter()
+        .filter(|o| !matches!(o.class, ObjClass::Other { .. }))
+        .map(|o| {
+            record_from_object(&world, world.cas[0].id, o, prov(), DiscoveredBy::User).unwrap()
+        })
+        .collect()
+}
+
+/// The isotropic rule of these class masks, as JETCARP writes it (a B/S rule when it is one).
+fn iso_notation(b: u64, s: u64, c: u8) -> String {
+    let n = IsoRule::from_class_masks(b, s, c).notation();
+    Rule::parse(&n).unwrap().0.notation()
+}
+
+/// xorshift64*, for sampling rules.
+fn next(x: &mut u64) -> u64 {
+    *x ^= *x >> 12;
+    *x ^= *x << 25;
+    *x ^= *x >> 27;
+    x.wrapping_mul(0x2545_f491_4f6c_dd1d)
+}
+
+/// Check each record's isotropic range with the verifier: rules sampled inside it run the
+/// pattern as stored; one class more than it allows, or one fewer than it needs, does not. And a
+/// B/S rule is inside it exactly when it is inside the B/S range. Returns how many records had
+/// one.
+fn check_iso_ranges(recs: &[PatternRecord]) -> usize {
+    let mut n = 0;
+    let mut x = 0x5eed_1507u64;
+    for rec in recs {
+        let Some(ir) = &rec.iso_range else { continue };
+        n += 1;
+        let what = format!("{} ({})", rec.label(), rec.rule);
+        assert!(ir.contains_notation(&rec.rule), "{what}: {}", ir.describe());
+        let state = |x: &mut u64| -> u8 {
+            let span = (ir.states_max - ir.states_min) as u64 + 1;
+            ir.states_min + (next(x) % span.min(6)) as u8
+        };
+        for _ in 0..3 {
+            let b = ir.birth_min | (next(&mut x) & ir.birth_max);
+            let s = ir.survive_min | (next(&mut x) & ir.survive_max);
+            let rule = iso_notation(b, s, state(&mut x));
+            assert!(ir.contains_notation(&rule), "{what}: {rule}");
+            let v = verify(&in_rule(rec, &rule), 4);
+            assert!(v.is_ok(), "{what} in {rule}: {v:?}");
+        }
+        // A birth it forbids (not B0, which every range forbids), or a survival it needs left out.
+        let extra = ALL_CLASSES & !ir.birth_max & !1;
+        if extra != 0 {
+            let k = extra.trailing_zeros();
+            let rule = iso_notation(ir.birth_min | 1 << k, ir.survive_min, ir.states_min);
+            assert!(!ir.contains_notation(&rule));
+            assert!(
+                verify(&in_rule(rec, &rule), 4).is_err(),
+                "{what} in {rule} (birth on {}) should fail",
+                jetcarp_core::isotropic::class_name(k)
+            );
+        }
+        if ir.survive_min != 0 {
+            let k = ir.survive_min.trailing_zeros();
+            let rule = iso_notation(ir.birth_min, ir.survive_min & !(1 << k), ir.states_min);
+            assert!(
+                verify(&in_rule(rec, &rule), 4).is_err(),
+                "{what} in {rule} (no survival on {}) should fail",
+                jetcarp_core::isotropic::class_name(k)
+            );
+        }
+        // B/S rules: in the isotropic range exactly when in the B/S range (none without one).
+        for _ in 0..300 {
+            let b = (next(&mut x) & 0x1fe) as u32;
+            let s = (next(&mut x) & 0x1ff) as u32;
+            let c = state(&mut x);
+            let rule = if c > 2 {
+                Rule::Generations {
+                    birth: b,
+                    survive: s,
+                    states: c,
+                }
+            } else {
+                Rule::LifeLike {
+                    birth: b,
+                    survive: s,
+                }
+            };
+            let bs = rec.range.as_ref().is_some_and(|r| r.contains(&rule));
+            assert_eq!(ir.contains(&rule), bs, "{what}: {}", rule.notation());
+        }
+        // The range's own bounds.
+        let a = IsoRange::masks_of(&Rule::parse(&ir.min_rule).unwrap().0).unwrap();
+        assert_eq!((a.0, a.1), (ir.birth_min, ir.survive_min), "{what}");
+    }
+    n
+}
+
+#[test]
+fn isotropic_ranges_hold() {
+    let mut recs = records(
+        "B3/S23",
+        &[
+            (GLIDER, 5, 5),
+            ("ooo", 20, 5),
+            ("oo/oo", 30, 5),
+            (".oo./o..o/.oo.", 40, 5),
+            ("oo./o.o/.o.", 5, 30),
+        ],
+    );
+    let life = recs.len();
+    recs.extend(soup_records("B2-a/S12", 96, 64, 300, 7));
+    recs.extend(soup_records("B3/S2-i34q", 96, 64, 400, 11));
+    recs.extend(soup_records("B2a3-ckn/S1e2-in3/C4", 64, 64, 300, 5));
+    recs.extend(soup_records("B2/S/C3", 64, 64, 200, 3));
+    let checked = check_iso_ranges(&recs);
+    assert_eq!(
+        checked,
+        recs.len(),
+        "every record on the square grid has an isotropic range"
+    );
+    assert!(life >= 5 && checked > 40, "{checked} of {}", recs.len());
+    // Some of Just Friends' objects need a count's arrangements to differ: an isotropic range
+    // and no B/S one.
+    assert!(
+        recs.iter()
+            .any(|r| r.range.is_none() && r.iso_range.is_some())
+    );
+    // Off the square grid's touching neighbours there is none: edge neighbours, hexagons.
+    let vn = one("B3/S23V", "oo/oo");
+    assert!(vn.range.is_some() && vn.iso_range.is_none());
+    let mut hex = World::new(TilingSpec::rect("hex", 32, 32, Boundary::Wrap), 1).unwrap();
+    hex.apply(Command::AddCa {
+        ca: CaSpec::new("B2/S34").seed(SeedSpec::Random { density: 0.3 }),
+    })
+    .unwrap();
+    hex.apply(Command::Step { gens: 200 }).unwrap();
+    let r = find_objects(&hex, &ObjectOptions::default()).unwrap();
+    let o = r
+        .objects
+        .iter()
+        .find(|o| !matches!(o.class, ObjClass::Other { .. }))
+        .unwrap();
+    let h = record_from_object(&hex, hex.cas[0].id, o, prov(), DiscoveredBy::User).unwrap();
+    assert!(h.range.is_some() && h.iso_range.is_none());
+}
+
+/// The library matches a pattern to an isotropic rule by its isotropic range, and to a B/S rule
+/// by either range: Life's glider runs in tlife, and Just Friends' objects that no B/S rule gives
+/// are found by their own rule.
+#[test]
+fn works_in_uses_isotropic_ranges() {
+    let lib = temp_lib("iso-works-in");
+    let glider = one("B3/S23", GLIDER);
+    let ir = glider.iso_range.clone().unwrap();
+    lib.add(glider.clone()).unwrap();
+    let jf = soup_records("B2-a/S12", 96, 64, 300, 7);
+    let only_iso = jf
+        .iter()
+        .filter(|r| r.range.is_none())
+        .map(|r| r.id.clone())
+        .collect::<Vec<_>>();
+    for r in jf {
+        lib.add(r).unwrap();
+    }
+    let q = |rule: &str| -> Vec<String> {
+        lib.query(&Query {
+            works_in: Some(rule.into()),
+            ..Default::default()
+        })
+        .unwrap()
+        .into_iter()
+        .map(|r| r.id)
+        .collect()
+    };
+    assert!(q("B3/S2-i34q").contains(&glider.id), "the glider in tlife");
+    assert!(q("B36/S23").contains(&glider.id));
+    // A rule one needed birth short of the glider's: not.
+    let k = ir.birth_min.trailing_zeros();
+    let short = iso_notation(ir.birth_max & !(1 << k), ir.survive_max, 2);
+    assert!(!q(&short).contains(&glider.id), "{short}");
+    assert!(!glider.works_in(&short));
+    assert!(glider.works_in("B3/S2-i34q"));
+    let found = q("B2-a/S12");
+    assert!(!only_iso.is_empty());
+    for id in &only_iso {
+        assert!(found.contains(id), "{id}");
+    }
+    // Stored and read back, the ranges are the same.
+    let back = lib.get(&glider.id).unwrap();
+    assert_eq!(back.iso_range, glider.iso_range);
 }

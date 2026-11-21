@@ -44,6 +44,34 @@ day later (0.4.2: 17 November here, 18 November there).
   Keyboard shortcuts* does; `--json` gives them for scripts, and the book's keyboard page is made
   from it and checked against it. ([`jetcarp shortcuts`](../reference/cli.md#jetcarp-shortcuts))
 
+- **Isotropic rule ranges.** A pattern on the square grid's touching neighbours now carries the
+  isotropic rules it runs in exactly as stored: the births and survivals its evolution needs, and
+  those it must not have, among the 51 arrangements of the live neighbours that Hensel's notation
+  names, as the B/S rule range does with counts. It is worked out when the pattern is verified,
+  whatever B/S, Generations or isotropic rule found it, shown with the record, and matched by
+  `--works-in`, which now takes isotropic rules (Life's glider is found in tlife), and a B/S rule by
+  either range. Libraries go to schema 4 (patterns gain the range's columns; an older library is
+  brought up on opening), and packs to format 1.1, whose `verifications` table gains an `iso_range`
+  column that a 1.0 reader ignores, with a new golden pack, `isotropic`. An object of an isotropic
+  rule that no B/S rule gives is stored with this range and no B/S one.
+  ([Isotropic rules](../automata/isotropic.md#searches-and-the-library),
+  [Pack format](../reference/pack-format.md#versions-and-compatibility),
+  [#238](https://github.com/jprodgers/jetcarp/issues/238))
+
+- **Isotropic rules in Hensel's notation.** A rule family on the square grid's eight touching
+  neighbours in which a letter after a count names an arrangement of that many live neighbours, the
+  same under turns and reflections: `B2-a/S12` (Just Friends), `B3-cnqy/S23-a`, Generations rules
+  such as `B2a/S/C3`, and birth on 0, kept relative to its background as for B0 Life-like rules. The
+  rules work wherever B/S rules do (the app, scenes, the command line, scripts and the MCP tools),
+  on the CPU and the GPU with identical results, in hunts (on the GPU too), the object finder and the
+  library, and *Copy as RLE* writes them. JETCARP reads the letters from Alan Hensel's table and
+  writes rules back in the canonical form Golly's documentation gives; a test runs 73 rules against
+  Golly, every generation to 100. Seven named rules come with Quick Start entries: Just Friends,
+  tlife, qlife, LeapLife, Salad, Goat Flock and Logic Rule. A new rule-semantics family,
+  `isotropic`, at version 1; no other family's meaning changed.
+  ([Isotropic rules](../automata/isotropic.md),
+  [Rule notation](../reference/rule-notation.md#isotropic-rules-hensels-notation),
+  [#70](https://github.com/jprodgers/jetcarp/issues/70))
 - **Palettes chosen and checked for colour-vision deficiency.** Three new built-in palettes,
   Lantern for any rule and Cobalt and Saffron for JACA's +1 and −1 cells, keep neighbouring stops,
   and every stop and the background, at a CIEDE2000 difference of 10 or more for protanopia,
@@ -218,6 +246,38 @@ day later (0.4.2: 17 November here, 18 November there).
   default to the computer's limits.
   ([This computer](../guides/this-computer.md), [#213](https://github.com/jprodgers/jetcarp/issues/213))
 
+- **B0 rules whose background is live for good start on it, as Golly reads them.** A rule with birth
+  on 0 that survives on every neighbour count the tiles have (`S8` on the square grid, such as
+  AntiLife, `B0123478/S01234678`) turns its background live for good at the first step. JETCARP now
+  starts it on that live background at generation 0, so a pattern is read against it, and JETCARP
+  and Golly agree generation for generation; before, JETCARP started on the empty world, one
+  generation behind Golly. This holds on every tiling, for B/S and isotropic rules, on the CPU and
+  the GPU and in HashLife. **Scenes from earlier versions with such a rule replay to other states.**
+  B0 rules whose background keeps flashing already matched Golly, and still do. `lifelike_b0` goes to
+  version 3, so a library flags B0 records for `jetcarp library reverify`. *Copy as RLE* now writes
+  B0 rules where Golly reads them the same: always when the background is live for good, at even
+  generations when it flashes. Tests run both kinds against Golly from generation 0.
+  ([B0 rules](../automata/life-like.md#b0-rules),
+  [#238](https://github.com/jprodgers/jetcarp/issues/238))
+
+- **Larger than Life rules with birth on 0 are kept against their background, as Golly runs them.**
+  A two-state rule with birth on 0, such as `R2,C2,S0-5,B0-3`, ran as written, so at its first step
+  every cell with no live cell in reach was born and the whole field turned on, where Golly keeps
+  the rule relative to its background. JETCARP now keeps it as it keeps B0 Life-like rules: each
+  cell against the rule's run from an empty world, starting on the live background when that is live
+  for good from the first step (survival on every count the reach holds). JETCARP and Golly agree
+  generation for generation from generation 0, whether the background flashes or is live for good.
+  This holds on lattices and patches, on the CPU and the GPU; the exploratory search's GPU batches
+  leave these rules to the processor's. **Scenes from earlier versions with such a rule replay to
+  other states.** `ltl` goes to version 3, so a library flags Larger than Life records for
+  `jetcarp library reverify`; no Quick Start entry has such a rule, and no pinned state moved. Rules
+  with more than two states and birth on 0 still run as written (Golly refuses them). *Copy as RLE*
+  now writes two-state Larger than Life rules on the square grid, which Golly reads as the same rule
+  and cells, and their B0 rules where Golly reads them the same; a test runs them against Golly from
+  generation 0.
+  ([Larger than Life](../automata/larger-than-life.md#rules-with-birth-on-0),
+  [#238](https://github.com/jprodgers/jetcarp/issues/238))
+
 - **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
   64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
   (the random-number generator, a turmite's internal state, a layered rule's layers, a forest fire's
@@ -235,6 +295,13 @@ day later (0.4.2: 17 November here, 18 November there).
   [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
 ### Fixed
+
+- **Animated WebP exports keep white.** The WebP encoder's colour cache started at the value that
+  is opaque white, so a frame, or the part of a frame that changed, beginning with white pixels
+  stored them under another colour's index: white came out as the frame's first other colour (in a
+  test, black), and a frame all white made a file that decoders refuse. Every version before 0.4.3
+  had this. A test now encodes and decodes frames that start with white, all white, and white among
+  other colours.
 
 - **In the *Desktop background* pane, the processor's percentage after *Pause while the processor
   is busier than* goes to the next line in a narrow pane,** where it ran past the pane's edge, out
@@ -345,7 +412,8 @@ day later (0.4.2: 17 November here, 18 November there).
   cells past a live edge as live now, as other B/S rules do (it ignored live edges), and HashLife
   runs B0 rules on wrap-edge lattices whatever their tiles' neighbour counts. B0 rules are now a
   [rule-semantics family](../reference/library-format.md#rule-semantics-versions) of their own,
-  `lifelike_b0`, at version 2: scenes of such rules replay to other states, and a library flags
+  `lifelike_b0`, at version 2 (3 with the change to B0 rules above): scenes of such rules replay to
+  other states, and a library flags
   any B0 pattern record for `jetcarp library reverify` (no search stores B0 patterns). Other B/S
   rules keep `lifelike` at version 1, so their records are not flagged.
   ([B0 rules](../automata/life-like.md#b0-rules),

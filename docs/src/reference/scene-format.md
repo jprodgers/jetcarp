@@ -254,7 +254,14 @@ scene so that such a change cannot happen by accident (see
 [Reproducibility](../research/reproducibility.md#pinned-geometry-and-dynamics)). One such change was made
 on purpose before this release: the Penrose rhomb (P3) construction was rewritten, so `penrose-rhomb`
 lays out its tiles differently from CART's, JETCARP's predecessor, and what ran on it in CART does not
-replay to the same hashes.
+replay to the same hashes. JETCARP 0.4.3 made three more: B0 rules became exact on every tiling (#171);
+a B0 rule whose background is live for good from the first step (survival on every neighbour count
+the tiles have, such as `B0123478/S01234678` on squares) now starts on the live background, as
+Golly reads it, so its seeds and drawn cells are read against that background and a scene from an
+earlier version with such a rule replays to other states (see
+[Reproducibility](../research/reproducibility.md#b0-rules-whose-background-is-live)); and two-state
+Larger than Life rules with birth on 0 are now kept against their background in the same way (see
+[Reproducibility](../research/reproducibility.md#larger-than-life-rules-with-birth-on-0)).
 
 ## JSON Schema
 

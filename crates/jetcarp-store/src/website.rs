@@ -373,6 +373,9 @@ pub struct SitePattern<'a> {
     pub rules: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub range: Option<&'a RuleRange>,
+    /// Its isotropic rule range, on the square grid's touching neighbours.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iso_range: Option<&'a jetcarp_core::pattern::IsoRange>,
     pub cells: usize,
     pub min_cells: usize,
     pub max_cells: usize,
@@ -426,6 +429,7 @@ fn pattern_json(lib: &Library, r: &PatternRecord, media: &MediaLinks) -> Result<
         rule: &r.rule,
         rules,
         range: r.range.as_ref(),
+        iso_range: r.iso_range.as_ref(),
         cells: r.cells,
         min_cells: r.min_cells,
         max_cells: r.max_cells,

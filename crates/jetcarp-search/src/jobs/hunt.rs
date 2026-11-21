@@ -79,7 +79,8 @@ pub fn summary(base: JobSummary, spec: Option<&HuntSpec>, p: &HuntProgress) -> J
     s
 }
 
-/// The neighbourhood and state count of a hunt's first rule.
+/// The neighbourhood and state count of a hunt's first rule. The heat map is a map of B/S rules,
+/// so isotropic rules (which have no place on it) give none.
 fn rule_space(rule: &str, nb: Option<Nb>) -> Option<(Nb, u32)> {
     let (r, hint) = Rule::parse(rule).ok()?;
     let states = match r {
