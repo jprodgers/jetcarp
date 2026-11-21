@@ -134,8 +134,8 @@ and that 5 to 7 are 3 to 1 with live and dead swapped. Then the stepper is check
 - **Against Golly.** Golly 5.0's command-line program, `bgolly`, runs the same soups: 73 rules (Just
   Friends written two ways, `B3-cnqy/S23-a`, Life written with letters two ways, two B/S rules with B0,
   and 66 random isotropic rules: two-state, B0 and Generations, written with letters, `-` forms and
-  bare digits in shuffled orders), two soups each, compared cell by cell and state by state at every generation up to 100, and Golly must name
-  every rule as JETCARP does. For every two letters of a count, as birth and as survival, some rule
+  bare digits in shuffled orders), two soups each, compared cell by cell and state by state at
+  every generation up to 100, and Golly must name every rule as JETCARP does. For every two letters of a count, as birth and as survival, some rule
   takes one and not the other while its soup has a cell with the first, so a letter read wrongly
   would show at the first generation. It does: with the arrangements of `3r` and `3y` swapped (as in
   Life32) the comparison fails at the first generation in 120 of its 146 soups, and with `4j` and

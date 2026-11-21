@@ -389,6 +389,11 @@ fn golly_states(
     )
 }
 
+/// An RLE's cells with their states, moved so the lowest x and y are 0.
+fn normalised_cells(text: &str) -> BTreeSet<(i64, i64, u32)> {
+    normalised(parse_rle(text).unwrap())
+}
+
 fn normalised(p: Vec<(i64, i64, u32)>) -> BTreeSet<(i64, i64, u32)> {
     let p: Vec<_> = p.into_iter().filter(|c| c.2 != 0).collect();
     let x0 = p.iter().map(|c| c.0).min().unwrap_or(0);
@@ -529,6 +534,21 @@ fn iso_soup(
     let (start_cells, _) = our_states(h.world());
     let cells: Vec<(i64, i64)> = start_cells.iter().map(|c| (c.0, c.1)).collect();
     let start = rle::write(&cells, &c.written, &[]);
+    // Copy as RLE, where it writes the rule (two states, no B0): the canonical name, which Golly
+    // reads as the same rule and the same cells.
+    if let jetcarp_core::rules::Rule::Isotropic(r) = &rule
+        && r.states <= 2
+        && !r.b0()
+    {
+        let copy = rle::of_world(h.world(), &[]).unwrap();
+        if rle::header_rule(&copy).as_deref() != Some(ours.as_str()) {
+            return Err(format!("{what}: Copy as RLE names it otherwise:\n{copy}"));
+        }
+        let (named, back) = golly_states(dir, &format!("{name}-copy"), &copy, 0, false);
+        if named.as_deref() != Some(ours.as_str()) || back != normalised_cells(&copy) {
+            return Err(format!("{what}: Golly reads Copy as RLE otherwise"));
+        }
+    }
     // Coverage: the classes of arrangement at the start, by the cell's state.
     {
         let w = h.world();
