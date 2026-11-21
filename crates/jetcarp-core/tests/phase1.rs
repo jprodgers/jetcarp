@@ -582,7 +582,7 @@ fn a_scene_with_an_unknown_palette_loads_and_says_so() {
     use jetcarp_core::render::Palette;
     let mut sc = Scene::new(square(20, 20, Boundary::Wrap));
     let mut ca = CaSpec::new("B3/S23").seed(SeedSpec::Random { density: 0.3 });
-    ca.palette = Some("Dusk".into());
+    ca.palette = Some("Nonesuch".into());
     sc.cas = vec![ca];
     sc.commands = vec![
         Command::UpdateCa {
@@ -598,16 +598,16 @@ fn a_scene_with_an_unknown_palette_loads_and_says_so() {
     assert_eq!(
         w.warnings(),
         [
-            "palette 'Dusk' is unknown here; drawn in Ember",
+            "palette 'Nonesuch' is unknown here; drawn in Ember",
             "palette 'Twilight' is unknown here; drawn in Ember"
         ]
     );
-    assert_eq!(w.cas[0].palette, "Dusk");
-    assert_eq!(w.palette("Dusk"), Palette::builtin("Ember").unwrap());
+    assert_eq!(w.cas[0].palette, "Nonesuch");
+    assert_eq!(w.palette("Nonesuch"), Palette::builtin("Ember").unwrap());
     assert_eq!(w.generation, 3);
     // Saved and loaded again, the names are still there, and so is the warning.
     let again = World::from_scene(&Scene::from_json(&w.to_scene().to_json()).unwrap()).unwrap();
-    assert_eq!(again.cas[0].palette, "Dusk");
+    assert_eq!(again.cas[0].palette, "Nonesuch");
     assert_eq!(again.cas[0].palette_neg, "Twilight");
     assert_eq!(again.warnings(), w.warnings());
     assert_eq!(again.hash_hex(), w.hash_hex());
@@ -618,7 +618,7 @@ fn a_scene_with_an_unknown_palette_loads_and_says_so() {
         tiling: square(24, 24, Boundary::Wrap),
     })
     .unwrap();
-    assert_eq!(w.cas[0].palette, "Dusk");
+    assert_eq!(w.cas[0].palette, "Nonesuch");
     assert_eq!(w.warnings().len(), 2);
     let change = CaChange {
         palette: Some("Dawn".into()),

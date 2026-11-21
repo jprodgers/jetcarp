@@ -368,6 +368,19 @@ pub const CHOSEN: Chosen = Chosen {
     jaca_neg: "Saffron",
 };
 
+/// JACA's pairs of built-in palettes, +1 then −1: each on JACA's deep ground, and every stop of
+/// one side at least [`MIN_DIFFERENCE`] from every stop of the other, and from the glow of
+/// annihilated cells, for every kind of deficiency. [`CHOSEN`]'s pair comes first.
+pub const JACA_PAIRS: &[(&str, &str)] = &[
+    ("Cobalt", "Saffron"),
+    ("Indigo", "Marmalade"),
+    ("Sky", "Rust"),
+    ("Iris", "Gold"),
+    ("Lapis", "Amber"),
+    ("Ice", "Ember Red"),
+    ("Delft", "Ochre"),
+];
+
 /// A set of default palettes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Chosen {

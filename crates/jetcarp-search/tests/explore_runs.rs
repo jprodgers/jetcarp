@@ -77,7 +77,16 @@ fn run(id: i64, true_score: bool) -> RunOut {
     RunOut {
         id,
         stage,
-        parent: (stage == 2).then_some(id - 1),
+        // A confirmation run names the run it confirms; some screened runs an elite, or a run
+        // of another job.
+        parent: if stage == 2 {
+            Some(id - 1)
+        } else {
+            (id % 3 == 1).then_some(id / 2)
+        },
+        parent_job: (stage == 1 && id % 6 == 1).then_some(7),
+        parent_search: (stage == 1 && id % 6 == 1)
+            .then(|| "00000000-0000-4000-8000-000000000007".to_string()),
         seed_kind: ["random", "point", "blob"][k % 3].into(),
         ev: Eval {
             cand,
@@ -397,6 +406,52 @@ fn queries_over_segments_match_the_same_runs_unsealed() {
         .collect();
     assert!(!sa.is_empty());
     assert_eq!(sa, sb);
+}
+
+/// A working database last written by JETCARP 0.4.2, whose `runs` has no `parent_job`, reads
+/// with every parent the search's own, opened for reading; opened to write, it gains the column
+/// and its new runs keep theirs.
+#[test]
+fn a_database_from_before_parent_jobs_reads_and_is_brought_up_to_date() {
+    let dir = scratch("parent-job");
+    let path = dir.join("search.sqlite");
+    let r = make(&dir, 120, 13, 0, true);
+    let want: Vec<RunRec> = all(&r)
+        .into_iter()
+        .map(|mut x| {
+            (x.parent_job, x.parent_search) = (None, None);
+            x
+        })
+        .collect();
+    assert!(all(&r).iter().any(|x| x.parent_search.is_some()));
+    drop(r);
+    let c = rusqlite::Connection::open(&path).unwrap();
+    c.execute_batch(
+        "ALTER TABLE runs DROP COLUMN parent_job; ALTER TABLE runs DROP COLUMN parent_search",
+    )
+    .unwrap();
+    drop(c);
+    assert_eq!(all(&Runs::open_read(&path).unwrap()), want, "read only");
+    let mut w = Runs::open(&path).unwrap();
+    assert_eq!(all(&w), want);
+    let mut late = run(121, true);
+    (late.stage, late.parent, late.parent_job) = (1, Some(3), Some(2));
+    late.parent_search = Some("00000000-0000-4000-8000-000000000002".into());
+    w.write(&Delta {
+        rows: vec![late],
+        ..Default::default()
+    })
+    .unwrap();
+    let back = all(&Runs::open_read(&path).unwrap());
+    assert_eq!(
+        back.last()
+            .map(|x| (x.parent, x.parent_job, x.parent_search.as_deref())),
+        Some((
+            Some(3),
+            Some(2),
+            Some("00000000-0000-4000-8000-000000000002")
+        ))
+    );
 }
 
 #[test]

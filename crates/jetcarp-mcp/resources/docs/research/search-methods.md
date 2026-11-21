@@ -27,7 +27,9 @@ transaction. It can therefore be stopped and carried on at any time, in the same
 and it ends exactly as it would have without the interruption (see
 [Reproducibility](reproducibility.md#interrupted-searches-end-where-uninterrupted-ones-would)).
 Results never depend on the number of threads. The [exploratory search](#explore) is the one
-exception: it is not deterministic, so a stopped one continues from its saved archive instead.
+exception: its rounds of runs on the processor are sized to the computer's threads, so that it
+scales with the machine, and its results depend on the thread count; and it is not deterministic,
+so a stopped one continues from its saved archive instead.
 
 The options shared by every strategy: `--minutes N`, `--until TIME` (a Unix time, the same end however
 often the job is resumed) and `--limit N` stop the job, still resumable, after a time or a number of
@@ -442,12 +444,25 @@ current best. A GPU loop runs the rules the graphics card
 supports in large batches while a CPU loop runs the rest. A run on the processor that would take
 longer than 8 seconds (a sandpile, which takes tens of seconds on the default grid; a confirmation
 run gets 32) stops there and is kept as a run of the generations it reached, so it still replays
-exactly. An elite's confirmation does not start on a thread that is waiting inside another run,
-which would hold that run past its cap. When a search's time is up, runs still going on the
+exactly. A run's time is its own: while it waits for its step's parallel work, its thread may take
+up another run, and the time spent on that one does not count against the first one's cap. An
+elite is confirmed beside the screening rather than after it: each CPU round confirms its share of
+the elites (twice the threads every four rounds), started first, each elite's seeds side by side,
+while the round's screening runs go on beside them, so the runs screened keep coming while elites
+are confirmed. On the GPU a batch of confirmation runs is sized to about 8 seconds of the GPU's time
+by its pace so far, and the GPU confirms as many elites as before, 96 every eight of its rounds, in
+such batches between its screening batches, so its screening never waits long either. A round's screened runs reach the
+archive, with their ids, in the order they were made, and its confirmations at its end in the order
+their elites were picked, so on the processor alone a search makes the same runs and confirms the
+same elites whatever the length of its steps and however its threads take up its runs: the same
+seed, settings and number of threads give the same search, as long as no run meets its cap, which
+is wall time. (With a GPU, the GPU's batches and the processor's rounds share the archive as they
+end, so two such searches differ.) When a search's time is up, runs still going on the
 processor are given up unrecorded, and the GPU's last batches are sized from its pace so far to
 end in time (Larger than Life on aperiodic patches paced apart, since it runs far slower there); a
 batch that runs on past the end, or past a stop, is given up between two of its submissions. The
-job's progress is written every two seconds while a step runs. Like the other searches it runs as
+job's progress, its memory reading and the runs that have ended since are written every two
+seconds while a step runs. Like the other searches it runs as
 a job, but it keeps its runs in a folder of its own, `searches/<uuid>/` beside the library. Every million
 runs are sealed into a compressed Parquet file that DuckDB, Polars or pyarrow can read directly (see
 [Search runs](../reference/search-runs.md)). A small SQLite database, `search.sqlite`, holds the
@@ -520,6 +535,13 @@ least-tried, 10% catalogue rules).
   the job's spec, so a resumed search has them still, and its log and `jetcarp jobs status` say what
   it took: `parents: 3 JACA runs of explore job 1 (2 keep, 1 maybe); 3 with both signs holding to the
   end`.
+- **Lineage.** Every run made from another names it as its `parent`: a variation, a new starting
+  pattern, a transplant or a balance variant the elite it came from, and a run made from another
+  job's the run there, with that job in `parent_job` and its search's uuid in `parent_search`
+  (which names it in any library or pack); a confirmation run names the run it
+  confirms. Following `parent` back from a run gives the chain of runs the search built it from,
+  back to a fresh draw or to the job given with `--parents-from`
+  ([Search runs](../reference/search-runs.md)).
 
 **Your taste as the score.** `jetcarp jobs refit` fits a score model to the keep, maybe and drop
 reviews recorded for a job's runs, all raters' or one's (`--rater`). It is a ridge logistic

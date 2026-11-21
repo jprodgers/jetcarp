@@ -186,12 +186,17 @@ pub fn progress_text(kind: &str, progress: &Value, line: &str) -> String {
             let _ = writeln!(s, "{line}");
             let _ = writeln!(
                 s,
-                "  status {}, {} run over every session, {} confirmation runs, {} candidates tried, {} GB of memory",
+                "  status {}, {} run over every session, {} confirmation runs, {} candidates tried, {} GB of memory{}",
                 p.status,
                 duration(p.elapsed_s),
                 digits(p.confirmed),
                 digits(p.seen),
-                format_args!("{:.2}", p.rss_gb)
+                format_args!("{:.2}", p.rss_gb),
+                if p.rss_peak_gb > p.rss_gb {
+                    format!(" (at most {:.2} GB this session)", p.rss_peak_gb)
+                } else {
+                    String::new()
+                }
             );
             if p.threads > 0 {
                 let used = p.threads + p.gpu_threads;

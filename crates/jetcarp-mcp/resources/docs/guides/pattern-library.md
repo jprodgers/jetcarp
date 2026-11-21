@@ -85,6 +85,12 @@ again and gives the N that made the most copies of the find, then the most space
 beside the first (`soup.json`, `soup-2.json`, ...). `--soups K` says how many soups to run: by
 default as many as the hunt ran, at most 10,000.
 
+Each soup also says where to look: the generation the find first shows in it, whole and apart from
+everything else (with several copies, the first of them), and for a spaceship the generation the
+hunt cut it out as it flew off and about when it reaches the scene's dead edge, where it breaks up.
+A ship that the soup sends off is in the scene only between those two, so run the scene to the
+first of them, not to the soup's end.
+
 ```sh
 jetcarp library soup 5a080db3 --best 3 --save glider.json
 ```
@@ -94,9 +100,9 @@ It prints:
 ```text
 glider (B3/S23 on Square): 16x16 rect soups at density 0.5, hunt job 1
   the best 3 of 400 soups run again:
-  soup 28 (rng state 807013244984872251): 17 copies, 17 ships; settled at generation 6406; scene: /home/ada/glider.json
-  soup 47 (rng state 15588416085187991748): 17 copies, 17 ships; settled at generation 5185; scene: /home/ada/glider-2.json
-  soup 230 (rng state 13388605875880922145): 16 copies, 16 ships; settled at generation 3084; scene: /home/ada/glider-3.json
+  soup 28 (rng state 807013244984872251): 17 copies, 17 ships; settled at generation 6406; the first copy shows at generation 176, flies off at 320 and reaches the scene's edge at about 2172; scene: /home/ada/glider.json
+  soup 47 (rng state 15588416085187991748): 17 copies, 17 ships; settled at generation 5185; the first copy shows at generation 80, flies off at 256 and reaches the scene's edge at about 2108; scene: /home/ada/glider-2.json
+  soup 230 (rng state 13388605875880922145): 16 copies, 16 ships; settled at generation 3084; the first copy shows at generation 168, flies off at 256 and reaches the scene's edge at about 2116; scene: /home/ada/glider-3.json
   note: the grid is 1024 unit cells across: ships that fly off reach its dead edge before generation 6406, and land there
 ```
 

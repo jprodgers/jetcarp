@@ -180,8 +180,12 @@ pub fn balance_variant(
 /// the job's spec, without decimals, so it survives a pack.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Parent {
-    /// Where it came from: the job, its run, and why it was taken (a verdict, or `best`).
+    /// Where it came from: the job, its search's uuid (none in a spec made before JETCARP
+    /// 0.4.3), its run, and why it was taken (a verdict, or `best`). The job's id is this
+    /// library's; the uuid names the search in any library or pack.
     pub job: i64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub search: String,
     pub run: i64,
     pub why: String,
     pub rule: String,
@@ -223,10 +227,11 @@ pub fn describe(parents: &[Parent]) -> Option<String> {
 }
 
 impl Parent {
-    /// A parent from a stored run.
-    pub fn of(job: i64, run: i64, why: &str, ev: &Eval) -> Parent {
+    /// A parent from a stored run of job `job`, whose search's uuid is `search`.
+    pub fn of(job: i64, search: &str, run: i64, why: &str, ev: &Eval) -> Parent {
         Parent {
             job,
+            search: search.into(),
             run,
             why: why.into(),
             rule: ev.cand.rule.clone(),
