@@ -6,6 +6,7 @@ mod ants_ui;
 mod app;
 mod catalog_picker;
 mod catalog_tools_ui;
+mod cell_cursor;
 mod cell_editor;
 mod cli;
 mod dash_ui;

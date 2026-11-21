@@ -365,6 +365,14 @@ impl egui_tiles::Behavior<PaneKey> for Shell<'_> {
             if !v.dark_mode || crate::a11y::high_contrast(ui.ctx()) {
                 ui.painter().rect_filled(ui.max_rect(), 0.0, v.panel_fill);
             }
+            // A part of the window F6 moves to (#219).
+            crate::a11y::region(
+                ui.ctx(),
+                crate::a11y::MAIN,
+                def.title,
+                ui.layer_id(),
+                ui.max_rect(),
+            );
             pane_scroll(self.app, ui, def);
         }
         egui_tiles::UiResponse::None
@@ -398,8 +406,21 @@ impl egui_tiles::Behavior<PaneKey> for Shell<'_> {
         ui: &mut egui::Ui,
         _tile_id: TileId,
         tabs: &egui_tiles::Tabs,
-        _scroll_offset: &mut f32,
+        scroll_offset: &mut f32,
     ) {
+        // A tab the keyboard reached is scrolled into the tab bar, when the bar is too narrow for
+        // all of its tabs (#219).
+        if let Some(f) = ui.memory(|m| m.focused())
+            && tabs.children.iter().any(|c| c.egui_id(tree_id()) == f)
+            && let Some(w) = ui.ctx().viewport(|v| v.prev_pass.widgets.get(f).copied())
+        {
+            let (r, shown) = (w.rect, w.interact_rect);
+            if r.max.x > shown.max.x + 0.5 {
+                *scroll_offset += r.max.x - shown.max.x.max(shown.min.x) + 6.0;
+            } else if r.min.x < shown.min.x - 0.5 {
+                *scroll_offset -= shown.min.x - r.min.x + 6.0;
+            }
+        }
         let Some(Tile::Pane(p)) = tabs.active.and_then(|a| tiles.get(a)) else {
             return;
         };
@@ -407,9 +428,12 @@ impl egui_tiles::Behavior<PaneKey> for Shell<'_> {
             return;
         }
         let small = |t: &str| egui::Button::new(t).frame(false).small();
+        // Screen readers read the buttons' names, not their symbols (#219).
+        let title = pane_def(&p.0).map(|d| d.title).unwrap_or("this");
         if ui
             .add(small("×"))
             .on_hover_text("Hide this pane (Window menu shows it again)")
+            .accessible_name(format!("Hide the {title} pane"))
             .clicked()
         {
             self.moves.push((p.0.clone(), Place::Hidden));
@@ -417,6 +441,7 @@ impl egui_tiles::Behavior<PaneKey> for Shell<'_> {
         if ui
             .add(small("↗"))
             .on_hover_text("Pop out to its own window")
+            .accessible_name(format!("Pop the {title} pane out to its own window"))
             .clicked()
         {
             self.moves.push((p.0.clone(), Place::Popped));
@@ -424,6 +449,7 @@ impl egui_tiles::Behavior<PaneKey> for Shell<'_> {
         if ui
             .add(small("◱"))
             .on_hover_text("Float in this window")
+            .accessible_name(format!("Float the {title} pane in this window"))
             .clicked()
         {
             self.moves.push((p.0.clone(), Place::Floating));

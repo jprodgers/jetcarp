@@ -296,7 +296,7 @@ impl TileEditor {
 
     fn controls(&mut self, ui: &mut egui::Ui, actions: &mut Vec<EditorAction>) -> bool {
         let mut changed = false;
-        egui::ComboBox::from_id_salt("ed-family")
+        let named = egui::ComboBox::from_id_salt("ed-family")
             .selected_text(self.family.name)
             .width(270.0)
             .show_ui(ui, |ui| {
@@ -320,6 +320,7 @@ impl TileEditor {
                     changed = true;
                 }
             });
+        crate::a11y::name(&named.response, "Tile family");
         match crate::isohedral_ui::controls(ui, self.family.id, Some(&self.params)) {
             Some(crate::isohedral_ui::IhChange::Type(id)) => {
                 self.load_family(id);
@@ -582,6 +583,13 @@ impl TileEditor {
     /// Draw the tile and handle dragging. Returns true when an edit finished (mouse released).
     fn canvas(&mut self, ui: &mut egui::Ui, size: Vec2) -> bool {
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+        resp.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::Role::Image,
+                true,
+                "The tile, whose corners and edges the mouse drags",
+            )
+        });
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, 4.0, Color32::from_rgb(0x15, 0x17, 0x1d));
         let corners = self.corners();

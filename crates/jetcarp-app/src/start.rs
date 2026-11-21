@@ -87,6 +87,8 @@ pub struct Menu {
     /// them).
     #[cfg(test)]
     menu_places: Vec<Rect>,
+    /// The card whose menu Shift+F10 opened (it shows by the card, not at the pointer).
+    key_menu: Option<usize>,
 }
 
 /// What a card's menu asked for.
@@ -175,6 +177,7 @@ impl Menu {
             drawn: vec![],
             #[cfg(test)]
             menu_places: vec![],
+            key_menu: None,
         };
         m.rows();
         m.reload();
@@ -556,8 +559,23 @@ impl Menu {
             area = area.vertical_scroll_offset(0.0);
             self.scroll_top = false;
         }
-        area.show_rows(ui, row_h, rows, |ui, range| {
-            for r in range {
+        // As `ScrollArea::show_rows` lays rows out, with a row more above and below the ones in view,
+        // so Tab and Shift+Tab can reach the next card out of view and scroll it in (#219).
+        let row_step = row_h + ui.spacing().item_spacing.y;
+        area.show_viewport(ui, |ui, viewport| {
+            ui.set_height((row_step * rows as f32 - ui.spacing().item_spacing.y).max(0.0));
+            let first = ((viewport.min.y / row_step).floor() as usize).saturating_sub(1);
+            let last = ((viewport.max.y / row_step).ceil() as usize + 1).min(rows);
+            let first = first.min(last);
+            let top = ui.max_rect().top();
+            let rect = Rect::from_x_y_ranges(
+                ui.max_rect().x_range(),
+                top + first as f32 * row_step..=top + last as f32 * row_step,
+            );
+            let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+            ui.skip_ahead_auto_ids(first);
+            let ui = &mut ui;
+            for r in first..last {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = gap;
                     for c in 0..cols {
@@ -584,6 +602,19 @@ impl Menu {
         now: f64,
     ) -> Option<MenuAction> {
         let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, img_h + CAPTION_H), Sense::click());
+        // A button to screen readers, named by what its caption says (#219).
+        let it = &self.items[i];
+        let mut name = format!(
+            "{}: {}, {} on {}",
+            it.title, it.rule, it.behaviour, it.tiling
+        );
+        if source_tag(it.source).is_some() {
+            name.push_str(&format!(", from {}", it.source.label()));
+        }
+        if let Some(r) = it.rating {
+            name.push_str(&format!(", rated {} of 5", r.round()));
+        }
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
         if !ui.is_rect_visible(rect) {
             return None;
         }
@@ -718,13 +749,27 @@ impl Menu {
         if it.has_preview {
             tip.push_str("\n\nClick to open at full size; Shift-click at preview size.");
         }
-        tip.push_str("\nRight-click to rate or hide it.");
+        tip.push_str("\nRight-click (or Shift+F10) to rate or hide it.");
         let title = it.title.clone();
         let rating = it.rating.map(|r| r.round() as u8);
         let mut act = None;
         #[cfg(test)]
         let mut places: Vec<Rect> = vec![];
-        resp.on_hover_text(tip).context_menu(|ui| {
+        let resp = resp.on_hover_text(tip);
+        // Shift+F10 opens the card's menu from the keyboard, beside the card; ↓ goes into it.
+        let by_key = resp.has_focus()
+            && ui.input_mut(|inp| inp.consume_key(egui::Modifiers::SHIFT, egui::Key::F10));
+        if by_key {
+            self.key_menu = Some(i);
+        }
+        let mut popup = egui::Popup::context_menu(&resp);
+        if self.key_menu == Some(i) {
+            popup = popup.anchor(resp.rect);
+            if by_key {
+                popup = popup.open_memory(egui::SetOpenCommand::Bool(true));
+            }
+        }
+        let shown = popup.show(|ui| {
             ui.label(RichText::new(&title).strong());
             ui.horizontal(|ui| {
                 ui.label("Rate");
@@ -749,6 +794,9 @@ impl Menu {
                 ui.close();
             }
         });
+        if shown.is_none() && !by_key && self.key_menu == Some(i) {
+            self.key_menu = None;
+        }
         #[cfg(test)]
         if !places.is_empty() {
             self.menu_places = places;
@@ -789,6 +837,15 @@ fn facet_row(
 ) -> bool {
     let (rect, resp) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 19.0), Sense::click());
+    // A toggle to screen readers: its name and count, and whether it filters now (#219).
+    resp.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::Role::Button,
+            true,
+            selected,
+            format!("{label}, {count}"),
+        )
+    });
     if !ui.is_rect_visible(rect) {
         return false;
     }

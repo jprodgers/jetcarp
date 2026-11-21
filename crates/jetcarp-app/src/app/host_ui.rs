@@ -377,11 +377,17 @@ impl JetcarpApp {
                     if ui
                         .small_button("◀")
                         .on_hover_text("Previous item")
+                        .accessible_name("Previous item")
                         .clicked()
                     {
                         ask = Some(json!({"action": "previous"}));
                     }
-                    if ui.small_button("▶").on_hover_text("Next item").clicked() {
+                    if ui
+                        .small_button("▶")
+                        .on_hover_text("Next item")
+                        .accessible_name("Next item")
+                        .clicked()
+                    {
                         ask = Some(json!({"action": "next"}));
                     }
                 }
@@ -440,7 +446,7 @@ impl JetcarpApp {
                         }
                     });
                 ui.label("on");
-                egui::ComboBox::from_id_salt(("host-monitor", i))
+                let picked = egui::ComboBox::from_id_salt(("host-monitor", i))
                     .selected_text(monitor_label(&monitors, screen.monitor))
                     .show_ui(ui, |ui| {
                         changed |= ui
@@ -464,10 +470,12 @@ impl JetcarpApp {
                                 .changed();
                         }
                     });
+                crate::a11y::name(&picked.response, format!("Screen {}'s monitor", i + 1));
                 if count > 1
                     && ui
                         .small_button("×")
                         .on_hover_text("Remove this screen")
+                        .accessible_name("Remove this screen")
                         .clicked()
                 {
                     remove = Some(i);
@@ -697,7 +705,7 @@ impl JetcarpApp {
         changed |= ui
             .checkbox(&mut settings.pause_on_battery, "Pause on battery")
             .changed();
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             let mut on = settings.busy_percent > 0;
             if ui
                 .checkbox(&mut on, "Pause while the processor is busier than")
@@ -707,17 +715,18 @@ impl JetcarpApp {
                 settings.busy_percent = if on { 80 } else { 0 };
                 changed = true;
             }
-            ui.add_enabled_ui(on, |ui| {
-                let mut p = settings.busy_percent.max(1);
-                if ui
-                    .add(egui::DragValue::new(&mut p).range(30..=100).suffix(" %"))
-                    .changed()
-                    && on
-                {
-                    settings.busy_percent = p;
-                    changed = true;
-                }
-            });
+            // Added to the wrapping row itself, so in a narrow pane it goes to the next line rather
+            // than past the pane's edge, out of sight.
+            let mut p = settings.busy_percent.max(1);
+            let busy = ui.add_enabled(
+                on,
+                egui::DragValue::new(&mut p).range(30..=100).suffix(" %"),
+            );
+            crate::a11y::name(&busy, "Pause while the processor is busier than, in per cent");
+            if busy.changed() && on {
+                settings.busy_percent = p;
+                changed = true;
+            }
         });
         let mut login = *h.login.get_or_insert_with(autostart::enabled);
         if ui.checkbox(&mut login, "Start at login").changed() {
