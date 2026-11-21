@@ -176,6 +176,13 @@ pub fn stop() {
     }
 }
 
+/// End the program with `code`, its record removed first ([`stop`]): every early exit of a
+/// program that records goes through here, so none leaves a record behind.
+pub fn exit(code: i32) -> ! {
+    stop();
+    std::process::exit(code)
+}
+
 /// The pool as it stands: its size, what the other programs hold, and what this one does.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Pool {

@@ -944,3 +944,37 @@ fn limits_and_a_short_score() {
         "{d}"
     );
 }
+
+/// Each run of the program records its memory in JETCARP's pool and removes the record when it
+/// ends, however it ends: done, refused, or failed with a status of its own (`jetcarp api call`
+/// of an operation that fails exits with 1).
+#[test]
+fn a_program_leaves_no_memory_record_behind() {
+    let runtime = test_dir("JETCARP_NO_SUCH_VARIABLE", "runtime-records");
+    let _ = std::fs::remove_dir_all(&runtime);
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+            .args(args)
+            .env("JETCARP_OUT", out_root())
+            .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+            .env(
+                "JETCARP_CONFIG_DIR",
+                test_dir("JETCARP_CONFIG_DIR", "config"),
+            )
+            .env("JETCARP_RUNTIME_DIR", &runtime)
+            .output()
+            .expect("run jetcarp")
+    };
+    let records = || {
+        std::fs::read_dir(runtime.join("memory"))
+            .map(|rd| rd.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+            .unwrap_or_default()
+    };
+    assert!(run(&["limits"]).status.success());
+    assert!(runtime.join("memory").is_dir(), "it recorded");
+    assert_eq!(records(), Vec::<std::ffi::OsString>::new());
+    let failed = run(&["api", "call", "world.render", "{\"no_such_option\": 1}"]);
+    assert_eq!(failed.status.code(), Some(1));
+    assert_eq!(records(), Vec::<std::ffi::OsString>::new());
+    let _ = std::fs::remove_dir_all(&runtime);
+}

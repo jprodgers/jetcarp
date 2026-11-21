@@ -132,14 +132,14 @@ fn gpu_setup() {
 fn run_saver(mode: window::Mode, seconds: Option<f64>) -> ! {
     if let Err(e) = jetcarp_core::photosensitivity::require("run the screen saver") {
         say!("jetcarp-host: {e}");
-        std::process::exit(1);
+        jetcarp_core::machine::pool::exit(1);
     }
     gpu_setup();
     match core::Core::for_saver() {
         Ok(c) => window::run(c, mode, seconds),
         Err(e) => {
             say!("jetcarp-host: {e}");
-            std::process::exit(1);
+            jetcarp_core::machine::pool::exit(1);
         }
     }
 }
@@ -202,7 +202,7 @@ pub fn run(args: HostArgs) -> ! {
         Ok(f) => f,
         Err(e) => {
             say!("jetcarp-host: {e}");
-            std::process::exit(3);
+            jetcarp_core::machine::pool::exit(3);
         }
     };
     if let Ok(cmd) = jetcarp_display::autostart::host_command() {
@@ -214,7 +214,7 @@ pub fn run(args: HostArgs) -> ! {
         Ok(c) => c,
         Err(e) => {
             say!("jetcarp-host: {e}");
-            std::process::exit(1);
+            jetcarp_core::machine::pool::exit(1);
         }
     };
     core.login = args.login;

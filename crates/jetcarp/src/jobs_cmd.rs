@@ -392,7 +392,7 @@ pub fn run(a: JobsArgs, json: bool) -> Result<()> {
                 code => {
                     use std::io::Write as _;
                     let _ = std::io::stdout().flush();
-                    std::process::exit(code)
+                    jetcarp_core::machine::pool::exit(code)
                 }
             }
         }
