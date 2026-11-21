@@ -414,10 +414,19 @@ fn jumped(mut w: World, n: u64, opts: Options) -> Result<World, String> {
 
 /// B0 rules: the stored plane swaps 0 and the (uniformly changing) background, so HashLife runs
 /// them exactly. Rules without S_max alternate; with S_max the background stays full; on
-/// tilings with several tile types each type has its own background cycle.
+/// tilings with several tile types each type has its own background cycle, Life-like rules
+/// where the types have different numbers of neighbours too (4.8.8, 3.6.3.6 with edge
+/// neighbours, 3.4.6.4, 3.3.4.3.4).
 #[test]
 fn b0_rules_equal_the_stepper() {
     let cases = [
+        ("oct", "B0/S8"),
+        ("oct", "B0/S4"),
+        ("oct", "B03/S238"),
+        ("trihex", "B0/S6V"),
+        ("rhombitrihex", "B03/S238"),
+        ("rhombitrihex", "B0123478/S01234678"),
+        ("snubsq", "B03/S2,3,9"),
         ("square", "B0/S8"),
         ("square", "B0/S"),
         ("square", "B03/S23"),
@@ -457,13 +466,14 @@ fn b0_rules_equal_the_stepper() {
                 if let Err(e) = b.apply(Command::Jump { gens: n }) {
                     return Some(format!("{f} {rule}: {e}"));
                 }
-                // In two pieces (odd then even), so phases carry across jumps.
+                // In two pieces (odd then even), so phases carry across jumps. A jump that fails
+                // is a failure of the case, not a pass.
                 let mut c = mk();
-                c.apply(Command::Jump { gens: n / 2 + 1 }).ok()?;
-                c.apply(Command::Jump {
-                    gens: n - n / 2 - 1,
-                })
-                .ok()?;
+                for gens in [n / 2 + 1, n - n / 2 - 1] {
+                    if let Err(e) = c.apply(Command::Jump { gens }) {
+                        return Some(format!("{f} {rule} {w}x{h}: a jump of {gens}: {e}"));
+                    }
+                }
                 (a.states_hash() != b.states_hash() || a.states_hash() != c.states_hash())
                     .then(|| format!("{f} {rule} {w}x{h} gens {n}"))
             })
@@ -498,6 +508,8 @@ fn b0_plane_equals_the_stepper() {
         ("square", "B013/S012/C4"),
         ("hex", "B02/S34"),
         ("oct", "B0/S4/C3"),
+        ("oct", "B0/S8"),
+        ("rhombitrihex", "B03/S238"),
     ] {
         let mut base = world(f, 64, 64, Boundary::Wrap, rule, SeedSpec::Empty, 3);
         let g = base.topo.lattice().unwrap().clone();
@@ -721,13 +733,10 @@ fn bit_leaf_equals_the_recursion() {
 /// What HashLife refuses about B0, and that a jump keeps the stepper's B0 step counter.
 #[test]
 fn b0_refusals_and_counters() {
-    // Mixed degrees (4.8.8): the stepper's emulation assumes one degree.
+    // Tiles with different numbers of neighbours (4.8.8) are not refused (before 0.4.3 they
+    // were, as the stepper's alternating emulation assumed one).
     let w = world("oct", 16, 16, Boundary::Wrap, "B0/S4", soup("B3/S23"), 1);
-    assert!(
-        hashlife::torus_problem(&w)
-            .unwrap()
-            .contains("same number of neighbours")
-    );
+    assert_eq!(hashlife::torus_problem(&w), None);
     // A B0 Life-like rule sharing its field.
     let w = world_of(
         "square",

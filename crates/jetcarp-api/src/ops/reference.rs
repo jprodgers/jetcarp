@@ -557,6 +557,11 @@ const SEED_FORMS: &[(&str, &str)] = &[
         "clock loops feeding wires (WireWorld on squares)",
     ),
     (
+        "circuit, circuit:40, circuit:40:160",
+        "WireWorld wiring on any tiling: wire along the borders of this many random regions \
+         (40), with this many signals (four a region)",
+    ),
+    (
         "pattern:blobs, pattern:voronoi:0.8:by_region",
         "a shape and a fill: shape, density, states",
     ),
@@ -615,5 +620,24 @@ impl Op for ReferenceSeeds {
             ]),
             states: words(&["one", "uniform", "range:lo:hi", "signed:share", "by_region"]),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SEED_FORMS;
+    use jetcarp_core::SeedSpec;
+
+    // `reference seeds` lists the circuit shorthands, and each one it lists reads as a circuit.
+    #[test]
+    fn the_seed_forms_list_circuits() {
+        let (forms, _) = SEED_FORMS
+            .iter()
+            .find(|(f, _)| f.starts_with("circuit"))
+            .expect("circuit is listed");
+        for f in forms.split(", ") {
+            let s = crate::args::parse_seed(&serde_json::json!(f)).unwrap();
+            assert!(matches!(s, SeedSpec::Circuit { .. }), "{f}: {s:?}");
+        }
     }
 }

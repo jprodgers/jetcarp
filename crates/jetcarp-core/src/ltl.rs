@@ -11,11 +11,24 @@
 //!
 //! On any tiling, Moore means "within r steps over touching neighbours" and von Neumann means
 //! "within r steps over edge neighbours"; on the square grid these are the usual box and diamond.
+//! Those neighbourhoods can hold more cells than the square grid's (a triangle has 12 touch
+//! neighbours), so every count a rule names is kept, up to [`MAX_COUNT`], and the notation reads
+//! back as written.
+//!
+//! On a lattice the neighbourhood is a list of offsets ([`reach`]), resolved like any neighbour
+//! slot: on a wrapped grid smaller than the neighbourhood, two offsets can land on the same cell,
+//! which then counts twice. On a patch the neighbourhood is the set of cells within `r` steps, each
+//! counted once.
 
 use crate::topology::{Nb, Offset, Storage, Topology};
 use crate::world::Field;
 use rayon::prelude::*;
 use std::collections::{HashMap, VecDeque};
+
+/// The largest birth or survival count a rule may name. Far more than any neighbourhood holds:
+/// the largest, within range 20 of one tile of the 5-uniform tiling `k5-047`, has 8,462 cells
+/// (the square grid's has 1,680).
+pub const MAX_COUNT: usize = 65_535;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Hood {
@@ -131,13 +144,16 @@ impl LtlRule {
             }
         };
         let r = range as usize;
-        let max = match hood {
+        // The cells in the square grid's neighbourhood. The tables are at least this long, and
+        // longer when the rule names a larger count: other tilings' neighbourhoods can hold more
+        // cells (a triangle has 12 touch neighbours), so every count written is kept.
+        let square = match hood {
             Hood::Moore => (2 * r + 1) * (2 * r + 1) - 1,
             Hood::VonNeumann => 2 * r * (r + 1),
             Hood::Cross => 4 * r,
         };
         let set = |k: char, shift: usize| -> Result<Vec<bool>, String> {
-            let mut v = vec![false; max + 1];
+            let mut counts = Vec::new();
             for item in get(k).ok_or_else(|| format!("missing {k}"))? {
                 if item.is_empty() {
                     continue;
@@ -151,11 +167,18 @@ impl LtlRule {
                 };
                 let a: usize = a.parse().map_err(|_| format!("bad count '{item}'"))?;
                 let b: usize = b.parse().map_err(|_| format!("bad count '{item}'"))?;
-                for c in a..=b {
-                    if c >= shift && c - shift <= max {
-                        v[c - shift] = true;
-                    }
+                if b > MAX_COUNT {
+                    return Err(format!(
+                        "{k}{item}: the count {b} is too large; Larger than Life counts are at \
+                         most {MAX_COUNT}"
+                    ));
                 }
+                counts.extend((a..=b).filter(|&c| c >= shift).map(|c| c - shift));
+            }
+            let len = counts.iter().copied().fold(square, usize::max) + 1;
+            let mut v = vec![false; len];
+            for c in counts {
+                v[c] = true;
             }
             Ok(v)
         };

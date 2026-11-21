@@ -272,7 +272,12 @@ fixes them. The plans, logs and results are published in
   naming its fix, its test and that the test failed before the fix, or why there is no test.
 - **The book is updated with each change**, and every candidate gets a full audit of the book before
   its tag: every page that mentions something changed, the app's pictures, and the changelog.
-- **A candidate is tagged** only when CI passes on all three systems, and only on Jimmie's go.
+- **A candidate is tagged** only on a commit whose CI has passed on all three systems, and only on
+  Jimmie's go. Since 0.4.3 the release workflow holds to the first half itself: it waits for CI on
+  the tagged commit and stops unless it passed. And `main` takes changes only through pull requests
+  whose CI checks have passed. In the 0.4.2 cycle, `rc.1` was tagged before its CI run had finished,
+  and that run failed (#15); `rc.3` and `rc.5` were tagged while their commit's run was still going,
+  and both passed.
 - **Security problems** are reported privately, as
   [SECURITY.md](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says. In the 0.4.2 cycle
   what stayed private was the problem: no public issue, its test records withheld and its advisory

@@ -226,9 +226,11 @@ fn bs_age(s: u32, v: u32, age: u32) -> u32 {
   return 0u;
 }
 
-// B0: the low d + 1 bits of m, reversed.
-fn rev_mask(m: u32, d: u32) -> u32 {
-  return reverseBits(m) >> (31u - d);
+// B0: a cell's next state under the plain B/S rule (birth, survive), live or not, with c live
+// neighbours (b0.rs `next_state`).
+fn life_bit(alive: u32, c: u32) -> u32 {
+  let m = select(p.birth, p.survive, alive != 0u);
+  return select(0u, (m >> min(c, 31u)) & 1u, c < 32u);
 }
 
 // 64-bit integers as (low, high) pairs, for forest fire's SplitMix64 noise (step.rs `noise01`).
@@ -512,30 +514,54 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         }
         na = commit_age(s, v, age);
       }
-      // B0 Life-like rules (step.rs `step_b0`): masks per degree, from the step number's parity
-      // (k1 bit 0: odd) and whether it is the CA's first step (k1 bit 1).
+      // B0 Life-like rules (step.rs `step_b0`, b0.rs): cells are stored relative to the empty
+      // world's background; decode the neighbours, apply the rule, store against the next
+      // background. A patch's cells carry their background in bit 8 (stepped here with the plain
+      // rule); a lattice's is a word per phase and tile type at aux[gg..], at phase k1 before
+      // this step and k2 after it, and a slot past a dead edge is in the background.
       case 8u: {
-        let c = gather(i, 1u, 1u, &deg).x;
-        let d = min(deg, 31u);
-        let full = select((2u << d) - 1u, 0xffffffffu, d >= 31u);
-        var bm = 0u;
-        var sm = 0u;
-        if (((p.survive >> d) & 1u) == 1u) {
-          if ((p.k1 & 2u) != 0u) {
-            bm = ~p.birth & full;
-            sm = ~p.survive & full;
-          } else {
-            bm = rev_mask(~p.survive & full, d);
-            sm = rev_mask(~p.birth & full, d);
+        var c = 0u;
+        var b0 = 0u;
+        var b1 = 0u;
+        if (topo[6] != 0) {
+          let h = hood(i);
+          var cb = 0u;
+          for (var o = 0u; o < h.cnt; o = o + 1u) {
+            let w = src[csr_nb[h.lo + o]];
+            let b = (w >> 8u) & 1u;
+            c += u32((w & 0xffu) == 1u) ^ b;
+            cb += b;
           }
-        } else if ((p.k1 & 1u) != 0u) {
-          bm = ~p.birth & full;
-          sm = ~p.survive & full;
+          b0 = (old >> 8u) & 1u;
+          b1 = life_bit(b0, cb);
+          glow = b1 << 8u;
         } else {
-          bm = rev_mask(p.survive & full, d);
-          sm = rev_mask(p.birth & full, d);
+          let nt = u32(topo[3]);
+          let w = u32(topo[1]);
+          let k = i % nt;
+          let cc = i / nt;
+          let j = i32(cc / w);
+          let base = i32(cc % w) + topo[topo[9] + j];
+          let t = topo[10] + i32((p.nb * nt + k) * 2u);
+          let start = topo[t];
+          let cnt = topo[t + 1];
+          let row0 = p.gg + p.k1 * nt;
+          for (var o = 0; o < cnt; o = o + 1) {
+            let e = topo[11] + (start + o) * 3;
+            let kk = u32(topo[e + 2]);
+            let x = resolve(base + topo[e], j + topo[e + 1], topo[e + 2]);
+            if (x >= 0) {
+              c += u32((src[u32(x)] & 0xffu) == 1u) ^ aux[row0 + kk];
+            } else if (topo[7] != 0) {
+              c += 1u;
+            } else {
+              c += aux[row0 + kk];
+            }
+          }
+          b0 = aux[row0 + k];
+          b1 = aux[p.gg + p.k2 * nt + k];
         }
-        if (s == 0u) { v = (bm >> c) & 1u; } else { v = (sm >> c) & 1u; }
+        v = life_bit(u32(s != 0u) ^ b0, c) ^ b1;
         if (v == 1u) {
           if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
         }

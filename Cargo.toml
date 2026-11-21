@@ -8,7 +8,6 @@ version = "0.4.2"
 edition = "2024"
 rust-version = "1.95"
 authors = ["Jimmie Rodgers <jimmie@jimmieprodgers.com>"]
-description = "JETCARP (Jimmie's Euclidean Tilings and Cellular Automata Research Program): cellular automata on almost any tiling of the plane."
 license = "Unlicense OR MIT"
 repository = "https://github.com/jprodgers/jetcarp"
 homepage = "https://jprodgers.github.io/jetcarp/"
