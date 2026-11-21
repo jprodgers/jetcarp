@@ -66,10 +66,10 @@ hand with the help of Jaap Scherphuis's PolyForm Puzzle Solver, and emailed Crai
 ([University of Waterloo 2023](../research/bibliography.md#uwaterloo2023trick)). Smith, Joseph Samuel
 Myers, Kaplan and Chaim Goodman-Strauss posted "An aperiodic monotile" in March 2023, and it was
 published in *Combinatorial Theory* in 2024. Their proof groups hats into four *metatiles* with a
-substitution rule ([Smith et al. 2023](../research/bibliography.md#smith2023aperiodic)). Two months later
+substitution rule ([Smith et al. 2024a](../research/bibliography.md#smith2023aperiodic)). Two months later
 the same four authors showed in "A chiral aperiodic monotile" that the equilateral member of the
 family is aperiodic without reflections, and introduced the spectres
-([Smith et al. 2023b](../research/bibliography.md#smith2023chiral)). Kaplan published software for both:
+([Smith et al. 2024b](../research/bibliography.md#smith2023chiral)). Kaplan published software for both:
 *hatviz*, which builds hat patches from the metatile substitution, and an interactive spectre app
 ([hatviz](../research/bibliography.md#kaplannd_hatviz); [hat page](../research/bibliography.md#kaplannd_hatpage);
 [spectre page](../research/bibliography.md#kaplannd_spectrepage)).
@@ -122,8 +122,8 @@ that it runs for a million rings of tiles on a sliding window (see
 
 - [Berger 1966](../research/bibliography.md#berger1966undecidability);
   [Socolar and Taylor 2011](../research/bibliography.md#socolar2011aperiodic)
-- [Smith et al. 2023](../research/bibliography.md#smith2023aperiodic);
-  [Smith et al. 2023b](../research/bibliography.md#smith2023chiral);
+- [Smith et al. 2024a](../research/bibliography.md#smith2023aperiodic);
+  [Smith et al. 2024b](../research/bibliography.md#smith2023chiral);
   [University of Waterloo 2023](../research/bibliography.md#uwaterloo2023trick)
 - [hatviz](../research/bibliography.md#kaplannd_hatviz);
   [Kaplan, hat page](../research/bibliography.md#kaplannd_hatpage);

@@ -68,8 +68,8 @@ cases in particular:
 - **James Edmond's** priority tables, Spectre glider and evolutionary glider search
   ([Edmond 2026](../research/bibliography.md#edmond2026gliders)).
 - **The hat and spectre tilings**, by David Smith, Joseph Samuel Myers, Craig S. Kaplan and Chaim
-  Goodman-Strauss ([Smith et al. 2023](../research/bibliography.md#smith2023aperiodic);
-  [2023b](../research/bibliography.md#smith2023chiral)).
+  Goodman-Strauss ([Smith et al. 2024a](../research/bibliography.md#smith2023aperiodic);
+  [2024b](../research/bibliography.md#smith2023chiral)).
 - **The k-uniform tilings**, Brian Galebach's catalogue in the encoding of J. E. Soto Sánchez and
   co-authors, which JETCARP uses under the Creative Commons Attribution 4.0 licence; that licence asks
   for attribution when the data are used (see [Licence](licence.md#third-party-work) and

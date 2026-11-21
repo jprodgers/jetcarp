@@ -75,12 +75,16 @@ results in detail ([Chavey 1984](../research/bibliography.md#chavey1984periodic)
 Grünbaum and G. C. Shephard surveyed the subject "from Kepler to the present" in 1977 and in their book
 *Tilings and Patterns*, the standard modern reference
 ([Grünbaum and Shephard 1977](../research/bibliography.md#grunbaum1977tilings);
-[1987](../research/bibliography.md#grunbaum1987tilings)).
+[1987](../research/bibliography.md#grunbaum1987tilings)), and they classified the 91 types of
+isogonal (vertex-transitive) tilings
+([Grünbaum and Shephard 1978](../research/bibliography.md#grunbaum1978ninetyone)).
 
 The dotted vertex notation (4.8.8) is commonly named after H. M. Cundy and A. P. Rollett's
 *Mathematical Models* ([Cundy and Rollett 1961](../research/bibliography.md#cundy1961mathematical));
 Grünbaum and Shephard use exponents. Later notations designed for generating tilings automatically
-include the GomJau-Hogg notation ([Gomez-Jauregui et al. 2021](../research/bibliography.md#gomezjauregui2021gomjau)).
+include Gomez-Jauregui and colleagues' nomenclature for tessellations
+([Gomez-Jauregui et al. 2012](../research/bibliography.md#gomezjauregui2012generation)) and their later
+GomJau-Hogg notation ([Gomez-Jauregui et al. 2021](../research/bibliography.md#gomezjauregui2021gomjau)).
 
 Cellular automata on these tilings have their own history. Carter Bays studied Life-like rules on the
 triangular tiling ([Bays 1994](../research/bibliography.md#bays1994cellular)) and on hexagons and Cairo
@@ -206,8 +210,10 @@ flagged 4.8.8 ships, since EricG found many ships in <code>B2</code> rules there
   [Kepler 1997](../research/bibliography.md#kepler1997harmony);
   [Chavey 1984](../research/bibliography.md#chavey1984periodic)
 - [Grünbaum and Shephard 1977](../research/bibliography.md#grunbaum1977tilings);
+  [Grünbaum and Shephard 1978](../research/bibliography.md#grunbaum1978ninetyone);
   [Grünbaum and Shephard 1987](../research/bibliography.md#grunbaum1987tilings)
 - [Cundy and Rollett 1961](../research/bibliography.md#cundy1961mathematical);
+  [Gomez-Jauregui et al. 2012](../research/bibliography.md#gomezjauregui2012generation);
   [Gomez-Jauregui et al. 2021](../research/bibliography.md#gomezjauregui2021gomjau)
 - [Bays 1994](../research/bibliography.md#bays1994cellular);
   [Bays 2005](../research/bibliography.md#bays2005note);

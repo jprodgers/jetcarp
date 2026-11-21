@@ -43,7 +43,10 @@ Golly's documentation credits David Griffeath with first imagining Larger than L
 1990s, to see whether Life sits near a critical point when its thresholds and range are scaled up
 together ([Golly: Larger than Life](../research/bibliography.md#gollynd_ltl)). Golly cites
 Griffeath's "Self-organization of random cellular automata: four snapshots" as the first reference
-([Griffeath 1994](../research/bibliography.md#griffeath1994self)).
+([Griffeath 1994](../research/bibliography.md#griffeath1994self)). Related work by Griffeath includes
+a survey of cellular automaton growth with Janko Gravner
+([Gravner and Griffeath 1998](../research/bibliography.md#gravner1998cellular)) and ten still frames of
+self-organising two-dimensional rules ([Griffeath 2016](../research/bibliography.md#griffeath2016self)).
 
 Kellie Michele Evans developed the family in a 1996 PhD thesis at the University of
 Wisconsin–Madison, *Larger than Life: It's So Nonlinear*, supervised by Griffeath. Evans's preface says
@@ -152,6 +155,8 @@ family on every tiling, including the k-uniform, isohedral and aperiodic ones.
 ## References
 
 - [Griffeath 1994](../research/bibliography.md#griffeath1994self);
+  [Gravner and Griffeath 1998](../research/bibliography.md#gravner1998cellular);
+  [Griffeath 2016](../research/bibliography.md#griffeath2016self);
   [Evans 1996](../research/bibliography.md#evans1996larger);
   [Evans 2001](../research/bibliography.md#evans2001larger);
   [Evans 2003](../research/bibliography.md#evans2003larger);

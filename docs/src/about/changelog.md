@@ -149,6 +149,20 @@ day later (0.4.2: 17 November here, 18 November there).
   the shares of the twelve commonest objects of a fixed hunt of Life with a pinned copy of the top of
   Catagolue's census. ([Soup hunt](../research/search-methods.md#soup-hunt),
   [#182](https://github.com/jprodgers/jetcarp/issues/182))
+- **The research pages add up, and their search log is published.** The count of spaceship records
+  in *Findings* is now a table that can be checked by subtraction (the 72 candidates came from 137
+  records, 103 of CART's and 34 of fresh searches; seven records of two candidate ships flying
+  together had not been said); the k-uniform chapter no longer says that no work had run cellular
+  automata on 2- and 3-uniform tilings; and the research notes that the claims and the
+  bibliography rest on, with every query and page their searches read, are in the repository's
+  `research/` folder. The bibliography marks the 10 entries that rest on a secondary listing (it
+  said every entry had been checked against a primary record), cites every entry it holds, and
+  corrects four: the year of the Smith et al. monotile papers, the pages of Eppstein (2010) and
+  Heudin (1996), and the translators of Kepler's *Harmony of the World*. *What is new in JETCARP*
+  now weighs Marr and Hütt's outer-totalistic rules on graphs and Nochella's network rules against
+  the layered rules and the one engine for every tiling.
+  ([Findings](../research/findings.md#how-the-list-was-cut),
+  [Bibliography](../research/bibliography.md), [#179](https://github.com/jprodgers/jetcarp/issues/179))
 
 ## [0.4.2] – 2026-11-17
 
