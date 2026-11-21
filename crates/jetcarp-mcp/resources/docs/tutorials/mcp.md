@@ -277,7 +277,9 @@ The tools are made so that an assistant cannot do much harm by mistake, and cann
   folder, and folders you name with `jetcarp mcp --allow DIR`; they also read the packs that came
   with JETCARP. A path anywhere else is refused, so an assistant cannot save over your documents or
   read your files. Relative paths start in the output folder.
-- **Time and size.** Worlds hold at most 4 million cells, and one `world_step` runs at most
+- **Time and size.** Worlds hold at most 4 million cells unless the person raised an AI's share of
+  the computer (Tools → This computer…, or `jetcarp limits set ai-share 25%`; `reference {"what":
+  "machine"}` shows the share in use), and one `world_step` runs at most
   1,000,000 generations or 2 billion cell updates. `run_script` runs a Rhai script for 60 seconds
   by default and 600 at most, writes only inside the output folder and reads only there. Waits for
   a job last ten minutes at most. When the assistant cancels a request, the call stops soon.

@@ -16,6 +16,7 @@
 //! | [`explore`] | `search.runs`, `search.sheet`, `search.run_scene`, `search.try`, `search.review`, `search.rescore`, `search.clips` (an explore job's run records) |
 //! | [`jobs`] | `jobs.list`, `jobs.status`, `jobs.wait`, `jobs.stop`, `jobs.resume`, `jobs.remove`, `jobs.report` |
 //! | [`pack`] | `pack.key`, `pack.rater`, `pack.publish`, `pack.export`, `pack.check`, `pack.info`, `pack.import` (with the `pack` feature) |
+//! | [`machine`] | `machine.info`, `machine.limits`, `machine.limits_set`, `machine.limits_reset`, `machine.score` |
 //! | [`setup`] | `setup.status`, `setup.set_data_dir`, `setup.apply` (the first-run setup; with the `pack` feature) |
 
 mod clip_ratings;
@@ -23,6 +24,7 @@ pub mod explore;
 pub mod files;
 pub mod jobs;
 pub mod library;
+pub mod machine;
 pub mod media;
 #[cfg(feature = "pack")]
 pub mod pack;
@@ -47,6 +49,11 @@ pub static OPS: &[&dyn DynOp] = &[
     &Plain::<system::SystemStrobeGuard>::NEW,
     &Plain::<system::SystemStrobeGuardOn>::NEW,
     &Plain::<system::SystemUninstall>::NEW,
+    &Plain::<machine::MachineInfo>::NEW,
+    &Plain::<machine::MachineLimits>::NEW,
+    &Plain::<machine::MachineLimitsSet>::NEW,
+    &Plain::<machine::MachineLimitsReset>::NEW,
+    &Plain::<machine::MachineScore>::NEW,
     &Plain::<reference::ReferenceRules>::NEW,
     &Plain::<reference::ReferenceTilings>::NEW,
     &Plain::<reference::ReferenceIsohedral>::NEW,

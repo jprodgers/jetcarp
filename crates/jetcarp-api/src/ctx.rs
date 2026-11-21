@@ -17,10 +17,28 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-/// Bounds on what one call may do. The command line trusts its user ([`Limits::NONE`]); the MCP
-/// server bounds every call so a model cannot stall it ([`Limits::INTERACTIVE`]).
+/// The memory limit a world must fit, worked out before it is built
+/// ([`jetcarp_core::machine::cost`]) against the process's machine limits
+/// ([`jetcarp_core::machine::current`]). A world over it is refused, naming the limit and where
+/// it came from; nothing is ever made smaller to fit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorldMemory {
+    /// None beyond the engine's own ceilings (tests, and programs using the crate as a library).
+    Unlimited,
+    /// This machine's `world` limit (the command line, and scripts people run).
+    Machine,
+    /// An AI's share of it (the MCP tools and their scripts).
+    Ai,
+}
+
+/// Bounds on what one call may do. The command line trusts its user with everything but the
+/// machine's memory ([`Limits::for_this_machine`]); the MCP server bounds every call so a model
+/// cannot stall it ([`Limits::for_an_ai`], from [`Limits::INTERACTIVE`]).
 #[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
 pub struct Limits {
+    /// The memory limit a new world, an opened scene, `set_tiling` or `add_ca` must fit.
+    pub world_memory: WorldMemory,
     /// Largest world (cells) a new world, an opened scene, or `set_tiling` may build.
     pub max_cells: u64,
     /// Widest and tallest grid (unit cells) a new world may have.
@@ -57,6 +75,7 @@ pub struct Limits {
 impl Limits {
     /// No limits beyond the engine's own (the command line, scripts the user runs, the app).
     pub const NONE: Limits = Limits {
+        world_memory: WorldMemory::Unlimited,
         max_cells: u64::MAX,
         max_grid_side: u32::MAX,
         max_gens: u64::MAX,
@@ -73,8 +92,11 @@ impl Limits {
         max_collide_gens: u64::MAX,
     };
     /// The MCP server's limits: each call finishes in seconds to a minute and stays in memory.
+    /// Its worlds' size is an AI's share of the machine ([`Limits::for_an_ai`]); these are that
+    /// share's small end, the limits before 0.4.3.
     pub const INTERACTIVE: Limits = Limits {
-        max_cells: 4_000_000,
+        world_memory: WorldMemory::Ai,
+        max_cells: jetcarp_core::machine::limits::AI_SMALL_CELLS,
         max_grid_side: 4096,
         max_gens: 1_000_000,
         max_work: 2_000_000_000,
@@ -89,6 +111,33 @@ impl Limits {
         max_collide_runs: 5000,
         max_collide_gens: 4096,
     };
+
+    /// The command line's and people's scripts': no limits but this machine's memory limit for
+    /// a world.
+    pub fn for_this_machine() -> Limits {
+        Limits {
+            world_memory: WorldMemory::Machine,
+            ..Limits::NONE
+        }
+    }
+
+    /// The MCP server's: [`Limits::INTERACTIVE`], with worlds of an AI's share of this machine
+    /// (`ai-share` in its limits: small by default, the 4 million cells of before).
+    pub fn for_an_ai() -> Limits {
+        let cells = jetcarp_core::machine::current().ai_cells();
+        Limits {
+            max_cells: cells,
+            max_grid_side: side_for(cells),
+            ..Limits::INTERACTIVE
+        }
+    }
+}
+
+/// The widest grid side a limit of `cells` allows: 4,096 at the small end (a long thin grid
+/// still fits), else twice the side of a square grid of that many cells.
+fn side_for(cells: u64) -> u32 {
+    let sq = (cells as f64).sqrt().ceil() as u64;
+    sq.saturating_mul(2).clamp(4096, u32::MAX as u64) as u32
 }
 
 /// Where an operation may read and write files.

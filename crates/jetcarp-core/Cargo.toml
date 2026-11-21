@@ -21,3 +21,12 @@ dirs.workspace = true
 flate2.workspace = true
 gif.workspace = true
 image-webp.workspace = true
+
+# Reading the machine's memory, processor and GPU memory (`src/machine/hardware.rs`): bindings
+# only, already in the dependency tree.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_System_Registry", "Win32_System_SystemInformation"] }
+windows = { version = "0.62.2", features = ["Win32_Graphics_Dxgi"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2.191"

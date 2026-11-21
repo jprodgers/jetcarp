@@ -19,8 +19,13 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-/// Largest lattice grid. A binary field costs about 6 bytes per cell (state, age, back buffers).
-pub const MAX_CELLS: u64 = 256_000_000;
+/// Largest lattice grid: the most cells the code can number. Cells are numbered with 32-bit
+/// integers in places (commands' `[cell, state]` pairs, seeds, ants, layers, the batch
+/// stepper's neighbour lists), so every cell's index must fit in one; 0.4.3 checked each such
+/// place (see the tests below). This is a hard ceiling: how much of it a machine may use is its
+/// limit ([`crate::machine::limits`]), from its memory (a Life world takes about 8 bytes a cell,
+/// [`crate::machine::cost`]).
+pub const MAX_CELLS: u64 = crate::machine::limits::CELL_CEILING;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -497,12 +502,13 @@ impl Topology {
                 }
                 if (w as u64) * (h as u64) * def.types.len() as u64 > MAX_CELLS {
                     return Err(format!(
-                        "grid is larger than {} million cells",
-                        MAX_CELLS / 1_000_000
+                        "a {w} x {h} grid is {} cells, more than the {} JETCARP can number",
+                        (w as u64) * (h as u64) * def.types.len() as u64,
+                        MAX_CELLS
                     ));
                 }
                 let grid = def.grid(w, h, spec.boundary == Boundary::Wrap);
-                let n = (w * h) as usize * def.types.len();
+                let n = w as usize * h as usize * def.types.len();
                 // Bounds from the four corner unit cells.
                 let mut bounds = [
                     f64::INFINITY,

@@ -216,6 +216,7 @@ impl Op for SceneVerify {
         // The record's hash in the version it names (no version: 1).
         let version = jetcarp_core::world::HashVersion::of_record(rec.hash_version)
             .map_err(ApiError::invalid)?;
+        crate::ops::world::check_world_memory(&sc.tiling, &sc.cas, &cx.limits)?;
         let w = World::from_scene(&sc).map_err(|e| in_file(a.path.as_deref(), e))?;
         let got = w.hash_hex_as(version);
         if w.generation != rec.generation || got != rec.hash.trim().to_ascii_lowercase() {
@@ -375,6 +376,7 @@ impl Op for SceneRun {
 
 fn run_scene(cx: &Ctx, a: RunIn, _: &dyn Progress) -> Result<RunSummary, ApiError> {
     let sc = read_scene(cx, None, Some(&a.scene))?;
+    crate::ops::world::check_world_memory(&sc.tiling, &sc.cas, &cx.limits)?;
     let t0 = std::time::Instant::now();
     let mut w = World::from_scene(&sc).map_err(|e| in_file(Some(&a.scene), e))?;
     if let Some(v) = &a.reseed {

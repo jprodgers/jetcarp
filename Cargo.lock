@@ -2468,11 +2468,14 @@ dependencies = [
  "flate2",
  "gif",
  "image-webp",
+ "libc",
  "png",
  "rayon",
  "ryu-js",
  "serde",
  "serde_json",
+ "windows",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
