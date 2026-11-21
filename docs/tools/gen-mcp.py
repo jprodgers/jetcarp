@@ -66,7 +66,9 @@ ONLY = {
     "app_display": "Listed by the app's own server, and by `jetcarp mcp`, which passes it to the app "
                    "once attached (`use_app`); an error otherwise.",
     "use_app": "`jetcarp mcp` (stdio) only.",
-    "host_control": "`jetcarp mcp` (stdio) only.",
+    "host_control": "`jetcarp mcp` (stdio) only. Its actions and options are told in the help topic "
+                    "`host` (`help {\"topic\": \"host\"}`), to keep the tool list short; the command "
+                    "line's are in [Wallpapers](../guides/wallpapers.md#the-background-host).",
 }
 
 

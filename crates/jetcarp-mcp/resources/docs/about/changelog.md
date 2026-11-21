@@ -171,17 +171,28 @@ day later (0.4.2: 17 November here, 18 November there).
   `reference {"what": "machine"}`, which reads the score; no tool runs the benchmark.
   ([This computer](../guides/this-computer.md), [#213](https://github.com/jprodgers/jetcarp/issues/213))
 - **Fit to this computer is back, and takes a few seconds.** Held back from 0.4.2, where a fit
-  showed every scene at every size and took 45 seconds to 12 minutes, it now measures one scene a
-  screen, the rotation's most demanding by its work a cell (its tiling's neighbours, its rules, its
-  speed and its drawing, with the GPU's steps counted at the GPU's speed), at four or five sizes of
-  a second each, found by a binary search from a first guess: the size chosen or recommended last
-  time, or one from the JETCARP Hardware Score. Every screen is measured at once. The size found
-  serves the whole rotation: the other scenes take their sizes from where the measured scene's loads
-  cross the limits, a cheaper scene going finer. On the desktop JETCARP is developed on, a first fit
-  took 2.7 s on one screen and 3.7 s on two, and a repeat 1.5 to 3.8 s. *Fit to this computer…* is
-  in the *Desktop background* pane again, with its limits and cards, and `jetcarp host tune` and the
-  MCP tool's `tune` are back. ([Fit to this computer](../guides/wallpapers.md#fit-to-this-computer),
+  showed every scene at every size and took 45 seconds to 12 minutes, it now measures the rotation's
+  most demanding scene on each device, by its work a cell (its tiling's neighbours, its rules, its
+  speed and its drawing, with the GPU's steps counted at the GPU's speed): the one that steps on the
+  GPU and the one that steps on the processor, each at four or five sizes of a second each, found by
+  a binary search from a first guess: the size chosen or recommended last time, or one from the
+  JETCARP Hardware Score. Every screen is measured at once. The size found serves the whole
+  rotation: the other scenes take their sizes from where the loads of the scene measured on their
+  device cross the limits, a cheaper scene going finer. On the desktop JETCARP is developed on, a
+  first fit took 3.2 s on one screen and 5.4 s on two, and a repeat 2.0 and 3.1 s; a rotation
+  mixing devices, its two scenes measured one after the other, 9.6 s the first time and 2.8 s
+  repeated.
+  *Fit to this computer…* is in the *Desktop background* pane again, with its limits and cards, and
+  `jetcarp host tune` and the MCP tool's `tune` are back.
+  ([Fit to this computer](../guides/wallpapers.md#fit-to-this-computer),
   [#113](https://github.com/jprodgers/jetcarp/issues/113))
+  - **The other scenes go no finer than twice the measured scene's cells' worth of work** unless
+    you choose a finer size, in the pane or with `--pick`; where one is held there, the pane and
+    `jetcarp host tune` say so.
+  - **A fit's first size warms up half a second longer,** so a fit just after the host started
+    measures as later ones do.
+  - **The MCP tool `host_control` is short again,** its actions and options in the help topic
+    `host`, and takes the frame rate (`fps`) and `fresh` for a fit.
   - **The limits are one for the whole desktop,** shared between the screens by their pixel area:
     a 2560 × 1440 screen beside a 1920 × 1080 one has 6.4% of a 10% processor limit and the other
     3.6%. Before, each of two screens had half the limit, so on the Mac's two monitors no size fit.

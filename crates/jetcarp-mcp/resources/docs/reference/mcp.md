@@ -119,7 +119,7 @@ The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tool
 
 ### `help`
 
-**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), "setup" (this installation as its user set it up: profile, folders, packs, GPU, library; read only, since setup is the user's choice) or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"} (the resources jetcarp://docs/{page}). `schema` returns the settings of a tool argument that names a jetcarp://schema/ resource, e.g. {"schema": "search_start/hunt"}.
+**JETCARP help and worked examples.** Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: "overview" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), "world" (drawing, pasting, reseeding, commands, objects), "library" (finding, reading and curating patterns, ant runs and Quick Start entries), "searches" (long searches as background jobs: start, wait, read the finds, stop, resume), "scripts" (every run_script function), "packs" (checking, importing and publishing packs), "setup" (this installation as its user set it up: profile, folders, packs, GPU, library; read only, since setup is the user's choice), "host" (the background host's actions, and fitting it to this computer) or "pages" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {"page": "guides/searching"} (the resources jetcarp://docs/{page}). `schema` returns the settings of a tool argument that names a jetcarp://schema/ resource, e.g. {"schema": "search_start/hunt"}.
 
 *reads only*
 
@@ -127,7 +127,7 @@ The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tool
 | --- | --- | --- |
 | `page` | string | A page of the JETCARP book by its path without .md, e.g. "guides/searching" (topic pages lists them). |
 | `schema` | string | A JSON Schema: a tool argument's settings ("search_start/hunt" is jetcarp://schema/search_start/hunt), "scene.json" or "pack.json". |
-| `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"setup"`, `"pages"` | Which guide (default overview). |
+| `topic` | `"overview"`, `"world"`, `"library"`, `"searches"`, `"scripts"`, `"packs"`, `"setup"`, `"host"`, `"pages"` | Which guide (default overview). |
 
 Example:
 
@@ -952,19 +952,21 @@ Example:
 
 ### `host_control`
 
-**JETCARP background host.** Runs the JETCARP background host (live wallpapers or windows, no app needed); returns its status. Fails if it isn't running (`jetcarp host start`). Refuses scenes until the seizure warning is accepted.
+**JETCARP background host.** Controls the JETCARP background host (live wallpapers or windows, no app needed); returns its status. Needs `jetcarp host start`; scenes wait for the seizure warning. Actions, options: help {"topic": "host"}.
 
-*`jetcarp mcp` (stdio) only.*
+*`jetcarp mcp` (stdio) only. Its actions and options are told in the help topic `host` (`help {"topic": "host"}`), to keep the tool list short; the command line's are in [Wallpapers](../guides/wallpapers.md#the-background-host).*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. wallpaper: on the desktop (GNOME: its extension) or windows; login: at login or not; open_app: the app; reload rereads host.json; tune: fit cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene. |
+| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. |
 | `cpu_limit` | number |  |
+| `fps` | number |  |
+| `fresh` | boolean |  |
 | `gpu_limit` | number |  |
-| `name` | string | With rotation: its name (saved). |
-| `on` | boolean | With wallpaper, login or tune: on or off (default on). |
+| `name` | string |  |
+| `on` | boolean |  |
 | `pick` | string or number |  |
-| `screen` | integer | From 0. Default: all for next, previous and tune, else the first. |
+| `screen` | integer |  |
 
 Example:
 

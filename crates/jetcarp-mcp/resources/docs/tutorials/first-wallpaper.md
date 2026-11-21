@@ -96,12 +96,14 @@ number of tiles (see [Cell sizes](../guides/wallpapers.md#cell-sizes)).
 
 To let the computer choose, press *Fit to this computer…* under *Performance*. In a few seconds the
 host shows the rotation's most demanding scene on the desktop at a few sizes, about a second each
-(move this window aside to watch), measuring how hard JETCARP works at each. Then that scene gets a
-row of cards: a picture of the screen at that size, its cells, the processor, GPU and frame rate,
-and whether it stays under the *Processor limit* and *GPU limit* and keeps its frames smooth. It
-shows at the card marked *Recommended*, the finest size within the limits, and the rotation's other
-scenes take their sizes from it; click another card if you like it better, and the rest follow. The
-rules and colours stay as they are (see
+(move this window aside to watch), measuring how hard JETCARP works at each; a rotation with scenes
+that step on the processor as well as on the GPU has its most demanding scene on each shown, one
+after the other. Then each scene measured gets a row of cards: a picture of the screen at that size,
+its cells, the processor, GPU and frame rate, and whether it stays under the *Processor limit* and
+*GPU limit* and keeps its frames smooth. It shows at the card marked *Recommended*, the finest size
+within the limits, and the rotation's other scenes take their sizes from it, up to twice its cells'
+worth of work; click another card if you like it better, and the rest follow, or choose a finer size
+for one of the others from its menu. The rules and colours stay as they are (see
 [Fit to this computer](../guides/wallpapers.md#fit-to-this-computer)).
 
 ## 5. The same from the command line

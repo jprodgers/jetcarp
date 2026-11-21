@@ -383,35 +383,53 @@ picture JETCARP writes does.
 *Fit to this computer…*, in the pane's *Performance* group, or `jetcarp host tune`, finds how fine
 each screen's scenes can be on this computer, in a few seconds, and lets you choose.
 
-<img src="../images/guides/desktop-pane-cards.webp" alt="The Desktop background pane after a fit of Until it settles on a 2560 by 1440 screen. In its Performance group: Show every generation (chosen) or Low power, Up to 60 frames a second, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, a line saying the limits are for the whole desktop, with several screens each getting a share by its pixel area, Fit to this computer…, Use the scenes' own sizes, and Measure again by itself when a monitor changes. Below, Life (Quick Start rule:B3/S23), measured as its rotation's most demanding scene, has four cards, each a picture of the screen at that size: 1 px, 3,686,400 cells, processor 12%, GPU 20%, over the limits; 2 px, 921,600 cells, processor 3.4%, GPU 6.8%, within the limits and Recommended, outlined as the size it shows at; 3 px, its own size, and 6 px, both within the limits. Under the cards, the other two scenes, B36/S23 and B368/S245, each show 2 px, recommended, in a menu of sizes, with the same work a cell as the measured scene" width="700">
+<img src="../images/guides/desktop-pane-cards.webp" alt="The Desktop background pane after a fit of Until it settles on a 2560 by 1440 screen. In its Performance group: Show every generation (chosen) or Low power, Up to 60 frames a second, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, a line saying the limits are for the whole desktop, with several screens each getting a share by its pixel area, Fit to this computer…, Use the scenes' own sizes, and Measure again by itself when a monitor changes. Below, Life (Quick Start rule:B3/S23), measured as the most demanding scene that steps on the GPU, has four cards, each a picture of the screen at that size: 1 px, 3,686,400 cells, processor 12%, GPU 20%, over the limits; 2 px, 921,600 cells, processor 3.4%, GPU 6.9%, within the limits and Recommended, outlined as the size it shows at; 3 px, its own size, and 4 px, both within the limits. Under the cards, a line saying the other scenes take their sizes from the scene measured on their device, by their cost, at most twice its cells unless you choose, and the other two scenes, B36/S23 and B368/S245, each at 2 px, recommended, in a menu of sizes, with the same work a cell as the measured scene" width="700">
 
-**One scene a screen.** A fit measures the most demanding scene of each screen's rotation: the one
-with the most work a cell, from its tiling's neighbours, its rules (and their passes a generation),
-its speed and its drawing, with the GPU's steps counted at the GPU's speed. A rule series, such as
-the Wolfram series, is one scene, measured by its first rule. A scene that is a pattern placed on
-an empty field (a glider gun, an ant from one cell), or that is not rebuilt to fill the screen,
-keeps its own size, and is not the one measured.
+**One scene on each device.** A fit measures the most demanding scene of each screen's rotation
+that steps on the GPU, and the most demanding that steps on the processor: the one with the most
+work a cell, from its tiling's neighbours, its rules (and their passes a generation), its speed and
+its drawing, with the GPU's steps counted at the GPU's speed. A rotation whose scenes all step on
+one device has one scene measured; one that mixes them (Life on the GPU beside the Wolfram series'
+rows on the processor, say) has two, each found by its own binary search, one after the other. A
+rule series, such as the Wolfram series, is one scene, measured by its first rule. A scene that is a
+pattern placed on an empty field (a glider gun, an ant from one cell), or that is not rebuilt to fill
+the screen, keeps its own size, and is not one of those measured.
 
 **A few sizes.** The measured scene is shown at a size for a second (the first quarter to warm up,
 the rest measured), and a binary search chooses the next: finer if it was within the limits,
-coarser if not. Four or five sizes settle it, six at most. The first size tried is the one you chose
-before, else the one recommended last time, else a guess from this computer's
-[JETCARP Hardware Score](this-computer.md) (its speed on one core, and its GPU's), else the middle of
-the ladder. A good first guess settles it in two sizes: that one, and the one next to it.
+coarser if not. A fit's first size warms up half a second longer, so a fit made just after the host
+started, with its shaders and buffers still new, measures as later ones do. Four or five sizes
+settle it, six at most. The first size tried is the one you chose before, else the one recommended
+last time, else a guess from this computer's [JETCARP Hardware Score](this-computer.md) (its speed
+on one core, and its GPU's), else the middle of the ladder. A good first guess settles it in two
+sizes: that one, and the one next to it.
 
 **Every screen at once.** With several screens on the desktop, every screen's measured scene shows
 at once, each at its own size, so a fit of two screens takes little longer than a fit of one. On
-the computer JETCARP is developed on, a first fit took 2.7 s on one 2560 × 1440 screen and 3.7 s on
-that screen beside a 1920 × 1080 one at 120 Hz (see [Testing](../about/testing.md)).
+the computer JETCARP is developed on, a first fit took 3.2 s on one 2560 × 1440 screen and 5.4 s on
+that screen beside a 1920 × 1080 one at 120 Hz, and a fit repeated 2.0 s and 3.1 s. A rotation
+mixing devices takes about twice as long the first time, its two scenes measured one after the
+other: 9.6 s on the one screen, and 2.8 s repeated (see [Testing](../about/testing.md)).
 
-**The size found serves the whole rotation.** Every other scene takes its size from the measured
-scene's, by their work a cell: a scene with half the work a cell may have twice the cells, so it goes
-finer; one with the same work shows at about the same size. How many cells that is comes from where
-the measured scene's loads cross the limits: between the finest size within them and the next
-finer one over them, or, where nothing finer was over them, its finest size scaled by how far under
-the limits it was (at most four times its cells). A scene that steps on the processor where the
-measured scene steps on the GPU (or the other way about) is sized from the estimate alone, so it goes
-no finer than the measured scene's own size allows, and its line says so.
+**The size found serves the whole rotation.** Every other scene takes its size from the scene
+measured on its own device, by their work a cell: a scene with half the work a cell may have twice
+the cells, so it goes finer; one with the same work shows at about the same size. How many cells
+that is comes from where the measured scene's loads cross the limits: between the finest size
+within them and the next finer one over them, or, where nothing finer was over them, its finest
+size scaled by how far under the limits it was. Should no scene on a scene's device have been
+measured (its measured scene could not be built, say), it is sized from the other device's by the
+estimate alone, so it goes no finer than that scene's own size allows, and its line says so.
+
+**Twice the measured scene's cells at most, unless you choose.** Where the measured scene had room
+to spare at its finest size (a Penrose patch has only three levels on a 2560 × 1440 screen), the
+estimate of how many of its cells would reach the limits goes no further than twice the cells it
+was measured at: past that, it is a guess. So a scene with the same work a cell goes no finer than
+twice the measured scene's cells, and one with half the work four times. A scene held there says so
+where its size is shown: in the pane, "held to twice the measured scene's cells: choose a finer size
+to go further", and in `jetcarp host tune`, "held to twice the measured scene's cells; choose a
+finer size to go further". Choosing a finer size, from its menu in the pane or a finer card for the
+measured scene, goes further, and so does `--pick` with `finest`, `own` or a cell size; `--pick
+recommended` keeps to the limit.
 
 **The sizes.** On a lattice the ladder is 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48 and 64 pixels a cell,
 in the screen's own pixels (on a screen of two pixels a point, 2 px is one point), and the scene's own
@@ -454,10 +472,12 @@ measures* below) and frame rate; and whether it is within the limits. The row sc
 a trackpad's sideways swipe or with shift and the mouse wheel, and opens at the card the scene shows
 at. *Recommended* marks the finest size within the limits, and each scene shows at its recommended
 size unless you choose another. Click a card to choose it: the rest of the rotation follows it.
-Below the cards, each other scene has its size, a menu of the sizes it can take, and how its work a
-cell compares with the measured scene's. *Use this size for every scene on this tiling* gives a
-chosen card's size to the screen's other scenes on the same tiling, *Use the recommended size for the
-rest* settles every scene you have not chosen, and *Use the scenes' own sizes* forgets the fit.
+A rotation that mixes devices has a row for each measured scene, each saying which device it
+steps on. Below the cards, each other scene has its size, a menu of the sizes it can take, and how
+its work a cell compares with that of the scene measured on its device. *Use this size for every
+scene on this tiling* gives a chosen card's size to the screen's other scenes on the same tiling,
+*Use the recommended size for the rest* settles every scene you have not chosen, and *Use the
+scenes' own sizes* forgets the fit.
 
 ```sh
 jetcarp host tune
@@ -468,23 +488,29 @@ It prints (here, off screen, on one 2560 × 1440 screen):
 ```text
 fitting 7 scenes on 1 screen at 30 to 60 frames a second, on AMD Radeon 8060S Graphics (RADV STRIX_HALO); limits: screen 0 (2560x1440): processor 10%, GPU 25%; screen 0 measures profile Penrose waves, the most demanding of its 7 scenes
 screen 0: profile Penrose waves at level 5 (size 1 of up to 3)
-  level 5 (7.3 px), 35,000 cells: processor 0.2%, GPU 1.9%, 31 fps, frames 1.8 ms, on the GPU — within the limits
+  level 5 (7.3 px), 35,000 cells: processor 0.2%, GPU 1.6%, 29 fps, frames 1.7 ms, on the GPU — within the limits
 screen 0: profile Penrose waves at level 6 (size 2 of up to 3)
-  level 6 (2.6 px), 280,000 cells: processor 0.8%, GPU 2.7%, 29 fps, frames 2.3 ms, on the GPU, its own size — within the limits
-screen 0: profile Life: sized from the measured scene, at 0.96 times its work a cell; shows at 2 px
+  level 6 (2.6 px), 280,000 cells: processor 0.7%, GPU 2.7%, 29 fps, frames 2.2 ms, on the GPU, its own size — within the limits
+screen 0: profile Life: sized from the measured scene, at 0.96 times its work a cell; shows at 3 px (held to twice the measured scene's cells; choose a finer size to go further)
 screen 0: Quick Start langtons-ant: a placed pattern, at its own size unless chosen; shows at 4 px
 ...
-screen 0: profile Penrose waves: measured, 2 sizes; recommended level 6 (2.6 px); shows at level 6 (2.6 px), 280,000 cells
-screen 0: profile Hodgepodge: sized from the measured scene, at 0.96 times its work a cell; shows at 2 px
-fitted 7 scene(s) in 2.6 s, 2 sizes tried (GPU time from the system's count of JETCARP's GPU time); saved to ~/.config/jetcarp/host.json
+screen 0: profile Penrose waves: measured on the GPU, 2 sizes; recommended level 6 (2.6 px); shows at level 6 (2.6 px), 280,000 cells
+screen 0: profile Hodgepodge: sized from the measured scene, at 0.96 times its work a cell; shows at 3 px (held to twice the measured scene's cells; choose a finer size to go further)
+fitted 7 scene(s) in 3.1 s, 2 sizes tried (GPU time from the system's count of JETCARP's GPU time); saved to ~/.config/jetcarp/host.json
 ```
+
+Here the Penrose patch had room to spare at its finest level, so Life and Hodgepodge, with about
+the same work a cell, are held at 3 px; `--pick 2`, or choosing 2 px for them in the pane, shows
+them finer. A rotation mixing devices says which scene it measures on each in its first line:
+`screen 0 measures B3/S23 on the GPU and W30 on the processor, the most demanding of its 3 scenes
+on each`.
 
 With two screens, the first line also says how the limits are shared: `the 10% processor and 25%
 GPU limits are one for the whole desktop, shared between the screens by their pixel area: screen 0
 (2560x1440, 64% of the area): processor 6.4%, GPU 16%; screen 1 (1920x1080, 36% of the area):
 processor 3.6%, GPU 9.0%`. With `--json`, each line is a JSON object; the first has each screen's
-share and the scene it measures in `shares`, and the last how long the fit took (`seconds`) and how
-many sizes it tried (`trials`).
+share and the scenes it measures (`measured`) in `shares`, and the last how long the fit took
+(`seconds`) and how many sizes it tried (`trials`).
 
 **Choosing without measuring.** `jetcarp host tune --pick own` (or `recommended`, `finest`, or a cell
 size in pixels such as `--pick 4`) places sizes from the last fit while it is still current: found
