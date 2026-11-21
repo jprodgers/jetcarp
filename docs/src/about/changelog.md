@@ -11,6 +11,20 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Added
 
+- **Isotropic rules in Hensel's notation.** A rule family on the square grid's eight touching
+  neighbours in which a letter after a count names an arrangement of that many live neighbours, the
+  same under turns and reflections: `B2-a/S12` (Just Friends), `B3-cnqy/S23-a`, Generations rules
+  such as `B2a/S/C3`, and birth on 0, kept relative to its background as for B0 Life-like rules. The
+  rules work wherever B/S rules do (the app, scenes, the command line, scripts and the MCP tools),
+  on the CPU and the GPU with identical results, in hunts (on the GPU too), the object finder and the
+  library, and *Copy as RLE* writes them. JETCARP reads the letters from Alan Hensel's table and
+  writes rules back in the canonical form Golly's documentation gives; a test runs 73 rules against
+  Golly, every generation to 100. Seven named rules come with Quick Start entries: Just Friends,
+  tlife, qlife, LeapLife, Salad, Goat Flock and Logic Rule. A new rule-semantics family,
+  `isotropic`, at version 1; no other family's meaning changed.
+  ([Isotropic rules](../automata/isotropic.md),
+  [Rule notation](../reference/rule-notation.md#isotropic-rules-hensels-notation),
+  [#70](https://github.com/jprodgers/jetcarp/issues/70))
 - **Palettes chosen and checked for colour-vision deficiency.** Three new built-in palettes,
   Lantern for any rule and Cobalt and Saffron for JACA's +1 and −1 cells, keep neighbouring stops,
   and every stop and the background, at a CIEDE2000 difference of 10 or more for protanopia,

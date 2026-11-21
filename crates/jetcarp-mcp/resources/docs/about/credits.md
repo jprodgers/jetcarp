@@ -207,6 +207,18 @@ credit and source are given:
   and **Franz Schwabl**: lightning and the standard model (1992); **Christopher L. Henley**, **Siegfried Clar**
   and **Peter Grassberger**: its theory.
 
+### Isotropic rules
+
+[Isotropic rules: Hensel's notation](../automata/isotropic.md)
+
+- **Alan Hensel**: the notation, a letter for each arrangement of a cell's live neighbours, and its
+  table of letters.
+- **Johan Bontes**: Life32, and the suggestion that revised Hensel's table, as Paul Tooke recounts.
+- **EricG** and **Paul Tooke**: the account of the two versions of the table and of Life32's swap.
+- **David Bell**: Just Friends (`B2-a/S12`).
+- **The Golly developers**: the canonical form JETCARP writes, and Golly's `bgolly`, against which
+  JETCARP's letters are checked.
+
 ### Margolus block rules
 
 [Margolus block rules](../automata/margolus.md)

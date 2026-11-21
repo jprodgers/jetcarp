@@ -1,0 +1,7 @@
+{
+  "name": "Just Friends from a soup",
+  "description": "Just Friends (B2-a/S12), David Bell's isotropic rule from Alan Hensel's notation page, on a wrapped square grid from a random soup: birth on two live neighbours unless they are a corner and the edge beside it, survival on one or two.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 160, "h": 100}}, "boundary": "wrap"},
+  "rng_state": 7,
+  "cas": [{"rule": "B2-a/S12", "seed": {"random": {"density": 0.3}}, "palette": "Tide"}]
+}

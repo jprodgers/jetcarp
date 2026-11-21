@@ -159,6 +159,8 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   (which must fall back to the CPU, never run differently).
 - **More families** (`families.rs`): JACA (with blast radii 0 to 64, its glow and its counts),
   B0 Life-like rules (from an odd step count too), Margolus blocks on even and odd sides,
+  isotropic rules (two-state, Generations and B0, from an odd step count too, and the isotropic
+  tables of B/S rules against the B/S stepper),
   Larger than Life on lattices and patches,
   the forest fire (at probabilities 0 and 1, and past 2^32 steps),
   sandpiles (grains dropped and lost, open patch edges, piles past 2^32 grains),

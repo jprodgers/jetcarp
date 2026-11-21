@@ -58,6 +58,9 @@ render automata/generalising-edge         1   360
 render automata/generalising-layers       9   640
 render automata/life-hex                 60   800
 render automata/life-triangle           300   800
+render automata/isotropic-letters         0   560
+render automata/isotropic-just-friends  300   800
+render automata/isotropic-tlife         300   800
 render automata/elementary-rule30       200   800
 render automata/elementary-rule110      200   800
 other  automata/elementary-sheet        sheet --kind w --from 0 --count 64 --cols 8 --thumb 110

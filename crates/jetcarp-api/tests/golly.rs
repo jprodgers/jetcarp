@@ -484,8 +484,15 @@ fn iso_cases() -> Vec<IsoCase> {
 /// One soup of an isotropic case, in JETCARP and in Golly, every generation to [`ISO_GENS`]:
 /// Golly names the rule as JETCARP does and reaches the same cells, in the same states, every
 /// generation. Returns the classes of arrangement (count and letter, `isotropic::classes`) its
-/// dead cells (0) and live cells (1) had at the start, for the coverage check.
-fn iso_soup(dir: &Path, ci: usize, c: &IsoCase, si: usize, fill: f64) -> [[bool; 256]; 2] {
+/// dead cells (0) and live cells (1) had at the start, for the coverage check, or the first
+/// generation that differs.
+fn iso_soup(
+    dir: &Path,
+    ci: usize,
+    c: &IsoCase,
+    si: usize,
+    fill: f64,
+) -> Result<[[bool; 256]; 2], String> {
     let cx = Ctx::interactive();
     let (rule, _) = jetcarp_core::rules::Rule::parse(&c.written)
         .unwrap_or_else(|e| panic!("{}: {e}", c.written));
@@ -556,15 +563,15 @@ fn iso_soup(dir: &Path, ci: usize, c: &IsoCase, si: usize, fill: f64) -> [[bool;
         if live != theirs {
             let only_ours = live.difference(&theirs).count();
             let only_theirs = theirs.difference(&live).count();
-            panic!(
+            return Err(format!(
                 "{what}, named {ours}: generation {g} differs ({} cells here, {} in Golly; \
                  {only_ours} only here, {only_theirs} only in Golly)",
                 live.len(),
                 theirs.len()
-            );
+            ));
         }
     }
-    seen
+    Ok(seen)
 }
 
 /// Isotropic rules in Hensel's notation against Golly (#70): every case's soups, every
@@ -584,9 +591,32 @@ fn golly_agrees_on_isotropic_rules() {
         .enumerate()
         .flat_map(|(ci, c)| c.fills.iter().enumerate().map(move |(si, &f)| (ci, si, f)))
         .collect();
-    let seen: Vec<(usize, [[bool; 256]; 2])> = runs
+    let results: Vec<(usize, Result<[[bool; 256]; 2], String>)> = runs
         .par_iter()
         .map(|&(ci, si, fill)| (ci, iso_soup(&dir, ci, &cases[ci], si, fill)))
+        .collect();
+    let failed: Vec<&String> = results
+        .iter()
+        .filter_map(|(_, r)| r.as_ref().err())
+        .collect();
+    let first = failed
+        .iter()
+        .filter(|e| e.contains("generation 1 differs"))
+        .count();
+    assert!(
+        failed.is_empty(),
+        "{} of {} soups differ from Golly ({first} at generation 1):\n{}",
+        failed.len(),
+        runs.len(),
+        failed
+            .iter()
+            .map(|e| e.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    let seen: Vec<(usize, [[bool; 256]; 2])> = results
+        .into_iter()
+        .map(|(ci, r)| (ci, r.unwrap()))
         .collect();
     // Coverage, over the rules without B0 (a B0 rule's stored cells are relative to its
     // background).

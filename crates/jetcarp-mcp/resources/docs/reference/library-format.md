@@ -272,12 +272,14 @@ version is not part of a record's id.
 | `priority` | priority tables: `Priority 4: …` | 1 |
 | `spectre_glider` | `SpectreGlider` | 1 |
 | `table` | rule tables by name: `Table parity` | 1 |
+| `isotropic` | isotropic rules in Hensel's notation: `B2-a/S12`, `B2a/S/C3`, `B01e/S8` | 1 (new in 0.4.3) |
 
 There is one family for each kind of rule the engine runs ([Rule notation](rule-notation.md) lists
 their forms), with three splits: B/S rules and Generations are apart, though a pattern's identity
 calls both `lifelike`; B/S rules with birth on 0 are apart from the others (their meaning changed in
 0.4.3, the others' did not); and an ant is a turn string (one state, each colour repainted the
-next), a turmite a state table. The families that the identity's `model` line names have the same names; its `other` is
+next), a turmite a state table. Isotropic rules are one family whatever their states; a rule written
+with every letter of each count or none is a B/S rule, in its family. The families that the identity's `model` line names have the same names; its `other` is
 split here into its families.
 
 - **Records.** Every pattern carries its rule's family (`family`) and the version of that family's

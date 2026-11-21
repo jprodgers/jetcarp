@@ -168,7 +168,11 @@ lit where the real state differs from what the empty world has there. Empty spac
 each step works out the real states, applies the rule and keeps the result against the next
 background, which is exact on any tiling. Where every tile has the same number of neighbours, the
 background is all dead and all live in turn (or live for good from the first step, when the rule
-survives on that number), and this is Golly's alternation, step for step. Where the tiles have
+survives on that number), and this is Golly's emulation, step for step; for a rule that survives on
+that number, Golly reads a pattern against the live background from the start, so its generation 0
+is JETCARP's generation 1. A test runs both kinds against Golly on the square grid
+(`golly_agrees_on_isotropic_rules`, which also runs [isotropic rules](isotropic.md) with birth on 0,
+kept the same way). Where the tiles have
 different numbers of neighbours, as on 4.8.8 (4 and 8) or an aperiodic tiling, the background can
 differ from tile to tile: on a periodic tiling it is one state per tile type, repeating after a few
 generations; on an aperiodic patch, whose edge tiles have fewer neighbours than the inner ones, it is
