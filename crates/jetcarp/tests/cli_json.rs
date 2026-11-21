@@ -1159,3 +1159,46 @@ fn mcp_over_http_keeps_its_token_and_allows_exact_origins() {
         );
     }
 }
+
+/// `jetcarp mcp --http` says what it must say on standard error (a kept token's warning) before
+/// it prints the line that says it is ready: a client, or a test, that stops it once it has read
+/// that line has the warning too. Both streams go to one file here, so the file holds them in the
+/// order they were written.
+#[test]
+fn mcp_over_http_warns_before_it_says_it_is_ready() {
+    use std::process::Stdio;
+    let dir = test_dir("JETCARP_RUNTIME_DIR", "runtime").join("http-order");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let log = dir.join("both.txt");
+    let file = std::fs::File::create(&log).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+        .args(["--json", "mcp", "--http", "0", "--keep-token"])
+        .env("JETCARP_OUT", out_root())
+        .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+        .env("JETCARP_CONFIG_DIR", dir.join("settings"))
+        .env("JETCARP_RUNTIME_DIR", dir.join("runtime"))
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(file.try_clone().unwrap()))
+        .stderr(Stdio::from(file))
+        .spawn()
+        .unwrap();
+    let t = std::time::Instant::now();
+    let text = loop {
+        let text = std::fs::read_to_string(&log).unwrap_or_default();
+        if text.contains("\"transport\"") || t.elapsed().as_secs() > 30 {
+            break text;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    let _ = child.kill();
+    let _ = child.wait();
+    let warning = text.find("survives restarts and reboots");
+    let ready = text.find("\"transport\"");
+    assert!(ready.is_some(), "it never said it was ready: {text}");
+    assert!(
+        warning.is_some_and(|w| w < ready.unwrap()),
+        "the warning comes after the ready line, or not at all: {text}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
