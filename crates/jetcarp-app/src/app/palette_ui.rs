@@ -54,6 +54,7 @@ pub(super) fn ink_for(bg: [u8; 3]) -> Color32 {
 /// A swatch: the palette's stops as a little patch of cells on its background, its name below.
 fn swatch(ui: &mut egui::Ui, p: &Palette, current: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(118.0, 54.0), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, current, &p.name));
     if !ui.is_rect_visible(rect) {
         return resp;
     }
@@ -333,7 +334,12 @@ impl JetcarpApp {
                         }
                     });
                 }
-                if ui.button("+").on_hover_text("Add a stop").clicked() {
+                if ui
+                    .button("+")
+                    .on_hover_text("Add a stop")
+                    .accessible_name("Add a stop")
+                    .clicked()
+                {
                     let last = self.pal_stops.last().copied().unwrap_or([255, 255, 255]);
                     self.pal_stops.push(last);
                 }

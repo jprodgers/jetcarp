@@ -11,6 +11,39 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Added
 
+- **The app from the keyboard alone.** Tab and Shift+Tab reach every control in every window, in
+  the order the window shows them, and scroll each into view; F6 and Shift+F6 move between the menu
+  bar, each group of docked panes, the grid, the status line and each floating window; F10 opens
+  the menus, and the arrow keys, Enter and Esc work them. A ring shows whatever has the keyboard in
+  every theme, two points wide in the standard ones. Esc closes *Export animation*, the setup
+  window and the tool window whose control has the keyboard; *Export animation* opens with
+  *Export…* ready for Enter, and each page of the setup window with its main button (*Next*,
+  *Start*, *Close*); Shift+F10 opens a Quick Start card's menu. Widgets only the mouse uses (a window's title
+  bar, the lines between docked panes) are passed over. Tests drive the whole app with key presses
+  and check that Tab reaches every control of the main window, and that F6, F10 and Esc go where
+  they should. ([Using the app from the keyboard](../guides/keyboard.md),
+  [#219](https://github.com/jprodgers/jetcarp/issues/219))
+- **A cell cursor on the grid.** With the keyboard on the grid, the arrow keys move a cursor from
+  cell to cell on any tiling (the touching cell whose centre lies most nearly that way, keeping to
+  its row or column, so it follows a row of triangles or a column of hexagons), Space draws in the
+  *Draw* pane's automaton and state, Delete erases, Shift and the arrows select, and Ctrl and the
+  arrows move what is selected by the tiling's own translations, so a pattern keeps its shape (on
+  an aperiodic tiling, to the cells under it). Space pastes a waiting library pattern at the cursor.
+  The cursor shows only while the grid has the keyboard.
+  ([The grid](../guides/keyboard.md#the-grid))
+- **Screen readers are told what every control is and what changes.** Every control in every
+  window has a role and a name, and its value reads: custom-drawn ones (the Quick Start's cards and
+  filters, the palettes' swatches, the editors' canvases, the Hunts window's finds and stars) are
+  described, buttons drawn as symbols are named by what they do, and a list or number with no name
+  of its own takes the label beside it. The grid reads the cursor's cell ("Cell 1234, column 5, row
+  7: alive"). The status line is a live region, so a scene the strobe guard paused, a job that
+  finished or failed, and a scene that could not be opened are read out as they happen, an error at
+  once. A test reads the accessibility tree of every window and fails on a control with no name,
+  role or value. ([With a screen reader](../guides/keyboard.md#with-a-screen-reader))
+- **`jetcarp shortcuts`** lists the app's keys, on Windows and Linux and on macOS, as *Help →
+  Keyboard shortcuts* does; `--json` gives them for scripts, and the book's keyboard page is made
+  from it and checked against it. ([`jetcarp shortcuts`](../reference/cli.md#jetcarp-shortcuts))
+
 - **Palettes chosen and checked for colour-vision deficiency.** Three new built-in palettes,
   Lantern for any rule and Cobalt and Saffron for JACA's +1 and −1 cells, keep neighbouring stops,
   and every stop and the background, at a CIEDE2000 difference of 10 or more for protanopia,
@@ -134,6 +167,14 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Changed
 
+- **Tab moves the keyboard; F9 hides the panes.** Tab and Shift+Tab move between controls, as in
+  other apps, so *View → Hide all panes* moves from Tab to F9, and *View → Auto-hide menu bar* from
+  F10 to Ctrl+F10 (⌘F10 on macOS): F10 now opens the menus. The single-key shortcuts (R, F, S, + and
+  −) and the function keys act while a button or check box has the keyboard, and are typing only in
+  a text box; before, any control with the keyboard turned them off. *Help → Keyboard shortcuts*
+  lists every key, the cell cursor's and those that move about the app too.
+  ([Every key](../guides/keyboard.md#every-key), [#219](https://github.com/jprodgers/jetcarp/issues/219))
+
 - **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
   64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
   (the random-number generator, a turmite's internal state, a layered rule's layers, a forest fire's
@@ -151,6 +192,10 @@ day later (0.4.2: 17 November here, 18 November there).
   [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
 ### Fixed
+
+- **In the *Desktop background* pane, the processor's percentage after *Pause while the processor
+  is busier than* goes to the next line in a narrow pane,** where it ran past the pane's edge, out
+  of sight and out of reach.
 
 - **An adapter named in `JETCARP_GPU` is looked for again before another is used.** On a laptop
   whose discrete GPU sleeps when idle, one run in 335 with `JETCARP_GPU=RTX` on DirectX 12 didn't

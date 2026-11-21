@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
 /// Whether dialogs run on a thread of their own here: Linux and the other free Unixes.
+#[cfg_attr(test, allow(dead_code))]
 const THREADED: bool = cfg!(all(unix, not(target_os = "macos")));
 
 enum Slot {
@@ -35,12 +36,35 @@ fn with_slots<R>(f: impl FnOnce(&mut HashMap<&'static str, Slot>) -> R) -> R {
 
 /// Opens the dialog `dialog` under `key`, unless one is already open under it. `dialog` runs the
 /// rfd dialog and returns its answer (None when cancelled).
+#[cfg(not(test))]
 pub fn open<T: Send + 'static>(
     ctx: &egui::Context,
     key: &'static str,
     dialog: impl FnOnce() -> Option<T> + Send + 'static,
 ) {
     open_on(THREADED, Some(ctx.clone()), key, dialog);
+}
+
+/// In tests no system dialog is ever shown: the request is noted ([`asked`]) and nothing is chosen.
+#[cfg(test)]
+pub fn open<T: Send + 'static>(
+    _ctx: &egui::Context,
+    key: &'static str,
+    _dialog: impl FnOnce() -> Option<T> + Send + 'static,
+) {
+    ASKED.lock().unwrap_or_else(|e| e.into_inner()).push(key);
+}
+
+#[cfg(test)]
+static ASKED: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+
+/// Whether a dialog was asked for under `key` (tests).
+#[cfg(test)]
+pub fn asked(key: &str) -> bool {
+    ASKED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(&key)
 }
 
 fn open_on<T: Send + 'static>(

@@ -912,6 +912,7 @@ fn output_ui(ui: &mut egui::Ui, slot: &Arc<Mutex<OutSlot>>) {
             let ppp = ctx.pixels_per_point();
             s.size_px = Some([rect.width() * ppp, rect.height() * ppp]);
             let resp = ui.allocate_rect(rect, Sense::click_and_drag());
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, "The grid"));
             if let Some(cb) = s.cb.clone() {
                 ui.painter()
                     .add(egui_wgpu::Callback::new_paint_callback(rect, cb));

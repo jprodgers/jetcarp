@@ -6,6 +6,7 @@ mod ants_ui;
 mod app;
 mod catalog_picker;
 mod catalog_tools_ui;
+mod cell_cursor;
 mod cell_editor;
 mod cli;
 mod dash_ui;
@@ -44,6 +45,14 @@ mod warning_ui;
 mod window_job;
 
 pub use cli::LaunchArgs;
+
+pub use app::{Shortcut, ShortcutGroup};
+
+/// Every key the app answers to, as *Help → Keyboard shortcuts* lists them (`jetcarp shortcuts`,
+/// and the book's keyboard page).
+pub fn shortcuts() -> Vec<ShortcutGroup> {
+    app::shortcut_table()
+}
 
 /// Opens the app window and runs until it closes.
 pub fn run(launch: LaunchArgs) -> Result<(), String> {

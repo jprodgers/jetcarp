@@ -142,7 +142,7 @@ jobs:
             echo "$left"
             exit 1
           fi
-      - name: The generated book pages, and the rule notation table, match the program
+      - name: The generated book pages, the keyboard page's table and the rule notation table match the program
         if: runner.os == 'Linux'
         run: |
           python3 docs/tools/gen-mcp.py --check --jetcarp target/release/jetcarp
@@ -150,6 +150,7 @@ jobs:
           python3 docs/tools/gen-named-rules.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/gen-tiling-catalogue.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/gen-palettes.py --check --jetcarp target/release/jetcarp
+          python3 docs/tools/gen-shortcuts.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/check-rule-notation.py --jetcarp target/release/jetcarp
 
   fmt:

@@ -4,7 +4,9 @@
 light or dark, and the palettes that scenes are drawn in when they don't choose their own. Reduced
 motion and high contrast follow your system's settings unless you choose otherwise here. The app
 reads the system's settings when it starts and every couple of seconds while it runs, so a change
-you make in your system's settings shows within a moment, without a restart.
+you make in your system's settings shows within a moment, without a restart. The app can be used
+from the keyboard alone and with a screen reader: see
+[Using the app from the keyboard](keyboard.md).
 
 <img src="../images/guides/accessibility-window.webp" alt="The Accessibility window: Reduced motion, with Follow the system chosen; Theme, with Follow the system, High contrast and Standard, and Light or dark; and Palettes for scenes that name none, with a button that uses the palettes chosen for colour-vision deficiency and a palette list for most rules, JACA's +1 cells and JACA's −1 cells" width="520">
 
@@ -72,7 +74,8 @@ world drawn in Cobalt and Saffron, the palettes chosen for colour-vision deficie
   ([WCAG 2.2](https://www.w3.org/TR/WCAG22/#non-text-contrast)), and thicker than the standard
   theme's.
 - **The keyboard focus** is a thick gold ring (navy in the light form) round whatever has the
-  keyboard, and round a field you are typing in.
+  keyboard, and round a field you are typing in. (The standard themes have a ring too, two points
+  of blue; see [Using the app from the keyboard](keyboard.md#moving-about).)
 
 A test in the app's code computes the contrast of every text and outline colour the theme uses
 against every background it is drawn on, and fails under those limits. What the theme doesn't
@@ -115,7 +118,7 @@ the app, `--palette` on the commands that draw pictures does the same job.
 
 ## Not yet covered
 
-- The app hasn't yet been checked from start to end with the keyboard alone or with a screen
-  reader ([#219](https://github.com/jprodgers/jetcarp/issues/219)).
 - The Quick Start's card pictures keep the palettes their entries name; the palettes chosen here
   apply when an entry is opened.
+- What the keyboard and screen readers can't do yet is listed in
+  [Using the app from the keyboard](keyboard.md#what-the-keyboard-and-screen-readers-cant-do).
