@@ -68,14 +68,15 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
 - **Size.** In the app, you can zoom the world in and out with the + and − keys or the scroll
   wheel. On the desktop background, the caption that names the rule and the tiling has a size of
   its own.
-- **Colour.** JETCARP has 33 built-in palettes, light and dark, and anywhere a palette is accepted
-  you can give your own colours instead ([Palettes and colouring](../guides/palettes.md)). Three
-  are chosen for colour-vision deficiency: Lantern for any rule, and Cobalt and Saffron for the two
-  signs of JACA, JETCARP's two-sign automaton. Their colours stay clearly apart for protanopia,
-  deuteranopia, tritanopia and their milder forms, as a standard model simulates them, and
-  *Settings → Accessibility* makes them the defaults for scenes that don't choose their own. The
-  [palettes reference](../reference/palettes.md#colour-vision-deficiency) gives every built-in
-  palette's result in the same check.
+- **Colour.** JETCARP has 75 built-in palettes, light and dark, and anywhere a palette is accepted
+  you can give your own colours instead ([Palettes and colouring](../guides/palettes.md)). 49 of
+  them pass JETCARP's colour-vision check: their colours stay clearly apart for protanopia,
+  deuteranopia, tritanopia and their milder forms, as a standard model simulates them. They
+  include ramps of many looks, palettes for light backgrounds, closed wheels for cyclic rules, and
+  seven pairs for the two signs of JACA, JETCARP's two-sign automaton. *Settings → Accessibility*
+  makes Lantern, and Cobalt and Saffron for JACA, the defaults for scenes that don't choose their
+  own. The [palettes reference](../reference/palettes.md#colour-vision-deficiency) gives every
+  built-in palette's result.
 - **High contrast.** The app has a high-contrast theme, dark and light: text at a contrast of 7:1
   or more, thicker outlines, and a thick ring round whatever has the keyboard. It follows Windows'
   contrast themes, macOS's *Increase contrast* and GNOME's *High Contrast*, and *Settings →
@@ -102,7 +103,7 @@ These are known, and each is tracked:
 
 - **Colour alone.** Cells' states and ages are told apart by colour only. The palettes chosen for
   colour-vision deficiency are checked by simulation, not yet by people with those deficiencies,
-  and most of the other built-in palettes don't pass the check
+  and 26 of the built-in palettes don't pass the check
   ([#217](https://github.com/jprodgers/jetcarp/issues/217)).
 - **The keyboard alone.** Drawing cells, selecting and moving patterns, and arranging the docked
   panes need a mouse or a touchpad, and the menus and windows have not been checked for use without
