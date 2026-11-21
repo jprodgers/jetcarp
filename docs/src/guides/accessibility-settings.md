@@ -20,7 +20,7 @@ Each system has a setting that asks apps for less motion. The app reads:
 | System | Setting | Where to find it |
 | --- | --- | --- |
 | Windows | *Show animations in Windows* (`SPI_GETCLIENTAREAANIMATION`); off asks for reduced motion | *Settings → Accessibility → Visual effects → Animation effects* |
-| macOS | *Reduce motion* (`accessibilityDisplayShouldReduceMotion`) | *System Settings → Accessibility → Display → Reduce motion* |
+| macOS | *Reduce motion* (`accessibilityDisplayShouldReduceMotion`) | *System Settings → Accessibility* (under *Display*, or *Motion* in later versions) |
 | Linux (GNOME) | `org.gnome.desktop.interface enable-animations`; off asks for reduced motion | *Settings → Accessibility → Seeing → Reduce Animation* |
 
 On Linux the app asks the desktop portal, which other desktops answer too
@@ -85,7 +85,7 @@ The app follows your system's high-contrast setting:
 | System | Setting |
 | --- | --- |
 | Windows | The contrast themes (*Settings → Accessibility → Contrast themes*), read as `SPI_GETHIGHCONTRAST` |
-| macOS | *Increase contrast* (*System Settings → Accessibility → Display*) |
+| macOS | *Increase contrast* (*System Settings → Accessibility → Display*), read as `accessibilityDisplayShouldIncreaseContrast` |
 | Linux (GNOME) | *High Contrast* (*Settings → Accessibility → Seeing*), `org.gnome.desktop.a11y.interface high-contrast`, or the portal's `org.freedesktop.appearance contrast` |
 
 **High contrast** turns the theme on and **Standard** off, whatever the system says.

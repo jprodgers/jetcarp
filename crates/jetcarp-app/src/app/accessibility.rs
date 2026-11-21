@@ -199,7 +199,8 @@ fn system_word(v: Option<bool>, on: &str, off: &str) -> String {
     }
 }
 
-fn follow_choice(ui: &mut egui::Ui, id: &str, f: &mut Follow, on: &str, off: &str) {
+/// Follow the system, or one of two choices that override it, as radio buttons.
+fn follow_choice(ui: &mut egui::Ui, f: &mut Follow, on: &str, off: &str) {
     ui.horizontal(|ui| {
         for c in Follow::ALL {
             let label = match c {
@@ -207,11 +208,13 @@ fn follow_choice(ui: &mut egui::Ui, id: &str, f: &mut Follow, on: &str, off: &st
                 Follow::On => on,
                 Follow::Off => off,
             };
-            ui.radio_value(f, c, label);
+            let hover = match c {
+                Follow::System => "As your system's setting says, now and when it changes",
+                _ => "Whatever your system's setting says",
+            };
+            ui.radio_value(f, c, label).on_hover_text(hover);
         }
-    })
-    .response
-    .on_hover_text(id.to_string());
+    });
 }
 
 fn settings_ui(
@@ -236,13 +239,7 @@ fn settings_ui(
         "reduced motion",
         "doesn't ask for reduced motion",
     ));
-    follow_choice(
-        ui,
-        "a11y-motion",
-        &mut s.reduced_motion,
-        "Reduce motion",
-        "Don't",
-    );
+    follow_choice(ui, &mut s.reduced_motion, "Reduce motion", "Don't");
     ui.label(
         RichText::new(if motion {
             "On: the Quick Start's cards and the small animations in other windows show a still \
@@ -261,13 +258,7 @@ fn settings_ui(
         "high contrast",
         "doesn't ask for high contrast",
     ));
-    follow_choice(
-        ui,
-        "a11y-contrast",
-        &mut s.high_contrast,
-        "High contrast",
-        "Standard",
-    );
+    follow_choice(ui, &mut s.high_contrast, "High contrast", "Standard");
     ui.horizontal(|ui| {
         ui.label("Light or dark");
         egui::ComboBox::from_id_salt("a11y-brightness")
