@@ -625,7 +625,7 @@ Example:
 | `evolve.verify` | array or string | Verification radii as multiples of the radius: a list or "1,2,4" (default 1,2,4). |
 | `explore` | object | The broad search over tilings, rule families, rules and seeds (search_runs reads its runs). It keeps the best runs of each kind of behaviour and breeds from them, storing every run in the job's own database. Not deterministic: a resumed search continues from its archive. Settings: `jetcarp://schema/search_start/explore`. |
 | `explore.batch` | integer | Most worlds in a GPU batch (default 1024). |
-| `explore.confirm_cells` | integer | Cells of a confirmation run, on a bigger grid (default 64,000). |
+| `explore.confirm_cells` | integer | Cells of a confirmation run, on a bigger grid (default 64,000; an aperiodic patch is the level nearest it, and bigger than the screening patch). |
 | `explore.confirm_gens` | integer | Generations of a confirmation run (default 4096). |
 | `explore.confirm_seeds` | integer | Seeds an elite is confirmed with (default 3). |
 | `explore.families` | array or string | Only these rule families (life_like, generations, ltl, jaca, cyclic, rps, greenberg_hastings, hodgepodge, priority, wireworld, turmite, layered, wolfram, hex_wolfram, hex_tri, margolus, lenia, sandpile, forest_fire, table, von_neumann, spectre_glider), a list or text (default: all). |
@@ -634,7 +634,7 @@ Example:
 | `explore.parents_from` | integer | Take parents from another explore job: the JACA rules of its reviewed runs (or its best runs, when it has no reviews), which this search transplants to other tilings and tunes for balance early on. |
 | `explore.parents_reviewed` | string | With parents_from: the verdicts whose runs to take, keep, maybe or drop, separated by commas (default keep,maybe). |
 | `explore.score` | any | Score runs with a fitted score model (a file's path, or the model) instead of the built-in score; the job keeps it. |
-| `explore.screen_cells` | integer | About this many cells in a screening run's grid (default 16,000). |
+| `explore.screen_cells` | integer | About this many cells in a screening run's grid (default 16,000; an aperiodic patch is the level nearest it, 4,000 tiles for 16,000). |
 | `explore.screen_gens` | integer | Generations of a screening run (default 1024). |
 | `explore.seed` | integer or string | Where the random draws start (default 0). |
 | `explore.tilings` | array or string | Only these tilings: ids (square, hex, trihex, spectre, ih28, k2-001, ...), a list or text separated by commas or spaces (default: every tiling the search knows, 1,359 today; the progress line counts them). |

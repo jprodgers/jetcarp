@@ -91,9 +91,11 @@ The app follows your system's high-contrast setting:
 **High contrast** turns the theme on and **Standard** off, whatever the system says.
 
 **Light or dark** chooses the form, for the standard theme and the high-contrast one alike:
-*Follow the system* (the default), *Dark* or *Light*. On Windows and macOS the app follows the
-system's light or dark choice; on Linux it stays dark unless you choose *Light* here
-([#137](https://github.com/jprodgers/jetcarp/issues/137)).
+*Follow the system* (the default), *Dark* or *Light*. The app follows the system's light or dark
+choice: on Windows and macOS, and on Linux through the desktop's settings portal
+(`org.freedesktop.appearance color-scheme`, or GNOME's own `org.gnome.desktop.interface
+color-scheme` where there is no portal). GNOME's *Light* style says no preference there, and the
+app takes it as light; a desktop it can't read at all leaves the app dark.
 
 ## Palettes for scenes that name none
 
@@ -103,8 +105,8 @@ for most rules (JETCARP's own default is Ember), and two for JACA's +1 and −1 
 stay apart for protanopia, deuteranopia, tritanopia and their milder forms: Lantern, and Cobalt
 and Saffron for JACA (see
 [Palettes for colour-vision deficiency](palettes.md#palettes-for-colour-vision-deficiency)). Or
-choose any built-in palette for each. The window lists the built-in palettes that pass JETCARP's
-colour-vision check.
+choose any built-in palette for each. The window says how many built-in palettes pass JETCARP's
+colour-vision check, and names JACA's pairs that stay apart.
 
 The choice applies to the scenes you open after making it: Quick Start entries, scene files, the
 library's patterns and AI control's worlds. A scene that names its palettes keeps them, and a scene

@@ -162,7 +162,7 @@ pub struct JetcarpApp {
     random_grains: u64,
     pal_name: String,
     pal_stops: Vec<[u8; 3]>,
-    pending_sheet: Option<(jetcarp_core::sheet::SheetKind, u64, String, bool)>,
+    pending_sheet: Option<scene::PendingSheet>,
     /// *File → Export animation…* (#62).
     anim: anim_export::AnimExport,
     autoshot: Option<autoshot::Autoshot>,
@@ -545,6 +545,11 @@ impl eframe::App for JetcarpApp {
         if self.warning.showing {
             return;
         }
+        // While a file dialog is open the world and AI control wait, as they did when the dialog
+        // held up the frame loop (#136): what is saved is what was showing when it was asked for.
+        if crate::file_dialog::any_open() {
+            return;
+        }
         self.ai_poll(ctx);
         if self.screen == Screen::Sim {
             let now = self.started.elapsed().as_secs_f64();
@@ -573,7 +578,7 @@ impl eframe::App for JetcarpApp {
             f.frame(self.world.generation);
         }
         self.shell.monitors.update(frame);
-        self.window_place(frame);
+        self.window_place(&ctx, frame);
         // The system's reduced motion and contrast, as Settings → Accessibility follows them.
         self.a11y_frame(&ctx);
         // The photosensitive seizure warning, alone, until it has been answered (#96): no outputs,
@@ -617,6 +622,7 @@ impl eframe::App for JetcarpApp {
         // The guard's confirmation shows even with the panels hidden.
         self.safety_window(&ctx);
         self.export_sheet();
+        self.file_dialog_answers();
         if self.screen == Screen::Sim && self.playing {
             ctx.request_repaint();
         }

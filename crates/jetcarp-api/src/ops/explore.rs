@@ -86,7 +86,12 @@ pub struct RunLine {
     pub id: i64,
     /// 1 screened, 2 a confirmation run of `parent` on a bigger grid.
     pub stage: i64,
+    /// The run it was made from: the run a confirmation run confirms, or the elite a mutation, new seed, transplant or balance variant was made from (none for a fresh draw).
     pub parent: Option<i64>,
+    /// The job whose run `parent` is, when it is another job's (`parents_from`); none for this search's own. Its id is the library's where the search ran.
+    pub parent_job: Option<i64>,
+    /// That job's search, by its uuid, which names it in any library or pack (none for this search's own, and for runs made before JETCARP 0.4.3).
+    pub parent_search: Option<String>,
     pub tiling: String,
     pub family: String,
     pub rule: String,
@@ -210,6 +215,8 @@ impl RunLine {
             id: r.id,
             stage: r.stage,
             parent: r.parent,
+            parent_job: r.parent_job,
+            parent_search: r.parent_search.clone(),
             tiling: r.cand.tiling.clone(),
             family: r.cand.fam.name().into(),
             rule: r.cand.rule.clone(),
@@ -255,10 +262,12 @@ impl RunLine {
 }
 
 /// The CSV columns of a run before its measures.
-const CSV_HEAD: [&str; 15] = [
+const CSV_HEAD: [&str; 17] = [
     "id",
     "stage",
     "parent",
+    "parent_job",
+    "parent_search",
     "family",
     "tiling",
     "nb",
@@ -290,6 +299,8 @@ fn csv_line(r: &RunRow, names: &[String]) -> String {
         r.id.to_string(),
         r.stage.to_string(),
         r.parent.map(|p| p.to_string()).unwrap_or_default(),
+        r.parent_job.map(|p| p.to_string()).unwrap_or_default(),
+        r.parent_search.clone().unwrap_or_default(),
         r.cand.fam.name().into(),
         r.cand.tiling.clone(),
         if r.cand.nb == Nb::Edge {
@@ -1354,7 +1365,7 @@ pub(crate) fn parents_from(
         .iter()
         .map(|(id, ev)| {
             let w = why.get(id).map_or("best", String::as_str);
-            Parent::of(row.id, *id, w, ev)
+            Parent::of(row.id, &c.uuid(), *id, w, ev)
         })
         .collect())
 }
