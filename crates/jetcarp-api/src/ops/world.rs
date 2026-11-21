@@ -937,7 +937,9 @@ pub struct DrawIn {
     /// Text picture, one line per row: '.' empty, 'O' (or '*', '#', 'X') live, '1'-'9' states.
     #[serde(default)]
     pub pattern: Option<String>,
-    /// Run-length encoded pattern (LifeWiki RLE; header lines are ignored).
+    /// Run-length encoded pattern (LifeWiki RLE). The header's rule is read for one thing: on
+    /// the hexagon grid, a rule ending in `H` (Golly's hexagonal layout) is turned into the grid's
+    /// offset rows.
     #[serde(default)]
     pub rle: Option<String>,
     /// Column of the pattern's top-left corner (default: centred).
@@ -1053,7 +1055,7 @@ impl WorldOp for WorldDraw {
             (None, None) => None,
         };
         let mut placed = None;
-        if let Some(p) = pattern {
+        if let Some(mut p) = pattern {
             given += 1;
             let g = need_grid()?;
             if p.is_empty() {
@@ -1061,10 +1063,19 @@ impl WorldOp for WorldDraw {
                     "the pattern has no live cells (use 'O' for live, '.' for empty)",
                 ));
             }
-            let pw = p.iter().map(|c| c.0).max().unwrap() + 1;
             let ph = p.iter().map(|c| c.1).max().unwrap() + 1;
-            let ox = a.x.unwrap_or((g.w as Int - pw) / 2);
             let oy = a.y.unwrap_or((g.h as Int - ph) / 2);
+            // An RLE written for Golly's hexagonal neighbourhood (`…H`), placed on JETCARP's
+            // hexagon grid, is turned from Golly's sheared layout into the grid's offset rows,
+            // keeping its shape on a row of either parity (#145).
+            if w.topo.spec.family == "hex" && a.rle.as_deref().is_some_and(crate::rle::is_golly_hex)
+            {
+                p = crate::rle::from_golly_hex(&p, oy);
+                let x0 = p.iter().map(|c| c.0).min().unwrap();
+                p = p.into_iter().map(|(x, y, v)| (x - x0, y, v)).collect();
+            }
+            let pw = p.iter().map(|c| c.0).max().unwrap() + 1;
+            let ox = a.x.unwrap_or((g.w as Int - pw) / 2);
             if p.len() > max_set {
                 return Err(ApiError::limit(format!(
                     "pattern has more than {max_set} cells"

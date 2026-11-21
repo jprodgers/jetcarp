@@ -55,7 +55,14 @@ day later (0.4.2: 17 November here, 18 November there).
   the light and high-contrast themes, where they kept the grid's dark backdrop.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
   [#220](https://github.com/jprodgers/jetcarp/issues/220))
-
+- **Copy as RLE.** *Edit → Copy as RLE* copies the world's pattern, and *Copy as RLE* on a library
+  pattern copies that one, as the run-length text Golly and LifeViewer read, ready to post on the
+  ConwayLife forums: two-state B/S rules on the square grid (Moore or von Neumann) and the hexagon
+  grid, in Golly's layout for hexagons. A hexagon RLE marked `H` placed on JETCARP's hexagon grid
+  (a world edit's `rle`) is turned back, so a copy pastes back as the same pattern. A test checks
+  it against Golly on every change: Golly reads the copy as the same cells and runs it to the same
+  generations, on squares and hexagons.
+  ([Copy as RLE](../guides/pattern-library.md#copy-as-rle), [#145](https://github.com/jprodgers/jetcarp/issues/145))
 - **WireWorld's `circuit` seed has a short form.** The command line, scripts and the MCP tools
   take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
   `reference seeds` lists them; before, only a scene file could name a circuit.
@@ -134,6 +141,12 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **An adapter named in `JETCARP_GPU` is looked for again before another is used.** On a laptop
+  whose discrete GPU sleeps when idle, one run in 335 with `JETCARP_GPU=RTX` on DirectX 12 didn't
+  find it and ran on the integrated GPU, saying so only in its backend note. When the adapter asked
+  for isn't there, JETCARP now looks twice more, a quarter of a second apart, before falling back,
+  and says so on the error stream too. ([GPU](../guides/gpu.md),
+  [#82](https://github.com/jprodgers/jetcarp/issues/82))
 - **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
   with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
   with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's

@@ -26,6 +26,13 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   the exploratory search continues from its saved archive instead
   ([what is not guaranteed yet](../research/reproducibility.md#what-is-not-guaranteed-yet)).
 - **Exact verification.** Every object a hunt keeps is run again alone and compared cell by cell.
+- **Golly agrees.** [Golly](https://golly.sourceforge.io/)'s command-line program, `bgolly`, reads
+  the RLE JETCARP writes as the same cells, and writes it back as JETCARP reads it. It runs the
+  pattern to the same generations as JETCARP, cell for cell. The test uses soups of nine rules on
+  the square grid (Moore and von Neumann) and the hexagon grid, placed on rows of both parities,
+  where JETCARP's offset rows and Golly's sheared grid differ: 62 generations up to 100
+  (`golly_agrees_on_jetcarp_s_rle`, `jetcarp-api/tests/golly.rs`, ignored where Golly isn't
+  installed). It fails if the hexagon layout is shifted the wrong way, at the first generation.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
   on Windows directory junctions and symbolic links too) and its limits, that nothing listens for AI
@@ -303,6 +310,7 @@ job that hangs is stopped rather than left running for hours.
   is no longer maintained is shown as a warning, and never fails it.
 - **The book** builds, its internal links all resolve, and its scripting reference matches the
   program.
+- **Golly:** the Linux job installs Ubuntu's Golly and runs the Golly test above.
 - **A release** is built only from a tag whose version agrees with the program and the changelog,
   and only after the tests pass.
 
