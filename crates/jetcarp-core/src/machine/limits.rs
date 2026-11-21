@@ -38,11 +38,15 @@ pub const GPU_CELL_CEILING: u64 = (u32::MAX / 2) as u64;
 /// HashLife's node store numbers its nodes with 32-bit integers, and its table grows to twice
 /// the nodes.
 pub const NODE_CEILING: u64 = 1 << 31;
-/// An AI's worlds are at least this large (the MCP server's limit before 0.4.3, kept as the
-/// small end of an AI's share).
+/// An AI's worlds may have this many cells at the small end of its share: the MCP server's
+/// limit before 0.4.3.
 pub const AI_SMALL_CELLS: u64 = 4_000_000;
+/// Memory an AI's world may take at the small end of its share: enough for any world the MCP
+/// server allowed before 0.4.3 (4 million cells of any kind, a level-7 patch), so there the cell
+/// limit decides, as it did.
+pub const AI_SMALL_BYTES: u64 = 512 * MIB;
 /// Bytes per cell of a Life world, for limits counted in cells ([`super::cost::field_bytes`]).
-pub const LIFE_CELL_BYTES: u64 = 6;
+pub const LIFE_CELL_BYTES: u64 = 8;
 /// Bytes per cell of a one-field world on the GPU (two state buffers, the snapshot, staging).
 pub const GPU_CELL_BYTES: u64 = 16;
 
@@ -655,20 +659,22 @@ impl Limits {
     }
 
     /// Memory an AI's world may take: its share of [`world_bytes`](Self::world_bytes), at least
-    /// [`AI_SMALL_CELLS`] Life cells, never more than the machine's own limit.
+    /// [`AI_SMALL_BYTES`], never more than the machine's own limit.
     pub fn ai_world_bytes(&self) -> u64 {
         let all = self.world_bytes();
-        let small = AI_SMALL_CELLS * LIFE_CELL_BYTES;
-        ((all as f64 * self.ai_share()) as u64).max(small).min(all)
+        ((all as f64 * self.ai_share()) as u64)
+            .max(AI_SMALL_BYTES)
+            .min(all)
     }
 
-    /// Cells an AI's world may have (a Life world in [`ai_world_bytes`](Self::ai_world_bytes),
-    /// within the code's ceiling): the MCP tools' `max_cells`.
+    /// Cells an AI's world may have: [`AI_SMALL_CELLS`] at the small end, else a Life world in
+    /// [`ai_world_bytes`](Self::ai_world_bytes); never more than the machine's own limit holds,
+    /// nor the code's ceiling. The MCP tools' `max_cells`.
     pub fn ai_cells(&self) -> u64 {
         let c = if self.ai_share() <= 0.0 {
             AI_SMALL_CELLS
         } else {
-            self.ai_world_bytes() / LIFE_CELL_BYTES
+            (self.ai_world_bytes() / LIFE_CELL_BYTES).max(AI_SMALL_CELLS)
         };
         c.min(self.world_bytes() / LIFE_CELL_BYTES)
             .min(CELL_CEILING)
@@ -947,14 +953,15 @@ mod tests {
     fn an_ais_share() {
         let hw = machine(64);
         let l = Limits::compute(&hw, &Own::default());
-        // Small by default: the 4 million cells of before, on any machine.
+        // Small by default: the 4 million cells of before, on any machine, and memory enough for
+        // any world they allowed.
         assert_eq!(l.ai_cells(), AI_SMALL_CELLS);
         assert_eq!(
             Limits::compute(&machine(128), &Own::default()).ai_cells(),
             AI_SMALL_CELLS
         );
-        assert!(l.check_ai_world(AI_SMALL_CELLS * 6).is_ok());
-        let e = l.check_ai_world(AI_SMALL_CELLS * 6 + 1).unwrap_err();
+        assert!(l.check_ai_world(AI_SMALL_BYTES).is_ok());
+        let e = l.check_ai_world(AI_SMALL_BYTES + 1).unwrap_err();
         assert!(
             e.to_string()
                 .contains("an AI's share, small, of the machine's 24 GB"),
@@ -963,11 +970,15 @@ mod tests {
         // All of it: the machine's own limit.
         let all = Limits::compute(&hw, &l.set(&Own::default(), Id::AiShare, 1.0).unwrap());
         assert_eq!(all.ai_world_bytes(), all.world_bytes());
-        assert_eq!(all.ai_cells(), (24 * GIB / 6).min(CELL_CEILING));
+        assert_eq!(all.ai_cells(), 24 * GIB / 8);
         // A quarter.
         let q = Limits::compute(&hw, &l.set(&Own::default(), Id::AiShare, 0.25).unwrap());
         assert_eq!(q.ai_world_bytes(), 6 * GIB);
-        assert_eq!(q.ai_cells(), 6 * GIB / 6);
+        assert_eq!(q.ai_cells(), 6 * GIB / 8);
+        // A tiny share still allows what small does.
+        let tiny = Limits::compute(&hw, &l.set(&Own::default(), Id::AiShare, 0.001).unwrap());
+        assert_eq!(tiny.ai_world_bytes(), AI_SMALL_BYTES);
+        assert_eq!(tiny.ai_cells(), AI_SMALL_BYTES / 8);
         assert!(l.set(&Own::default(), Id::AiShare, 1.5).is_err());
     }
 

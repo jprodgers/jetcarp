@@ -6,7 +6,7 @@
 //!   running meanwhile; the frames are what stepping gives, exactly as on the GPU.
 //! - **The format** is the user's choice; the hunts' *Render media* picks it by size instead.
 //! - **Memory:** every frame is held until encoding, so the frame count is capped
-//!   ([`MAX_FRAMES`]).
+//!   ([`max_frames`], the machine's `animation-frames` limit).
 //! - **The strobe guard** (#149): the frames are checked at their own rate before anything is
 //!   saved (`jetcarp_core::strobe::export`). An animation that flashes or shows strong stripes is
 //!   held, with what was found and a choice: save the softened version (the default), or cancel;
@@ -17,9 +17,11 @@ use jetcarp_core::media::encode;
 use jetcarp_core::render::Image;
 use std::sync::{Arc, Mutex};
 
-/// Frames an animation may have (each held until the end: 2,000 frames of 640 x 400 is about
-/// 2 GB).
-pub const MAX_FRAMES: u32 = 2000;
+/// Frames an animation may have on this machine (each held until the end: 2,000 frames of
+/// 640 x 400 is about 2 GB): its `animation-frames` limit, 2,000 on a 16 GB machine.
+pub fn max_frames() -> u32 {
+    jetcarp_core::machine::current().animation_frames()
+}
 
 /// The window's settings, kept between exports.
 pub(crate) struct AnimExport {
@@ -135,11 +137,12 @@ impl JetcarpApp {
                     ui.end_row();
                 });
                 let frames = self.anim.gens / self.anim.every.max(1) + 1;
-                if frames > MAX_FRAMES {
+                if frames > max_frames() {
                     ui.colored_label(
                         egui::Color32::LIGHT_RED,
                         format!(
-                            "{frames} frames is over the limit of {MAX_FRAMES}: fewer generations, or a frame every more"
+                            "{frames} frames is over this machine's limit of {}: fewer generations, or a frame every more",
+                            max_frames()
                         ),
                     );
                 } else {
@@ -162,7 +165,7 @@ impl JetcarpApp {
                     }
                     None => {
                         go = ui
-                            .add_enabled(frames <= MAX_FRAMES, egui::Button::new("Export…"))
+                            .add_enabled(frames <= max_frames(), egui::Button::new("Export…"))
                             .clicked();
                     }
                 }
@@ -361,8 +364,11 @@ pub(crate) fn render_frames(
 ) -> Result<Vec<Image>, String> {
     let every = every.max(1);
     let total = gens / every + 1;
-    if total > MAX_FRAMES {
-        return Err(format!("{total} frames is over the limit of {MAX_FRAMES}"));
+    if total > max_frames() {
+        return Err(format!(
+            "{total} frames is over this machine's limit of {}",
+            max_frames()
+        ));
     }
     let opts = render::ViewOptions {
         outline_min_px: 0.0,

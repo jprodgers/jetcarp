@@ -78,7 +78,7 @@ pub fn answer(id: &str) -> Option<&'static str> {
 }
 
 /// A world stepper on a GPU (`jetcarp_gpu::GpuSim`), for the crossover.
-pub trait WorldStepper: Send {
+pub trait WorldStepper {
     fn step(&mut self, w: &mut World, gens: u64) -> Result<(), String>;
 }
 
@@ -95,7 +95,7 @@ pub struct Options {
     pub quick: bool,
     /// Seconds each timed part repeats its workload for (at least once).
     pub part_seconds: f64,
-    /// Where the disk part makes its folders (removed after); none skips it.
+    /// Where the disk part makes its folders (removed after: the data folder); none skips it.
     pub scratch: Option<PathBuf>,
     /// The process's memory now, in bytes, if the program can read it (the memory part).
     pub rss: Option<fn() -> Option<u64>>,
@@ -298,7 +298,7 @@ pub fn run(
             if let Some(b) = memory_per_cell(side, rule, rss) {
                 parts.push(Part {
                     id: id.into(),
-                    label: format!("Memory per cell, {words}"),
+                    label: format!("Memory in use per cell, {words}"),
                     device: "processor".into(),
                     value: b,
                     unit: "bytes/cell".into(),
@@ -315,7 +315,7 @@ pub fn run(
             Ok(rate) => parts.push(Part {
                 id: "disk".into(),
                 label: "Folders and small files made and removed".into(),
-                device: "the settings folder's disk".into(),
+                device: "the data folder's disk".into(),
                 value: rate,
                 unit: "items/s".into(),
                 correct: None,

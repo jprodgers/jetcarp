@@ -515,7 +515,7 @@ impl Core {
             seed(),
             canvas,
             self.lookup.clone(),
-            self.settings.max_cells,
+            self.settings.cell_limit(),
         )?;
         stage.resize(canvas, self.scale, self.now());
         Ok((stage, from))
@@ -904,7 +904,7 @@ impl Core {
             return;
         };
         let mut mb = b / (1 << 20);
-        if mb <= self.settings.max_memory_mb {
+        if mb <= self.settings.memory_limit_mb() {
             return;
         }
         // Over the limit: first give back what the allocator only keeps, and look again (#69).
@@ -912,7 +912,7 @@ impl Core {
         if let Some(b) = crate::power::memory_bytes() {
             mb = b / (1 << 20);
         }
-        if mb <= self.settings.max_memory_mb {
+        if mb <= self.settings.memory_limit_mb() {
             return;
         }
         let biggest = self
@@ -921,7 +921,7 @@ impl Core {
             .filter(|s| s.stage.world().is_some())
             .max_by_key(|s| s.stage.world().map_or(0, |w| w.topo.len()));
         if let Some(s) = biggest {
-            let limit = self.settings.max_memory_mb;
+            let limit = self.settings.memory_limit_mb();
             s.stage.abandon_item(&format!(
                 "the host used {mb} MB, over its limit of {limit} MB"
             ));

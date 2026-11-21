@@ -50,11 +50,11 @@ pub(crate) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "reference",
-            title: "Rules, tilings, palettes, seeds, commands",
+            title: "Rules, tilings, palettes, seeds, commands, this machine",
             read_only: true,
             destructive: false,
             description: || {
-                "Lists what there is to choose from. `what`: \"rules\" (default: the named rules with notation, family and a line each, and how rule notation works; any name or notation works as a CA's `rule`, e.g. \"Life\", \"B36/S23\", \"Brian's Brain\", \"W30\", \"Ant RL\"), \"tilings\" (tiling ids for world_new and their neighbour counts; with `search`, catalog tilings such as \"k2-005\" or \"3.4.6.4\"), \"isohedral\" (Kaplan's 81 isohedral tile types), \"palettes\" (built-in palettes and their colours), \"seeds\" (the forms a CA's `seed` takes), or \"commands\" (the command objects world_edit's `commands` applies). Examples: {\"what\": \"rules\", \"family\": \"Generations\"}, {\"what\": \"tilings\", \"search\": \"k2-\"}.".into()
+                "Lists what there is to choose from. `what`: \"rules\" (default: the named rules with notation, family and a line each, and how rule notation works; any name or notation works as a CA's `rule`, e.g. \"Life\", \"B36/S23\", \"Brian's Brain\", \"W30\", \"Ant RL\"), \"tilings\" (tiling ids for world_new and their neighbour counts; with `search`, catalog tilings such as \"k2-005\" or \"3.4.6.4\"), \"isohedral\" (Kaplan's 81 isohedral tile types), \"palettes\" (built-in palettes and their colours), \"seeds\" (the forms a CA's `seed` takes), \"commands\" (the command objects world_edit's `commands` applies), or \"machine\" (this computer: its hardware, its JETCARP Hardware Score, the limits set from them, and your own limits as an AI). Examples: {\"what\": \"rules\", \"family\": \"Generations\"}, {\"what\": \"tilings\", \"search\": \"k2-\"}.".into()
             },
             schema: || {
                 let rules = schema::props(&input_schema::<RulesIn>());
@@ -69,6 +69,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                             "palettes",
                             "seeds",
                             "commands",
+                            "machine",
                         ],
                         "What to list (default rules).",
                     ),
@@ -113,7 +114,7 @@ fn help(c: &mut Call) -> Res {
     Ok(ToolOutput::text(
         match a.get("topic").and_then(Value::as_str).unwrap_or("overview") {
             "overview" => HELP.to_string(),
-            "world" => HELP_WORLD.to_string(),
+            "world" => help_world(),
             "library" => HELP_LIBRARY.to_string(),
             "searches" | "jobs" => HELP_SEARCHES.to_string(),
             "scripts" | "script" => jetcarp_script::help_text().to_string(),
@@ -189,12 +190,40 @@ fn reference(c: &mut Call) -> Res {
             .map_err(err)?
             .text(),
         "commands" => COMMANDS.to_string(),
+        "machine" => machine_text(),
         w => {
             return Err(format!(
-                "`what` is rules, tilings, isohedral, palettes, seeds, or commands, not {w}"
+                "`what` is rules, tilings, isohedral, palettes, seeds, commands, or machine, not {w}"
             ));
         }
     }))
+}
+
+/// `reference {"what": "machine"}`: this computer, its score and limits, and an AI's own limits.
+/// The tools read the score; they never run the benchmark (that is the person's: `jetcarp score`,
+/// or Tools → This computer… in the app).
+pub(crate) fn machine_text() -> String {
+    let cx = ctx();
+    let l = &cx.limits;
+    let m = jetcarp_core::machine::current();
+    let share = m.get(jetcarp_core::machine::Id::AiShare);
+    let mut s = jetcarp_api::ops::machine::machine_info(cx).text();
+    let _ = write!(
+        s,
+        "\nYour limits as an AI (an AI's share: {}, set by the person in the app's Tools → This \
+         computer… or with `jetcarp limits set ai-share VALUE`): worlds of at most {} cells ({} \
+         unit cells a side) and {}; {} generations and {} cell updates a call; scripts up to {} \
+         seconds. The benchmark is the person's to run (`jetcarp score`); these tools only read \
+         its result.\n",
+        share.text(),
+        jetcarp_search::dashboard::digits(l.max_cells),
+        jetcarp_search::dashboard::digits(l.max_grid_side as u64),
+        jetcarp_core::machine::bytes_text(m.ai_world_bytes()),
+        jetcarp_search::dashboard::digits(l.max_gens),
+        jetcarp_search::dashboard::digits(l.max_work),
+        l.max_script_seconds
+    );
+    s
 }
 
 /// The rules, as `reference {"what": "rules"}` and the resource jetcarp://reference/rules show
@@ -385,13 +414,21 @@ Change (world_edit; every change is a logged command)
 
 Run
 - world_step {"generations": 100}; {"stop_when_settled": true} stops once the world is empty, frozen or periodic (up to 5000 generations unless given).
-- Limits per call: worlds up to 4 million cells, 1,000,000 generations, and 2 billion cell updates (cells x generations); world_step says how far to go when a call is too big.
+- Limits per call: worlds up to {max_cells} cells, 1,000,000 generations, and 2 billion cell updates (cells x generations); world_step says how far to go when a call is too big. reference {"what": "machine"} shows this machine and its limits.
 
 Two CAs on one grid
 1. world_new {"tiling": "square", "width": 120, "height": 80, "cas": [{"rule": "W30", "seed": "top_center"}, {"rule": "Ant RL", "seed": "ants:3", "steps_per_gen": 20}]}
 2. world_edit {"commands": [{"op": "step", "gens": 60}, {"op": "update_ca", "id": 1, "change": {"enabled": false}}, {"op": "step", "gens": 500}]}
 3. world_status {}
 "#;
+
+/// [`HELP_WORLD`] with the server's live limits.
+pub fn help_world() -> String {
+    HELP_WORLD.replace(
+        "{max_cells}",
+        &jetcarp_core::machine::count_text(crate::tools::max_cells()),
+    )
+}
 
 /// `help {"topic": "library"}`.
 pub const HELP_LIBRARY: &str = r#"The library: one database of what JETCARP has found, shared by the app, the command line, scripts and these tools.

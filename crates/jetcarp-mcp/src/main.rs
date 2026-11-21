@@ -44,6 +44,8 @@ fn main() {
         }
     }
     jetcarp_mcp::tools::allow_dirs(allow);
+    // An AI's limits are a share of this machine's.
+    let _ = jetcarp_core::machine::use_this_machine();
     if let Err(e) = jetcarp_mcp::stdio::run(app, port, token) {
         eprintln!("jetcarp-mcp: {e}");
         std::process::exit(1);

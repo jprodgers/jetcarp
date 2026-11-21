@@ -430,9 +430,13 @@ pub struct HostSettings {
     #[serde(deserialize_with = "Own::deserialize_lenient")]
     pub gpu: Own,
     pub caption: CaptionSettings,
-    /// Abandon an item when the host passes this much memory.
+    /// Abandon an item when the host passes this much memory. Since 0.4.3 the limit is the
+    /// machine's `host-memory` ([`HostSettings::memory_limit_mb`]); a value here other than the
+    /// old default (a file edited by hand) still wins.
     pub max_memory_mb: u64,
-    /// Refuse to build a world estimated to have more cells than this.
+    /// Refuse to build a world estimated to have more cells than this. Since 0.4.3 the limit is
+    /// the machine's `host-cells` ([`HostSettings::cell_limit`]); a value here other than the old
+    /// default still wins.
     pub max_cells: u64,
     /// The Windows screen saver's rotation. None: the first screen's.
     pub saver_rotation: Option<String>,
@@ -461,8 +465,8 @@ impl Default for HostSettings {
             max_fps: Some(DEFAULT_MAX_FPS),
             gpu: Own::Follow,
             caption: CaptionSettings::default(),
-            max_memory_mb: 6144,
-            max_cells: 64_000_000,
+            max_memory_mb: OLD_MAX_MEMORY_MB,
+            max_cells: OLD_MAX_CELLS,
             saver_rotation: None,
             lock_screen: LockScreen::default(),
             lock_awake_minutes: 30,
@@ -475,6 +479,33 @@ impl Default for HostSettings {
 }
 
 pub const MAX_AWAKE_MINUTES: u32 = 24 * 60;
+
+/// `max_memory_mb` and `max_cells` as every `host.json` had them before 0.4.3: a file with these
+/// leaves the limits to the machine.
+pub const OLD_MAX_MEMORY_MB: u64 = 6144;
+pub const OLD_MAX_CELLS: u64 = 64_000_000;
+
+impl HostSettings {
+    /// The most cells one of the host's worlds may have: this machine's `host-cells` limit
+    /// (`jetcarp limits`, Tools → This computer…), unless this file holds a value of its own.
+    pub fn cell_limit(&self) -> u64 {
+        if self.max_cells != OLD_MAX_CELLS {
+            self.max_cells
+        } else {
+            jetcarp_core::machine::current().host_cells()
+        }
+    }
+
+    /// The memory the host may use before it gives up its largest world, megabytes: this
+    /// machine's `host-memory` limit, unless this file holds a value of its own.
+    pub fn memory_limit_mb(&self) -> u64 {
+        if self.max_memory_mb != OLD_MAX_MEMORY_MB {
+            self.max_memory_mb
+        } else {
+            jetcarp_core::machine::current().host_memory_mb()
+        }
+    }
+}
 
 /// Who the host's own GPU choice belongs to, in reports.
 pub const OWNER: &str = "the desktop background";
@@ -582,6 +613,20 @@ impl HostSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The host's cells and memory come from the machine's limits (the reference machine's in
+    /// tests: the values every host.json had before), unless host.json holds its own.
+    #[test]
+    fn the_host_limits_come_from_the_machine_unless_set_here() {
+        let s = HostSettings::default();
+        assert_eq!((s.cell_limit(), s.memory_limit_mb()), (64_000_000, 6144));
+        let own = HostSettings {
+            max_cells: 1_000_000,
+            max_memory_mb: 2048,
+            ..HostSettings::default()
+        };
+        assert_eq!((own.cell_limit(), own.memory_limit_mb()), (1_000_000, 2048));
+    }
 
     #[test]
     fn partial_files_fill_in_and_bad_values_are_fixed() {

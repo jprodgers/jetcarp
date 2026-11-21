@@ -348,6 +348,9 @@ pub struct DoctorReport {
     pub os: String,
     pub arch: String,
     pub threads: usize,
+    /// The machine: its hardware, its JETCARP Hardware Score and its limits
+    /// (`machine.info`).
+    pub machine: crate::ops::machine::MachineOut,
     pub folders: DoctorFolders,
     pub gpu: Vec<GpuAdapter>,
     /// The GPU policy, and the adapter each purpose uses and why (none: no GPU support here).
@@ -364,6 +367,8 @@ impl Report for DoctorReport {
             "JETCARP {} on {} {} ({} threads)\n\n",
             self.version, self.os, self.arch, self.threads
         );
+        s.push_str(&machine_text(&self.machine));
+        s.push('\n');
         s.push_str("Folders\n");
         let paths = Paths {
             settings: f.settings.clone(),
@@ -477,6 +482,57 @@ impl Report for DoctorReport {
     }
 }
 
+/// The machine section of `jetcarp doctor`: the hardware, the score in a line, and the limits
+/// that matter most (`jetcarp limits` shows every one).
+fn machine_text(m: &crate::ops::machine::MachineOut) -> String {
+    use jetcarp_core::machine::Id;
+    let mut s = String::from("This computer\n");
+    s.push_str(&crate::ops::machine::hardware_text(&m.hardware));
+    match &m.score {
+        Some(sc) => {
+            let _ = writeln!(
+                s,
+                "  JETCARP Hardware Score: {} (score v{}, {}{})",
+                sc.text(),
+                sc.benchmark,
+                if sc.date.is_empty() {
+                    "undated"
+                } else {
+                    &sc.date
+                },
+                match sc.wrong().count() {
+                    0 => String::new(),
+                    n => format!(", {n} wrong answers"),
+                }
+            );
+        }
+        None => s.push_str("  JETCARP Hardware Score: not measured yet (`jetcarp score`)\n"),
+    }
+    if let Some(why) = &m.stale {
+        let _ = writeln!(s, "      note: {why}: `jetcarp score` measures it again");
+    }
+    for id in [Id::ReservedJetcarp, Id::World, Id::AiShare] {
+        if let Some(e) = m.limits.entries.iter().find(|e| e.id == id) {
+            let _ = writeln!(
+                s,
+                "  {}: {}{}",
+                e.label
+                    .to_lowercase()
+                    .replace("jetcarp", "JETCARP")
+                    .replace("an ai", "an AI"),
+                e.text(),
+                if e.source == jetcarp_core::machine::Source::Own {
+                    " (your own value)"
+                } else {
+                    ""
+                }
+            );
+        }
+    }
+    s.push_str("  every limit: `jetcarp limits`\n");
+    s
+}
+
 /// The GPU section of `jetcarp doctor`.
 fn gpu_policy_text(p: &GpuPolicy) -> String {
     let mut s = format!("GPU: {}\n", p.summary);
@@ -588,6 +644,7 @@ impl Op for SystemDoctor {
             threads: std::thread::available_parallelism()
                 .map(|n| n.get())
                 .unwrap_or(1),
+            machine: crate::ops::machine::machine_info(cx),
             folders: DoctorFolders {
                 data_size_bytes: folder_size(&paths.data),
                 settings: paths.settings,

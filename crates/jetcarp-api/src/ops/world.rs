@@ -106,6 +106,29 @@ pub fn check_grid_cells(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
     )))
 }
 
+/// A world of `cas` on `spec` against the memory limit (`Limits::world_memory`), worked out
+/// before any of it is built: refused naming what it needs, the limit and where the limit came
+/// from (`this world needs 31 GB; this machine's limit is 24 GB (half of the 48 GB reserved for
+/// JETCARP, from its hardware: ...)`). Never made smaller to fit.
+pub fn check_world_memory(spec: &TilingSpec, cas: &[CaSpec], l: &Limits) -> Result<(), ApiError> {
+    use crate::ctx::WorldMemory;
+    use jetcarp_core::machine::{self, cost};
+    if l.world_memory == WorldMemory::Unlimited {
+        return Ok(());
+    }
+    let Some(cells) = cost::cells_of(spec) else {
+        return Ok(());
+    };
+    let needs = cost::world_bytes(spec, cells, cas);
+    let m = machine::current();
+    let r = match l.world_memory {
+        WorldMemory::Machine => m.check_world(needs),
+        WorldMemory::Ai => m.check_ai_world(needs),
+        WorldMemory::Unlimited => Ok(()),
+    };
+    r.map_err(|e| ApiError::limit(e.to_string()))
+}
+
 /// A tiling's size against the limits (an opened scene, `set_tiling`).
 pub fn check_tiling_size(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
     match spec.size {
@@ -725,6 +748,7 @@ impl WorldOp for WorldNew {
         if scene.cas.len() > 32 {
             return Err(ApiError::limit("at most 32 CAs"));
         }
+        check_world_memory(&scene.tiling, &scene.cas, l)?;
         // Palettes named here are typed, so an unknown one is refused (a scene file's would load,
         // drawn in the default, with a warning). A new world has no palettes of its own.
         for c in &scene.cas {
@@ -844,6 +868,7 @@ impl WorldOp for WorldOpen {
     ) -> Result<OpenOut, ApiError> {
         let scene = scene_to_open(cx, &a)?;
         check_tiling_size(&scene.tiling, &cx.limits)?;
+        check_world_memory(&scene.tiling, &scene.cas, &cx.limits)?;
         let record = scene.record.clone();
         let recorded = record.as_ref().map(|r| Recorded {
             generation: r.generation,
@@ -2187,7 +2212,16 @@ pub fn prepare_command(v: &Value, w: &World, l: &Limits) -> Result<Command, ApiE
     })?;
     match &cmd {
         Command::Step { gens } => check_work(w, *gens, l)?,
-        Command::SetTiling { tiling } => check_tiling_size(tiling, l)?,
+        Command::SetTiling { tiling } => {
+            check_tiling_size(tiling, l)?;
+            let cas: Vec<CaSpec> = w.cas.iter().map(|c| c.spec()).collect();
+            check_world_memory(tiling, &cas, l)?;
+        }
+        Command::AddCa { ca } => {
+            let mut cas: Vec<CaSpec> = w.cas.iter().map(|c| c.spec()).collect();
+            cas.push(ca.clone());
+            check_world_memory(&w.topo.spec, &cas, l)?;
+        }
         Command::SetCells { cells, .. } if cells.len() > l.max_set => {
             return Err(ApiError::limit(format!(
                 "at most {} cells per set_cells",

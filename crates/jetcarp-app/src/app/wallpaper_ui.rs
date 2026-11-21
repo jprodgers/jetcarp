@@ -20,8 +20,11 @@ use std::sync::{Arc as SArc, Mutex};
 
 /// The key of the window (popout registry and settings).
 pub(super) const KEY: &str = "wallpaper";
-/// Largest fresh grid built here (cells).
-const MAX_FRESH_CELLS: u64 = 16_000_000;
+/// Largest fresh grid built here (cells): the machine's `wallpaper-cells` limit, 16 million on
+/// a 16 GB machine.
+fn max_fresh_cells() -> u64 {
+    jetcarp_core::machine::current().wallpaper_cells()
+}
 /// Longest side of the preview thumbnail (points).
 const PREVIEW: f32 = 340.0;
 
@@ -581,9 +584,10 @@ impl JetcarpApp {
         let source = if s.fresh {
             let spec = wallpaper::fresh_tiling(&scene.tiling, width, height, s.cell_px);
             let cells = fresh_cells(&spec);
-            if cells > MAX_FRESH_CELLS {
+            if cells > max_fresh_cells() {
                 return Err(format!(
-                    "a fresh grid of about {cells} cells is too large (at most {MAX_FRESH_CELLS}); raise the tile size"
+                    "a fresh grid of about {cells} cells is too large (at most {} on this machine); raise the tile size",
+                    max_fresh_cells()
                 ));
             }
             // The world's CAs and palettes as they are now (not as the scene started).
@@ -897,7 +901,7 @@ impl JetcarpApp {
                                 .on_hover_text("Results are identical to the CPU");
                             if let Some(c) = fresh_cells_est {
                                 let t = format!("about {} cells", crate::sweep_form::thousands(c));
-                                if c > MAX_FRESH_CELLS {
+                                if c > max_fresh_cells() {
                                     ui.colored_label(Color32::from_rgb(255, 120, 120), t + " (too many)");
                                 } else {
                                     ui.label(RichText::new(t).weak());

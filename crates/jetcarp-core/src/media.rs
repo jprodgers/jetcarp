@@ -641,8 +641,16 @@ fn alone_periodic(rec: &PatternRecord, o: &MediaOptions) -> Result<Animation, St
     })
 }
 
-/// Most pixels (width x height x frames) one animation holds in memory: 1.2 GB of RGBA.
+/// Most pixels (width x height x frames) one animation holds in memory on a 16 GB machine: 1.2 GB
+/// of RGBA. The limit on this machine is its `media-pixels` ([`max_volume`]).
 pub const MAX_VOLUME: u64 = 300_000_000;
+
+/// Most pixels one animation may hold on this machine (`media-pixels`, from its memory:
+/// [`crate::machine::limits`]); [`MAX_VOLUME`] for code that never asked for the machine's
+/// limits. An animation over it is refused, never made smaller.
+pub fn max_volume() -> u64 {
+    crate::machine::current().media_pixels()
+}
 
 /// Frames, their generations, the window, pixels per world unit, and pixels per cell.
 type RunOut = (Vec<Image>, Vec<u64>, [f64; 4], f64, f64);
@@ -720,10 +728,11 @@ fn run_world(
     let n = (shown.end.saturating_sub(shown.start))
         .div_ceil(every)
         .max(1);
-    if pw as u64 * ph as u64 * n > MAX_VOLUME {
+    let most = max_volume();
+    if pw as u64 * ph as u64 * n > most {
         return Err(format!(
-            "{n} frames of {pw} x {ph} pixels is too much for one animation (at most {} million pixels in all): use fewer generations, or a frame every few (`every`)",
-            MAX_VOLUME / 1_000_000
+            "{n} frames of {pw} x {ph} pixels is too much for one animation (at most {} pixels in all on this machine, its media-pixels limit): use fewer generations, or a frame every few (`every`)",
+            crate::machine::count_text(most)
         ));
     }
     let mut frames = Vec::new();
