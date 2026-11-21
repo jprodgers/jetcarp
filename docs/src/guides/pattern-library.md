@@ -206,6 +206,32 @@ again:
 
 *Tools → Pattern library…* browses the same library, with the same filters and sort orders. For
 each pattern it shows the phases (choose a phase and an orientation), and offers *Paste into world*,
-*Open in a new world* and *Promote to Quick Start*. Its name, tags, notes, rating and state can be
+*Open in a new world*, *Copy as RLE* (below) and *Promote to Quick Start*. Its name, tags, notes, rating and state can be
 edited there, with *Undo*. Records a [pack](packs.md) retracted are marked, with who retracted them
 and why. Removing a pattern is done from the command line (`jetcarp library remove`).
+
+## Copy as RLE
+
+To share a pattern with people who use Golly or LifeViewer, or to post it on the ConwayLife forums,
+copy it as RLE, the run-length text those programs read. *Edit → Copy as RLE* copies the world's
+whole field. *Copy as RLE* on a library pattern copies that pattern alone. Either puts on the
+clipboard what Golly writes: a comment saying where it came from (JETCARP's version, the state hash
+or the pattern's id), the `x = …, y = …, rule = …` line, and the cells:
+
+```text
+#C Copied from JETCARP 0.4.3 at generation 0; state hash …
+x = 3, y = 3, rule = B3/S23
+bo$2bo$3o!
+```
+
+For now this covers what Golly and LifeViewer read the same way JETCARP does: two-state B/S rules
+on the square grid (Moore, or von Neumann written with a `V`) and on the hexagon grid, written
+with Golly's `H`. JETCARP's hexagons have offset rows, while Golly and LifeViewer lay hexagons out
+as a sheared square grid, so a hexagon pattern is written in their layout. Pasting it back into a
+hexagon world, for example with the `rle` of a world edit (MCP, scripts, the command line), turns it
+back, so a copy pastes back as the same pattern. JETCARP's tests check this against Golly itself
+on every change: Golly reads a copy as the same cells and runs it to the same generations
+([How JETCARP is tested](../about/testing.md#automated-tests)). Other tilings, other rule families, rules with B0
+and worlds with several automata are refused, with the reason. The rest of the exchange with Golly
+and LifeViewer, reading and writing more of their formats, is planned for 0.4.4
+([Roadmap](../about/roadmap.md)).

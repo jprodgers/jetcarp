@@ -771,6 +771,25 @@ impl LibraryWindow {
                 }
             }
             if ui
+                .button("Copy as RLE")
+                .on_hover_text(
+                    "The pattern as RLE, the format Golly and LifeViewer read, for the ConwayLife \
+                     forums (B/S rules on the square and hexagon grids)",
+                )
+                .clicked()
+            {
+                match rle_of(&r) {
+                    Ok(text) => {
+                        ui.ctx().copy_text(text);
+                        out.push(Action::Message(
+                            format!("Copied {} as RLE", r.label()),
+                            false,
+                        ));
+                    }
+                    Err(e) => out.push(Action::Message(e, true)),
+                }
+            }
+            if ui
                 .button("Promote to Quick Start")
                 .on_hover_text("Adds it to the Quick Start under My finds and marks it promoted")
                 .clicked()
@@ -790,6 +809,18 @@ impl LibraryWindow {
             }
         });
     }
+}
+
+/// A library pattern as RLE (#145): the scene that shows it alone, written with its id and where
+/// it came from.
+fn rle_of(r: &PatternRecord) -> Result<String, String> {
+    let scene = showcase_scene(r, None, None)?;
+    let w = jetcarp_core::World::from_scene(&scene)?;
+    let notes = [
+        format!("{} (JETCARP library pattern {})", r.label(), r.id),
+        format!("Copied from JETCARP {}", env!("CARGO_PKG_VERSION")),
+    ];
+    jetcarp_api::rle::of_world(&w, &notes)
 }
 
 /// Add a pattern to the Quick Start ("My finds") with `quickstart.add`, titled with its name, and
@@ -837,8 +868,8 @@ mod tests {
 
     /// The library, and the folder that holds it: bind them as `(root, lib)` so the folder is
     /// removed after the library is closed (#121).
-    fn lib_with_patterns() -> (jetcarp_core::scratch::ScratchDir, Library) {
-        let root = jetcarp_core::scratch::ScratchDir::new("app-lib");
+    fn lib_with_patterns(name: &str) -> (jetcarp_core::scratch::ScratchDir, Library) {
+        let root = jetcarp_core::scratch::ScratchDir::new(&format!("app-lib-{name}"));
         let lib = Library::open(root.path());
         let mut w = jetcarp_core::World::new(
             jetcarp_core::TilingSpec::rect("square", 40, 40, jetcarp_core::Boundary::Wrap),
@@ -886,9 +917,29 @@ mod tests {
         (root, lib)
     }
 
+    /// A library find copies as RLE with its id in a comment; the glider is the glider (#145).
+    #[test]
+    fn a_library_find_copies_as_rle() {
+        let (_root, lib) = lib_with_patterns("rle");
+        let recs = lib.list().unwrap();
+        let glider = recs
+            .iter()
+            .find(|r| r.class == PatternClass::Spaceship)
+            .unwrap();
+        let text = rle_of(glider).unwrap();
+        assert!(text.contains(&glider.id), "{text}");
+        assert_eq!(
+            jetcarp_api::rle::header_rule(&text).as_deref(),
+            Some("B3/S23"),
+            "{text}"
+        );
+        let cells = jetcarp_api::cells::parse_rle(&text).unwrap();
+        assert_eq!(cells.len(), 5, "{text}");
+    }
+
     #[test]
     fn filter_sort_edit_promote() {
-        let (_root, lib) = lib_with_patterns();
+        let (_root, lib) = lib_with_patterns("filter");
         let recs = lib.list().unwrap();
         let all = view(&recs, &Filters::default(), Sort::Score, true);
         assert_eq!(all.len(), 3);
