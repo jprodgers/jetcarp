@@ -475,8 +475,67 @@ pub fn pick(
     purpose: Purpose,
     surface: Option<&wgpu::Surface<'_>>,
 ) -> Result<Choice, String> {
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
-    pick_from(&adapters, &Policy::load(), purpose, surface)
+    let policy = Policy::load();
+    let adapters = adapters_for(instance, &policy.want);
+    let choice = pick_from(&adapters, &policy, purpose, surface)?;
+    if let Some(f) = &choice.fallback {
+        say_fallback_once(f);
+    }
+    Ok(choice)
+}
+
+/// How many more times to look, and how far apart, for an adapter the policy asks for before the
+/// choice falls back (#82).
+const LOOK_AGAIN: (u32, std::time::Duration) = (2, std::time::Duration::from_millis(250));
+
+/// Every adapter of `instance`. When the policy asks for a particular adapter (by name, or the
+/// integrated, discrete or software one) and none is there, it looks twice more, a quarter of a
+/// second apart, before the choice falls back to another. On a laptop whose discrete GPU sleeps
+/// when idle (Optimus), a DirectX 12 enumeration made while it wakes up now and then leaves it
+/// out: one process in 335 ran on the integrated GPU though `JETCARP_GPU` named the other (#82).
+pub fn adapters_for(instance: &wgpu::Instance, want: &Want) -> Vec<wgpu::Adapter> {
+    look_again(
+        || pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all())),
+        |list: &[wgpu::Adapter]| has_wanted(want, list.iter().map(|a| a.get_info())),
+        LOOK_AGAIN.0,
+        LOOK_AGAIN.1,
+    )
+}
+
+/// Whether an adapter `want` asks for is among these (WARP never counts, as in the choice).
+fn has_wanted(want: &Want, mut infos: impl Iterator<Item = wgpu::AdapterInfo>) -> bool {
+    match want {
+        Want::Best => true,
+        w => infos.any(|i| w.matches(&i) && !is_warp(&i)),
+    }
+}
+
+/// `list()`, then up to `more` times again, `wait` apart, until `found` says it holds what is
+/// wanted; the last list either way.
+fn look_again<A>(
+    mut list: impl FnMut() -> Vec<A>,
+    found: impl Fn(&[A]) -> bool,
+    more: u32,
+    wait: std::time::Duration,
+) -> Vec<A> {
+    let mut l = list();
+    for _ in 0..more {
+        if found(&l) {
+            break;
+        }
+        std::thread::sleep(wait);
+        l = list();
+    }
+    l
+}
+
+/// The fallback said on the error stream too, once a process, so a script that relies on
+/// `JETCARP_GPU` sees it without reading the backend note (#82).
+fn say_fallback_once(f: &str) {
+    static SAID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        eprintln!("note: GPU: {f}");
+    }
 }
 
 /// [`pick`] among these adapters (the app's window hands its own list over).
@@ -1148,7 +1207,7 @@ pub fn report_with(test: bool) -> (Policy, Vec<ChoiceReport>) {
     let policy = Policy::load();
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+    let adapters = adapters_for(&instance, &policy.want);
     let out = [Purpose::Display, Purpose::Compute]
         .into_iter()
         .map(
@@ -1367,6 +1426,74 @@ mod tests {
         assert_eq!(s, Setting::default());
         assert_eq!(serde_json::to_string(&s).unwrap(), r#"{"gpu":"auto"}"#);
         assert!(serde_json::from_str::<Setting>(r#"{"gpu": "maybe"}"#).is_err());
+    }
+
+    /// A named adapter missing from the first list is looked for again (#82); the best needs no
+    /// second look, and one never found gives up after two more.
+    #[test]
+    fn a_named_adapter_missing_at_first_is_looked_for_again() {
+        use std::cell::Cell;
+        use wgpu::{Backend, DeviceType as D};
+        let uhd = || info("Intel(R) UHD Graphics", D::IntegratedGpu, Backend::Dx12);
+        let rtx = || {
+            info(
+                "NVIDIA GeForce RTX 3050 Laptop GPU",
+                D::DiscreteGpu,
+                Backend::Dx12,
+            )
+        };
+        let rtx_wanted = Want::parse("RTX");
+        let wait = std::time::Duration::ZERO;
+        let found = |want: &Want| {
+            let want = want.clone();
+            move |l: &[wgpu::AdapterInfo]| has_wanted(&want, l.iter().cloned())
+        };
+
+        // The RTX shows up on the second look.
+        let calls = Cell::new(0);
+        let list = || {
+            calls.set(calls.get() + 1);
+            if calls.get() == 1 {
+                vec![uhd()]
+            } else {
+                vec![uhd(), rtx()]
+            }
+        };
+        let got = look_again(list, found(&rtx_wanted), 2, wait);
+        assert_eq!(calls.get(), 2);
+        assert!(got.iter().any(|i| i.name.contains("RTX")));
+
+        // There at once: one look.
+        let calls = Cell::new(0);
+        let list = || {
+            calls.set(calls.get() + 1);
+            vec![uhd(), rtx()]
+        };
+        look_again(list, found(&rtx_wanted), 2, wait);
+        assert_eq!(calls.get(), 1);
+
+        // The best: one look, whatever is there.
+        let calls = Cell::new(0);
+        let list = || {
+            calls.set(calls.get() + 1);
+            vec![uhd()]
+        };
+        look_again(list, found(&Want::Best), 2, wait);
+        assert_eq!(calls.get(), 1);
+
+        // Never there: three looks, then the choice falls back as before.
+        let calls = Cell::new(0);
+        let list = || {
+            calls.set(calls.get() + 1);
+            vec![uhd()]
+        };
+        let got = look_again(list, found(&rtx_wanted), 2, wait);
+        assert_eq!(calls.get(), 3);
+        assert_eq!(got.len(), 1);
+
+        // WARP doesn't count as the software adapter asked for, as in the choice.
+        let warp = info("Microsoft Basic Render Driver", D::Cpu, Backend::Dx12);
+        assert!(!has_wanted(&Want::Software, [warp].into_iter()));
     }
 
     fn info(name: &str, kind: wgpu::DeviceType, backend: wgpu::Backend) -> wgpu::AdapterInfo {
