@@ -25,6 +25,10 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
   note saying why. The guard runs wherever JETCARP draws: the app, full screen, the desktop
   background, the screen savers, and the animations it exports, which it checks before saving. See
   [The strobe guard](../guides/strobe-guard.md).
+- **Stricter for someone at risk.** If you answered that you have, or may have, a seizure
+  disorder, the guard also dims any pattern of similar parts, regular or not, as EA's IRIS
+  analyser counts one, so soups, waves and mazes are often shown dimmed for you. See
+  [Stricter for someone at risk](../guides/strobe-guard.md#stricter-for-someone-at-risk).
 - **Who can turn it off.** The guard is on for everyone. If you answered that you have, or may
   have, a seizure disorder, it can't be turned off. If you answered that you don't, you can turn it
   off in *Settings → Safety*, through a confirmation. The desktop background and the screen saver
@@ -33,8 +37,13 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
 - **What it does not do.** The guard lowers the risk; it does not remove it. It measures the screen
   under assumptions about its size and your distance from it, which the guard's page states. It
   is not a certificate of safety, and the warning stands.
-- **Less motion.** You can pause any scene, run it slower, step it one generation at a time, or show
-  it in a small window. The desktop background pauses on its own while windows cover it, on battery
+- **Less motion.** The app follows your system's request for reduced motion: the Quick Start's
+  cards and the small animations in other windows show stills until you choose one, a scene opens
+  paused with a note saying why, and the interface's own animations stop. *Settings →
+  Accessibility* turns this on or off whatever the system says
+  ([Accessibility settings](../guides/accessibility-settings.md#reduced-motion)). You can also
+  pause any scene, run it slower, step it one generation at a time, or show it in a small window.
+  The desktop background pauses on its own while windows cover it, on battery
   and while the processor is busy, and has a low-power pacing (`jetcarp host pacing low-power`).
   In this book, every animation is replaced by a still picture when your system asks for reduced
   motion.
@@ -59,16 +68,28 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
 - **Size.** In the app, you can zoom the world in and out with the + and − keys or the scroll
   wheel. On the desktop background, the caption that names the rule and the tiling has a size of
   its own.
-- **Colour.** JETCARP has 30 built-in palettes, light and dark, and anywhere a palette is accepted
-  you can give your own colours instead ([Palettes and colouring](../guides/palettes.md)). The two
-  palettes of JACA, JETCARP's two-sign automaton, are chosen to stay apart at every age.
-- **Light and dark.** The app follows your system's light or dark setting on Windows and macOS.
+- **Colour.** JETCARP has 33 built-in palettes, light and dark, and anywhere a palette is accepted
+  you can give your own colours instead ([Palettes and colouring](../guides/palettes.md)). Three
+  are chosen for colour-vision deficiency: Lantern for any rule, and Cobalt and Saffron for the two
+  signs of JACA, JETCARP's two-sign automaton. Their colours stay clearly apart for protanopia,
+  deuteranopia, tritanopia and their milder forms, as a standard model simulates them, and
+  *Settings → Accessibility* makes them the defaults for scenes that don't choose their own. The
+  [palettes reference](../reference/palettes.md#colour-vision-deficiency) gives every built-in
+  palette's result in the same check.
+- **High contrast.** The app has a high-contrast theme, dark and light: text at a contrast of 7:1
+  or more, thicker outlines, and a thick ring round whatever has the keyboard. It follows Windows'
+  contrast themes, macOS's *Increase contrast* and GNOME's *High Contrast*, and *Settings →
+  Accessibility* turns it on or off whatever the system says
+  ([Accessibility settings](../guides/accessibility-settings.md#high-contrast)).
+- **Light and dark.** The app follows your system's light or dark setting on Windows and macOS,
+  and *Settings → Accessibility* chooses either on any system.
 
 ## Using the keyboard
 
 The common actions have keyboard shortcuts, which *Help → Keyboard shortcuts…* (F1) lists. Running,
 pausing and stepping have single keys (Space to run or pause, S or → to step), and + and − zoom the
-world; they work while no text box has the keyboard.
+world; they work while no text box has the keyboard. In the high-contrast theme, a thick ring shows
+which control has the keyboard.
 
 ## Hearing
 
@@ -79,22 +100,23 @@ future.
 
 These are known, and each is tracked:
 
-- **Colour alone.** Cells' states and ages are told apart by colour only, and no built-in palette
-  has yet been chosen and checked for the common kinds of colour-vision deficiency
+- **Colour alone.** Cells' states and ages are told apart by colour only. The palettes chosen for
+  colour-vision deficiency are checked by simulation, not yet by people with those deficiencies,
+  and most of the other built-in palettes don't pass the check
   ([#217](https://github.com/jprodgers/jetcarp/issues/217)).
-- **Reduced motion in the app.** The app doesn't yet read your system's request for reduced motion;
-  the strobe guard and the speed controls are what it offers instead
-  ([#218](https://github.com/jprodgers/jetcarp/issues/218)).
-- **Light and dark on Linux.** On Linux the app stays dark when the system is set to light
+- **Light and dark on Linux.** On Linux the app doesn't follow the system's light or dark setting;
+  choose it in *Settings → Accessibility* instead
   ([#137](https://github.com/jprodgers/jetcarp/issues/137)).
 - **The keyboard alone.** Drawing cells, selecting and moving patterns, and arranging the docked
   panes need a mouse or a touchpad, and the menus and windows have not been checked for use without
   one. Scripts and the command line can draw and edit worlds instead
   ([#219](https://github.com/jprodgers/jetcarp/issues/219)).
-- **No high-contrast theme** for the app, beyond the light and dark ones
-  ([#220](https://github.com/jprodgers/jetcarp/issues/220)).
 - **Not yet tested** with screen readers, with keyboard-only use
-  ([#219](https://github.com/jprodgers/jetcarp/issues/219)), or by disabled people. The checks so
+  ([#219](https://github.com/jprodgers/jetcarp/issues/219)), or by disabled people. Reduced motion
+  and the high-contrast theme are checked by the program's tests; reading each system's settings is
+  checked by hand on Windows, macOS and GNOME as part of each release's testing
+  ([#218](https://github.com/jprodgers/jetcarp/issues/218),
+  [#220](https://github.com/jprodgers/jetcarp/issues/220)). The checks so
   far are the program's own: its tests, the strobe guard's comparison with the IRIS flash and
   pattern analyser, and the hands-on testing of each release.
 
