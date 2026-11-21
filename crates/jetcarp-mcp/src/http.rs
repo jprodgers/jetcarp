@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
@@ -171,6 +171,10 @@ struct Shared {
     limits: Limits,
     stop: AtomicBool,
     connections: AtomicUsize,
+    /// A handle on each open connection, to shut it down when the listener stops: a thread
+    /// waiting to read wakes at once.
+    open: Mutex<HashMap<u64, TcpStream>>,
+    next: AtomicU64,
     sessions: Mutex<HashMap<String, Session>>,
     /// Cancel flags of the requests made without a session.
     sessionless: CancelMap,
@@ -221,6 +225,8 @@ impl Listener {
             limits,
             stop: AtomicBool::new(false),
             connections: AtomicUsize::new(0),
+            open: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(0),
             sessions: Mutex::new(HashMap::new()),
             sessionless: CancelMap::default(),
             tx,
@@ -299,6 +305,9 @@ impl Listener {
 impl Drop for Listener {
     fn drop(&mut self) {
         self.shared.stop.store(true, Ordering::SeqCst);
+        for s in self.shared.open.lock().unwrap().values() {
+            let _ = s.shutdown(Shutdown::Both);
+        }
         if self.wrote_file
             && let Some(p) = &self.file
             && let Ok(info) = link::EndpointInfo::read_at(p, "")
@@ -310,18 +319,23 @@ impl Drop for Listener {
     }
 }
 
-/// Counts one open connection until dropped.
-struct Counted(Arc<Shared>);
+/// Counts one open connection, and keeps a handle on it, until dropped.
+struct Counted(Arc<Shared>, u64);
 
 impl Counted {
-    fn new(sh: &Arc<Shared>) -> Counted {
+    fn new(sh: &Arc<Shared>, s: &TcpStream) -> Counted {
         sh.connections.fetch_add(1, Ordering::SeqCst);
-        Counted(sh.clone())
+        let id = sh.next.fetch_add(1, Ordering::SeqCst);
+        if let Ok(handle) = s.try_clone() {
+            sh.open.lock().unwrap().insert(id, handle);
+        }
+        Counted(sh.clone(), id)
     }
 }
 
 impl Drop for Counted {
     fn drop(&mut self) {
+        self.0.open.lock().unwrap().remove(&self.1);
         self.0.connections.fetch_sub(1, Ordering::SeqCst);
     }
 }
@@ -338,7 +352,7 @@ fn accept_loop(sock: TcpListener, sh: Arc<Shared>) {
                 }
                 // Counted here, before the thread starts, so that a burst cannot pass the limit;
                 // a thread that cannot start drops it.
-                let counted = Counted::new(&sh);
+                let counted = Counted::new(&sh, &s);
                 let _ = std::thread::Builder::new()
                     .name("jetcarp-http-conn".into())
                     .spawn(move || {
@@ -490,26 +504,27 @@ struct Conn {
 }
 
 impl Conn {
-    /// Read more into the buffer, by `deadline`. `Ok(0)`: the client closed.
-    fn fill(&mut self, deadline: Instant, stop: &AtomicBool) -> std::io::Result<usize> {
+    /// Read more into the buffer, by `deadline`. `Ok(0)`: the client closed, or the listener
+    /// stopped (it shuts its connections down).
+    ///
+    /// One wait for the whole time left, and none after it runs out: on Windows a socket whose
+    /// read has timed out is not to be read again.
+    fn fill(&mut self, deadline: Instant) -> std::io::Result<usize> {
         let mut chunk = [0u8; 16 << 10];
         loop {
-            if stop.load(Ordering::SeqCst) {
-                return Err(std::io::Error::new(ErrorKind::Interrupted, "stopping"));
-            }
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
                 return Err(std::io::Error::new(ErrorKind::TimedOut, "timed out"));
             }
-            // A slice at a time, so that a stop is seen soon.
-            self.s
-                .set_read_timeout(Some(left.min(Duration::from_millis(250))))?;
+            self.s.set_read_timeout(Some(left))?;
             match self.s.read(&mut chunk) {
                 Ok(n) => {
                     self.buf.extend_from_slice(&chunk[..n]);
                     return Ok(n);
                 }
-                Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+                Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
+                    return Err(std::io::Error::new(ErrorKind::TimedOut, "timed out"));
+                }
                 Err(e) if e.kind() == ErrorKind::Interrupted => {}
                 Err(e) => return Err(e),
             }
@@ -530,7 +545,7 @@ impl Conn {
                     return Err(head_too_long(sh).into());
                 }
             }
-            match self.fill(head_until.unwrap_or(idle_until), &sh.stop) {
+            match self.fill(head_until.unwrap_or(idle_until)) {
                 Ok(0) => return Ok(None),
                 Ok(_) => {}
                 Err(e) if e.kind() == ErrorKind::TimedOut && head_until.is_some() => {
@@ -584,9 +599,9 @@ impl Conn {
     }
 
     /// Exactly `n` more bytes, by `deadline`.
-    fn take(&mut self, n: usize, deadline: Instant, stop: &AtomicBool) -> Result<Vec<u8>, End> {
+    fn take(&mut self, n: usize, deadline: Instant) -> Result<Vec<u8>, End> {
         while self.buf.len() < n {
-            match self.fill(deadline, stop) {
+            match self.fill(deadline) {
                 Ok(0) => return Err(End::Quiet),
                 Ok(_) => {}
                 Err(e) if e.kind() == ErrorKind::TimedOut => {
@@ -599,7 +614,7 @@ impl Conn {
     }
 
     /// One line of a chunked body (without its CRLF), of at most `max` bytes.
-    fn line(&mut self, max: usize, deadline: Instant, stop: &AtomicBool) -> Result<Vec<u8>, End> {
+    fn line(&mut self, max: usize, deadline: Instant) -> Result<Vec<u8>, End> {
         loop {
             if let Some(i) = self.buf.iter().position(|&b| b == b'\n') {
                 if i > max + 1 {
@@ -615,12 +630,12 @@ impl Conn {
             if self.buf.len() > max + 1 {
                 return Err(Refusal::new(400, "a chunk line is too long").into());
             }
-            self.take_more(deadline, stop)?;
+            self.take_more(deadline)?;
         }
     }
 
-    fn take_more(&mut self, deadline: Instant, stop: &AtomicBool) -> Result<(), End> {
-        match self.fill(deadline, stop) {
+    fn take_more(&mut self, deadline: Instant) -> Result<(), End> {
+        match self.fill(deadline) {
             Ok(0) => Err(End::Quiet),
             Ok(_) => Ok(()),
             Err(e) if e.kind() == ErrorKind::TimedOut => {
@@ -631,15 +646,10 @@ impl Conn {
     }
 
     /// A body sent in chunks, of at most `max` bytes in all.
-    fn chunked(
-        &mut self,
-        max: usize,
-        deadline: Instant,
-        stop: &AtomicBool,
-    ) -> Result<Vec<u8>, End> {
+    fn chunked(&mut self, max: usize, deadline: Instant) -> Result<Vec<u8>, End> {
         let mut body = Vec::new();
         loop {
-            let line = self.line(1024, deadline, stop)?;
+            let line = self.line(1024, deadline)?;
             let size = std::str::from_utf8(&line)
                 .ok()
                 .map(|l| l.split(';').next().unwrap_or("").trim())
@@ -650,7 +660,7 @@ impl Conn {
                 // Trailers, up to the empty line.
                 let mut trailers = 0;
                 loop {
-                    let l = self.line(1024, deadline, stop)?;
+                    let l = self.line(1024, deadline)?;
                     if l.is_empty() {
                         return Ok(body);
                     }
@@ -663,8 +673,8 @@ impl Conn {
             if body.len() + size > max {
                 return Err(too_large(max).into());
             }
-            body.extend(self.take(size, deadline, stop)?);
-            if !self.line(0, deadline, stop)?.is_empty() {
+            body.extend(self.take(size, deadline)?);
+            if !self.line(0, deadline)?.is_empty() {
                 return Err(Refusal::new(400, "a chunk does not end where its size says").into());
             }
         }
@@ -778,6 +788,11 @@ fn serve_connection(s: TcpStream, sh: &Shared) {
     let _ = s.set_nodelay(true);
     let mut c = Conn { s, buf: Vec::new() };
     loop {
+        // Stopped: what is open is closed (a connection accepted as the listener stopped was
+        // not among those it shut down).
+        if sh.stop.load(Ordering::SeqCst) {
+            return c.close();
+        }
         let (head_only, r) = match c.read_head(sh) {
             Ok(None) | Err(End::Quiet) => return c.close(),
             Err(End::Refused(r)) => (false, Err(End::Refused(r))),
@@ -1093,8 +1108,8 @@ fn post(c: &mut Conn, sh: &Shared, h: &Head) -> Result<Flow, End> {
     }
     let until = Instant::now() + sh.limits.body_timeout;
     let body = match framing {
-        Framing::Length(n) => c.take(n, until, &sh.stop)?,
-        Framing::Chunked => c.chunked(sh.limits.max_body, until, &sh.stop)?,
+        Framing::Length(n) => c.take(n, until)?,
+        Framing::Chunked => c.chunked(sh.limits.max_body, until)?,
         Framing::None => unreachable!(),
     };
     let msg: Value = serde_json::from_slice(&body)

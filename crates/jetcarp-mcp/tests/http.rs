@@ -1003,3 +1003,37 @@ fn a_chunked_body_over_the_limit_is_refused() {
     assert_eq!(parse(&answer).status, 413);
     stop.store(true, Ordering::SeqCst);
 }
+
+/// Stopped (the app's checkbox unticked, say), the endpoint closes the connections open on it at
+/// once, rather than when they have been idle for 30 seconds, and nothing accepts on its port.
+#[test]
+fn stopping_closes_the_open_connections() {
+    let (port, token, stop) = in_process(Limits::default());
+    // One idle, one kept alive after an answer.
+    let mut idle = connect(port);
+    let mut kept = connect(port);
+    let body = init(1).to_string();
+    write!(
+        kept,
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\
+         Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    assert_eq!(read_one(&mut kept).status, 200);
+    let t = Instant::now();
+    stop.store(true, Ordering::SeqCst);
+    for c in [&mut idle, &mut kept] {
+        let mut rest = Vec::new();
+        let _ = c.read_to_end(&mut rest);
+    }
+    assert!(t.elapsed() < Duration::from_secs(5), "{:?}", t.elapsed());
+    let t = Instant::now();
+    while TcpStream::connect(("127.0.0.1", port)).is_ok() {
+        assert!(
+            t.elapsed() < Duration::from_secs(5),
+            "port {port} still accepts"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}

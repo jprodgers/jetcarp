@@ -495,7 +495,11 @@ mod tests {
         let port = {
             let h = ai.http.as_ref().expect("ticked again");
             assert_ne!(h.token, token, "a new token each time it is ticked");
-            assert_eq!(http_status(h.port, Some(&token)), Some(401), "the old one fails");
+            assert_eq!(
+                http_status(h.port, Some(&token)),
+                Some(401),
+                "the old one fails"
+            );
             h.port
         };
         ai.switch_off();
