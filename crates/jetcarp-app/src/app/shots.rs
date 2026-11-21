@@ -375,14 +375,7 @@ fn shots_tour() {
     h.run(4.0, 0.05, |_| false);
     h.steady();
     h.shot("tour-world");
-    // The Tools menu.
-    h.hold_menu("Tools");
-    let first = h.find("Scripts and sweeps…");
-    let last = h.find("AI control…");
-    let bar = h.find("Tools");
-    h.shot_part("tour-tools-menu", Harness::around(&[first, last, bar], 8.0));
-    h.hold_menu("");
-    h.escape();
+    tools_menu(&mut h);
     // The Window menu: every pane and tool window, and where each is.
     h.hold_menu("Window");
     let bar = h.find("Window");
@@ -391,6 +384,31 @@ fn shots_tour() {
     h.shot_part("tour-window-menu", Harness::around(&[bar, last, wide], 8.0));
     h.hold_menu("");
     h.escape();
+}
+
+/// The Tools menu, as the tour shows it.
+fn tools_menu(h: &mut Harness) {
+    h.hold_menu("Tools");
+    let first = h.find("Scripts and sweeps…");
+    let last = h.find("This computer…");
+    let bar = h.find("Tools");
+    h.shot_part("tour-tools-menu", Harness::around(&[first, last, bar], 8.0));
+    h.hold_menu("");
+    h.escape();
+}
+
+/// The tour's Tools menu alone (the rest of [`shots_tour`] needs the starter pack).
+#[test]
+#[ignore]
+fn shots_tools_menu() {
+    let Some(mut h) = Harness::new(1400, 900) else {
+        return;
+    };
+    h.quick_start_loaded();
+    // In a world, as the tour shows it (a built-in entry).
+    h.open_entry("penrose-rhomb-brain");
+    h.run(1.0, 0.05, |_| false);
+    tools_menu(&mut h);
 }
 
 /// The book's photosensitive seizure warning (`getting-started/photosensitivity.md`, #96): the

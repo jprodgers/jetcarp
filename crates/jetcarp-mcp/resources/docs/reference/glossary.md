@@ -170,6 +170,11 @@ apart by the tile's shape alone. See [Isohedral tilings](../tilings/isohedral.md
 **JACA.** Jimmie's Annihilating Cellular Automata: cells of sign +1 and −1, each following its own B/S
 rule, destroyed where they meet. See [JACA](../automata/jaca.md).
 
+**JETCARP Hardware Score.** A computer's number from about a minute of JETCARP's own work: the
+geometric mean of five Life soup rates on non-square tilings, in soups a second, each answer
+checked. Its own unit, with no computer pinned to a value. See
+[This computer](../guides/this-computer.md).
+
 **Job.** A search stored in the catalogue with its settings, progress and checkpoint, so that it can
 be stopped and resumed. See [Search methods](../research/search-methods.md#jobs).
 
@@ -198,6 +203,11 @@ per generation from the layer before. See [Layered rules](../automata/layered.md
 
 **Life-like rule.** A two-state rule that counts live neighbours, written in B/S notation. See
 [Life-like rules](../automata/life-like.md).
+
+**Limit.** How much of something this computer allows (the memory of one world, the desktop
+background's cells, an AI's share...): your own value if you set one, else the machine's suggestion
+from its memory, never above the code's ceiling. A limit only allows or refuses; it never changes a
+result. See [This computer](../guides/this-computer.md#the-limits).
 
 ## M
 

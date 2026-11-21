@@ -247,9 +247,11 @@ The settings are saved in `host.json` in the settings folder. The app and the co
 it and tell a running host to read it again, so a setting changed while the host is stopped applies
 the next time it starts (*saved; the host is not running*). When the host reads it again, a screen
 whose rotation, or a profile in it, has been saved since starts that rotation afresh, as saved.
-Should the host's memory pass `max_memory_mb` in `host.json` (6,144 MB by default), it gives up the
-biggest scene it shows for the next item, with a note; on Linux it first gives back the memory it
-has freed but kept. On macOS its memory is its physical footprint, the figure Activity Monitor
+Should the host's memory pass this computer's `host-memory` limit (6 GB on a 16 GB computer, more
+on a bigger one: see [This computer](this-computer.md); a `max_memory_mb` edited by hand in
+`host.json` still wins), it gives up the biggest scene it shows for the next item, with a note; on
+Linux it first gives back the memory it has freed but kept. Its worlds may have at most the
+computer's `host-cells` (64 million cells on a 16 GB computer). On macOS its memory is its physical footprint, the figure Activity Monitor
 shows.
 Besides pausing on battery and when busy, the host also pauses by itself while its desktop background
 is completely hidden behind other windows, while the screen is locked, and while the display is

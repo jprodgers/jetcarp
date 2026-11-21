@@ -132,7 +132,7 @@ Most tools open in windows of their own. Each floats over the world, and its ↗
 *In its own window* under its name in the *Window* menu) moves it to a separate window that can go
 on another monitor.
 
-<img src="../images/getting-started/tour-tools-menu.webp" alt="The Tools menu: Scripts and sweeps, Sweep this world, Sweep results, Pattern library, Hunts, Catalog tools, Ants and turmites, Large sandpile, HashLife view, Objects and AI control" width="244">
+<img src="../images/getting-started/tour-tools-menu.webp" alt="The Tools menu: Scripts and sweeps, Sweep this world, Sweep results, Pattern library, Hunts, Catalog tools, Ants and turmites, Large sandpile, HashLife view, Objects, AI control and This computer" width="244">
 
 | Window | Menu | What it is for |
 | --- | --- | --- |
@@ -144,6 +144,7 @@ on another monitor.
 | *Palettes* | *CA* | Browse, make and apply palettes ([Palettes and colouring](../guides/palettes.md)) |
 | *Scripts and sweeps* | *Tools* | Rhai scripts, and sweeps of many rules built from a form ([Scripting a rule sweep](../tutorials/scripting-a-sweep.md)) |
 | *AI control* | *Tools* | Let an AI assistant act on this world, through `jetcarp mcp --app` ([Driving JETCARP from an AI assistant](../tutorials/mcp.md)) |
+| *This computer* | *Tools* | The computer's hardware, its JETCARP Hardware Score, and the limits set from them ([This computer](../guides/this-computer.md)) |
 | *Tile editor* | *Tiling* | Move a tile's corners and bend its edges ([Drawing and editing tiles](../guides/drawing-tiles.md#the-tile-editor)) |
 | *Unit cell editor* | *Tiling* | Edit a periodic tiling's lattice and every tile of its unit cell ([Drawing and editing tiles](../guides/drawing-tiles.md#the-unit-cell-editor)) |
 

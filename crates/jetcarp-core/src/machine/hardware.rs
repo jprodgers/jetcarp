@@ -448,12 +448,12 @@ mod tests {
 
     #[test]
     fn cpuinfo_model_and_cores() {
-        let x86 = "processor\t: 0\nmodel name\t: AMD Ryzen  AI Max+ 395\nphysical id\t: 0\ncore id\t: 0\n\n\
-                   processor\t: 1\nmodel name\t: AMD Ryzen  AI Max+ 395\nphysical id\t: 0\ncore id\t: 0\n\n\
-                   processor\t: 2\nmodel name\t: AMD Ryzen  AI Max+ 395\nphysical id\t: 0\ncore id\t: 1\n";
+        let x86 = "processor\t: 0\nmodel name\t: Example  Processor   8-Core\nphysical id\t: 0\ncore id\t: 0\n\n\
+                   processor\t: 1\nmodel name\t: Example  Processor   8-Core\nphysical id\t: 0\ncore id\t: 0\n\n\
+                   processor\t: 2\nmodel name\t: Example  Processor   8-Core\nphysical id\t: 0\ncore id\t: 1\n";
         assert_eq!(
             parse_cpuinfo(x86),
-            ("AMD Ryzen AI Max+ 395".to_string(), Some(2))
+            ("Example Processor 8-Core".to_string(), Some(2))
         );
         let arm = "processor\t: 0\nBogoMIPS\t: 48.00\n\nHardware\t: Qualcomm Snapdragon\n";
         assert_eq!(
@@ -484,9 +484,9 @@ mod tests {
             "card1",
             &[
                 ("vendor", "0x1002\n"),
-                ("device", "0x1586\n"),
-                ("mem_info_vram_total", "34359738368\n"),
-                ("mem_info_gtt_total", "51539607552\n"),
+                ("device", "0x73df\n"),
+                ("mem_info_vram_total", "12884901888\n"),
+                ("mem_info_gtt_total", "17179869184\n"),
             ],
         );
         // No memory files (another driver): left out. A connector: skipped.
@@ -494,9 +494,9 @@ mod tests {
         std::fs::create_dir_all(d.join("card1-DP-1")).unwrap();
         let g = read_drm(&d);
         assert_eq!(g.len(), 1);
-        assert_eq!((g[0].vendor, g[0].device), (0x1002, 0x1586));
-        assert_eq!(g[0].dedicated, Some(32 << 30));
-        assert_eq!(g[0].shared, Some(48 << 30));
+        assert_eq!((g[0].vendor, g[0].device), (0x1002, 0x73df));
+        assert_eq!(g[0].dedicated, Some(12 << 30));
+        assert_eq!(g[0].shared, Some(16 << 30));
         assert_eq!(read_drm(&d.join("missing")), vec![]);
     }
 

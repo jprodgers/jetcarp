@@ -52,8 +52,36 @@ day later (0.4.2: 17 November here, 18 November there).
   key; a known key, your own publisher key and the packs that came with JETCARP are each said as
   such. Before, the app showed only a pack's name and size, and the command line the key alone.
   ([Packs](../guides/packs.md#check-a-pack))
+- **The JETCARP Hardware Score, and limits set per machine.** JETCARP reads what the computer holds
+  (memory, the processor, each GPU's memory) each time it starts, and sets its limits from that:
+  the largest world, the GPU's, the desktop background's cells and memory, HashLife's node cap, the
+  hunt caches, media's pixels, the app's wallpaper grid and animation frames, and an AI's share. The
+  memory is split in two linked values, *Reserved for the System* (half the memory on a smaller
+  computer, at most 16 GB on a bigger one) and *Reserved for JETCARP* (the rest), and every other
+  memory limit is a share of JETCARP's part, scaled so a 16 GB computer keeps the limits it had and
+  a 64 GB one gets six times as much. Your own values win, up to each limit's ceiling, and are kept
+  in `limits.json`. A world over the limit is refused before anything is built, naming what it
+  needs, the limit and where the limit came from; the app asks first, with *Build anyway*. Nothing
+  is ever made smaller to fit, so results never depend on the computer. The benchmark, about a
+  minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU,
+  memory, the disk), checks every answer against stored digests and gives the JETCARP Hardware
+  Score, its own unit, with its parts; it runs at setup (ticked by default) and by hand, never by
+  itself, and a changed computer is noticed once. New: *Tools → This computer…*, setup's *Measure
+  this computer* page, `jetcarp score` (`--report FILE` writes Markdown and JSON), `jetcarp limits`
+  (show, `set`, `reset`), the hardware in `jetcarp doctor`, and the MCP tools'
+  `reference {"what": "machine"}`, which reads the score; no tool runs the benchmark.
+  ([This computer](../guides/this-computer.md), [#213](https://github.com/jprodgers/jetcarp/issues/213))
 
 ### Changed
+
+- **A grid may have up to 4,294,967,295 cells, the most the code can number,** where it had 256
+  million on every computer; how much of that a computer may use is now its limit. Every place
+  that numbers cells with 32-bit integers was checked first. The MCP tools' worlds stay at 4 million
+  cells unless an AI's share of the computer is raised, and their descriptions give the limits in
+  use. `host.json`'s `max_cells` and `max_memory_mb` give way to the computer's `host-cells` and
+  `host-memory`, unless edited by hand. `jetcarp hashlife --node-cap` and `JETCARP_HUNT_CACHE_MB`
+  default to the computer's limits.
+  ([This computer](../guides/this-computer.md), [#213](https://github.com/jprodgers/jetcarp/issues/213))
 
 - **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
   64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
@@ -73,6 +101,11 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **A number past 32 bits is refused, not wrapped round to a small one.** A size of
+  `[4294967304, 8]` made an 8 by 8 grid, a paste at index 4,294,967,301 landed on cell 5, a cell
+  list's cell 4,294,967,596 (or state 257) was cell 300 (state 1) in `search.try` and scripts'
+  `track_mover`, and an image 4,294,967,936 pixels wide came out 640 wide. Each is now refused with
+  the reason. ([#213](https://github.com/jprodgers/jetcarp/issues/213))
 - **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
   with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
   with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's

@@ -44,6 +44,7 @@ pub enum LimitsSub {
         /// reserved-system, reserved-jetcarp, world, gpu-world, host-cells, host-memory,
         /// hashlife-nodes, hunt-cache, media-pixels, wallpaper-cells, animation-frames, ai-share.
         name: String,
+        /// The value in the limit's unit: 24GB, 64M, 25%...
         value: String,
     },
     /// Put a limit back to the machine's suggestion (with no name: every one).
