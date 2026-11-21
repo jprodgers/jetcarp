@@ -48,6 +48,10 @@ fn with_env(c: &mut Command, home: &Path) {
 }
 
 fn spawn(home: &Path, extra: &[&str]) -> Child {
+    spawn_with_env(home, extra, &[])
+}
+
+fn spawn_with_env(home: &Path, extra: &[&str], env: &[(&str, &str)]) -> Child {
     let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
     c.args(["host", "serve", "--headless", "--canvas", "160x120"])
         .args(extra)
@@ -55,6 +59,7 @@ fn spawn(home: &Path, extra: &[&str]) -> Child {
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
     with_env(&mut c, home);
+    c.envs(env.iter().copied());
     c.spawn().expect("the host starts")
 }
 
@@ -84,9 +89,14 @@ fn call_in(home: &Path, args: &Value) -> Result<Value, String> {
 
 impl Host {
     fn start(name: &str, rotation: Option<&str>) -> Host {
+        Host::start_with_env(name, rotation, &[])
+    }
+
+    /// As [`Host::start`], with these variables set in the host's environment.
+    fn start_with_env(name: &str, rotation: Option<&str>, env: &[(&str, &str)]) -> Host {
         let home = home(name);
         let extra: Vec<&str> = rotation.map_or(vec![], |r| vec!["--rotation", r]);
-        let child = spawn(&home, &extra);
+        let child = spawn_with_env(&home, &extra, env);
         let host = Host { child, home };
         host.wait(|v| v["running"] == true, "the host to answer");
         host
@@ -316,7 +326,36 @@ fn the_extension_can_hold_the_scene_and_a_wallpaper_is_remembered() {
 /// choice that was, and the log's GPU line is the new one, not the one from start-up (#75).
 #[test]
 fn status_follows_the_gpu_setting() {
-    let h = Host::start("simulation", Some("Wolfram series"));
+    gpu_setting_off_is_the_reason(Host::start("simulation", Some("Wolfram series")));
+}
+
+/// The same with no GPU at all, as on a machine without one, or a session whose GPU was taken
+/// away (#138): the setting is still the reason given, since it is the user's own choice and holds
+/// whether or not there is a GPU. Vulkan with no driver to load is how the host is shown no GPU.
+#[test]
+fn status_follows_the_gpu_setting_with_no_gpu() {
+    let h = Host::start_with_env(
+        "simulation-nogpu",
+        Some("Wolfram series"),
+        &[
+            ("WGPU_BACKEND", "vulkan"),
+            ("VK_ICD_FILENAMES", "no-such-driver.json"),
+            ("VK_DRIVER_FILES", "no-such-driver.json"),
+        ],
+    );
+    let v = h.wait(
+        |v| v["screens"][0]["simulation"]["on"].is_string(),
+        "the screen's simulation",
+    );
+    assert!(v["gpu"].is_null(), "the host was meant to see no GPU: {v}");
+    assert_eq!(
+        v["screens"][0]["simulation"]["why"], "GPU simulation unavailable: no GPU",
+        "{v}"
+    );
+    gpu_setting_off_is_the_reason(h);
+}
+
+fn gpu_setting_off_is_the_reason(h: Host) {
     let v = h.wait(
         |v| v["screens"][0]["simulation"]["on"].is_string(),
         "the screen's simulation",
@@ -331,24 +370,22 @@ fn status_follows_the_gpu_setting() {
     let v = h.call(json!({"action": "reload"})).unwrap();
     let sim = &v["screens"][0]["simulation"];
     assert_eq!(sim["on"], "cpu", "{v}");
-    let log = v["log"].to_string();
-    match gpu {
-        Some(_) => {
-            assert_eq!(
-                sim["why"],
-                "GPU simulation off, from the desktop background's own setting"
-            );
-            assert!(
-                log.contains("GPU simulation off (the desktop background's own setting)"),
-                "{log}"
-            );
-            assert_eq!(
-                log.matches("GPU simulation").count(),
-                1,
-                "the start-up line is taken back: {log}"
-            );
-        }
-        None => assert_eq!(sim["why"], "GPU simulation unavailable: no GPU"),
+    // The user's own choice first, with a GPU or without (`SimBackend::report`).
+    assert_eq!(
+        sim["why"],
+        "GPU simulation off, from the desktop background's own setting"
+    );
+    if gpu.is_some() {
+        let log = v["log"].to_string();
+        assert!(
+            log.contains("GPU simulation off (the desktop background's own setting)"),
+            "{log}"
+        );
+        assert_eq!(
+            log.matches("GPU simulation").count(),
+            1,
+            "the start-up line is taken back: {log}"
+        );
     }
 }
 
@@ -566,7 +603,7 @@ fn nothing_starts_on_screen_before_the_warning_is_accepted() {
             )),
             "{args:?}: {err}"
         );
-        assert!(err.contains("B0"), "the warning itself: {err}");
+        assert!(err.contains("Hodgepodge"), "the warning itself: {err}");
     }
     let o = run(&["host", "status"]);
     assert!(String::from_utf8_lossy(&o.stderr).contains("not running"));

@@ -474,8 +474,10 @@ twelve periodic tilings, and JETCARP's tests check that the layout above gives e
 Geometry pins catch changed tiles; rule-semantics versions catch a changed rule. `engine.rule_semantics`
 maps every rule family JETCARP has to its version, a positive integer written as a string; the
 families and their versions are listed in [Library format](library-format.md#rule-semantics-versions),
-and every one is `"1"` in JETCARP 0.4.0. Each `rules` row, each pattern and each ant carries its
-family and the version it was verified under (`family`, `semantics`). An importer flags a record
+and every one is `"1"` in JETCARP 0.4.0. JETCARP 0.4.3 added `lifelike_b0`, the B/S rules with birth on
+0, at `"2"`: a pack from before files such rules under `lifelike`, so an importer takes a record's
+family from its rule. Each `rules` row, each pattern and each ant carries its family and the version
+it was verified under (`family`, `semantics`). An importer flags a record
 whose version differs from its own engine's for that family, or whose family it does not have,
 as it flags a changed pin ([importing](#importing)).
 
@@ -712,7 +714,7 @@ means its palette for good; a later JETCARP may add names to the list, never cha
 `Ember`, `Tide`, `Prism`, `Mono`, `Ink`, `Aurora`, `Synthwave`, `Moss`, `Candy`, `Lava`, `Glacier`,
 `Phosphor`, `Koi`, `Desert`, `Thermal`, `Deep Sea`, `Paper`, `Blueprint`, `Neon`, `Autumn`,
 `Verdigris`, `Marigold`, `Coral`, `Orchid`, `Citrus`, `Riso`, `Bone`, `Ultramarine`,
-`Stained Glass`, `Opal`.
+`Stained Glass`, `Opal`, `Lantern`, `Cobalt`, `Saffron`.
 <!-- /palette-registry -->
 
 ### Media
@@ -1008,8 +1010,10 @@ JETCARP is level 4. **Replay** (level 3):
   is alive; Generations, 1 is alive and 2 and up are the dying states in order
   ([Generations](../automata/generations.md)); other families as their automata pages define,
   each pinned by its semantics version.
-- A rule with birth on 0 (B0) is run as two complementary rules alternating on even and odd
-  generations, as [Life-like rules](../automata/life-like.md#b0-rules) describes.
+- A Life-like rule with birth on 0 (B0) is the plain rule; JETCARP stores its cells relative to
+  the rule's run from an empty world, as [Life-like rules](../automata/life-like.md#b0-rules)
+  describes (where every tile has the same number of neighbours, that is two complementary rules
+  alternating on even and odd generations).
 - Aperiodic patterns are not level 3 in 1.0: a site lists its tiles' corners and the pattern
   graph's neighbours among pattern tiles only. Replaying them is JETCARP's (level 4).
 - Search runs replay only in JETCARP: re-creating a run's soup needs its random-number generator

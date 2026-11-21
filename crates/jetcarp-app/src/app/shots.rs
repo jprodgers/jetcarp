@@ -54,7 +54,6 @@ impl Harness {
             ps::record_in(&settings, ps::Answer::NoDisorder, "test").unwrap();
         }
         let Some(o) = Offscreen::new(w, h) else {
-            eprintln!("no GPU adapter");
             return None;
         };
         o.ctx.enable_accesskit();
@@ -64,6 +63,7 @@ impl Harness {
         // As a first launch looks, whatever an earlier test left in the settings file.
         app.setup.open = false;
         app.shell.layout = panes::Layout::default();
+        app.a11y.settings = Default::default();
         for t in menu::ToolWin::ALL {
             app.set_tool_open(t, false);
         }
@@ -1053,4 +1053,186 @@ fn a_rule_being_typed_applies_before_save() {
     let app = &mut h.app;
     h.o.frame_with(0.05, vec![], |ctx| app.commit_rule_edit(ctx));
     assert_eq!(h.app.world.cas[0].notation(), "B36/S23");
+}
+
+/// A Margolus Tron field: every 2 by 2 block of the empty background is complemented each
+/// generation, so the whole field flips black and white at the scene's speed (#97's test scene).
+const TRON_FIELD: &str = r#"{"name": "Tron flip", "tiling": {"family": "square", "size": {"rect": {"w": 120, "h": 90}}, "boundary": "wrap"}, "rng_state": 1, "cas": [{"rule": "Margolus Tron", "seed": "empty"}]}"#;
+
+/// Not a picture: the app's view through the strobe guard (#148). A field flipping every
+/// generation, run at 60 generations a second in a window drawn in real time at about 60 frames a
+/// second: the guard softens it, then slows it, and what the window shows (measured frame by frame
+/// on the processor, the whole window) never flashes more than three times a second.
+/// `JETCARP_STROBE_RECORD=DIR` also writes every frame there as a PNG, for IRIS.
+#[test]
+#[ignore]
+fn strobe_guard_keeps_the_app_view_under_the_limit() {
+    use jetcarp_core::strobe::Viewing;
+    use jetcarp_core::strobe::flash::FlashMeter;
+    use jetcarp_core::strobe::frame::reduce;
+    let Some(mut h) = Harness::new(640, 480) else {
+        return;
+    };
+    assert!(h.app.guard_on_here(), "the guard is on by default");
+    let scene: Scene = serde_json::from_str(TRON_FIELD).unwrap();
+    let world = World::from_scene(&scene).unwrap();
+    h.app.show_world(world, "Tron flip".into(), String::new());
+    h.app.speed = 60.0;
+    h.app.max_speed = false;
+    h.app.playing = true;
+    let record = std::env::var_os("JETCARP_STROBE_RECORD").map(PathBuf::from);
+    if let Some(d) = &record {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let [w, hh] = h.o.size();
+    let mut meter = FlashMeter::new(Viewing::screen(1.0), None);
+    let (mut worst, mut slowed) = (0, false);
+    let start = Instant::now();
+    let mut k = 0u32;
+    while start.elapsed().as_secs_f64() < 12.0 {
+        let t = start.elapsed().as_secs_f64();
+        let px = h.frame_with(1.0 / 60.0, vec![]);
+        let r = meter.update(&reduce(&px, w, hh), t);
+        worst = worst.max(r.most());
+        if let Some(d) = &record {
+            h.o.save(&px, &d.join(format!("app-{k:05}.png"))).unwrap();
+        }
+        k += 1;
+        slowed |= h.app.strobe.cap.is_some();
+        // About 60 frames a second of real time.
+        let next = Duration::from_secs_f64(k as f64 / 60.0);
+        if let Some(wait) = next.checked_sub(start.elapsed()) {
+            std::thread::sleep(wait);
+        }
+    }
+    eprintln!(
+        "{k} frames; most transitions in a second on screen: {worst}; report: {:?}",
+        h.app.strobe.report
+    );
+    assert!(worst <= jetcarp_core::strobe::MAX_TRANSITIONS, "{worst}");
+    assert!(slowed, "the guard slowed the field");
+    assert!(
+        h.app.guarded_speed().0 <= 3.0,
+        "{:?}",
+        h.app.guarded_speed()
+    );
+}
+
+/// Settings → Safety (`guides/strobe-guard.md`, #148): its two switches, and the confirmation that
+/// turns one off. *Turn it off* does nothing until its box is ticked; the desktop's switch stays on
+/// when the app's goes off; for someone at risk there is no switch at all.
+#[test]
+#[ignore]
+fn shots_safety() {
+    use jetcarp_core::photosensitivity::{self as ps, GuardPlace};
+    let Some(mut h) = Harness::new(900, 640) else {
+        return;
+    };
+    let settings = jetcarp_core::paths::config_dir().expect("a scratch settings folder");
+    ps::record_in(&settings, ps::Answer::NoDisorder, "test").unwrap();
+    h.app.strobe.reread();
+    h.action(menu::Action::Tool(menu::ToolWin::Safety));
+    h.run(0.5, 0.05, |_| false);
+    h.shot("safety-1-window");
+    h.click("Turn off the strobe guard…");
+    h.shot("safety-2-confirm");
+    h.click(ps::GUARD_TURN_OFF);
+    assert!(
+        ps::guard_on_in(&settings, GuardPlace::App),
+        "not without the box ticked"
+    );
+    h.click(ps::GUARD_OFF_CHECK);
+    h.click(ps::GUARD_TURN_OFF);
+    assert!(!ps::guard_on_in(&settings, GuardPlace::App), "turned off");
+    assert!(
+        ps::guard_on_in(&settings, GuardPlace::Desktop),
+        "the desktop's stays on"
+    );
+    assert!(!h.app.guard_on_here());
+    h.click("Turn the strobe guard back on");
+    assert!(ps::guard_on_in(&settings, GuardPlace::App));
+    // The desktop's: its confirmation has the sentence about other people in the room.
+    h.click("Turn off the strobe guard for the desktop…");
+    h.find(ps::GUARD_OFF_ROOM);
+    h.shot("safety-3-confirm-desktop");
+    h.click(ps::GUARD_KEEP);
+    assert!(ps::guard_on_in(&settings, GuardPlace::Desktop), "kept on");
+    assert!(
+        h.o.find(ps::GUARD_OFF_ROOM).is_none(),
+        "and the confirmation closed"
+    );
+    // Someone at risk: always on, no switch.
+    ps::record_in(&settings, ps::Answer::AtRisk, "test").unwrap();
+    h.app.strobe.reread();
+    h.run(0.3, 0.05, |_| false);
+    assert!(h.o.find("Turn off the strobe guard…").is_none());
+    assert!(
+        h.o.find("Turn off the strobe guard for the desktop…")
+            .is_none()
+    );
+    h.find(ps::GUARD_ALWAYS);
+    ps::record_in(&settings, ps::Answer::NoDisorder, "test").unwrap();
+    h.app.strobe.reread();
+}
+
+/// Settings → Accessibility (`guides/accessibility-settings.md`, #217, #218, #220): the window in
+/// the standard dark theme, then a JACA world in Cobalt and Saffron (the palettes chosen for
+/// colour-vision deficiency) with its panes and the window, in the high-contrast theme, dark and
+/// light. The scene is the book's own, so it needs no library.
+#[test]
+#[ignore]
+fn shots_accessibility() {
+    use crate::a11y::Follow;
+    use crate::theme::Brightness;
+    let Some(mut h) = Harness::new(1200, 800) else {
+        return;
+    };
+    // As on a desktop that asks for neither.
+    let none = crate::a11y::Reading {
+        reduce_motion: Some(false),
+        high_contrast: Some(false),
+    };
+    h.app.a11y.watch = crate::a11y::Watch::new(Box::new(crate::a11y::Fixed::new(none)));
+    let scene = Scene::from_json(include_str!(
+        "../../../../docs/scenes/guides/accessibility-jaca.json"
+    ))
+    .unwrap();
+    h.app.load_scene_bg(&scene);
+    h.built();
+    h.app.exec(Command::Step { gens: 120 });
+    h.app.playing = false;
+    h.app.message = None;
+    h.action(menu::Action::Tool(menu::ToolWin::Accessibility));
+    h.run(1.0, 0.05, |_| false);
+    // The window alone: dragged by its title bar onto the grid, the pointer out of it.
+    let win = h.find("Accessibility");
+    let bar = egui::pos2(win.center().x, win.min.y + 10.0);
+    h.drag(bar, egui::pos2(760.0, 60.0));
+    h.hover(egui::pos2(2.0, 798.0));
+    let parts = [
+        h.find("Accessibility"),
+        h.find("Reduced motion"),
+        h.find("Palettes for scenes that name none"),
+        h.find("JACA −1 cells"),
+        h.find(
+            "Use the palettes chosen for colour-vision deficiency (Lantern; JACA: Cobalt and Saffron)",
+        ),
+    ];
+    h.shot_part("accessibility-window", Harness::around(&parts, 14.0));
+    for (b, name) in [
+        (Brightness::Dark, "accessibility-high-contrast-dark"),
+        (Brightness::Light, "accessibility-high-contrast-light"),
+    ] {
+        h.app.a11y.settings.high_contrast = Follow::On;
+        h.app.a11y.settings.brightness = b;
+        h.run(1.0, 0.05, |_| false);
+        h.hover(egui::pos2(2.0, 798.0));
+        h.shot(name);
+    }
+    // A check, not for the book: the Quick Start in the light form.
+    h.app.set_tool_open(menu::ToolWin::Accessibility, false);
+    h.action(menu::Action::QuickStart);
+    h.quick_start_loaded();
+    h.shot("accessibility-check-quick-start-light");
+    h.app.a11y.settings = Default::default();
 }

@@ -56,8 +56,25 @@ fn json_of_the_listing_commands() {
     let pal = printed(&ReferencePalettes::run(&cx, NoInput {}, &Quiet).unwrap());
     assert_eq!(
         keys(&pal["palettes"][0]),
-        ["background", "name", "stage", "stops"]
+        ["background", "cvd", "name", "stage", "stops"]
     );
+    // Each palette's colour-vision check (#217), and the palettes chosen for it.
+    let cvd = &pal["palettes"][0]["cvd"];
+    assert_eq!(cvd["passes"], json!(false), "Ember: {cvd}");
+    assert!(
+        cvd["failure"].as_str().unwrap().contains("protanopia"),
+        "{cvd}"
+    );
+    assert_eq!(pal["cvd_min_difference"], json!(10.0));
+    assert_eq!(pal["cvd_chosen"]["jaca_neg"], json!("Saffron"));
+    let lantern = pal["palettes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "Lantern")
+        .unwrap();
+    assert_eq!(lantern["cvd"]["passes"], json!(true));
+    assert!(lantern["cvd"].get("failure").is_none());
 }
 
 #[test]
@@ -72,6 +89,7 @@ fn json_of_paths_uninstall_and_calls_by_name() {
     assert_eq!(
         keys(&u),
         [
+            "already_gone",
             "done",
             "installed_with",
             "kept_data",

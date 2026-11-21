@@ -60,15 +60,16 @@ impl JetcarpApp {
             });
             if let Some((m, err)) = &self.message {
                 ui.colored_label(
-                    if *err {
+                    crate::theme::ink(ui, if *err {
                         Color32::LIGHT_RED
                     } else {
                         Color32::LIGHT_GREEN
-                    },
+                    }),
                     m,
                 );
             }
             ui.add_space(4.0);
+            self.menu.guard = self.strobe.on_app;
             open = self.menu.show(ui);
         });
         match open {

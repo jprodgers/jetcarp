@@ -81,13 +81,43 @@ jobs:
     name: The tag, the version and the changelog agree
     if: github.event_name != 'release'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Long enough to wait for CI on the tagged commit (below).
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      # To read CI's runs on the tagged commit.
+      actions: read
     outputs:
       version: ${{ steps.check.outputs.version }}
       prerelease: ${{ steps.check.outputs.prerelease }}
       packs: ${{ steps.packs.outputs.packs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: CI passed on the tagged commit (a candidate or release is tagged only on a green one)
+        # A tag pushed before CI has finished on its commit waits for it here; a commit whose CI
+        # failed, or never ran, stops the release. Dry runs (workflow_dispatch) build any commit.
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha="$GITHUB_SHA"
+          for minute in $(seq 1 140); do
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&per_page=50" \
+              --jq '[.workflow_runs[] | {id, event, status, conclusion}]')
+            if jq -e 'any(.[]; .conclusion == "success")' <<<"$runs" >/dev/null; then
+              echo "CI passed on $sha: $(jq -c '[.[] | select(.conclusion == "success") | .id]' <<<"$runs")"
+              exit 0
+            fi
+            running=$(jq 'map(select(.status != "completed")) | length' <<<"$runs")
+            # A run can take a few minutes to appear after the commit is pushed.
+            if [ "$running" = 0 ] && { [ "$runs" != "[]" ] || [ "$minute" -gt 10 ]; }; then
+              echo "::error::CI has not passed on $sha (its runs: $runs). Tag a commit whose CI is green."
+              exit 1
+            fi
+            sleep 60
+          done
+          echo "::error::CI on $sha did not finish in time"
+          exit 1
       - name: The tag matches the version in Cargo.toml, and the changelog has it
         # A tag that disagrees with Cargo.toml gives a release whose files all report another
         # version than the one people downloaded. A release (not a candidate) also needs its
@@ -161,6 +191,11 @@ jobs:
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      # As CI's Linux tests: the GPU tests on Mesa's lavapipe (a software adapter, used only when
+      # asked for), and failing rather than skipping when it cannot be used.
+      JETCARP_GPU: software
+      JETCARP_REQUIRE_GPU: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15

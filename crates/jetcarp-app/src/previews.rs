@@ -721,6 +721,8 @@ struct UiCard {
     id: Arc<str>,
     tex: Option<TextureHandle>,
     seen: f64,
+    /// The strobe guard on its pictures (#149).
+    guard: crate::strobe_cpu::LiveGuard,
 }
 
 /// The live previews of the cards on screen. Call [`begin_frame`](Self::begin_frame), then
@@ -765,8 +767,9 @@ impl Pool {
         }
     }
 
-    /// Upload finished pictures (a few per frame) and forget cards off screen for a while.
-    pub fn begin_frame(&mut self, ctx: &egui::Context, now: f64) {
+    /// Upload finished pictures (a few per frame), each through its card's strobe guard (`guard`:
+    /// the app's setting), and forget cards off screen for a while.
+    pub fn begin_frame(&mut self, ctx: &egui::Context, now: f64, guard: bool) {
         let mut imgs = Vec::new();
         {
             let mut g = self.state.0.lock().unwrap();
@@ -779,10 +782,15 @@ impl Pool {
                 }
             }
         }
-        for (id, img) in imgs {
+        for (id, mut img) in imgs {
             let Some(c) = self.ui.get_mut(&id) else {
                 continue;
             };
+            let [w, h] = img.size;
+            let rgba: Vec<u8> = img.pixels.iter().flat_map(|p| p.to_array()).collect();
+            if let Some(soft) = c.guard.show(&rgba, w as u32, h as u32, now, guard) {
+                img = ColorImage::from_rgba_unmultiplied([w, h], &soft);
+            }
             let opts = TextureOptions {
                 magnification: egui::TextureFilter::Nearest,
                 minification: egui::TextureFilter::Linear,
@@ -834,6 +842,7 @@ impl Pool {
                 id: arc.clone(),
                 tex: None,
                 seen: now,
+                guard: Default::default(),
             },
         );
         self.vis.push(arc.clone());

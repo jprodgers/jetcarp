@@ -898,7 +898,7 @@ impl JetcarpApp {
                             if let Some(c) = fresh_cells_est {
                                 let t = format!("about {} cells", crate::sweep_form::thousands(c));
                                 if c > MAX_FRESH_CELLS {
-                                    ui.colored_label(Color32::from_rgb(255, 120, 120), t + " (too many)");
+                                    ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(255, 120, 120)), t + " (too many)");
                                 } else {
                                     ui.label(RichText::new(t).weak());
                                 }
@@ -951,7 +951,7 @@ impl JetcarpApp {
             // Preview, with the monitors' cuts of a span.
             match &resolved {
                 Err(e) => {
-                    ui.colored_label(Color32::from_rgb(255, 120, 120), e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(255, 120, 120)), e);
                 }
                 Ok((w, h, mons)) => {
                     ui.label(format!(
@@ -1022,7 +1022,7 @@ impl JetcarpApp {
                     }
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(Color32::from_rgb(255, 120, 120), e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(255, 120, 120)), e);
                 }
                 None => {}
             }

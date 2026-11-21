@@ -23,7 +23,9 @@ fn pins_path() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/dynamics_pins.txt")
 }
 
-fn run_all() -> BTreeMap<String, String> {
+/// Per entry: the pinned value (the state hash, version 2, and the generation), and the same
+/// with the version 1 hash.
+fn run_all() -> BTreeMap<String, (String, String)> {
     let entries = quickstart::entries();
     assert!(entries.len() > 100, "only {} entries", entries.len());
     entries
@@ -32,11 +34,28 @@ fn run_all() -> BTreeMap<String, String> {
             let scene = quickstart::preview_scene(&e.scene, CELLS);
             let result = World::from_scene(&scene).and_then(|mut w| {
                 w.apply(Command::Step { gens: GENS })?;
-                Ok(format!("{:016x} gen {}", w.state_hash(), w.generation))
+                Ok((
+                    format!("{} gen {}", w.hash_hex(), w.generation),
+                    format!("{} gen {}", w.hash_hex_v1(), w.generation),
+                ))
             });
-            let value = result.unwrap_or_else(|err| format!("error {err}"));
-            (e.id.clone(), value.replace('\n', " "))
+            let (v2, v1) = result.unwrap_or_else(|err| {
+                let e = format!("error {err}").replace('\n', " ");
+                (e.clone(), e)
+            });
+            (e.id.clone(), (v2, v1))
         })
+        .collect()
+}
+
+/// The pinned values, by entry id.
+fn read_pins(path: &std::path::Path) -> BTreeMap<String, String> {
+    std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("{}: {e} (run with JETCARP_PIN_WRITE=1)", path.display()))
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(a, b)| (a.to_string(), b.to_string()))
         .collect()
 }
 
@@ -45,26 +64,41 @@ fn quick_start_dynamics_are_pinned() {
     let got = run_all();
     let path = pins_path();
     if std::env::var_os("JETCARP_PIN_WRITE").is_some() {
-        let mut text = String::from(
-            "# Pinned dynamics (tests/dynamics_pins.rs): Quick Start entry id, state hash after\n\
-             # 48 generations on a 4,096-cell preview grid, and the generation reached.\n",
+        // A pin still in the version 1 hash (16 digits) is rewritten in version 2 only when the
+        // entry's version 1 hash and generation are the pinned ones: proof that only the hash's
+        // version changed, not the state it is the hash of.
+        let old = if path.exists() {
+            read_pins(&path)
+        } else {
+            BTreeMap::new()
+        };
+        let refused: Vec<String> = got
+            .iter()
+            .filter_map(|(id, (_, v1))| {
+                let p = old.get(id)?;
+                let is_v1 = p.split(' ').next().is_some_and(|h| h.len() == 16);
+                (is_v1 && p != v1).then(|| format!("{id}: pinned {p}, version 1 now {v1}"))
+            })
+            .collect();
+        assert!(
+            refused.is_empty(),
+            "not written: these entries' state changed, not only the hash's version:\n{}",
+            refused.join("\n")
         );
-        for (id, v) in &got {
+        let mut text = String::from(
+            "# Pinned dynamics (tests/dynamics_pins.rs): Quick Start entry id, state hash (version\n\
+             # 2) after 48 generations on a 4,096-cell preview grid, and the generation reached.\n",
+        );
+        for (id, (v, _)) in &got {
             text.push_str(&format!("{id}\t{v}\n"));
         }
         std::fs::write(&path, text).unwrap();
         return;
     }
-    let pinned: BTreeMap<String, String> = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{}: {e} (run with JETCARP_PIN_WRITE=1)", path.display()))
-        .lines()
-        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
-        .filter_map(|l| l.split_once('\t'))
-        .map(|(a, b)| (a.to_string(), b.to_string()))
-        .collect();
+    let pinned = read_pins(&path);
     let portable = |id: &str| !NOT_PORTABLE.iter().any(|(p, _)| id.starts_with(p));
     let mut bad = vec![];
-    for (id, v) in &got {
+    for (id, (v, _)) in &got {
         match pinned.get(id) {
             Some(p) if p == v => {}
             Some(p) if portable(id) => bad.push(format!("{id}: pinned {p}, got {v}")),

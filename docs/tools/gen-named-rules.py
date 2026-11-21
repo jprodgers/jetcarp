@@ -20,6 +20,7 @@ DOCS = Path(__file__).resolve().parent.parent
 REPO = DOCS.parent
 NAMED = REPO / "crates" / "jetcarp-core" / "data" / "rules" / "named.json"
 CREDITS = DOCS / "data" / "named-rule-credits.tsv"
+BIB = DOCS / "data" / "bibliography.bib"
 OUT = DOCS / "src" / "automata" / "named-rules.md"
 
 FAMILY_PAGE = {
@@ -36,20 +37,39 @@ FAMILY_PAGE = {
 ORDER = list(FAMILY_PAGE)
 
 
+def bib_by_url() -> dict:
+    """Bibliography keys by their url field, so a source the bibliography holds links to its entry."""
+    text = BIB.read_text(encoding="utf-8")
+    out = {}
+    for m in re.finditer(r"@\w+\{([^,\s]+),(.*?)\n\}", text, re.S):
+        u = re.search(r"\burl\s*=\s*\{([^}]*)\}", m.group(2))
+        if u:
+            out.setdefault(u.group(1).strip(), m.group(1))
+    return out
+
+
+BIB_URLS = bib_by_url()
+
+
+def cite(label: str, url: str) -> str:
+    key = BIB_URLS.get(url)
+    return f"[{label}](../research/bibliography.md#{key})" if key else f"[{label}]({url})"
+
+
 def source_links(codes: str) -> str:
     out = []
     for code in [c.strip() for c in codes.split(";") if c.strip()]:
         if code.startswith("LW:"):
             page = code[3:].split(" ")[0]
             label = page.replace("_", " ").replace("%27", "'")
-            out.append(f"[LifeWiki: {label}](https://conwaylife.com/wiki/{page})")
+            out.append(cite(f"LifeWiki: {label}", f"https://conwaylife.com/wiki/{page}"))
         elif code.startswith("MC"):
             out.append("[MCell lexicon](https://mcell.ca/pages/rules.html)")
         elif code.startswith("CAM"):
             out.append("[Toffoli & Margolus 1987](../research/bibliography.md#toffoli1987cellular)")
         elif code.startswith("WP:"):
             page = code[3:]
-            out.append(f"[Wikipedia: {page.replace('_', ' ')}](https://en.wikipedia.org/wiki/{page})")
+            out.append(cite(f"Wikipedia: {page.replace('_', ' ')}", f"https://en.wikipedia.org/wiki/{page}"))
         elif code.startswith("forum p="):
             p = code.split("=", 1)[1]
             out.append(f"[ConwayLife forum](https://conwaylife.com/forums/viewtopic.php?p={p})")

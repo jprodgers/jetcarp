@@ -298,6 +298,64 @@ fn gun_in_a_soup_run_is_found_and_its_stream_not_counted() {
     assert_eq!(out.escaped, 0);
 }
 
+/// A block with gliders of one phase flying the same way from the given offsets, run as a soup
+/// with the hunt's default limits for 16 x 16 soups.
+fn block_and_gliders(glider: &str, at: &[(i32, i32)]) -> jetcarp_core::hunt::soup::SoupOut {
+    use jetcarp_core::hunt::soup::{Limits, SoupRun, finish};
+    let c = Census::new("B3/S23", &TilingSpec::new("square"), None, 64).unwrap();
+    let glider = jetcarp_core::objects::rows_to_cells(glider);
+    let mut cells = jetcarp_core::objects::rows_to_cells("oo/oo");
+    for &(di, dj) in at {
+        cells.extend(glider.iter().map(|g| LCell {
+            i: g.i + di,
+            j: g.j + dj,
+            ..*g
+        }));
+    }
+    cells.sort_unstable();
+    let limits = Limits {
+        max_gens: 20_000,
+        settle_period: 64,
+        pop_cap: 2048,
+        max_span: 512,
+        cut_every: 16,
+    };
+    let u = Universe::with_cells(c.plan.clone(), &cells);
+    let mut run = SoupRun::new(u, [-10, 10, -10, 10], limits);
+    let mut cache = Cache::default();
+    run.run(&c, &mut cache);
+    finish(&c, &mut cache, run, 0, 0)
+}
+
+/// Gliders flying the same way never come nearer to each other, so none of them was ever beyond
+/// all the others by the cutting gap when they flew on lanes a few cells apart, or staggered so
+/// that each was level with another along every axis it moved on. They stayed uncut until the
+/// soup passed the span limit and was dropped as exploded, with no census: about one Life soup in
+/// 370, nearly every "explosion" of Life (issue 182). Now they are cut, each counted as a glider,
+/// and the soup settles.
+#[test]
+fn gliders_flying_the_same_way_are_cut_and_counted() {
+    use jetcarp_core::hunt::soup::End;
+    // As in soup 2023 of seed 7: the second glider 3 cells along and 6 down from the first, one
+    // cell clear of it across the lanes and four along them. Then as in soup 2926: three gliders
+    // flying up and to the right, the second far behind the first and level with it, the third
+    // just ahead of the first along and far behind it up.
+    for (glider, at) in [
+        (".o./..o/ooo", vec![(20, 20), (23, 26)]),
+        ("ooo/..o/.o.", vec![(70, -20), (18, -18), (76, 27)]),
+    ] {
+        let out = block_and_gliders(glider, &at);
+        assert_eq!(out.end, End::Settled, "{at:?}: gens {}", out.gens);
+        assert!(out.gens < 300, "{at:?}: cut late, {} generations", out.gens);
+        let mut labels: Vec<_> = out.objects.iter().map(|f| f.label.as_str()).collect();
+        labels.sort_unstable();
+        let mut want = vec!["glider"; at.len()];
+        want.insert(0, "block");
+        assert_eq!(labels, want, "{at:?}");
+        assert_eq!(out.escaped as usize, at.len(), "{at:?}");
+    }
+}
+
 fn lattice_topo(family: &str) -> Topology {
     Topology::build(&TilingSpec::new(family).with_size(SizeSpec::Rect { w: 8, h: 8 })).unwrap()
 }

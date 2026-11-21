@@ -229,9 +229,11 @@ fn render_key(source: &Source, mode: MediaMode, o: &MediaOptions) -> String {
             serde_json::to_value(&s).unwrap_or_default()
         }
     };
+    // The strobe guard changes the animation it saves (#149); its being part of the key also
+    // renders again everything rendered before it checked animations.
     let opts = json!({
         "mode": mode.name(), "format": o.format.name(), "periods": o.periods, "gens": o.gens,
-        "every": o.every, "frames": o.frames,
+        "every": o.every, "frames": o.frames, "strobe_guard": o.strobe_guard,
     });
     let text = json!({"input": input, "opts": opts, "style": o.style.hash(), "v": STYLE_VERSION})
         .to_string();
@@ -570,7 +572,9 @@ fn write_tree(dir: &Path, enc: &Encoded) -> Result<Vec<MediaRow>, String> {
 /// Encode an animation's files (frames, animation, poster, thumbnail) with their rows.
 fn encode_all(anim: &Animation, o: &MediaOptions, job: &Job) -> Result<Encoded, String> {
     let st = &o.style;
-    let (fmt, bytes) = anim.encode(o.format, st)?;
+    let (fmt, guarded) = anim.encode_guarded(o.format, st, o.strobe_guard)?;
+    let delay_ms = guarded.delay_ms;
+    let bytes = guarded.bytes.clone();
     let render = json!({
         "key": job.key,
         "mode": anim.mode.name(),
@@ -585,8 +589,9 @@ fn encode_all(anim: &Animation, o: &MediaOptions, job: &Job) -> Result<Encoded, 
         "generations": [anim.generations.first(), anim.generations.last()],
         "every": if anim.mode == MediaMode::Seed { o.every.max(1) } else { 1 },
         "periods": if anim.mode == MediaMode::Alone { o.periods.max(1) } else { 0 },
-        "delay_ms": anim.delay_ms,
+        "delay_ms": delay_ms,
         "seamless": anim.seamless,
+        "strobe_guard": guarded.record(),
         "poster_frame": anim.poster,
         "jetcarp_version": jetcarp_core::VERSION,
     });

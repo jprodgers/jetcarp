@@ -226,6 +226,32 @@ pub static PALETTES: &[Builtin] = &[
         0x1b1d2b,
         0x10111a,
     ),
+    // Chosen for colour-vision deficiency (#217; `crate::cvd`): lightness falls steadily from the
+    // first stop to the last, so lightness alone tells the stops apart, and every stop stays at
+    // least `cvd::MIN_DIFFERENCE` from its neighbours and the background under protanopia,
+    // deuteranopia, tritanopia and their milder forms. Lantern runs from yellow through green and
+    // teal to blue, a perceptually even ramp of the viridis and cividis kind. Cobalt and Saffron
+    // are JACA's two sides: blue and orange, which every kind of deficiency keeps apart, so every
+    // stop of one stays far from every stop of the other, and from the pale yellow glow of
+    // annihilated cells.
+    pal(
+        "Lantern",
+        &[0xfff07f, 0x95cd96, 0x559f97, 0x277287, 0x0f4474],
+        BG,
+        ST,
+    ),
+    pal(
+        "Cobalt",
+        &[0xb4ebff, 0x5cb8e0, 0x1a82b4, 0x184662],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Saffron",
+        &[0xffcc55, 0xe88a2a, 0xb84a10, 0x7e1c0a],
+        0x0e1118,
+        0x07090c,
+    ),
 ];
 
 pub fn palette_names() -> impl Iterator<Item = &'static str> {
@@ -1416,6 +1442,7 @@ pub fn png_metadata(world: &World) -> Vec<(&'static str, String)> {
         ("jetcarp:version", r.jetcarp_version.clone()),
         ("jetcarp:generation", r.generation.to_string()),
         ("jetcarp:hash", r.hash.clone()),
+        ("jetcarp:hash_version", r.hash_version.to_string()),
         ("jetcarp:dead_boundary", r.dead_boundary.to_string()),
         ("jetcarp:scene", world.to_scene().to_json()),
     ]

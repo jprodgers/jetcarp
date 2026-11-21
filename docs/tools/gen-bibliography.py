@@ -57,6 +57,9 @@ def delatex(s: str) -> str:
 
 
 def parse(text: str):
+    """Entries as (type, key, fields); `fields["_secondary"]` is set when the comment lines just
+    before the entry say "% verified (secondary):", the mark of an entry whose work could not be
+    read and whose details come from a secondary listing."""
     entries = []
     i = 0
     while True:
@@ -64,6 +67,11 @@ def parse(text: str):
         if not m:
             break
         etype, key = m.group(1).lower(), m.group(2)
+        comments = []
+        for line in reversed(text[:m.start()].rstrip("\n").split("\n")):
+            if not line.startswith("%"):
+                break
+            comments.append(line)
         j = m.end()
         fields = {}
         while True:
@@ -92,6 +100,8 @@ def parse(text: str):
             fields[name] = value
         close = text.index("}", j)
         i = close + 1
+        if any(c.startswith("% verified (secondary)") for c in comments):
+            fields["_secondary"] = "1"
         entries.append((etype, key, fields))
     return entries
 
@@ -112,13 +122,13 @@ def names(field: str):
     return out
 
 
-def fmt_names(field: str) -> str:
+def fmt_names(field: str, inverted_first: bool = True) -> str:
     ns = names(field)
     shown = []
     for idx, (last, first) in enumerate(ns):
         if first is None:
             shown.append(last)
-        elif idx == 0:
+        elif idx == 0 and inverted_first:
             shown.append(f"{last}, {first}" if first else last)
         else:
             shown.append(f"{first} {last}".strip())
@@ -167,10 +177,13 @@ def fmt(etype, key, f):
         if f.get("publisher"):
             venue.append(delatex(f["publisher"]))
     elif etype == "book":
+        if f.get("translator"):
+            venue.append("Translated by " + fmt_names(f["translator"], inverted_first=False))
         if f.get("edition"):
             venue.append(delatex(f["edition"]) + " edition")
         if f.get("series"):
-            venue.append(delatex(f["series"]))
+            vol = f" {delatex(f['volume'])}" if f.get("volume") else ""
+            venue.append(delatex(f["series"]) + vol)
         if f.get("publisher"):
             pub = delatex(f["publisher"])
             if f.get("address"):
@@ -204,9 +217,14 @@ def fmt(etype, key, f):
     if links:
         parts.append("; ".join(links) + ".")
     # The `note` fields hold research bookkeeping (how and when an entry was checked) and are
-    # deliberately not shown.
+    # deliberately not shown; the "% verified" lines are in the BibTeX file.
+    if f.get("_secondary"):
+        parts.append(SECONDARY_MARK)
     return " ".join(parts)
 
+
+
+SECONDARY_MARK = '<span title="Rests on a secondary listing: the work itself was not read">†</span>'
 
 
 def emit(path, text, check, tool):
@@ -226,6 +244,7 @@ def main():
     check = sys.argv[1:] == ["--check"]
     text = BIB.read_text(encoding="utf-8")
     entries = parse(text)
+    secondary = sum(1 for _, _, f in entries if f.get("_secondary"))
     lines = [
         "# Bibliography",
         "",
@@ -235,11 +254,16 @@ def main():
         "> **Generated page.** This list is built from `docs/data/bibliography.bib` by",
         "> `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.",
         "",
-        f"These are the {len(entries)} works cited across the JETCARP documentation. Every entry was",
-        "checked against a primary record (a DOI landing page or Crossref, arXiv, the publisher, archive.org,",
-        "the author's or project's own page, or LifeWiki) when the history research was compiled in",
-        "November 2026. Web pages are given with the date they were read. Each entry's anchor is its",
-        "BibTeX key, so you can link to it directly.",
+        f"These are the {len(entries)} works cited across the JETCARP documentation. Each was checked",
+        "against a primary record where one could be read (a DOI landing page or Crossref, arXiv, the",
+        "publisher, archive.org, the author's or project's own page, or LifeWiki) when the history",
+        f"research was compiled in November 2026. The {secondary} marked † could not be read, and rest on a",
+        "secondary listing instead: a reference list, a library or thesis catalogue, or an encyclopaedia.",
+        "The BibTeX file says, entry by entry, what was read and when; the research notes behind it, with",
+        "their search logs and the items that could not be verified, are in the repository's",
+        "[`research/`](https://github.com/jprodgers/jetcarp/tree/main/research) folder. Web pages are given",
+        "with the date they were read. Each entry's anchor is its BibTeX key, so you can link to it",
+        "directly.",
         "",
     ]
     letter = None

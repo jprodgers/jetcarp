@@ -1,0 +1,30 @@
+{
+  "name": "JACA territories in Cobalt and Saffron",
+  "description": "A JACA rule on the Cairo pentagon tiling, its +1 cells in Cobalt and its -1 cells in Saffron, the two palettes chosen for colour-vision deficiency. The territories age from light to dark, and the two signs stay apart at every age.",
+  "tiling": {
+    "boundary": "wrap",
+    "family": "cairo",
+    "size": {
+      "rect": {
+        "h": 63,
+        "w": 95
+      }
+    }
+  },
+  "rng_state": 28,
+  "cas": [
+    {
+      "enabled": true,
+      "palette": "Cobalt",
+      "palette_neg": "Saffron",
+      "rule": "JACA B27/S03456",
+      "seed": {
+        "signed": {
+          "density": 0.45,
+          "negative": 0.5
+        }
+      },
+      "steps_per_gen": 1
+    }
+  ]
+}

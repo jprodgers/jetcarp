@@ -255,7 +255,7 @@ impl JetcarpApp {
             .small(),
         );
         for w in &self.world.topo.warnings {
-            ui.colored_label(Color32::YELLOW, w);
+            ui.colored_label(crate::theme::ink(ui, Color32::YELLOW), w);
         }
         ui.horizontal(|ui| {
             if ui

@@ -43,7 +43,10 @@ Golly's documentation credits David Griffeath with first imagining Larger than L
 1990s, to see whether Life sits near a critical point when its thresholds and range are scaled up
 together ([Golly: Larger than Life](../research/bibliography.md#gollynd_ltl)). Golly cites
 Griffeath's "Self-organization of random cellular automata: four snapshots" as the first reference
-([Griffeath 1994](../research/bibliography.md#griffeath1994self)).
+([Griffeath 1994](../research/bibliography.md#griffeath1994self)). Related work by Griffeath includes
+a survey of cellular automaton growth with Janko Gravner
+([Gravner and Griffeath 1998](../research/bibliography.md#gravner1998cellular)) and ten still frames of
+self-organising two-dimensional rules ([Griffeath 2016](../research/bibliography.md#griffeath2016self)).
 
 Kellie Michele Evans developed the family in a 1996 PhD thesis at the University of
 Wisconsin–Madison, *Larger than Life: It's So Nonlinear*, supervised by Griffeath. Evans's preface says
@@ -107,7 +110,19 @@ in reach; a patch whose lists would pass 67 million entries in all runs on the C
 
 Neighbourhood sizes change with the tiling, so a rule's thresholds usually need adjusting when it
 moves. On the hat, below, Bosco's thresholds are scaled down by a quarter, and bug-like hollow
-blobs appear on an aperiodic tiling.
+blobs appear on an aperiodic tiling. A neighbourhood can also hold more cells than the square
+grid's: a triangle has 12 touch neighbours at range 1, against a square's 8, and within range 20 of
+a tile of some k-uniform tilings lie more than 8,000 cells, against the square grid's 1,680. So a
+rule keeps every count it names, up to 65,535, whether or not the square grid could reach it, and
+reads back as written: `R1,C2,S2-3,B9-12` is born on 9 to 12 live neighbours on triangles and is
+Life without births on squares. Before JETCARP 0.4.3, counts above the square grid's neighbourhood
+size were dropped.
+
+On a lattice, the neighbourhood is a list of steps from the cell, the same for every tile of a
+type. On a wrapped grid smaller than the neighbourhood (the smallest grid is 8 by 8 unit cells,
+and ranges go up to 20), two steps from a cell can come round the torus to the same cell, which
+then counts once for each. On an aperiodic patch the neighbourhood is the set of tiles within `r`
+steps, each counted once.
 
 <figure>
 <picture>
@@ -140,6 +155,8 @@ family on every tiling, including the k-uniform, isohedral and aperiodic ones.
 ## References
 
 - [Griffeath 1994](../research/bibliography.md#griffeath1994self);
+  [Gravner and Griffeath 1998](../research/bibliography.md#gravner1998cellular);
+  [Griffeath 2016](../research/bibliography.md#griffeath2016self);
   [Evans 1996](../research/bibliography.md#evans1996larger);
   [Evans 2001](../research/bibliography.md#evans2001larger);
   [Evans 2003](../research/bibliography.md#evans2003larger);

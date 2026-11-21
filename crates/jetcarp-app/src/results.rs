@@ -429,7 +429,7 @@ impl ResultsBrowser {
                     self.add_favourites_to_library();
                 }
                 if busy {
-                    ui.spinner();
+                    crate::a11y::spinner(ui);
                 }
             }
             if let Some(f) = self.folder().map(Path::to_path_buf) {
@@ -446,7 +446,7 @@ impl ResultsBrowser {
             }
         });
         if let Some(e) = &self.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         let Some(m) = &self.manifest else {
             thumbs::empty_note(
@@ -764,7 +764,7 @@ impl ResultsBrowser {
                 ui.ctx().copy_text(text(&r, "rule").to_string());
             }
             if let Some((_, what)) = &self.loading {
-                ui.spinner();
+                crate::a11y::spinner(ui);
                 ui.label(RichText::new(format!("opening {what}…")).weak());
             }
         });
@@ -1029,8 +1029,8 @@ mod tests {
     #[test]
     fn favourites_round_trip() {
         let m = manifest();
-        let dir = std::env::temp_dir().join(format!("jetcarp-favs-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = jetcarp_core::scratch::ScratchDir::new("favs");
+        std::fs::create_dir_all(&*dir).unwrap();
         let mut favs = Favourites::default();
         assert!(favs.toggle(&m.rows[1]));
         assert!(favs.toggle(&m.rows[3]));
@@ -1045,19 +1045,17 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(view(&m, &f, "index", false, &back), vec![1]);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn loads_a_real_sweep_and_reopens_a_run() {
-        let root = std::env::temp_dir().join(format!("jetcarp-results-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = jetcarp_core::scratch::ScratchDir::new("results");
         let s = jetcarp_script::run(
             r#"sweep(#{ rules: "W", from: 28, to: 33, tiling: "square", size: [31, 20],
                         boundary: "dead", seed: "top_center", until: "done",
                         png: #{ size: [62, 40] }, skip: ["uniform"] });"#,
             jetcarp_script::RunOptions {
-                out_root: Some(root.clone()),
+                out_root: Some(root.to_path_buf()),
                 ..Default::default()
             },
             |_| {},
@@ -1096,19 +1094,17 @@ mod tests {
             .unwrap();
         assert_eq!(text(r, "hash"), again.hash_hex());
         assert_eq!(finds[0].handle, format!("find:{id}"));
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
     fn favourites_go_to_the_library() {
-        let root = std::env::temp_dir().join(format!("jetcarp-results-lib-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = jetcarp_core::scratch::ScratchDir::new("results-lib");
         let s = jetcarp_script::run(
             r#"sweep(#{ rules: ["B3/S23", "W30"], tiling: "square", size: [48, 48],
                         boundary: "wrap", seed: "random:0.35", until: "repeats",
                         max_period: 30, max_gens: 3000, png: false });"#,
             jetcarp_script::RunOptions {
-                out_root: Some(root.clone()),
+                out_root: Some(root.to_path_buf()),
                 ..Default::default()
             },
             |_| {},
@@ -1122,6 +1118,5 @@ mod tests {
         // Life leaves objects; W30 makes none (a row rule), and the report says so.
         assert!(!lib.list().unwrap().is_empty(), "{msg}");
         assert!(msg.contains("W30"), "{msg}");
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

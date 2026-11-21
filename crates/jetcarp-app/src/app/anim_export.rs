@@ -7,6 +7,10 @@
 //! - **The format** is the user's choice; the hunts' *Render media* picks it by size instead.
 //! - **Memory:** every frame is held until encoding, so the frame count is capped
 //!   ([`MAX_FRAMES`]).
+//! - **The strobe guard** (#149): the frames are checked at their own rate before anything is
+//!   saved (`jetcarp_core::strobe::export`). An animation that flashes or shows strong stripes is
+//!   held, with what was found and a choice: save the softened version (the default), or cancel;
+//!   with the app's guard turned off, saving it as it is is offered too.
 
 use super::*;
 use jetcarp_core::media::encode;
@@ -46,10 +50,43 @@ pub(crate) struct AnimJob {
     pub done: u32,
     pub total: u32,
     pub outcome: Option<Result<String, String>>,
+    /// Frames the strobe guard held back, waiting for the person's choice.
+    pub held: Option<Held>,
+}
+
+/// An animation the strobe guard found flashing, before it is saved.
+pub(crate) struct Held {
+    pub frames: Vec<Image>,
+    pub delay_ms: u32,
+    pub webp: bool,
+    pub path: std::path::PathBuf,
+    pub check: jetcarp_core::strobe::export::Check,
+    /// For the message once saved.
+    pub summary: String,
+}
+
+/// What the person chose for a held animation.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum HeldChoice {
+    Softened,
+    AsIs,
+    Cancel,
 }
 
 impl JetcarpApp {
     pub(super) fn anim_export_window(&mut self, ctx: &egui::Context) {
+        // The strobe guard held the frames back: ask what to save.
+        let held = self
+            .anim
+            .job
+            .as_ref()
+            .and_then(|j| j.lock().unwrap().held.as_ref().map(|h| (h.check, h.webp)));
+        if let Some((check, webp)) = held {
+            if let Some(choice) = self.held_dialog(ctx, &check, webp) {
+                self.save_held(choice);
+            }
+            return;
+        }
         if let Some(job) = &self.anim.job {
             let outcome = job.lock().unwrap().outcome.take();
             if let Some(o) = outcome {
@@ -100,7 +137,7 @@ impl JetcarpApp {
                 let frames = self.anim.gens / self.anim.every.max(1) + 1;
                 if frames > MAX_FRAMES {
                     ui.colored_label(
-                        egui::Color32::LIGHT_RED,
+                        crate::theme::ink(ui, egui::Color32::LIGHT_RED),
                         format!(
                             "{frames} frames is over the limit of {MAX_FRAMES}: fewer generations, or a frame every more"
                         ),
@@ -179,43 +216,149 @@ impl JetcarpApp {
                 center,
                 scale,
             };
-            let bytes = animate(&mut world, &frame, gens, every, webp, delay_ms, &|k| {
+            let frames = match render_frames(&mut world, &frame, gens, every, &|k| {
                 job.lock().unwrap().done = k;
-            });
-            let outcome = bytes.and_then(|b| {
+            }) {
+                Ok(f) => f,
+                Err(e) => {
+                    job.lock().unwrap().outcome = Some(Err(e));
+                    return;
+                }
+            };
+            let summary = format!(
+                "{} ({w}x{h}, {total} frames, generations {start} to {})",
+                path.display(),
+                world.generation
+            );
+            // The strobe guard: checked before anything is saved.
+            let refs: Vec<&Image> = frames.iter().collect();
+            let check = jetcarp_core::strobe::export::check(&refs, delay_ms);
+            if check.harmful {
+                job.lock().unwrap().held = Some(Held {
+                    frames,
+                    delay_ms,
+                    webp,
+                    path,
+                    check,
+                    summary,
+                });
+                return;
+            }
+            let outcome = encode_frames(&frames, webp, delay_ms).and_then(|b| {
                 std::fs::write(&path, &b).map_err(|e| format!("{}: {e}", path.display()))?;
-                Ok(format!(
-                    "Exported {} ({w}x{h}, {total} frames, generations {start} to {})",
-                    path.display(),
-                    world.generation
-                ))
+                Ok(format!("Exported {summary}"))
+            });
+            job.lock().unwrap().outcome = Some(outcome);
+        });
+    }
+
+    /// The choice for a held animation: what was found, *Save the softened version* (the
+    /// default), *Save it as it is* (only with the app's guard off), *Cancel*.
+    fn held_dialog(
+        &mut self,
+        ctx: &egui::Context,
+        check: &jetcarp_core::strobe::export::Check,
+        webp: bool,
+    ) -> Option<HeldChoice> {
+        let mut choice = None;
+        let guard_on = self.strobe.on_app;
+        egui::Modal::new(egui::Id::unique("strobe-guard-export")).show(ctx, |ui| {
+            ui.set_max_width(440.0);
+            ui.heading("This animation flashes");
+            ui.add_space(4.0);
+            ui.label(format!(
+                "The {} {}. Anyone who opens it would see that, and flashing like this can trigger \
+                 seizures in people with photosensitive epilepsy.",
+                if webp { "WebP" } else { "GIF" },
+                check.words().unwrap_or_else(|| "flashes".into())
+            ));
+            ui.label(
+                "The strobe guard can save a version that does not flash: shown more slowly, when \
+                 a little slower is enough, or else with its flashing softened and strong stripes \
+                 veiled.",
+            );
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                let soft = ui.add(egui::Button::new(
+                    RichText::new("Save the softened version").strong(),
+                ));
+                if !soft.has_focus() && !ui.memory(|m| m.focused().is_some()) {
+                    soft.request_focus();
+                }
+                if soft.clicked() {
+                    choice = Some(HeldChoice::Softened);
+                }
+                if !guard_on && ui.button("Save it as it is").clicked() {
+                    choice = Some(HeldChoice::AsIs);
+                }
+                if ui.button("Cancel").clicked() {
+                    choice = Some(HeldChoice::Cancel);
+                }
+            });
+            if guard_on {
+                ui.label(
+                    RichText::new(
+                        "Saving it as it is needs the strobe guard turned off (Settings → Safety).",
+                    )
+                    .small()
+                    .weak(),
+                );
+            }
+        });
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            choice = Some(HeldChoice::Cancel);
+        }
+        choice
+    }
+
+    /// Saves (or drops) the held animation as chosen, in the background.
+    fn save_held(&mut self, choice: HeldChoice) {
+        let Some(job) = self.anim.job.clone() else {
+            return;
+        };
+        let Some(held) = job.lock().unwrap().held.take() else {
+            return;
+        };
+        if choice == HeldChoice::Cancel {
+            self.anim.job = None;
+            self.message = Some((
+                "Not exported: the animation flashes, and it was not saved.".into(),
+                false,
+            ));
+            return;
+        }
+        // As it is only with the app's guard off, whatever asked.
+        let soften = choice == HeldChoice::Softened || self.strobe.on_app;
+        std::thread::spawn(move || {
+            let Held {
+                frames,
+                delay_ms,
+                webp,
+                path,
+                summary,
+                ..
+            } = held;
+            let outcome = guarded_bytes(&frames, webp, delay_ms, soften).and_then(|g| {
+                std::fs::write(&path, &g.bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+                Ok(match g.note() {
+                    Some(n) => format!("Exported {summary}: {n}."),
+                    None => format!("Exported {summary}"),
+                })
             });
             job.lock().unwrap().outcome = Some(outcome);
         });
     }
 }
 
-/// The part of the world a frame shows: `width` x `height` pixels, world point `center` in the
-/// middle, `scale` pixels per world unit.
-pub(crate) struct Frame {
-    pub width: u32,
-    pub height: u32,
-    pub center: [f64; 2],
-    pub scale: f64,
-}
-
-/// Renders `world` now and after every `every` generations up to `gens` more (stepping `world`),
-/// and encodes the frames as a GIF or a lossless WebP, `delay_ms` each. `done(k)` hears each
-/// frame finished.
-pub(crate) fn animate(
+/// Renders `world` now and after every `every` generations up to `gens` more (stepping `world`).
+/// `done(k)` hears each frame finished.
+pub(crate) fn render_frames(
     world: &mut World,
     frame: &Frame,
     gens: u32,
     every: u32,
-    webp: bool,
-    delay_ms: u32,
     done: &dyn Fn(u32),
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<Image>, String> {
     let every = every.max(1);
     let total = gens / every + 1;
     if total > MAX_FRAMES {
@@ -243,6 +386,15 @@ pub(crate) fn animate(
         ));
         done(k + 1);
     }
+    Ok(frames)
+}
+
+/// The frames as a GIF or a lossless WebP, `delay_ms` each.
+pub(crate) fn encode_frames(
+    frames: &[Image],
+    webp: bool,
+    delay_ms: u32,
+) -> Result<Vec<u8>, String> {
     let refs: Vec<&Image> = frames.iter().collect();
     if webp {
         let p = &frames[0].rgba;
@@ -252,9 +404,101 @@ pub(crate) fn animate(
     }
 }
 
+/// The frames through the strobe guard: softened if they flash and `soften`, checked again as
+/// encoded.
+pub(crate) fn guarded_bytes(
+    frames: &[Image],
+    webp: bool,
+    delay_ms: u32,
+    soften: bool,
+) -> Result<jetcarp_core::strobe::export::Guarded, String> {
+    let background = frames
+        .first()
+        .map_or([0, 0, 0, 255], |f| [f.rgba[0], f.rgba[1], f.rgba[2], 255]);
+    let enc = |f: &[&Image], d: u32| {
+        if webp {
+            encode::webp(f, d, background)
+        } else {
+            encode::gif(f, d)
+        }
+    };
+    let dec = |b: &[u8]| {
+        if webp {
+            encode::decode_webp(b)
+        } else {
+            encode::decode_gif(b)
+        }
+    };
+    jetcarp_core::strobe::export::guard(frames, delay_ms, soften, &enc, &dec)
+}
+
+/// The part of the world a frame shows: `width` x `height` pixels, world point `center` in the
+/// middle, `scale` pixels per world unit.
+pub(crate) struct Frame {
+    pub width: u32,
+    pub height: u32,
+    pub center: [f64; 2],
+    pub scale: f64,
+}
+
+/// Renders `world` now and after every `every` generations up to `gens` more (stepping `world`),
+/// and encodes the frames as a GIF or a lossless WebP, `delay_ms` each, with no strobe guard (the
+/// tests' check of the frames). `done(k)` hears each frame finished.
+#[cfg(test)]
+pub(crate) fn animate(
+    world: &mut World,
+    frame: &Frame,
+    gens: u32,
+    every: u32,
+    webp: bool,
+    delay_ms: u32,
+    done: &dyn Fn(u32),
+) -> Result<Vec<u8>, String> {
+    let frames = render_frames(world, frame, gens, every, done)?;
+    encode_frames(&frames, webp, delay_ms)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The strobe guard on an export (#149): a Margolus Tron field, which flips every generation,
+    /// exported at 20 frames a second, is found harmful; its softened version, as saved in either
+    /// format and read back, is not.
+    #[test]
+    fn a_flashing_export_is_caught_and_its_softened_version_passes() {
+        let scene: Scene = serde_json::from_str(
+            r#"{"name": "Tron flip", "tiling": {"family": "square", "size": {"rect": {"w": 40, "h": 30}}, "boundary": "wrap"}, "rng_state": 1, "cas": [{"rule": "Margolus Tron", "seed": "empty"}]}"#,
+        )
+        .unwrap();
+        let mut w = World::from_scene(&scene).unwrap();
+        let b = w.topo.bounds;
+        let frame = Frame {
+            width: 160,
+            height: 120,
+            center: [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0],
+            scale: 160.0 / (b[2] - b[0]),
+        };
+        let frames = render_frames(&mut w, &frame, 40, 1, &|_| {}).unwrap();
+        let refs: Vec<&Image> = frames.iter().collect();
+        let check = jetcarp_core::strobe::export::check(&refs, 50);
+        assert!(check.harmful, "{check:?}");
+        for webp in [false, true] {
+            let g = guarded_bytes(&frames, webp, 50, true).unwrap();
+            assert!(!g.after.harmful, "webp {webp}: {:?}", g.after);
+            let back = if webp {
+                encode::decode_webp(&g.bytes).unwrap()
+            } else {
+                encode::decode_gif(&g.bytes).unwrap()
+            };
+            let back: Vec<&Image> = back.iter().collect();
+            assert!(!jetcarp_core::strobe::export::check(&back, g.delay_ms).harmful);
+            assert!(g.note().unwrap().contains("strobe guard saved"));
+            // Unguarded, the same frames are saved as drawn.
+            let raw = guarded_bytes(&frames, webp, 50, false).unwrap();
+            assert_eq!(raw.bytes, encode_frames(&frames, webp, 50).unwrap());
+        }
+    }
 
     /// A GIF and a WebP of a Life world have a frame now and one every `every` generations, the
     /// last one the world as stepping leaves it, and the world is that many generations on.

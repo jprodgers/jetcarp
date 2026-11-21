@@ -57,7 +57,7 @@ impl JetcarpApp {
                 st.secs = t0.elapsed().as_secs_f64();
             }
             if let Some(e) = &st.error {
-                ui.colored_label(Color32::LIGHT_RED, e);
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
             }
             let Some(r) = st.report.clone() else {
                 return;
@@ -77,14 +77,14 @@ impl JetcarpApp {
                 ui.label(
                     RichText::new("The world has changed since; find again to refresh.")
                         .small()
-                        .color(Color32::LIGHT_RED),
+                        .color(crate::theme::ink(ui, Color32::LIGHT_RED)),
                 );
             }
             ui.label(RichText::new("Click a row to highlight those cells.").small());
             for (k, row) in r.counts.iter().enumerate() {
                 let text = RichText::new(format!("{:>5} × {}", row.count, row.label()))
                     .monospace()
-                    .color(class_color(&row.class));
+                    .color(crate::theme::ink(ui, class_color(&row.class)));
                 if ui.selectable_label(st.selected == Some(k), text).clicked() {
                     st.selected = if st.selected == Some(k) { None } else { Some(k) };
                 }

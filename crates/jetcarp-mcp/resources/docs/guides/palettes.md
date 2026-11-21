@@ -3,7 +3,7 @@
 Every automaton draws in a *palette*: a list of colour stops, plus a *background* colour for empty
 cells and a *stage* colour for the area outside the tiling. Its *colour by* setting decides how its
 states, and how long each cell has been in its state, are spread along the stops. This guide shows how
-to pick a palette, make your own, and choose the colouring, including age colouring. The 30 built-in
+to pick a palette, make your own, and choose the colouring, including age colouring. The 33 built-in
 palettes, with their colours, and the exact rules for every family are in the
 [Palettes reference](../reference/palettes.md).
 
@@ -30,6 +30,23 @@ On a field that several automata share, only the first automaton's palette shows
 background and stage colours always come from the first automaton's palette (see
 [Several automata at once](several-automata.md#how-several-fields-are-drawn)). If a palette change
 seems to do nothing, change the first automaton's instead.
+
+## Palettes for colour-vision deficiency
+
+JETCARP checks every built-in palette for the common kinds of colour-vision deficiency, and three
+are chosen to pass: **Lantern** (yellow through green and teal to blue) for any rule, and
+**Cobalt** (blue) and **Saffron** (orange) for JACA's +1 and −1 cells. Each gets steadily darker
+from its first stop to its last, so lightness alone tells a pattern's ages apart, and Cobalt and
+Saffron stay apart from each other at every age. Tide, Phosphor, Koi and Verdigris pass the check
+too. The [Palettes reference](../reference/palettes.md#colour-vision-deficiency) says how the check
+works and gives every palette's result.
+
+To use them without choosing them each time, open *Settings → Accessibility* and click *Use the
+palettes chosen for colour-vision deficiency*: every scene you open that doesn't choose its own
+palettes is then drawn in them (see
+[Accessibility settings](accessibility-settings.md#palettes-for-scenes-that-name-none)). Outside
+the app, give `--palette Lantern` to the commands that draw pictures, or name the palettes in a
+scene.
 
 ## Make your own palette
 

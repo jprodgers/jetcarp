@@ -747,22 +747,28 @@ fn new_quick_start_examples_behave() {
 /// OS and CPU; a failure here on another platform means some maths is not portable.
 #[test]
 fn lenia_hashes_are_portable() {
-    let run = |family: &str, w: u32, h: u32, rule: &str, seed: SeedSpec| -> String {
+    // The state hash in version 2, and in version 1: the pins before 0.4.3, kept to show that
+    // only the hash's version changed when they were written again.
+    let run = |family: &str, w: u32, h: u32, rule: &str, seed: SeedSpec| -> (String, String) {
         let mut wd = World::new(TilingSpec::rect(family, w, h, Boundary::Wrap), 7).unwrap();
         wd.apply(Command::AddCa {
             ca: CaSpec::new(rule).seed(seed),
         })
         .unwrap();
         wd.apply(Command::Step { gens: 30 }).unwrap();
-        wd.hash_hex()
+        (wd.hash_hex(), wd.hash_hex_v1())
     };
+    let pin = |v2: &str, v1: &str| (v2.to_string(), v1.to_string());
     let lenia = |name: &str| SeedSpec::Lenia {
         name: name.into(),
         scale: 1.0,
     };
     assert_eq!(
         run("square", 96, 96, ORBIUM, lenia("orbium")),
-        "ebdff31cdf1e4130"
+        pin(
+            "5195057061b29c3dbad21c8cc4a5414ebf51c4060f4d6d78424b1a9edb4a2a4a",
+            "ebdff31cdf1e4130"
+        )
     );
     // Exponential kernel core and Gaussian growth (both use exp), from Gaussian bumps (exp).
     assert_eq!(
@@ -777,7 +783,10 @@ fn lenia_hashes_are_portable() {
                 peak: 1.0
             }
         ),
-        "0c1a7b79a60d5999"
+        pin(
+            "3cc20b9bcce1e37074603870fa8767f0e330330dfffa1c68b155fb6fd5fed396",
+            "0c1a7b79a60d5999"
+        )
     );
     assert_eq!(
         run(
@@ -790,6 +799,9 @@ fn lenia_hashes_are_portable() {
                 density: 0.6
             }
         ),
-        "f731ec3b4dc887d7"
+        pin(
+            "5e1211798eb31b8aa9606e2cb4bab4c9929458629a5ee49b5be22d0621a0ccac",
+            "f731ec3b4dc887d7"
+        )
     );
 }

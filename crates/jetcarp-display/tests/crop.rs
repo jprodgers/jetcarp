@@ -12,21 +12,36 @@ use jetcarp_display::stage::{Stage, no_lookup};
 use jetcarp_display::tuning::crop_size;
 use std::time::{Duration, Instant};
 
+/// The display adapter as JETCARP chooses it. No usable one skips the test, or fails it under
+/// `JETCARP_REQUIRE_GPU=1`.
 fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
+    const WHAT: &str = "the sweep card picture test";
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let choice =
-        jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None).ok()?;
+        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
+            Ok(c) => c,
+            Err(e) => {
+                jetcarp_gpu::no_gpu(WHAT, &e);
+                return None;
+            }
+        };
     if let Err(e) = &choice.usable {
-        eprintln!("skipped: {e}");
+        jetcarp_gpu::no_gpu(WHAT, e);
         return None;
     }
-    pollster::block_on(
+    match pollster::block_on(
         choice
             .adapter
             .request_device(&wgpu::DeviceDescriptor::default()),
-    )
-    .ok()
+    ) {
+        Ok(d) => Some(d),
+        Err(e) => {
+            let name = &choice.info.name;
+            jetcarp_gpu::no_gpu(WHAT, &format!("{name} refused a device: {e}"));
+            None
+        }
+    }
 }
 
 /// A stage showing a still checkerboard on a `w` by `h` square grid, built at `px` pixels a cell

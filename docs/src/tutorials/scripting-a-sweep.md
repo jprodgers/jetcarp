@@ -34,7 +34,7 @@ jetcarp script first.rhai
 It prints:
 
 ```text
-generation 300, 1527 live cells, hash 8c936c690b20f095
+generation 300, 1527 live cells, hash 1597a455ccef0ada8cd86ff3f1dcb96bd0699f3f6be9bc96f120b9744a2a2ca2
 output: /home/ada/Pictures/JETCARP/2026-11-11_21-27-33_cairo-life
 time:   0.10s
 ```

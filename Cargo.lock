@@ -2435,7 +2435,6 @@ dependencies = [
 name = "jetcarp-app"
 version = "0.4.2"
 dependencies = [
- "anyhow",
  "bytemuck",
  "clap",
  "dirs",
@@ -2456,6 +2455,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "windows-sys 0.61.2",
  "winit",
  "zbus",
 ]

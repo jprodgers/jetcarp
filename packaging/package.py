@@ -509,8 +509,8 @@ curl -LsSf {url}/jetcarp-installer.sh | sh
 Windows (PowerShell): save the installer, then run it.
 
 ```powershell
-Invoke-WebRequest {url}/jetcarp-installer.ps1 -OutFile jetcarp-installer.ps1
-powershell -ExecutionPolicy Bypass -File .\\jetcarp-installer.ps1
+Invoke-WebRequest {url}/jetcarp-installer.ps1 -OutFile "$env:TEMP\\jetcarp-installer.ps1"
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\\jetcarp-installer.ps1"
 ```
 {others}
 Every way to install, and what to know on each system, is in

@@ -25,8 +25,8 @@ changing automata, reseeding, editing palettes, running. Consecutive runs are me
 entry, so a long session does not make a long file. *Edit → Reset*, choosing another tiling, and a
 new random state start the log again from a new base.
 
-The state hash is shown at the right end of the menu bar, after the generation: `hash 1adf6e32`, the
-first eight of its sixteen digits. Click it, or use *Edit → Copy state hash*, to copy the whole hash.
+The state hash is shown at the right end of the menu bar, after the generation: `hash bf2ec44f9443a2d1`,
+the first 16 of its 64 digits. Click it, or use *Edit → Copy state hash*, to copy the whole hash.
 Worlds of more than about a million cells compute the hash only while paused, and show `hash …`
 while they run.
 
@@ -81,13 +81,13 @@ jetcarp verify out.json
 It prints:
 
 ```text
-ok: generation 100 hash 1adf6e3234b7f199
+ok: generation 100 hash bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b9
 ```
 
 If they differ it says so and exits with status 1:
 
 ```text
-Error: MISMATCH: recorded gen 100 hash 1adf6e3234b7f198, replayed gen 100 hash 1adf6e3234b7f199
+Error: MISMATCH: recorded gen 100 hash bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b8, replayed gen 100 hash bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b9
 ```
 
 It takes a picture JETCARP wrote too (`--png`, the app's exports, wallpapers): each carries its scene,
@@ -102,10 +102,13 @@ check a run made with `--gpu`.
 
 ## The state hash
 
-The state hash is a 64-bit number, printed as sixteen hexadecimal digits, computed from everything
-that decides what the world does next: every cell's state and age, sandpile heights, Lenia's values,
-the generation, the ants, and the progress of any script or reseed policy. Two worlds with the same
-hash are, in practice, in the same state. The hash does not depend on the number of threads or on
+The state hash is a SHA-256 hash, printed as 64 hexadecimal digits, of everything that decides
+what the world does next: every cell's state and age, sandpile heights, Lenia's values, the
+generation, the random-number generator, each automaton's rule and settings, the ants, and the
+progress of any script, reseed policy or period check, with a digest of the tiling. Two worlds with
+the same hash are in the same state. A world reopened from its saved scene has the hash of the
+world that ran straight through. Scenes saved before JETCARP 0.4.3 recorded an older, 16-digit hash
+(version 1); `jetcarp verify` checks each record with the version it names. The hash does not depend on the number of threads or on
 whether the CPU or the GPU did the work, and by design it does not depend on the operating system.
 
 One case needs care: a HashLife jump reaches exactly the same cells as stepping, but restarts every
@@ -139,7 +142,8 @@ Every PNG made by `jetcarp run --png`, *File → Export the world as PNG…*, *F
 as PNG…*, *File → Export wallpaper…*,
 `jetcarp wallpaper`, `jetcarp hashlife --png` and a script's `save_png` carries its scene inside it,
 as PNG text chunks: `jetcarp:scene` (the whole scene), `jetcarp:version`, `jetcarp:generation`,
-`jetcarp:hash` and `jetcarp:dead_boundary`. A picture can therefore always be traced back to the run
+`jetcarp:hash`, `jetcarp:hash_version` (2; absent in pictures made before 0.4.3, whose hash is
+version 1) and `jetcarp:dead_boundary`. A picture can therefore always be traced back to the run
 that made it. (Animations, from *File → Export animation…* or `jetcarp media`, and the frames
 `jetcarp media` writes do not carry them.)
 
@@ -160,7 +164,7 @@ jetcarp verify scene.json
 It prints:
 
 ```text
-ok: generation 100 hash 1adf6e3234b7f199
+ok: generation 100 hash bf2ec44f9443a2d100124c0133475711a1f98cfe48927add833a4d63e8bea8b9
 ```
 
 ## Scenes everywhere else

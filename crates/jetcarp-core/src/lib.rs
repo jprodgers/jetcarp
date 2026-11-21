@@ -2,11 +2,13 @@
 
 pub mod ants;
 pub mod aperiodic;
+pub mod b0;
 pub mod board;
 pub mod catalog;
 pub mod cellcheck;
 pub mod census;
 pub mod computing;
+pub mod cvd;
 pub mod detmath;
 pub mod edges;
 pub mod evolve;
@@ -41,6 +43,8 @@ pub mod reseed;
 pub mod rng;
 pub mod rules;
 pub mod sandpile;
+#[doc(hidden)]
+pub mod scratch;
 pub mod script;
 pub mod seeding;
 pub mod semantics;
@@ -49,6 +53,7 @@ pub mod sheet;
 pub mod sizeclass;
 pub mod spectre;
 pub mod step;
+pub mod strobe;
 pub mod table;
 pub mod topology;
 pub mod turmite;

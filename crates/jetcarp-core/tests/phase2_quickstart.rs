@@ -90,8 +90,10 @@ fn every_example_works() {
         .filter_map(|e| {
             let full = e.rule == "SpectreGlider";
             let h = if e.id == "sandpile-identity-cairo" {
-                let h = health(&e.scene, 1, None).ok()?;
-                return (h.population == 0).then(|| format!("{}: empty", e.scene.name));
+                return match health(&e.scene, 1, None) {
+                    Ok(h) => (h.population == 0).then(|| format!("{}: empty", e.scene.name)),
+                    Err(err) => Some(format!("{}: {err}", e.scene.name)),
+                };
             } else if full {
                 health(&e.scene, 100, None)
             } else {

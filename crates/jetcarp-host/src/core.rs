@@ -1,5 +1,6 @@
 //! The host's work, whatever shows it: the stages, the link, the settings, the memory limit.
 
+use jetcarp_core::photosensitivity::GuardPlace;
 use jetcarp_display::autostart;
 use jetcarp_display::host_settings::{HostSettings, LockScreen, Place, ScreenSettings};
 use jetcarp_display::pace::FrameClock;
@@ -43,6 +44,8 @@ const RETUNE_SETTLE: f64 = 15.0;
 pub(crate) const WARNING_HOLD: &str = "warning";
 /// How often a host held by the warning looks for an answer.
 const WARNING_CHECK: f64 = 2.0;
+/// How often the host reads the strobe guard's setting again.
+const GUARD_CHECK: f64 = 2.0;
 /// What a host held by the warning prints on standard error as it starts.
 const WARNING_SAID: &str = "nothing runs until the photosensitive seizure warning has been \
                             accepted: open the JETCARP app, or run `jetcarp setup`";
@@ -115,6 +118,9 @@ pub struct Screen {
     pub due: bool,
     /// Frames it has drawn.
     frames: u64,
+    /// No surface shows it: its monitor isn't connected, and another screen is on the one it
+    /// would move to. It neither steps nor draws until its monitor comes back (#130).
+    pub unseen: bool,
 }
 
 /// A rotation and its expanded items, as text to compare.
@@ -140,6 +146,7 @@ impl Screen {
             monitor,
             place,
             made_from,
+            unseen: false,
             clock: FrameClock::default(),
             due: false,
             frames: 0,
@@ -164,6 +171,9 @@ pub struct Core {
     /// None in a screen saver, which nothing controls.
     listener: Option<Listener>,
     gpu: Option<SharedGpu>,
+    /// Whether the GPU has been looked for yet, found, not found, or lost, so `status` tells a
+    /// host that hasn't opened it yet (started at login, nothing shown) from one with none (#141).
+    gpu_state: GpuState,
     /// The desktop background's GPU policy as last read (its own choice, the shared setting, or
     /// `JETCARP_GPU`), read again with the settings, so `status` says what each screen steps on
     /// now and why (#75).
@@ -228,6 +238,10 @@ pub struct Core {
     retune_tried: Option<Vec<(usize, [u32; 2])>>,
     /// When the host last looked for an answer to the photosensitive seizure warning.
     warning_at: f64,
+    /// The strobe guard's setting for the desktop background and the screen saver (#97), and
+    /// when it was last read.
+    desktop_guard: bool,
+    guard_at: f64,
 }
 
 /// The tuned desktop background screens whose canvas is not the one their tuning was found for,
@@ -414,6 +428,7 @@ impl Core {
             rotation_override: rotation,
             listener,
             gpu: None,
+            gpu_state: GpuState::NotOpened,
             policy,
             gpu_note: None,
             lookup,
@@ -449,6 +464,8 @@ impl Core {
             retune_since: None,
             retune_tried: None,
             warning_at: 0.0,
+            desktop_guard: jetcarp_core::photosensitivity::guard_on(GuardPlace::Desktop),
+            guard_at: 0.0,
         };
         if let Some(w) = warning {
             core.note(w);
@@ -484,7 +501,7 @@ impl Core {
                 g.queue.clone(),
                 self.policy.clone(),
             ),
-            None => SimBackend::unavailable("no GPU".into()),
+            None => SimBackend::unavailable(self.gpu_state.sim_reason().into()),
         }
     }
 
@@ -574,6 +591,11 @@ impl Core {
         if gpu.is_none() {
             self.note("no GPU found; running on the CPU");
         }
+        self.gpu_state = if gpu.is_some() {
+            GpuState::Found
+        } else {
+            GpuState::NoneFound
+        };
         self.gpu = gpu;
         self.note_gpu();
         for i in 0..self.screens.len() {
@@ -603,6 +625,7 @@ impl Core {
     /// stepped on the CPU until a new device is attached.
     pub fn gpu_lost(&mut self) {
         self.gpu = None;
+        self.gpu_state = GpuState::Lost;
         for s in &mut self.screens {
             s.stage.rebuild();
         }
@@ -719,9 +742,10 @@ impl Core {
         autostart::set(on, &autostart::login_command()?)
     }
 
-    /// Whether screen `s` is left unseen: a window screen of a host started at login.
+    /// Whether screen `s` is left unseen: a window screen of a host started at login, or a
+    /// screen whose monitor isn't connected and has nowhere else to show (#130).
     pub fn hidden(&self, s: &Screen) -> bool {
-        self.login && s.place != Place::Wallpaper
+        (self.login && s.place != Place::Wallpaper) || s.unseen
     }
 
     /// Shows every screen as a wallpaper, or back in a window (saved).
@@ -806,6 +830,18 @@ impl Core {
             self.still_at = now;
             self.refresh_still();
         }
+        if now - self.guard_at >= GUARD_CHECK {
+            self.guard_at = now;
+            let on = jetcarp_core::photosensitivity::guard_on(GuardPlace::Desktop);
+            if on != self.desktop_guard {
+                self.desktop_guard = on;
+                self.note(if on {
+                    "the strobe guard is on for the desktop background and the screen saver"
+                } else {
+                    "the strobe guard was turned off for the desktop background and the screen saver"
+                });
+            }
+        }
         if self.local_holds.contains(WARNING_HOLD) && now - self.warning_at >= WARNING_CHECK {
             self.warning_at = now;
             self.check_warning();
@@ -825,7 +861,8 @@ impl Core {
         let login = self.login;
         for (s, pacer) in self.screens.iter_mut().zip(pacers) {
             s.due = false;
-            if login && s.place != Place::Wallpaper {
+            // Nobody can see it: neither stepped nor drawn (#130).
+            if (login && s.place != Place::Wallpaper) || s.unseen {
                 continue;
             }
             s.stage.set_pacer(pacer);
@@ -843,6 +880,11 @@ impl Core {
         for n in notes {
             self.note(n);
         }
+    }
+
+    /// Whether the strobe guard is on for the desktop background and the screen saver.
+    pub fn desktop_guard_on(&self) -> bool {
+        self.desktop_guard
     }
 
     /// The pause rules: on battery, and while the processor is busy with something else.
@@ -907,17 +949,25 @@ impl Core {
             "monitors": self.monitors,
             "monitor_hz": self.monitor_hz,
             "gpu": self.gpu.as_ref().map(|g| g.adapter.get_info().name),
+            "gpu_state": self.gpu_state.word(),
             "fps": self.settings.fps,
             "pacing": self.settings.pacing,
             "max_fps": self.settings.max_fps,
             "caption": self.settings.caption,
             "run_at_login": autostart::enabled(),
+            // On unless turned off in the app's Settings → Safety; each screen's stage says what
+            // it is doing there.
+            "strobe_guard": json!({
+                "on": self.desktop_guard,
+                "for": GuardPlace::Desktop.words(),
+            }),
             "rotations": rotation_names(),
             "login": self.login,
             "screens": self.screens.iter().map(|s| json!({
                 "monitor": s.monitor,
                 "place": s.place,
                 "hidden": self.hidden(s),
+                "waiting_for_monitor": s.unseen,
                 "frames": s.frames,
                 "stage": s.stage.status(),
                 // What its world steps on now, and why, as the settings say since they last
@@ -1308,9 +1358,58 @@ fn still_png(s: &Screen, image: &jetcarp_core::render::Image) -> Result<Vec<u8>,
     jetcarp_core::media::encode::png_with_text(image, &meta)
 }
 
+/// Where the host is with its GPU (#141).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GpuState {
+    /// Not looked for yet: the GPU is opened with the first window shown, so a host started at
+    /// login with nothing to show yet has none open.
+    NotOpened,
+    Found,
+    /// Looked for, and none could be used.
+    NoneFound,
+    /// Lost (a driver reset, sometimes after sleep), until a new device is attached.
+    Lost,
+}
+
+impl GpuState {
+    /// As `status` gives it: `not_opened`, `found`, `none_found` or `lost`.
+    pub fn word(self) -> &'static str {
+        match self {
+            GpuState::NotOpened => "not_opened",
+            GpuState::Found => "found",
+            GpuState::NoneFound => "none_found",
+            GpuState::Lost => "lost",
+        }
+    }
+
+    /// Why a screen steps on the processor when there is no GPU to step on.
+    pub fn sim_reason(self) -> &'static str {
+        match self {
+            GpuState::NotOpened => "the GPU is opened when the scene is first shown",
+            GpuState::Lost => "the GPU was lost, until it is back",
+            GpuState::Found | GpuState::NoneFound => "no GPU",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{hold_reasons, made_from, pause_reasons, retune_wanted};
+    use super::{GpuState, hold_reasons, made_from, pause_reasons, retune_wanted};
+
+    /// A screen of a host that hasn't opened its GPU yet says so, not "no GPU" (#141).
+    #[test]
+    fn a_screen_says_why_it_has_no_gpu() {
+        assert_eq!(
+            GpuState::NotOpened.sim_reason(),
+            "the GPU is opened when the scene is first shown"
+        );
+        assert_eq!(
+            GpuState::Lost.sim_reason(),
+            "the GPU was lost, until it is back"
+        );
+        assert_eq!(GpuState::NoneFound.sim_reason(), "no GPU");
+        assert_eq!(GpuState::NotOpened.word(), "not_opened");
+    }
     use jetcarp_display::host_settings::{HostSettings, Place, ScreenSettings, Tuning};
     use jetcarp_display::{profiles, rotation};
 

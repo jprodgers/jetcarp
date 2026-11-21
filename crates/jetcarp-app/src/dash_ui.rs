@@ -661,11 +661,17 @@ fn make_anim(
         (0..ANIM_FRAMES).map(|k| k * n / ANIM_FRAMES).collect()
     };
     let step = (n as f64 / pick.len().max(1) as f64).max(1.0);
+    let delay = (anim.delay_ms as f64 * step).round() as u32;
+    let picked: Vec<jetcarp_core::render::Image> =
+        pick.into_iter().map(|k| anim.frames[k].clone()).collect();
+    // The strobe guard (#149): frames that flash play softened.
+    let (frames, delay) = crate::strobe_cpu::guard_frames(picked, delay);
     Ok((
-        pick.into_iter()
-            .map(|k| thumbs::color_image(&anim.frames[k], ANIM_SIDE))
+        frames
+            .iter()
+            .map(|f| thumbs::color_image(f, ANIM_SIDE))
             .collect(),
-        (anim.delay_ms as f64 * step).round() as u32,
+        delay,
     ))
 }
 
@@ -837,6 +843,8 @@ pub struct DashWindow {
     pub palette: Option<String>,
     /// Imported packs' feed names, by manifest (read once each from the library).
     pack_names: HashMap<String, String>,
+    /// Finds chosen to play while motion is reduced (#218).
+    stills: crate::a11y::Stills,
 }
 
 impl Default for DashWindow {
@@ -860,6 +868,7 @@ impl Default for DashWindow {
             pending_select: None,
             palette: None,
             pack_names: HashMap::new(),
+            stills: Default::default(),
         }
     }
 }
@@ -1095,11 +1104,14 @@ impl DashWindow {
         });
         for (m, err, _) in &self.messages {
             ui.colored_label(
-                if *err {
-                    Color32::LIGHT_RED
-                } else {
-                    Color32::LIGHT_GREEN
-                },
+                crate::theme::ink(
+                    ui,
+                    if *err {
+                        Color32::LIGHT_RED
+                    } else {
+                        Color32::LIGHT_GREEN
+                    },
+                ),
                 m,
             );
         }
@@ -1192,7 +1204,7 @@ impl DashWindow {
             );
         });
         if let Some(e) = &self.form_error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
     }
 
@@ -1223,7 +1235,7 @@ impl DashWindow {
                             }
                             ui.label(&j.kind_label);
                             let (txt, col) = status_label(j);
-                            ui.colored_label(col, txt);
+                            ui.colored_label(crate::theme::ink(ui, col), txt);
                             // A pack's hunt may name no rules of its own.
                             let title = if j.title.is_empty() && j.imported_from.is_some() {
                                 "from a pack".to_string()
@@ -1323,7 +1335,7 @@ impl DashWindow {
                     .size(15.0),
             );
             let (txt, col) = status_label(j);
-            ui.colored_label(col, txt);
+            ui.colored_label(crate::theme::ink(ui, col), txt);
             ui.label(RichText::new(&j.title).weak());
         });
         if j.resumable && !j.deterministic {
@@ -1336,7 +1348,7 @@ impl DashWindow {
             );
         }
         if let Some(e) = &j.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         if let Some(pack) = &j.imported_from {
             let name = self.pack_name(pack);
@@ -1595,7 +1607,7 @@ impl DashWindow {
     fn finds_ui(&mut self, ui: &mut egui::Ui, d: &Detail) -> Option<Cmd> {
         let mut cmd = None;
         if let Some(e) = &d.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         ui.horizontal_wrapped(|ui| {
             if d.rules.is_empty() {
@@ -1663,9 +1675,15 @@ impl DashWindow {
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.set_width(w);
             ui.vertical(|ui| {
-                let (rect, _) = ui.allocate_exact_size(egui::vec2(w, w * 0.8), Sense::hover());
+                let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, w * 0.8), Sense::click());
+                // With reduced motion, a still until it is clicked (#218).
+                let key = key_of(&f.target);
+                let time = self.stills.time(&resp, &key, time);
                 let anims = self.anims.as_mut();
                 let tex = anims.and_then(|a| a.frame_at(&f.target, time));
+                if tex.is_some() {
+                    self.stills.mark(ui, &resp, &key);
+                }
                 let p = ui.painter_at(rect);
                 p.rect_filled(rect, 2.0, Color32::from_gray(20));
                 match tex {

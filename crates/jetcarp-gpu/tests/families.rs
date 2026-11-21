@@ -1,8 +1,8 @@
-//! CPU vs GPU for the families the world stepper gained in 0.4.2. Every generation must give
-//! the same states, ages, grain counts, generation, step counters and hash (and, for JACA, the
-//! same annihilation glow and counts) on lattices and patches, with every edge, in chunks of
-//! several sizes, through scripts, reseeds and period detection. Skipped (with a note) when no
-//! GPU adapter is available.
+//! CPU vs GPU for the families the world stepper gained in 0.4.2. Every generation must give the
+//! same states, ages, grain counts, generation, step counters and hash (and, for JACA, the same
+//! annihilation glow and counts) on lattices and patches, with every edge, in chunks of several
+//! sizes, through scripts, reseeds and period detection. Skipped (with a note) when no GPU adapter
+//! is available, failed under `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::reseed::{AutoReseed, ReseedMode, ReseedWhen};
 use jetcarp_core::rules::Rule;
@@ -19,7 +19,7 @@ fn gpu() -> Option<MutexGuard<'static, GpuSim>> {
             Some(Mutex::new(s))
         }
         Err(e) => {
-            eprintln!("note: skipping GPU family tests: {e}");
+            jetcarp_gpu::no_gpu("GPU family tests", &e);
             None
         }
     });
@@ -257,6 +257,65 @@ fn jaca_glow_and_counts() {
     }
 }
 
+/// A settled policy with a cooldown that looks for a steady cycle fires at the same generations,
+/// with the same version 2 hash after every generation, on the CPU, on the GPU, and on the GPU
+/// while every generation's changes are counted: its decision reads only the generations it
+/// measured itself.
+#[test]
+fn settled_policies_fire_alike_on_the_gpu() {
+    let Some(mut sim) = gpu() else { return };
+    let mut sc = scene(
+        TilingSpec::rect("square", 16, 16, Boundary::Wrap),
+        vec![ca("B3/S23", None, SeedSpec::Random { density: 0.3 })],
+    );
+    sc.reseed = vec![
+        AutoReseed::new(
+            ReseedMode::rain(),
+            ReseedWhen::Settled {
+                activity: 0.0,
+                for_gens: 6,
+                cycle: Some(6),
+                period: None,
+                latest: Some(400),
+            },
+        )
+        .cooldown(40),
+    ];
+    let gens = 600;
+    let run = |w: &mut World, step: &mut dyn FnMut(&mut World)| -> (Vec<u64>, Vec<String>) {
+        let (mut at, mut hashes, mut fired) = (vec![], vec![], 0);
+        for _ in 0..gens {
+            step(w);
+            let f: u64 = w.reseed_status().iter().map(|s| s.fired).sum();
+            if f != fired {
+                at.push(w.generation);
+                fired = f;
+            }
+            hashes.push(w.hash_hex());
+        }
+        (at, hashes)
+    };
+    let mut cpu = World::from_scene(&sc).unwrap();
+    let want = run(&mut cpu, &mut |w| {
+        w.apply(Command::Step { gens: 1 }).unwrap();
+    });
+    assert!(want.0.len() >= 3, "fired at {:?}", want.0);
+    for tracked in [false, true] {
+        let mut gw = World::from_scene(&sc).unwrap();
+        gw.set_track_changes(tracked);
+        let mut on_cpu = 0;
+        let got = run(&mut gw, &mut |w| {
+            on_cpu += sim.step_mixed(w, 1).unwrap().cpu_gens;
+        });
+        assert_eq!(on_cpu, 0, "tracked {tracked}: fell back to the CPU");
+        assert_eq!(
+            got.0, want.0,
+            "tracked {tracked}: fired at other generations"
+        );
+        assert!(got.1 == want.1, "tracked {tracked}: the hashes differ");
+    }
+}
+
 /// Several JACA and other CAs, steps per generation, a script switching between them (the glow
 /// stays with its CA), reseeds of either sign, and period detection.
 #[test]
@@ -407,32 +466,134 @@ fn b0_rules() {
     }
 }
 
-/// B0 runs alternate complementary rules by the parity of the step count, so a GPU run that
+/// B0 rules follow their background's phase, which the step count gives, so a GPU run that
 /// starts on an odd tick (after a CPU generation), or with two steps per generation, must keep
-/// the parity.
+/// it: on a lattice, and on a patch, whose cells' background the GPU takes from the CPU.
 #[test]
 fn b0_from_an_odd_tick() {
     let Some(mut sim) = gpu() else { return };
-    for &rule in B0 {
-        for spg in [1, 2, 3] {
-            let sc = scene(
-                TilingSpec::rect("square", 32, 24, Boundary::Wrap),
-                vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(spg)],
-            );
-            let mut cpu = World::from_scene(&sc).unwrap();
-            let mut gw = World::from_scene(&sc).unwrap();
-            cpu.apply(Command::Step { gens: 1 }).unwrap();
-            gw.apply(Command::Step { gens: 1 }).unwrap();
-            assert_eq!(gw.cas[0].ticks, spg as u64);
-            let (_, on_cpu) = compare_worlds(
-                &mut sim,
-                &mut cpu,
-                &mut gw,
-                &[1, 2, 7, 50],
-                &format!("{rule} x{spg} from tick {spg}"),
-            );
-            assert_eq!(on_cpu, 0);
+    let tilings = [
+        TilingSpec::rect("square", 32, 24, Boundary::Wrap),
+        TilingSpec::rect("oct", 12, 12, Boundary::Dead),
+        TilingSpec::new("hat").with_size(SizeSpec::Level(3)),
+    ];
+    for t in &tilings {
+        for &rule in B0.iter().chain(&["B03/S238"]) {
+            for spg in [1, 2, 3] {
+                let sc = scene(
+                    t.clone(),
+                    vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(spg)],
+                );
+                let mut cpu = World::from_scene(&sc).unwrap();
+                let mut gw = World::from_scene(&sc).unwrap();
+                cpu.apply(Command::Step { gens: 1 }).unwrap();
+                gw.apply(Command::Step { gens: 1 }).unwrap();
+                assert_eq!(gw.cas[0].ticks, spg as u64);
+                let (_, on_cpu) = compare_worlds(
+                    &mut sim,
+                    &mut cpu,
+                    &mut gw,
+                    &[1, 2, 7, 50],
+                    &format!("{rule} x{spg} on {} from tick {spg}", t.family),
+                );
+                assert_eq!(on_cpu, 0);
+            }
         }
+    }
+}
+
+/// A B0 world repeats only when its background's phase does too (#211), on the GPU as on the
+/// CPU: worlds whose stored cells come back with the background in another phase, on squares,
+/// 4.8.8 and a hat patch, report the same status, at the same generation.
+#[test]
+fn b0_repeats_match_the_cpu() {
+    let Some(mut sim) = gpu() else { return };
+    let cases = [
+        (
+            TilingSpec::rect("square", 8, 8, Boundary::Wrap),
+            "B014/S2",
+            10,
+        ),
+        (
+            TilingSpec::rect("square", 8, 8, Boundary::Wrap),
+            "B013/S1",
+            26,
+        ),
+        (TilingSpec::rect("oct", 8, 8, Boundary::Wrap), "B0/S8", 3),
+        (
+            TilingSpec::new("hat").with_size(SizeSpec::Level(2)),
+            "B014/S2",
+            17,
+        ),
+    ];
+    for (t, rule, seed) in cases {
+        let mk = || {
+            let mut w = World::new(t.clone(), seed).unwrap();
+            w.add_ca(CaSpec::new(rule).seed(SeedSpec::Random { density: 0.3 }))
+                .unwrap();
+            w
+        };
+        let (mut cpu, mut gw) = (mk(), mk());
+        let what = format!("{rule} on {} seed {seed}", t.family);
+        let (_, on_cpu) = compare_worlds(&mut sim, &mut cpu, &mut gw, &[1, 7, 9, 31, 80], &what);
+        assert_eq!(on_cpu, 0, "{what}");
+        assert!(
+            matches!(cpu.status(), Status::Repeats { .. }),
+            "{what}: {:?}",
+            cpu.status()
+        );
+    }
+}
+
+/// B0 rules where the tiles have different numbers of neighbours and the survival list holds
+/// some of them (#171): on lattices with every edge, where the background is one state per tile
+/// type, and on patches, where each cell carries its own. The GPU must equal the CPU, also when
+/// the CPU goes on from where the GPU stopped (the background read back).
+#[test]
+fn b0_rules_on_mixed_tilings() {
+    let Some(mut sim) = gpu() else { return };
+    let lattices: &[(&str, u32, u32, &[&str])] = &[
+        (
+            "oct",
+            12,
+            12,
+            &["B0/S8", "B0/S4", "B03/S238", "B0123478/S01234678"],
+        ),
+        ("trihex", 10, 10, &["B0/S6V", "B03/S23V", "B0/S3V"]),
+        ("rhombitrihex", 8, 8, &["B03/S238", "B0/S8", "B0/S6"]),
+        ("snubsq", 8, 8, &["B03/S2,3,9"]),
+    ];
+    let mut cases: Vec<(TilingSpec, &str, &[u64])> = vec![];
+    for &(fam, w, h, rules) in lattices {
+        for b in BOUNDARIES {
+            for &rule in rules {
+                cases.push((TilingSpec::rect(fam, w, h, b), rule, CHUNKS));
+            }
+        }
+    }
+    for (fam, level) in [("penrose-rhomb", 4), ("hat", 3), ("spectre", 3)] {
+        for rule in [
+            "B0123478/S01234678",
+            "B0/S8",
+            "B03/S238",
+            "B014/S2",
+            "B0/S6",
+        ] {
+            let t = TilingSpec::new(fam).with_size(SizeSpec::Level(level));
+            cases.push((t, rule, &[1, 5, 40, 150]));
+        }
+    }
+    for (t, rule, chunks) in cases {
+        let what = format!("{rule} on {} {:?}", t.family, t.boundary);
+        let sc = scene(t, vec![ca(rule, None, SeedSpec::Random { density: 0.3 })]);
+        compare_gpu(&mut sim, &sc, chunks, &what);
+        // 37 generations on the GPU, then 20 on the CPU, equal 57 on the CPU.
+        let mut cpu = World::from_scene(&sc).unwrap();
+        let mut gw = World::from_scene(&sc).unwrap();
+        cpu.apply(Command::Step { gens: 57 }).unwrap();
+        assert_eq!(sim.step_mixed(&mut gw, 37).unwrap().cpu_gens, 0, "{what}");
+        gw.apply(Command::Step { gens: 20 }).unwrap();
+        same(&cpu, &gw, &format!("{what}: the CPU after the GPU"));
     }
 }
 

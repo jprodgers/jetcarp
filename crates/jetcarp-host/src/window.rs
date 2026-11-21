@@ -42,6 +42,39 @@ const NO_WALLPAPER_AT_LOGIN: &str = if cfg!(all(unix, not(target_os = "macos")))
 } else {
     "wallpaper is not available on this system yet. Started at login, the host shows nothing."
 };
+/// When the extension's files are installed already (setup installs them), GNOME only has to
+/// load them, which it does at login: nothing is left to run (#139).
+const LOG_OUT_ONCE: &str = "wallpaper needs JETCARP's GNOME extension, which is installed: log out and back in once to load it. Showing a window for now.";
+const LOG_OUT_ONCE_AT_LOGIN: &str = "wallpaper needs JETCARP's GNOME extension, which is installed: log out and back in once to load it. Started at login, the host shows nothing until then.";
+
+/// Whether JETCARP's GNOME extension's files are installed (a look at one file).
+fn gnome_files() -> bool {
+    cfg!(all(unix, not(target_os = "macos"))) && jetcarp_display::gnome::installed()
+}
+
+/// The note for a wallpaper that shows in a window instead.
+fn no_wallpaper_note(login: bool, extension_files: bool) -> &'static str {
+    match (
+        cfg!(all(unix, not(target_os = "macos"))) && extension_files,
+        login,
+    ) {
+        (true, false) => LOG_OUT_ONCE,
+        (true, true) => LOG_OUT_ONCE_AT_LOGIN,
+        (false, false) => NO_WALLPAPER,
+        (false, true) => NO_WALLPAPER_AT_LOGIN,
+    }
+}
+
+/// What a window standing in for the wallpaper adds to its title, so it says why it is a window.
+fn stand_in_title(rotation: &str, extension_files: bool) -> String {
+    if cfg!(all(unix, not(target_os = "macos"))) && extension_files {
+        format!("JETCARP: {rotation} (log out and back in once to show it on the desktop)")
+    } else if cfg!(all(unix, not(target_os = "macos"))) {
+        format!("JETCARP: {rotation} (the desktop wallpaper needs JETCARP's GNOME extension)")
+    } else {
+        format!("JETCARP: {rotation}")
+    }
+}
 /// How long to keep trying to get under the desktop icons (Explorer may be restarting).
 #[cfg(windows)]
 const DESKTOP_PATIENCE: f64 = 15.0;
@@ -168,7 +201,8 @@ struct App {
     #[cfg(windows)]
     had_desktop: bool,
     /// A wallpaper was shown in a plain window and the reason has been noted.
-    noted_fallback: bool,
+    /// The note said while the wallpaper shows in a window, to take back when it no longer does.
+    noted_fallback: Option<&'static str>,
     noted_starved: bool,
     /// `JETCARP_HOST_TEST_LOSE_GPU` has lost the device once.
     lost_on_purpose: bool,
@@ -189,10 +223,14 @@ impl App {
     }
 
     fn title(&self, t: Target) -> String {
+        let rotation = self.core.screens[t.screen].stage.rotation();
         if t.wallpaper {
             self.core.wallpaper_title(t.screen)
+        } else if self.core.screens[t.screen].place == Place::Wallpaper {
+            // A window standing in for the wallpaper says why (#139).
+            stand_in_title(rotation, gnome_files())
         } else {
-            format!("JETCARP: {}", self.core.screens[t.screen].stage.rotation())
+            format!("JETCARP: {rotation}")
         }
     }
 
@@ -425,9 +463,13 @@ impl App {
         let (body, surface) = self.make_body(el, target)?;
         let gpu = self.gpu_for(&surface)?;
         let caps = surface.get_capabilities(&gpu.adapter);
-        let config = painter::surface_config(&caps, body.size())?;
+        let mut config = painter::surface_config(&caps, body.size())?;
+        // The strobe guard reads each frame where it is drawn, if the surface lets it.
+        let readable = painter::readable(&mut config, &caps, &gpu.adapter);
         surface.configure(&gpu.device, &config);
-        let mut painter = Painter::new(&gpu.device, config.format);
+        let mut painter =
+            Painter::guarded(&gpu.device, config.format, self.core.desktop_guard_on());
+        painter.set_readable(readable);
         painter.insets = self.caption_insets(el, target);
         Ok(Output {
             painter,
@@ -469,6 +511,15 @@ impl App {
             return;
         }
         let wanted = self.targets(el);
+        // A host's screen that no surface shows (its monitor has gone and it could not move) is
+        // held, not stepped and drawn for nobody (#130). A login host's window screens are
+        // already unseen by their own rule.
+        if self.mode == Mode::Host {
+            let unseen = targets::unseen(&wanted, self.core.screens.len());
+            for (s, u) in self.core.screens.iter_mut().zip(unseen) {
+                s.unseen = u && !(self.core.login && s.place != Place::Wallpaper);
+            }
+        }
         let mut old: Vec<Option<Output>> = std::mem::take(&mut self.outputs)
             .into_iter()
             .map(Some)
@@ -529,18 +580,13 @@ impl App {
             }
         }
         let showing = !self.core.wants_wallpaper() || self.core.shell() != Shell::Gone;
-        let note = if self.core.login {
-            NO_WALLPAPER_AT_LOGIN
-        } else {
-            NO_WALLPAPER
-        };
         if showing {
-            if self.noted_fallback {
-                self.noted_fallback = false;
+            if let Some(note) = self.noted_fallback.take() {
                 self.core.retract(note);
             }
-        } else if !self.noted_fallback {
-            self.noted_fallback = true;
+        } else if self.noted_fallback.is_none() {
+            let note = no_wallpaper_note(self.core.login, gnome_files());
+            self.noted_fallback = Some(note);
             self.core.note(note);
         }
     }
@@ -732,11 +778,11 @@ impl App {
             }
         };
         o.starved_since = None;
-        let view = frame.texture.create_view(&Default::default());
+        o.painter.set_guard_on(self.core.desktop_guard_on());
         o.painter.paint(
             &gpu.device,
             &gpu.queue,
-            &view,
+            &frame.texture,
             [o.config.width, o.config.height],
             o.body.scale() as f32,
             &screen.stage,
@@ -749,6 +795,19 @@ impl App {
             w.pre_present_notify();
         }
         gpu.queue.present(frame);
+        // What the strobe guard asks of the stage: a pace cap, or a pause; and what it did.
+        let (cap, paused) = o.painter.guard_hold();
+        let (id, report) = (o.painter.id(), o.painter.guard_report());
+        let notes = o.painter.take_guard_notes();
+        let screen_i = o.target.screen;
+        if let Some(screen) = self.core.screens.get_mut(screen_i) {
+            screen.stage.set_guard(id, now, cap, paused);
+            screen.stage.set_guard_report(report);
+        }
+        for n in notes {
+            self.core
+                .note(format!("screen {screen_i}: strobe guard: {n}"));
+        }
     }
 
     /// Notes GPU errors, and starts again on a new device when the old one was lost.
@@ -1030,7 +1089,7 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
         desktop_failing_since: None,
         #[cfg(windows)]
         had_desktop: false,
-        noted_fallback: false,
+        noted_fallback: None,
         noted_starved: false,
         pointer_from: None,
         #[cfg(any(windows, target_os = "macos"))]
@@ -1074,4 +1133,29 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
     };
     // `app` keeps the device and the instance: they end with the process.
     jetcarp_display::exit::end_process(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{no_wallpaper_note, stand_in_title};
+
+    /// With the extension's files installed, as setup leaves them, the note and the stand-in
+    /// window say to log out once, not to run an install that has been done (#139).
+    #[test]
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn a_window_standing_in_for_the_wallpaper_says_to_log_out_once() {
+        assert!(
+            no_wallpaper_note(false, true).contains("which is installed: log out and back in once")
+        );
+        assert!(no_wallpaper_note(true, true).contains("Started at login"));
+        assert!(no_wallpaper_note(false, false).contains("run `jetcarp host gnome install`"));
+        assert_eq!(
+            stand_in_title("Desktop art", true),
+            "JETCARP: Desktop art (log out and back in once to show it on the desktop)"
+        );
+        assert_eq!(
+            stand_in_title("Desktop art", false),
+            "JETCARP: Desktop art (the desktop wallpaper needs JETCARP's GNOME extension)"
+        );
+    }
 }

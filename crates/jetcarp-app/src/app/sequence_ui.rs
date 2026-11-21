@@ -257,7 +257,7 @@ impl JetcarpApp {
                     }
                 });
                 if !live && self.script_edit.is_some() {
-                    ui.colored_label(Color32::YELLOW, "Edited: apply to use these steps.");
+                    ui.colored_label(crate::theme::ink(ui, Color32::YELLOW), "Edited: apply to use these steps.");
                 }
                 if live
                     && let (Some(s), false) = (&self.world.script, self.world.script_state.finished)

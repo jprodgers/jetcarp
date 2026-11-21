@@ -236,7 +236,7 @@ fn a_whole_session_over_stdio() {
         json!({"action": "wallpaper"}),
     ));
     assert!(
-        e.contains("won't start or show scenes in the background host") && e.contains("B0"),
+        e.contains("won't start or show scenes in the background host") && e.contains("Hodgepodge"),
         "{e}"
     );
     assert!(e.contains("photosensitive seizure warning"), "{e}");

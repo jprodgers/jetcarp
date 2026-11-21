@@ -171,6 +171,151 @@ impl Op for SystemPaths {
     }
 }
 
+/// One of the strobe guard's switches (#97).
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct GuardSwitch {
+    /// Where it applies, in words.
+    pub applies_to: String,
+    pub on: bool,
+    /// When it was turned off (UTC), and by which JETCARP.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub off_since: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub off_by: Option<String>,
+}
+
+/// The strobe guard's switches, as saved with the photosensitive seizure warning's answer.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct StrobeGuardStatus {
+    /// The warning's answer: `no_disorder` or `at_risk`; none before it has been answered.
+    pub answer: Option<String>,
+    /// The app: its view, full screen, outputs, previews and exported animations.
+    pub app: GuardSwitch,
+    /// The desktop background and the screen saver.
+    pub desktop: GuardSwitch,
+    /// Whether a switch can be turned off at all: only after the answer *no disorder*, and only
+    /// in the app.
+    pub can_turn_off: bool,
+    /// How a switch is turned off.
+    pub how: String,
+    /// The viewing the area rule assumes: millimetres away, pixels an inch at a scale of 1, and
+    /// the 10° field that makes, in pixels across.
+    pub viewing_distance_mm: f64,
+    pub reference_dpi: f64,
+    pub field_px: f64,
+}
+
+impl Report for StrobeGuardStatus {
+    fn text(&self) -> String {
+        let mut s = String::from("strobe guard\n");
+        for sw in [&self.app, &self.desktop] {
+            let _ = write!(
+                s,
+                "  {}: {}",
+                sw.applies_to,
+                if sw.on { "on" } else { "off" }
+            );
+            if let (Some(d), Some(v)) = (&sw.off_since, &sw.off_by) {
+                let _ = write!(s, " (turned off {d}, JETCARP {v})");
+            }
+            s.push('\n');
+        }
+        let answer = match self.answer.as_deref() {
+            Some("no_disorder") => "no epilepsy or seizure disorder",
+            Some("at_risk") => "has, or may have, a seizure disorder: the guard is always on",
+            _ => "the photosensitive seizure warning has not been answered yet",
+        };
+        let _ = writeln!(s, "answer: {answer}");
+        let _ = writeln!(s, "{}", self.how);
+        s
+    }
+}
+
+fn guard_status(settings: Option<&Path>) -> StrobeGuardStatus {
+    use jetcarp_core::photosensitivity::{self as ps, Answer, GuardPlace};
+    let rec = settings.and_then(ps::read_in);
+    let switch = |place: GuardPlace| {
+        let off = rec.as_ref().and_then(|r| match place {
+            GuardPlace::App => r.guard_off.clone(),
+            GuardPlace::Desktop => r.desktop_guard_off.clone(),
+        });
+        let on = rec.as_ref().is_none_or(|r| r.guard_on(place));
+        GuardSwitch {
+            applies_to: place.words().to_string(),
+            on,
+            off_since: off.as_ref().filter(|_| !on).map(|o| o.date.clone()),
+            off_by: off.filter(|_| !on).map(|o| o.jetcarp),
+        }
+    };
+    let v = jetcarp_core::strobe::Viewing::screen(1.0);
+    StrobeGuardStatus {
+        answer: rec.as_ref().map(|r| r.answer.name().to_string()),
+        app: switch(GuardPlace::App),
+        desktop: switch(GuardPlace::Desktop),
+        can_turn_off: rec.as_ref().is_some_and(|r| r.answer == Answer::NoDisorder),
+        how: ps::GUARD_HOW.to_string(),
+        viewing_distance_mm: jetcarp_core::strobe::VIEWING_DISTANCE_MM,
+        reference_dpi: jetcarp_core::strobe::REFERENCE_DPI,
+        field_px: (v.field_px * 10.0).round() / 10.0,
+    }
+}
+
+/// `system.strobe_guard`.
+pub struct SystemStrobeGuard;
+impl Op for SystemStrobeGuard {
+    const NAME: &'static str = "system.strobe_guard";
+    const SUMMARY: &'static str = "The strobe guard's switches (on unless turned off in the app's Settings → Safety, which no tool can do), with the warning's answer.";
+    const READ_ONLY: bool = true;
+    type In = NoInput;
+    type Out = StrobeGuardStatus;
+    fn run(cx: &Ctx, _: NoInput, _: &dyn Progress) -> Result<StrobeGuardStatus, ApiError> {
+        Ok(guard_status(cx.paths().settings.as_deref()))
+    }
+}
+
+/// Input of `system.strobe_guard_on`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GuardOnIn {
+    /// `app`, `desktop`, or both when left out.
+    #[serde(default)]
+    pub place: Option<String>,
+}
+
+/// `system.strobe_guard_on`: turns the strobe guard back on. There is no operation that turns it
+/// off.
+pub struct SystemStrobeGuardOn;
+impl Op for SystemStrobeGuardOn {
+    const NAME: &'static str = "system.strobe_guard_on";
+    const SUMMARY: &'static str = "Turn the strobe guard back on, for the app, the desktop background and screen saver, or both. Only on: turning it off is the app's alone.";
+    const READ_ONLY: bool = false;
+    type In = GuardOnIn;
+    type Out = StrobeGuardStatus;
+    fn run(cx: &Ctx, i: GuardOnIn, _: &dyn Progress) -> Result<StrobeGuardStatus, ApiError> {
+        use jetcarp_core::photosensitivity::{self as ps, GuardPlace};
+        let places = match i.place.as_deref() {
+            None | Some("both") => vec![GuardPlace::App, GuardPlace::Desktop],
+            Some("app") => vec![GuardPlace::App],
+            Some("desktop") => vec![GuardPlace::Desktop],
+            Some(p) => {
+                return Err(ApiError::invalid(format!(
+                    "{p:?} is not a place: give app, desktop or both"
+                )));
+            }
+        };
+        let settings = cx.paths().settings;
+        if let Some(dir) = settings.as_deref() {
+            for p in places {
+                // With no answer yet the guard is on already: nothing to save.
+                if ps::read_in(dir).is_some() {
+                    ps::set_guard_in(dir, p, true).map_err(ApiError::io)?;
+                }
+            }
+        }
+        Ok(guard_status(settings.as_deref()))
+    }
+}
+
 /// Folders in the doctor's report.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct DoctorFolders {
@@ -568,6 +713,9 @@ pub struct UninstallReport {
     pub kept_settings: Option<PathBuf>,
     /// The publisher's files `--settings` keeps (without `--publisher-key`), when there are any.
     pub kept_publisher: Option<KeptPublisher>,
+    /// Folders `--settings` or `--data` asked to delete that were not there to delete, as
+    /// sentences (#144): "the settings folder … is already gone".
+    pub already_gone: Vec<String>,
     /// The output folder (never deleted).
     pub output: PathBuf,
     /// How this program was installed, and what removes it; none when that can't be told.
@@ -707,13 +855,15 @@ fn installer_commands(folder: &Path, windows: bool) -> Vec<String> {
     });
     if windows {
         let mut run =
-            "powershell -ExecutionPolicy Bypass -File .\\jetcarp-installer.ps1 -Uninstall"
+            "powershell -ExecutionPolicy Bypass -File \"$env:TEMP\\jetcarp-installer.ps1\" -Uninstall"
                 .to_string();
         if !same {
             let _ = write!(run, " -InstallDir {}", quoted(folder, true));
         }
         vec![
-            format!("Invoke-WebRequest {INSTALLER_URL}.ps1 -OutFile jetcarp-installer.ps1"),
+            format!(
+                "Invoke-WebRequest {INSTALLER_URL}.ps1 -OutFile \"$env:TEMP\\jetcarp-installer.ps1\""
+            ),
             run,
         ]
     } else {
@@ -747,8 +897,17 @@ impl Report for UninstallReport {
             "This undoes what JETCARP set up outside its folders. It never removes the program \
              itself, and deletes its settings and data only when asked (--settings, --data).\n\n",
         );
+        // A folder asked for that was already gone is said, so a repeated `--settings --data` does
+        // not read as if the options were ignored (#144).
+        for g in &self.already_gone {
+            let _ = writeln!(s, "Already gone: {g}.");
+        }
         if self.steps.is_empty() {
-            s.push_str("Nothing to undo: JETCARP has not set anything up outside its folders.\n");
+            s.push_str(if self.already_gone.is_empty() {
+                "Nothing to undo: JETCARP has not set anything up outside its folders.\n"
+            } else {
+                "Nothing else to undo: JETCARP has not set anything up outside its folders.\n"
+            });
         } else {
             s.push_str(if self.done {
                 "Undoing:\n"
@@ -1505,6 +1664,17 @@ impl Op for SystemUninstall {
         } else {
             steps.extend(settings_step.into_iter().chain(data_step));
         }
+        // Before any step runs, so the folders this run deletes are not counted.
+        let gone = |p: &Path| std::fs::symlink_metadata(p).is_err();
+        let mut already_gone = Vec::new();
+        if a.settings
+            && let Some(c) = paths.settings.as_deref().filter(|c| gone(c))
+        {
+            already_gone.push(format!("the settings folder {} (--settings)", c.display()));
+        }
+        if a.data && gone(&data) {
+            already_gone.push(format!("the data folder {} (--data)", data.display()));
+        }
         let steps = steps
             .into_iter()
             .map(|(what, run)| {
@@ -1543,6 +1713,7 @@ impl Op for SystemUninstall {
             kept_data,
             kept_settings,
             kept_publisher,
+            already_gone,
             output: paths.output,
             installed_with: jetcarp_core::paths::program_path()
                 .and_then(|exe| installed_with(&exe, cfg!(windows))),

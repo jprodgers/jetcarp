@@ -161,9 +161,33 @@ switches on. Without survival on the maximum count it switches off again next ge
 whole picture flashes. Golly avoids this by running such a rule as two complementary rules that
 alternate on even and odd generations, so that what you see is the rule's real behaviour without the
 strobing ([Golly: QuickLife](../research/bibliography.md#gollynd_quicklife)); Golly credits David
-Eppstein with the idea ([Golly credits](../research/bibliography.md#gollynd_credits)). JETCARP does
-the same, and its tests check the result against running the rule by brute force. B0 rules also run
-under HashLife and on the GPU.
+Eppstein with the idea ([Golly credits](../research/bibliography.md#gollynd_credits)).
+
+JETCARP keeps each cell relative to the **background**, the rule run from an empty world: a cell is
+lit where the real state differs from what the empty world has there. Empty space stays dark, and
+each step works out the real states, applies the rule and keeps the result against the next
+background, which is exact on any tiling. Where every tile has the same number of neighbours, the
+background is all dead and all live in turn (or live for good from the first step, when the rule
+survives on that number), and this is Golly's alternation, step for step. Where the tiles have
+different numbers of neighbours, as on 4.8.8 (4 and 8) or an aperiodic tiling, the background can
+differ from tile to tile: on a periodic tiling it is one state per tile type, repeating after a few
+generations; on an aperiodic patch, whose edge tiles have fewer neighbours than the inner ones, it is
+kept for every tile and need not settle. What you see is then the difference from the empty world,
+so where the background flashes, a still pattern flashes with it. Before 0.4.3 JETCARP used the
+alternation on every tiling, which gave wrong results from the third generation where the survival
+list held some of the tiles' neighbour counts but not all.
+
+A neighbour past a dead edge counts as background, as if the tiling went on, empty; past a live
+edge it counts as live. A B0 world counts as repeating only when its cells come back with the
+background in the same phase too, since with the background in another phase the next steps
+differ: on squares, a pattern kept still against an alternating background repeats with period 2,
+as the real cells do. On a patch whose background does not repeat within a few thousand
+generations, no repeat is reported.
+
+The tests check the result against running the rule by brute force: on wrapped squares, hexagons
+and Cairo pentagons, on wrapped 4.8.8, 3.6.3.6, 3.4.6.4, 3.3.4.3.4 and 4.6.12, on squares, 4.8.8 and
+3.4.6.4 with dead and live edges, and on Penrose rhombs and the hat. B0 rules also run on the GPU,
+with the same results, and under HashLife on wrap-edge lattices.
 
 ### Speed
 

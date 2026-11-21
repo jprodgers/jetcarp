@@ -248,9 +248,10 @@ version is not part of a record's id.
 
 | Family | Rules | Version |
 | --- | --- | --- |
-| `lifelike` | B/S: `B3/S23`, `B3/S23V` | 1 |
+| `lifelike` | B/S without birth on 0: `B3/S23`, `B3/S23V` | 1 |
+| `lifelike_b0` | B/S with birth on 0: `B0/S8`, `B014/S2` | 2 (a family of its own since 0.4.3, when these rules became exact on every tiling) |
 | `generations` | `B2/S/C3` | 1 |
-| `ltl` | Larger than Life: `R5,C2,S33-57,B34-45` | 1 |
+| `ltl` | Larger than Life: `R5,C2,S33-57,B34-45` | 2 (since 0.4.3: counts above the square grid's neighbourhood size kept) |
 | `elementary` | `W30` | 1 |
 | `hexw` | two-parent hexagon rows: `HexW 6`, `HexW3 1234` | 1 |
 | `hext` | three-parent hexagon rows: `HexT 30`, `HexT3 sum 777` | 1 |
@@ -273,9 +274,10 @@ version is not part of a record's id.
 | `table` | rule tables by name: `Table parity` | 1 |
 
 There is one family for each kind of rule the engine runs ([Rule notation](rule-notation.md) lists
-their forms), with two splits: B/S rules and Generations are apart, though a pattern's identity calls
-both `lifelike`; and an ant is a turn string (one state, each colour repainted the next), a turmite a
-state table. The families that the identity's `model` line names have the same names; its `other` is
+their forms), with three splits: B/S rules and Generations are apart, though a pattern's identity
+calls both `lifelike`; B/S rules with birth on 0 are apart from the others (their meaning changed in
+0.4.3, the others' did not); and an ant is a turn string (one state, each colour repainted the
+next), a turmite a state table. The families that the identity's `model` line names have the same names; its `other` is
 split here into its families.
 
 - **Records.** Every pattern carries its rule's family (`family`) and the version of that family's
@@ -283,8 +285,9 @@ split here into its families.
   version `1`.
 - **On opening.** A library flags (`needs_reverify`) every pattern whose version is not the running
   engine's for its family, or whose family the engine does not have, exactly as it flags a changed
-  pin (see [When the geometry changes](#when-the-geometry-changes)). `jetcarp library reverify`
-  checks them again; a pattern that passes gets the engine's version (and keeps its id).
+  pin (see [When the geometry changes](#when-the-geometry-changes)). A pattern of a B/S rule with
+  birth on 0 filed under `lifelike` (before 0.4.3) moves to `lifelike_b0` first. `jetcarp library
+  reverify` checks them again; a pattern that passes gets the engine's version (and keeps its id).
 - **Tests.** The test `crates/jetcarp-core/tests/semantics_pins.rs` runs one small fixed scene per
   family and pins the state it reaches, with the version it was pinned at
   (`tests/data/semantics_pins.txt`; see
@@ -464,6 +467,9 @@ it, and it comes from one of four sources:
   built-in's or a pack entry's is its handle, an atlas entry's `atlas-<8 hex>-<run id>`, and a
   promotion's that of what it was made from (a pattern's or ant's id, `sweep-<hash>`,
   `run-<8 hex>-<run id>`, `scene-<hash>`).
+- A built-in whose handle changed still opens by its old one: `rule:R4,C2,S40-80,B41-80` and
+  `rule:R7,C2,S112-224,B113-224` (Majority and Majorly before 0.4.3, now `…B41-81` and
+  `…B113-225`), so rotations and profiles that name them keep working.
 - `target_kind` and `target_id` say what an entry was made from: `pattern`, `ant`, `sweep_run`,
   `search_run` (`<search uuid>:<run id>`) or `scene`. A rating given in the menu goes to the pattern
   or ant run an entry was made from, and otherwise to the entry.

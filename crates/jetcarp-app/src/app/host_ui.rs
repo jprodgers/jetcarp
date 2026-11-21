@@ -808,7 +808,7 @@ impl JetcarpApp {
             h.ask(a, now);
         }
         if let Some(n) = &h.note {
-            ui.colored_label(WARN, n);
+            ui.colored_label(crate::theme::ink(ui, WARN), n);
         }
         if edit_rotations {
             self.shell.layout.show_pane("screensaver");
@@ -871,7 +871,7 @@ impl JetcarpApp {
             };
         }
         if let Some(n) = &h.note {
-            ui.colored_label(WARN, n);
+            ui.colored_label(crate::theme::ink(ui, WARN), n);
         }
     }
 }
@@ -1235,7 +1235,7 @@ fn performance_ui(
         });
     ui.horizontal_wrapped(|ui| {
         if view.running {
-            ui.spinner();
+            crate::a11y::spinner(ui);
             if ui.button("Cancel").clicked() {
                 stop = true;
             }
@@ -1291,7 +1291,7 @@ fn performance_ui(
         } else {
             ui.visuals().weak_text_color()
         };
-        ui.label(RichText::new(t).small().color(c));
+        ui.label(RichText::new(t).small().color(crate::theme::ink(ui, c)));
     }
     // The cards: each scene's saved sweep (choosable), and the scene on show (not yet).
     let ppp = ui.ctx().pixels_per_point();
@@ -1330,7 +1330,11 @@ fn performance_ui(
         });
         // Said once for the screen; each card shows the share as unknown (#72).
         if scenes.iter().any(|x| gpu_unmeasured(x)) {
-            ui.label(RichText::new(GPU_UNMEASURED).small().color(WARN));
+            ui.label(
+                RichText::new(GPU_UNMEASURED)
+                    .small()
+                    .color(crate::theme::ink(ui, WARN)),
+            );
         }
         for scene in scenes {
             if view
@@ -1354,7 +1358,11 @@ fn performance_ui(
         };
         ui.label(RichText::new("Measuring…").small().weak());
         if gpu_unmeasured(&scene) {
-            ui.label(RichText::new(GPU_UNMEASURED).small().color(WARN));
+            ui.label(
+                RichText::new(GPU_UNMEASURED)
+                    .small()
+                    .color(crate::theme::ink(ui, WARN)),
+            );
         }
         let _ = scene_row(ui, &ctx, ppp, *i, &scene, false, crop);
     }
@@ -1470,7 +1478,7 @@ fn scene_row(
         }
     });
     if let Some(n) = &scene.note {
-        ui.label(RichText::new(n).small().color(WARN));
+        ui.label(RichText::new(n).small().color(crate::theme::ink(ui, WARN)));
     }
     egui::ScrollArea::horizontal()
         .id_salt(("tune-cards", screen, &scene.scene))
@@ -1573,16 +1581,25 @@ fn card(
                         ui.label(
                             RichText::new("within the limits")
                                 .small()
-                                .color(Color32::from_rgb(110, 200, 120)),
+                                .color(crate::theme::ink(ui, Color32::from_rgb(110, 200, 120))),
                         );
                     } else {
-                        ui.label(RichText::new("over the limits").small().color(WARN))
-                            .on_hover_text(r.over.as_deref().unwrap_or(""));
+                        ui.label(
+                            RichText::new("over the limits")
+                                .small()
+                                .color(crate::theme::ink(ui, WARN)),
+                        )
+                        .on_hover_text(r.over.as_deref().unwrap_or(""));
                     }
                 });
                 ui.horizontal(|ui| {
                     if recommended {
-                        ui.label(RichText::new("Recommended").small().strong().color(accent));
+                        ui.label(
+                            RichText::new("Recommended")
+                                .small()
+                                .strong()
+                                .color(crate::theme::ink(ui, accent)),
+                        );
                     }
                     if r.own {
                         ui.label(RichText::new("its own size").small().weak());

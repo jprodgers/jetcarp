@@ -931,7 +931,7 @@ impl JetcarpApp {
             }
         });
         if let Some(e) = &self.reseed.error {
-            ui.colored_label(Color32::from_rgb(255, 110, 110), e);
+            ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(255, 110, 110)), e);
         }
         if self.reseed.drafts.is_empty() {
             ui.label(RichText::new("None. Add one, or pick a preset.").weak());
@@ -1010,7 +1010,10 @@ pub(super) fn policies_editor(
                 {
                     ui.label(RichText::new(status_text(p, st, generation)).small());
                     if let Some(e) = &st.error {
-                        ui.colored_label(Color32::from_rgb(255, 110, 110), e);
+                        ui.colored_label(
+                            crate::theme::ink(ui, Color32::from_rgb(255, 110, 110)),
+                            e,
+                        );
                     }
                 }
             });

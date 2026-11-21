@@ -5,7 +5,8 @@
 //! - Life-like and Generations rules, WireWorld, cyclic, rock-paper-scissors, Greenberg–Hastings,
 //!   hodgepodge, the Spectre glider, and priority tables (`jetcarp search evolve`)
 //! - JACA, with its annihilation glow and counts
-//! - B0 Life-like rules and Margolus blocks, which follow the step count's parity
+//! - B0 Life-like rules, stored relative to their background on any tiling, and Margolus blocks,
+//!   which follow the step count's parity
 //! - Larger than Life, its reach in an aux buffer
 //! - forest fire, with the CPU's 64-bit random numbers
 //! - sandpiles, with 64-bit grain totals and losses
@@ -28,6 +29,7 @@
 // No unsafe code here, and the compiler keeps it so: this crate takes in other people's data.
 #![forbid(unsafe_code)]
 
+use jetcarp_core::b0::Types;
 use jetcarp_core::jaca::JacaRule;
 use jetcarp_core::ltl::{Hood, Reach};
 use jetcarp_core::rules::{FieldKind, Rule};
@@ -214,7 +216,9 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
         ..Default::default()
     };
     match *rule {
-        // B0 Life-like rules alternate complementary rules, by the parity of the CA's step count.
+        // B0 Life-like rules are stored relative to their background (`jetcarp_core::b0`): per
+        // tile type on a lattice (an aux section, phases from the CA's step count), per cell in
+        // bit 8 of the cells' words on a patch.
         Rule::LifeLike { birth, survive } if birth & 1 == 1 => {
             (p.rule, p.birth, p.survive, p.states) = (R_B0, birth, survive, 2)
         }
@@ -284,6 +288,22 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
         _ => return Err(()),
     }
     Ok(p)
+}
+
+/// Whether the tests were told a usable GPU adapter must be there: `JETCARP_REQUIRE_GPU=1`. CI
+/// sets it where it expects one (Linux on Mesa's lavapipe, macOS on its own GPU).
+pub fn gpu_required() -> bool {
+    std::env::var("JETCARP_REQUIRE_GPU").is_ok_and(|v| v.trim() == "1")
+}
+
+/// For tests that need a GPU and found none they can use (`why`: no adapter, or the adapter
+/// found and why the self-test or the policy turned it down): skip with a note, or, when
+/// [`gpu_required`], fail, so that tests meant to run never pass without running.
+pub fn no_gpu(what: &str, why: &dyn std::fmt::Display) {
+    if gpu_required() {
+        panic!("{what}: JETCARP_REQUIRE_GPU=1, but there is no usable GPU adapter: {why}");
+    }
+    eprintln!("note: skipping {what}: {why}");
 }
 
 /// Can this rule run on the GPU?
@@ -392,6 +412,8 @@ struct GpuField {
     height: bool,
     /// The JACA CA (by id) whose annihilation glow the cells carry in bits 8-15.
     glow_owner: Option<u32>,
+    /// The B0 Life-like CA (by id) on a patch whose background the cells carry in bit 8.
+    bg_owner: Option<u32>,
 }
 
 /// One section of the aux buffer.
@@ -403,6 +425,46 @@ enum AuxKey {
     Table(Vec<u32>),
     /// A patch's open boundary cells, one bit each.
     Open,
+    /// A B0 Life-like rule's background on a lattice (neighbourhood, birth, survival): a word per
+    /// phase and tile type, its state ([`jetcarp_core::b0::Types`]).
+    Background(u8, u32, u32),
+}
+
+/// The CAs whose cells a field carries more than states for: the JACA CA's glow, and the B0
+/// Life-like CA's background on a patch (`check_plan` allows one of each).
+fn field_owners(world: &World, f: usize) -> (Option<u32>, Option<u32>) {
+    let explicit = matches!(world.topo.storage, Storage::Explicit(_));
+    let on = |want: &dyn Fn(&Rule) -> bool| {
+        world
+            .cas
+            .iter()
+            .find(|c| c.enabled && c.field == f && want(&c.rule))
+            .map(|c| c.id)
+    };
+    (
+        on(&|r| matches!(r, Rule::Jaca(_))),
+        on(&|r| explicit && is_b0_life(r)),
+    )
+}
+
+/// A Life-like rule with birth on 0.
+fn is_b0_life(rule: &Rule) -> bool {
+    matches!(rule, Rule::LifeLike { birth, .. } if birth & 1 == 1)
+}
+
+/// A B0 Life-like rule's background on a lattice.
+fn b0_types(topo: &Topology, ca: &jetcarp_core::world::CaInstance) -> Result<Types, String> {
+    let (Rule::LifeLike { birth, survive }, Some(g)) = (&ca.rule, topo.lattice()) else {
+        return Err("not a B0 Life-like rule on a lattice".into());
+    };
+    // The world's own, when it has one for this rule and neighbourhood.
+    if let Some(b) = ca.background.as_deref()
+        && (b.nb, b.birth, b.survive) == (ca.nb, *birth, *survive)
+        && let jetcarp_core::b0::Kind::Types(t) = &b.kind
+    {
+        return Ok(t.clone());
+    }
+    Types::new(g, ca.nb, *birth, *survive)
 }
 
 /// A Larger than Life reach as the shader reads it, with the most cells any cell reaches.
@@ -720,6 +782,7 @@ impl GpuSim {
         let mut any = false;
         let mut subs = vec![0usize; world.fields.len()];
         let mut jaca = vec![false; world.fields.len()];
+        let mut b0 = vec![false; world.fields.len()];
         let mut dispatches = 0usize;
         for ca in world.cas.iter().filter(|c| c.enabled) {
             any = true;
@@ -730,6 +793,23 @@ impl GpuSim {
                 || world.fields[ca.field].kind == FieldKind::Continuous
             {
                 return Err(cpu_only());
+            }
+            if p.rule == R_B0 {
+                match world.topo.storage {
+                    Storage::Lattice(_) => {
+                        b0_types(&world.topo, ca).map_err(|e| format!("{}: {e}", cpu_only()))?;
+                    }
+                    // A patch's background lives in the field's cells, so one per field.
+                    Storage::Explicit(_) => {
+                        if std::mem::replace(&mut b0[ca.field], true) {
+                            return Err(
+                                "two B0 Life-like CAs running on one field of a patch run on \
+                                 the CPU"
+                                    .into(),
+                            );
+                        }
+                    }
+                }
             }
             match ca.rule {
                 Rule::Jaca(ref j) => {
@@ -858,6 +938,9 @@ impl GpuSim {
                 }
                 Rule::Sandpile if explicit => add(AuxKey::Open),
                 Rule::Jaca(ref j) if j.blast > 0 => blast = true,
+                Rule::LifeLike { birth, survive } if birth & 1 == 1 && !explicit => {
+                    add(AuxKey::Background(ca.nb as u8, birth, survive))
+                }
                 _ => {}
             }
         }
@@ -888,6 +971,12 @@ impl GpuSim {
                         }
                     }
                     words.extend_from_slice(&bits);
+                }
+                AuxKey::Background(nb, birth, survive) => {
+                    let g = world.topo.lattice().ok_or("a patch has no tile types")?;
+                    let nb = [jetcarp_core::Nb::Touch, jetcarp_core::Nb::Edge][*nb as usize];
+                    let t = Types::new(g, nb, *birth, *survive)?;
+                    words.extend(t.states.iter().map(|&s| s as u32));
                 }
             }
         }
@@ -1157,22 +1246,23 @@ impl GpuSim {
     /// Make every running field resident and current; read back fields that stopped running.
     fn prepare_fields(&mut self, world: &mut World, plan: &ExternalPlan) -> Result<(), String> {
         let running = plan.running_fields.clone();
-        // The JACA CA whose glow each running field carries (`check_plan` allows one).
-        let owner = |f: usize| {
-            world
-                .cas
-                .iter()
-                .find(|c| c.enabled && c.field == f && matches!(c.rule, Rule::Jaca(_)))
-                .map(|c| c.id)
-        };
-        let owners: Vec<Option<u32>> = (0..world.fields.len()).map(owner).collect();
-        // Fields that stopped running, or whose glow changes hands, go back to the world first.
+        // The JACA CA whose glow, and the B0 CA whose background, each running field carries.
+        let owners: Vec<(Option<u32>, Option<u32>)> = (0..world.fields.len())
+            .map(|f| field_owners(world, f))
+            .collect();
+        // Fields that stopped running, or whose glow or background changes hands, go back to the
+        // world first.
         let moved: Vec<usize> = self.res.as_ref().map_or(vec![], |r| {
             r.fields
                 .iter()
                 .enumerate()
                 .filter_map(|(f, g)| g.as_ref().map(|g| (f, g)))
-                .filter(|(f, g)| g.valid && owners.get(*f).is_some_and(|o| *o != g.glow_owner))
+                .filter(|(f, g)| {
+                    g.valid
+                        && owners
+                            .get(*f)
+                            .is_some_and(|o| *o != (g.glow_owner, g.bg_owner))
+                })
                 .map(|(f, _)| f)
                 .collect()
         });
@@ -1230,15 +1320,36 @@ impl GpuSim {
                     dirty: false,
                     height,
                     glow_owner: None,
+                    bg_owner: None,
                 });
             }
             let gf = res.fields[fi].as_mut().unwrap();
             if gf.valid {
                 continue;
             }
-            let f = &world.fields[fi];
-            gf.glow_owner = owners[fi];
+            (gf.glow_owner, gf.bg_owner) = owners[fi];
             gf.cur = 0;
+            // The background owner's, at its step count (made from the empty world if the CA has
+            // none at that count).
+            let background = gf.bg_owner.and_then(|id| {
+                let topo = world.topo.clone();
+                let ca = world.cas.iter_mut().find(|c| c.id == id)?;
+                let Rule::LifeLike { birth, survive } = ca.rule else {
+                    return None;
+                };
+                jetcarp_core::b0::ready(
+                    &mut ca.background,
+                    &topo,
+                    ca.nb,
+                    (birth, survive),
+                    ca.ticks,
+                )
+            });
+            let bg = background.as_deref().and_then(|b| match &b.kind {
+                jetcarp_core::b0::Kind::Cells(c) => Some(&c.states),
+                jetcarp_core::b0::Kind::Types(_) => None,
+            });
+            let f = &world.fields[fi];
             if height {
                 self.queue
                     .write_buffer(&gf.bufs[0], 0, bytemuck::cast_slice(&f.height));
@@ -1255,8 +1366,9 @@ impl GpuSim {
                     let ca = world.cas.iter().find(|c| c.id == id)?;
                     ca.heat.as_ref().map(|h| &h.glow).filter(|g| g.len() == n)
                 });
+                // A field carries glow or a background, never both (a JACA field is not binary).
                 let pack = |(i, (&s, &a)): (usize, (&u8, &u16))| {
-                    let g = glow.map_or(0, |g| g[i] as u32);
+                    let g = glow.map_or(0, |g| g[i] as u32) | bg.map_or(0, |b| b[i] as u32);
                     s as u32 | g << 8 | (a as u32) << 16
                 };
                 // Waking every worker thread for a small field costs more processor time
@@ -1316,6 +1428,11 @@ impl GpuSim {
                 p.k2 = world.topo.center_cell() as u32;
                 p.gg = at(&AuxKey::Open);
             }
+            // On a lattice, the background's states (the phases go in k1 and k2 per step); on a
+            // patch, none: the cells carry it.
+            Rule::LifeLike { birth, survive } if birth & 1 == 1 => {
+                p.gg = at(&AuxKey::Background(ca.nb as u8, birth, survive));
+            }
             _ => {}
         }
         p
@@ -1345,6 +1462,16 @@ impl GpuSim {
             .iter()
             .map(|&ci| self.ca_params(world, ci))
             .collect();
+        // B0 Life-like CAs on a lattice: their backgrounds, for each step's phases.
+        let types: Vec<Option<Types>> = enabled
+            .iter()
+            .map(|&ci| {
+                (rule_params(&world.cas[ci].rule).is_ok_and(|p| p.rule == R_B0)
+                    && world.topo.lattice().is_some())
+                .then(|| b0_types(&world.topo, &world.cas[ci]))
+                .transpose()
+            })
+            .collect::<Result<_, _>>()?;
         let per_gen = order
             .iter()
             .map(|&(ei, _)| passes(&rule[ei]))
@@ -1412,8 +1539,13 @@ impl GpuSim {
                 // The CA's step count before this step, as `CaInstance::ticks` counts them.
                 let ticks = ca.ticks + g as u64 * ca.steps_per_gen as u64 + s;
                 match p.rule {
-                    // B0: the 1-based step number's parity, and whether it is the first step.
-                    R_B0 => p.k1 = ((ticks + 1) & 1) as u32 | ((ticks == 0) as u32) << 1,
+                    // B0 on a lattice: the background's phases before and after this step.
+                    R_B0 => {
+                        if let Some(t) = &types[ei] {
+                            p.k1 = t.phase(ticks) as u32;
+                            p.k2 = t.phase(ticks + 1) as u32;
+                        }
+                    }
                     R_MARGOLUS => p.k2 = (ticks & 1) as u32,
                     R_FOREST => {
                         let key = forest_key(ca.noise, ticks + 1);
@@ -1848,6 +1980,33 @@ impl GpuSim {
                             .par_iter_mut()
                             .zip(words.par_iter())
                             .for_each(glow);
+                    }
+                }
+                // The B0 owner's background on a patch, at the step count the run reached (its
+                // cycle, if known, as the upload's).
+                let topo = world.topo.clone();
+                let bg_owner = gf
+                    .bg_owner
+                    .and_then(|id| world.cas.iter_mut().find(|c| c.id == id));
+                if let Some(ca) = bg_owner
+                    && let Rule::LifeLike { birth, survive } = ca.rule
+                {
+                    let bit = |&x: &u32| ((x >> 8) & 1) as u8;
+                    let states: Vec<u8> = if small {
+                        words.iter().map(bit).collect()
+                    } else {
+                        words.par_iter().map(bit).collect()
+                    };
+                    let made = match ca.background.as_deref() {
+                        Some(b) if b.is_for(ca.nb, birth, survive) => None,
+                        _ => jetcarp_core::b0::Background::new(&topo, ca.nb, birth, survive).ok(),
+                    };
+                    let next = made
+                        .as_ref()
+                        .or(ca.background.as_deref())
+                        .map(|b| b.with_cells(ca.ticks, states));
+                    if let Some(b) = next {
+                        ca.background = Some(Arc::new(b));
                     }
                 }
             }

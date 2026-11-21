@@ -1,6 +1,7 @@
 //! The GPU batch stepper must reproduce `run_cpu` exactly: population, changes, hash and frames,
 //! for several worlds with different rules in one batch, on lattice and aperiodic topologies and
-//! dead, wrap and live edges. Skipped (with a note) when no GPU adapter is available.
+//! dead, wrap and live edges. Skipped (with a note) when no GPU adapter is available, failed under
+//! `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::explore::batch::{BatchJob, BatchWorld, WorldTrace, run_cpu};
 use jetcarp_core::rules::Rule;
@@ -18,7 +19,7 @@ fn gpu() -> Option<MutexGuard<'static, BatchSim>> {
             Some(Mutex::new(s))
         }
         Err(e) => {
-            eprintln!("note: skipping GPU batch tests: {e}");
+            jetcarp_gpu::no_gpu("GPU batch tests", &e);
             None
         }
     });
@@ -174,6 +175,10 @@ const RULES: &[&str] = &[
     "B02/S",
     "B0/S0123456",
     "B013/S34",
+    // B0 rules whose survival list holds some of the tiles' neighbour counts on 4.8.8 (4 and 8)
+    // and 3.4.6.4 (6, 8 and 12): backgrounds that differ between tile types (#171).
+    "B0/S8",
+    "B03/S238",
 ];
 
 const LTL_RULES: &[&str] = &[
@@ -220,6 +225,8 @@ fn tilings() -> Vec<(&'static str, TilingSpec)> {
             "rhombitrihex dead",
             TilingSpec::rect("rhombitrihex", 8, 8, Boundary::Dead),
         ),
+        ("oct dead", TilingSpec::rect("oct", 12, 10, Boundary::Dead)),
+        ("oct live", TilingSpec::rect("oct", 12, 10, Boundary::Live)),
         ("spectre level 2", at("spectre", 2)),
         ("spectre level 3", at("spectre", 3)),
         ("hat level 2", at("hat", 2)),

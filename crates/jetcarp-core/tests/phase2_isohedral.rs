@@ -285,7 +285,7 @@ fn cas_run_on_isohedral_tilings_with_every_edge_mode() {
         let mut w = World::from_scene(&s).unwrap();
         w.apply(Command::Step { gens: 20 }).unwrap();
         let again = World::from_scene(&w.to_scene()).unwrap();
-        assert_eq!(again.state_hash(), w.state_hash(), "{id}");
+        assert_eq!(again.state_hash_v2(), w.state_hash_v2(), "{id}");
         assert_eq!(w.topo.wraps(), b == Boundary::Wrap);
     }
 }

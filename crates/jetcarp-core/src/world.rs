@@ -30,6 +30,9 @@ mod done;
 // Automatic reseeding and the activity history. See `world/reseeding.rs`.
 mod reseeding;
 pub use reseeding::{ACTIVITY_HISTORY, Activity};
+// The state hash, versions 1 and 2. See `world/hash.rs`.
+mod hash;
+pub use hash::{HashVersion, STATE_HASH_VERSION};
 
 // ---------------------------------------------------------------------------------------------
 // Fields
@@ -430,6 +433,9 @@ pub struct CaInstance {
     pub glow: bool,
     /// JACA: annihilation glow and counts (display and status only; not part of the state).
     pub heat: Option<Arc<crate::jaca::Heat>>,
+    /// B0 Life-like rules: the background the field is stored relative to ([`crate::b0`]), at
+    /// `ticks` steps. A function of the tiling, the rule and `ticks`, made again when missing.
+    pub background: Option<Arc<crate::b0::Background>>,
 }
 
 impl CaInstance {
@@ -473,7 +479,9 @@ pub fn cell_size(topo: &Topology) -> f64 {
     }
 }
 
-pub fn default_seed(rule: &Rule, n_cells: usize) -> SeedSpec {
+/// The start a rule takes when it is given none, on this tiling.
+pub fn default_seed(rule: &Rule, topo: &Topology) -> SeedSpec {
+    let n_cells = topo.len();
     match rule {
         Rule::Cyclic { .. }
         | Rule::Rps { .. }
@@ -487,7 +495,17 @@ pub fn default_seed(rule: &Rule, n_cells: usize) -> SeedSpec {
         Rule::Layered { .. } => SeedSpec::Center,
         Rule::Wolfram(_) => SeedSpec::TopCenter,
         Rule::Turmite(_) => SeedSpec::Ants { count: 1 },
-        Rule::WireWorld => SeedSpec::WireDemo,
+        // The demo's clock loops are drawn for the square grid. Anywhere else: wiring along the
+        // borders of random regions, about 70 cells a region with four signals each (the explore
+        // search's best-rated circuits had 50 regions or more and 4 or more signals a region).
+        Rule::WireWorld if topo.rows().is_some() => SeedSpec::WireDemo,
+        Rule::WireWorld => {
+            let sites = (n_cells / 70).clamp(3, 400) as u32;
+            SeedSpec::Circuit {
+                sites,
+                electrons: 4 * sites,
+            }
+        }
         Rule::Sandpile => SeedSpec::Pile {
             grains: (n_cells as u64 * 3).max(1000),
         },
@@ -678,6 +696,10 @@ pub struct Record {
     #[serde(with = "crate::json_int::uint")]
     pub generation: u64,
     pub hash: String,
+    /// The state-hash version `hash` is in ([`HashVersion`]): 2 since 0.4.3; absent in older
+    /// records, which are version 1.
+    #[serde(default = "hash_v1")]
+    pub hash_version: u32,
     pub jetcarp_version: String,
     /// True when some cells have missing neighbours (dead edges or a patch boundary).
     pub dead_boundary: bool,
@@ -728,6 +750,9 @@ pub struct Scene {
 }
 fn fmt1() -> u32 {
     SCENE_FORMAT
+}
+fn hash_v1() -> u32 {
+    1
 }
 
 impl Scene {
@@ -1027,6 +1052,7 @@ impl World {
         Record {
             generation: self.generation,
             hash: self.hash_hex(),
+            hash_version: STATE_HASH_VERSION,
             jetcarp_version: crate::VERSION.into(),
             dead_boundary: self.topo.has_boundary(),
         }
@@ -1565,6 +1591,14 @@ impl World {
                 .or(nb_from_text)
                 .unwrap_or_else(|| rule.default_nb())
         };
+        // A B0 Life-like rule is stored relative to its background, which a lattice works out
+        // on its unit cell (and refuses if it takes too long to repeat).
+        let background = match rule {
+            Rule::LifeLike { birth, survive } if birth & 1 == 1 => Some(Arc::new(
+                crate::b0::Background::new(&self.topo, nb, birth, survive)?,
+            )),
+            _ => None,
+        };
         let id = match spec.id {
             Some(id) if !self.cas.iter().any(|c| c.id == id) => id,
             _ => self.next_id,
@@ -1576,7 +1610,7 @@ impl World {
         let joins_busy_field = self.fields[field].shared && !self.fields[field].is_empty();
         let seed = spec.seed.clone().unwrap_or_else(|| match rule {
             Rule::LifeLike { .. } | Rule::Generations { .. } if joins_busy_field => SeedSpec::Empty,
-            _ => default_seed(&rule, self.topo.len()),
+            _ => default_seed(&rule, &self.topo),
         });
         let table = self.table_for(&rule);
         let nb = match &table {
@@ -1624,6 +1658,7 @@ impl World {
             ticks: 0,
             color_by: spec.color_by,
             agent_edge: spec.agent_edge,
+            background,
         };
         self.cas.push(ca);
         let i = self.cas.len() - 1;
@@ -1663,10 +1698,11 @@ impl World {
             ca.kernel = None;
             ca.layers = None;
             ca.heat = None;
+            ca.background = None;
             ca.ticks = 0;
             let is_agent = rule.is_agent();
-            let default = default_seed(&rule, self.topo.len());
-            let seed_kind_changed = std::mem::discriminant(&default_seed(&ca.rule, 1))
+            let default = default_seed(&rule, &self.topo);
+            let seed_kind_changed = std::mem::discriminant(&default_seed(&ca.rule, &self.topo))
                 != std::mem::discriminant(&default);
             ca.rule = rule;
             if seed_kind_changed {
@@ -2130,16 +2166,22 @@ impl World {
             phases: self.phases(),
         }
     }
-    /// Per CA, the step parity of phase-dependent rules (Margolus partitions), else 0.
+    /// Per CA, the phase of what its next step depends on beyond the cells, else 0: a Margolus
+    /// partition's parity, and a B0 Life-like rule's background ([`crate::b0`]; a B0 world whose
+    /// stored cells come back with the background in another phase goes on differently, #211).
+    /// A B0 CA whose background is not at hand, or whose cycle is not known, gives a value that
+    /// matches no other step count's.
     pub(crate) fn phases(&self) -> Vec<u64> {
         self.cas
             .iter()
-            .map(|c| {
-                if matches!(c.rule, Rule::Margolus(_)) {
-                    c.ticks % 2
-                } else {
-                    0
-                }
+            .map(|c| match c.rule {
+                Rule::Margolus(_) => c.ticks % 2,
+                Rule::LifeLike { birth, survive } if birth & 1 == 1 => c
+                    .background
+                    .as_deref()
+                    .filter(|b| b.is_for(c.nb, birth, survive))
+                    .map_or((1 << 63) | c.ticks, |b| b.phase_key(c.ticks)),
+                _ => 0,
             })
             .collect()
     }
@@ -2191,45 +2233,6 @@ impl World {
             return Status::Empty;
         }
         Status::Running
-    }
-
-    /// FNV-1a over generation, every field, and every CA's dynamic state.
-    pub fn state_hash(&self) -> u64 {
-        let mut h = Fnv::default();
-        h.u64(self.generation);
-        for f in &self.fields {
-            h.bytes(format!("{:?}{}", f.kind, f.shared).as_bytes());
-            h.bytes(&f.state);
-            h.u16s(&f.age);
-            h.u32s(&f.height);
-            // Continuous values by their exact bits (empty for other fields).
-            h.f32s(&f.value);
-            h.u64(f.lost);
-        }
-        if self.script.is_some() {
-            h.u64(self.script_state.step as u64);
-            h.u64(self.script_state.started);
-            h.u64(self.script_state.finished as u64);
-        }
-        for st in &self.reseed_status {
-            h.u64(st.since);
-            h.u64(st.streak);
-            h.u64(st.fired);
-        }
-        for c in &self.cas {
-            h.u64(c.id as u64);
-            h.u64(c.cursor as u64);
-            h.u64(c.ticks);
-            h.u64(c.enabled as u64);
-            for a in &c.agents {
-                h.u64(a.cell as u64);
-                h.u64(a.heading as u64);
-            }
-        }
-        h.0
-    }
-    pub fn hash_hex(&self) -> String {
-        format!("{:016x}", self.state_hash())
     }
 
     /// FNV-1a over every field's cell states only (no generation, ages, heights, values, or CA

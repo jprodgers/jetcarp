@@ -850,6 +850,36 @@ pub(super) fn check_pins(c: &mut Connection) -> Result<PinCheck, String> {
 /// (or whose family the engine does not have), as [`check_pins`] flags changed pins. Two index
 /// ranges per family, so only mismatches are read; writes only when something is flagged.
 fn check_semantics(c: &mut Connection, out: &mut PinCheck) -> Result<(), String> {
+    // B/S rules with birth on 0 became a family of their own (`lifelike_b0`) in 0.4.3: a record
+    // filed under `lifelike` before then moves there, so its version is checked against theirs.
+    let moved: Vec<(String, &str)> = {
+        let mut st = c
+            .prepare("SELECT id, rule FROM patterns WHERE family = 'lifelike' AND rule LIKE 'B0%'")
+            .map_err(e)?;
+        st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+            .map_err(e)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(e)?
+            .into_iter()
+            .filter_map(|(id, rule)| {
+                let (f, _) = semantics::of_notation(&rule)?;
+                (f != "lifelike").then_some((id, f))
+            })
+            .collect()
+    };
+    if !moved.is_empty() {
+        let tx = c
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(e)?;
+        for (id, f) in &moved {
+            tx.execute(
+                "UPDATE patterns SET family = ?2 WHERE id = ?1",
+                params![id, f],
+            )
+            .map_err(e)?;
+        }
+        tx.commit().map_err(e)?;
+    }
     let families: Vec<String> = {
         let mut st = c
             .prepare("SELECT DISTINCT family FROM patterns")

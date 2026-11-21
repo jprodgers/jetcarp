@@ -332,7 +332,7 @@ impl LibraryWindow {
             }
         });
         if let Some(e) = &self.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         let before = (self.filters.clone(), self.sort, self.descending);
         let f = &mut self.filters;
@@ -552,11 +552,11 @@ impl LibraryWindow {
             if let Some(f) = t.get_mut(..1) {
                 f.make_ascii_uppercase();
             }
-            ui.colored_label(Color32::from_rgb(230, 110, 90), t);
+            ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(230, 110, 90)), t);
         }
         if r.needs_reverify {
             ui.colored_label(
-                Color32::from_rgb(230, 160, 60),
+                crate::theme::ink(ui, Color32::from_rgb(230, 160, 60)),
                 "Needs re-verification: the engine's geometry for this tiling changed since it \
                  was verified (jetcarp library reverify)",
             );
@@ -580,7 +580,7 @@ impl LibraryWindow {
                     ui.image((t.id(), sz * k));
                 }
                 Err(e) => {
-                    ui.colored_label(Color32::LIGHT_RED, e);
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
                 }
             }
         }
@@ -835,10 +835,11 @@ fn short_tiling(name: &str) -> String {
 mod tests {
     use super::*;
 
-    fn lib_with_patterns() -> (Library, std::path::PathBuf) {
-        let root = std::env::temp_dir().join(format!("jetcarp-app-lib-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let lib = Library::open(&root);
+    /// The library, and the folder that holds it: bind them as `(root, lib)` so the folder is
+    /// removed after the library is closed (#121).
+    fn lib_with_patterns() -> (jetcarp_core::scratch::ScratchDir, Library) {
+        let root = jetcarp_core::scratch::ScratchDir::new("app-lib");
+        let lib = Library::open(root.path());
         let mut w = jetcarp_core::World::new(
             jetcarp_core::TilingSpec::rect("square", 40, 40, jetcarp_core::Boundary::Wrap),
             1,
@@ -882,12 +883,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(rep.added.len(), 3);
-        (lib, root)
+        (root, lib)
     }
 
     #[test]
     fn filter_sort_edit_promote() {
-        let (lib, root) = lib_with_patterns();
+        let (_root, lib) = lib_with_patterns();
         let recs = lib.list().unwrap();
         let all = view(&recs, &Filters::default(), Sort::Score, true);
         assert_eq!(all.len(), 3);
@@ -929,6 +930,5 @@ mod tests {
             panic!()
         };
         assert!(f().is_ok());
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -35,6 +35,9 @@ jobs:
       # Linux), which JETCARP uses only when asked for. Windows' WARP is never used, so the GPU
       # tests skip there; macOS uses the runner's own GPU.
       JETCARP_GPU: software
+      # Where a GPU is expected (Linux's lavapipe, macOS's own GPU), a GPU test that finds no
+      # adapter it can use, or one the self-test turns down, fails rather than skipping.
+      JETCARP_REQUIRE_GPU: ${{ matrix.require_gpu }}
       # The folder rules' tests make links: on Windows directory junctions and symbolic links
       # (the runner may make both). A link that cannot be made fails the test here, rather than
       # skipping it as on a machine without the rights.
@@ -43,9 +46,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: Linux x86_64, os: ubuntu-24.04, features: "" }
-          - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher" }
-          - { name: macOS arm64, os: macos-latest, features: "" }
+          - { name: Linux x86_64, os: ubuntu-24.04, features: "", require_gpu: "1" }
+          - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher", require_gpu: "" }
+          - { name: macOS arm64, os: macos-latest, features: "", require_gpu: "1" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
@@ -86,6 +89,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           powershell -NoProfile -ExecutionPolicy Bypass -File packaging\test-install-ps1.ps1 -Installer "$env:RUNNER_TEMP\installers\jetcarp-installer.ps1" -Program target\release\jetcarp.exe
           exit $LASTEXITCODE
+      - name: A temp folder of the tests' own, to check they leave nothing in it (#121)
+        shell: bash
+        run: |
+          base=$RUNNER_TEMP
+          # On Windows, a path both bash and the tests read the same way (D:/a/_temp).
+          if command -v cygpath >/dev/null; then base=$(cygpath -m "$RUNNER_TEMP"); fi
+          d="$base/tests-temp"
+          mkdir -p "$d"
+          { echo "TMPDIR=$d"; echo "TMP=$d"; echo "TEMP=$d"; } >> "$GITHUB_ENV"
       - name: Test
         if: runner.os != 'Linux'
         run: cargo test --workspace --release --no-fail-fast ${{ matrix.features }}
@@ -114,6 +126,16 @@ jobs:
         run: |
           cargo test --workspace --release ${{ matrix.features }} --test folders -- --nocapture
           cargo test --workspace --release ${{ matrix.features }} --test hostile -- --nocapture a_link_out
+      - name: The tests left no folders or files of theirs in the temp folder (#121)
+        shell: bash
+        run: |
+          # The macOS screen saver's log is the program's own file there, not a test's.
+          left=$(find "$TMPDIR" -mindepth 1 -maxdepth 1 -name 'jetcarp*' ! -name jetcarp-saver.log)
+          if [ -n "$left" ]; then
+            echo "::error::tests left these in the temp folder:"
+            echo "$left"
+            exit 1
+          fi
       - name: The generated book pages, and the rule notation table, match the program
         if: runner.os == 'Linux'
         run: |
@@ -205,8 +227,9 @@ jobs:
   msrv:
     # The stated minimum Rust (Cargo.toml's rust-version) must build the workspace: every other
     # job uses the newest stable, which hid that the workspace did not load on 1.95 to 1.98
-    # (#175). Keep the toolchain below in step with rust-version.
-    name: The minimum Rust (1.95) builds the workspace
+    # (#175). Keep the toolchain below in step with rust-version. The job's name carries no version,
+    # since main's ruleset requires it by name.
+    name: The minimum Rust builds the workspace
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

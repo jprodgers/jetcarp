@@ -41,9 +41,9 @@ jetcarp script hex-life.rhai --set gens=600 --set every=200
 It prints:
 
 ```text
-generation 200: 197 live, hash 9fd22c3b518fe0a5
-generation 400: 209 live, hash c56126e522f752f6
-generation 600: 197 live, hash f711a1e991a158b7
+generation 200: 197 live, hash 69ca682254af7c1e2170a5c15550e1ef5e7a74a5d76cde0d3d2bb6ad4c88415c
+generation 400: 209 live, hash bfbbd9590bbe1c25e9b981d53d8a135abd4b7b49508a83600525c6778f7629d8
+generation 600: 197 live, hash fdd563766cb2f371decb974db7f49be022bb8167de164bbdb3c8a26b654229cd
 30 palettes, the first Ember
 output: /home/ada/Pictures/JETCARP/2026-11-10_18-36-13_hex-life
 time:   0.12s
@@ -181,7 +181,7 @@ The simulation runs in Rust; the script only orchestrates. Statements end with `
 | `world(#{ tiling: "hex", size: "screen", boundary: "dead" })` | New world. `tiling`: a family (`square`, `hex`, `hex_flat` (flat-top hexagons, for `HexT`), `triangle`, `cairo`, `oct`, `snubsq`, `spectre`, `hat`, `penrose-kd`, ...), an isohedral type `ih01`..`ih93`, or a catalog id (`k3-012`). `size`: `"screen"` (default: fill the screen at `cell_px`), a cell count, `[w, h]`, `"WxH"`, `#{cells: n}`, or `level: n` (aperiodic). `boundary`: `dead`, `wrap`, `live`. Also `rng_seed`, `screen: "WxH"`, `cell_px`, `params`, `cas: ["Life", #{rule: "W30", seed: "top_center"}]`. |
 | `world()` | Square grid filling the screen, dead edges. |
 | `load_scene(path)` / `scene_world(json)` | A world from a scene file or scene JSON (replayed to its saved state). |
-| `w.add_ca(rule)` / `w.add_ca(rule, #{ seed: "random:0.3", neighborhood: "edge", palette: "Tide", steps_per_gen: 2, name: "a" })` | Add a CA; returns its id. Rules by notation (`B3/S23`, `W30`, `HexW3 8229`) or name (`"Brian's Brain"`). Seeds: `empty`, `random`, `random:0.2`, `center`, `top_center`, `top_random:0.5`, `random_states`, `blob:0.3:0.5`, `ants:3`, `pile:10000`, `glider_pair`, `wire_demo`, `#{random: 0.2}`; Lenia also `gauss:count:radius:peak`, `lenia:orbium`. Pattern seeds, on any tiling: `pattern:blobs`, `pattern:voronoi:0.8:by_region` (shape, density, states), or `#{shape: "blobs", count: 3, min_radius: 0.05, density: 0.4, states: "by_region"}`; shapes `all`, `disc`, `blobs`, `clusters`, `dots`, `ring`, `rings`, `stripes`, `checker`, `gradient`, `radial_gradient`, `noise`, `voronoi`, `symmetric`; states `one`, `uniform`, `range:lo:hi`, `signed:share` (JACA), `by_region`. Other options: `affects_others`, `enabled`, `drop_per_gen`, `color_by`, `agent_edge` (`bounce`/`fall_off`). |
+| `w.add_ca(rule)` / `w.add_ca(rule, #{ seed: "random:0.3", neighborhood: "edge", palette: "Tide", steps_per_gen: 2, name: "a" })` | Add a CA; returns its id. Rules by notation (`B3/S23`, `W30`, `HexW3 8229`) or name (`"Brian's Brain"`). Seeds: `empty`, `random`, `random:0.2`, `center`, `top_center`, `top_random:0.5`, `random_states`, `blob:0.3:0.5`, `ants:3`, `pile:10000`, `glider_pair`, `wire_demo`, `circuit:40` (WireWorld wiring: regions, then signals, four a region by default), `#{random: 0.2}`; Lenia also `gauss:count:radius:peak`, `lenia:orbium`. Pattern seeds, on any tiling: `pattern:blobs`, `pattern:voronoi:0.8:by_region` (shape, density, states), or `#{shape: "blobs", count: 3, min_radius: 0.05, density: 0.4, states: "by_region"}`; shapes `all`, `disc`, `blobs`, `clusters`, `dots`, `ring`, `rings`, `stripes`, `checker`, `gradient`, `radial_gradient`, `noise`, `voronoi`, `symmetric`; states `one`, `uniform`, `range:lo:hi`, `signed:share` (JACA), `by_region`. Other options: `affects_others`, `enabled`, `drop_per_gen`, `color_by`, `agent_edge` (`bounce`/`fall_off`). |
 | `w.update_ca(id, #{ rule: "B36/S23", enabled: false, palette: "Ink" })` | Change a CA (same options as `add_ca`, plus `rule`). |
 | `w.remove_ca(id)`, `w.seed(seed)`, `w.seed(id, seed)`, `w.clear()`, `w.clear(id)`, `w.reset()` | Remove a CA; seed (adds to the field); clear a field; reset every CA to generation 0. |
 | `w.apply(#{ op: "sandpile", id: 1, action: "stabilize" })` | Any scene command (map or JSON text). |

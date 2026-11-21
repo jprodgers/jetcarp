@@ -135,18 +135,26 @@ if [ -n "$uninstall" ]; then
         fi
     done
     # Named here, as `jetcarp paths` would have, since the program has gone: only the folders still
-    # there, so nothing is said of what `jetcarp uninstall --settings --data` already took (#134).
+    # there, each with what it holds, so nothing is said of what `jetcarp uninstall --settings --data`
+    # already took (#134, #142). Each entry is "folder|what it holds".
     case "$(uname -s)" in
-        Darwin) set -- "$HOME/Library/Application Support/jetcarp" "$HOME/Pictures/JETCARP" ;;
-        *) set -- "${XDG_CONFIG_HOME:-$HOME/.config}/jetcarp" "${XDG_DATA_HOME:-$HOME/.local/share}/jetcarp" "$HOME/Pictures/JETCARP" ;;
+        Darwin) set -- "$HOME/Library/Application Support/jetcarp|your settings and data" \
+            "$HOME/Pictures/JETCARP|your pictures and exports" ;;
+        *) set -- "${XDG_CONFIG_HOME:-$HOME/.config}/jetcarp|your settings" \
+            "${XDG_DATA_HOME:-$HOME/.local/share}/jetcarp|your library and data" \
+            "$HOME/Pictures/JETCARP|your pictures and exports" ;;
     esac
-    kept=""
+    first=1
     for k in "$@"; do
-        if [ -e "$k" ]; then kept="${kept:+$kept, }$k"; fi
+        folder=${k%|*}
+        if [ -e "$folder" ]; then
+            if [ "$first" = 1 ]; then
+                say "kept these folders; delete them by hand if you want them gone:"
+                first=0
+            fi
+            say "  $folder (${k##*|})"
+        fi
     done
-    if [ -n "$kept" ]; then
-        say "kept your settings, data and pictures in $kept; delete them by hand if you want them gone"
-    fi
     exit 0
 fi
 

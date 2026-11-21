@@ -192,7 +192,7 @@ impl JetcarpApp {
             match self.stats.as_ref().and_then(|s| s.hash.clone()) {
                 Some(h) => {
                     if ui
-                        .link(RichText::new(format!("hash {}", &h[..8])).monospace())
+                        .link(RichText::new(format!("hash {}", &h[..h.len().min(16)])).monospace())
                         .on_hover_text(format!("State hash {h}. Click to copy."))
                         .clicked()
                     {
@@ -211,7 +211,10 @@ impl JetcarpApp {
                 ("‖ paused", Color32::GRAY)
             };
             if ui
-                .add(egui::Button::new(RichText::new(txt).color(col)).frame(false))
+                .add(
+                    egui::Button::new(RichText::new(txt).color(crate::theme::ink(ui, col)))
+                        .frame(false),
+                )
                 .on_hover_text("Space")
                 .clicked()
             {
@@ -228,7 +231,7 @@ impl JetcarpApp {
         egui::Panel::bottom("status").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if let Some((m, err)) = self.message.clone() {
-                    ui.colored_label(message_color(err), m);
+                    ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
                     if ui.small_button("×").on_hover_text("Dismiss").clicked() {
                         self.message = None;
                     }
@@ -236,6 +239,25 @@ impl JetcarpApp {
                 }
                 if self.screen != Screen::Sim {
                     return;
+                }
+                // The strobe guard, while it acts.
+                if let Some((note, strong)) = self.guard_status() {
+                    let c = if strong {
+                        Color32::from_rgb(0xff, 0xb0, 0x60)
+                    } else {
+                        Color32::from_rgb(0xff, 0xd8, 0x90)
+                    };
+                    if ui
+                        .add(
+                            egui::Label::new(RichText::new(note).color(crate::theme::ink(ui, c)))
+                                .sense(egui::Sense::click()),
+                        )
+                        .on_hover_text("Settings → Safety")
+                        .clicked()
+                    {
+                        self.strobe.window_open = true;
+                    }
+                    ui.separator();
                 }
                 let (status, pops) = match &self.stats {
                     Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
@@ -263,12 +285,15 @@ impl JetcarpApp {
                 ));
                 ui.separator();
                 if let Some(s) = self.scripts.status() {
-                    ui.label(RichText::new(s).color(Color32::from_rgb(0xff, 0xc0, 0x80)));
+                    ui.label(
+                        RichText::new(s)
+                            .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xc0, 0x80))),
+                    );
                     ui.separator();
                 }
                 crate::simgpu::status_ui(&self.sim, ui);
                 if !self.gpu {
-                    ui.colored_label(Color32::LIGHT_RED, "no GPU renderer");
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), "no GPU renderer");
                 }
             });
         });
@@ -312,7 +337,7 @@ impl JetcarpApp {
         if let Some((m, err)) = self.message.clone() {
             ui.separator();
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(message_color(err), m);
+                ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
                 if ui.small_button("×").clicked() {
                     self.message = None;
                 }

@@ -1,8 +1,12 @@
-% JETCARP documentation bibliography (copied from the history research, research/history/*.md)
-% Compiled 2026-11-10 by Claude Code (Opus 5.5) for Jimmie Rodgers.
+% JETCARP documentation bibliography (copied from the history research, research/history/*.md in
+% this repository, and the prior-art search, research/novelty-*.md)
+% Compiled 2026-11-10 by Claude Code (Opus 5.5) for Jimmie Rodgers; corrected 2026-11-20.
 % Every entry was checked against the source named in its "% verified:" line (DOI landing page or
 % Crossref record, arXiv, publisher, archive.org, author or project page, or LifeWiki read through the
 % mirror conwaylife.njohnston.ca, since conwaylife.com returns HTTP 403 to automated fetches).
+% Where the work itself could not be read and its details come from a secondary listing (a reference
+% list, a library or thesis catalogue, an encyclopaedia), the line reads "% verified (secondary):",
+% and docs/tools/gen-bibliography.py marks the entry on the generated page.
 % Items that could not be verified are NOT here; they are listed under "Unverified" in each file.
 % Keys: first-author surname + year + first significant title word; web pages: site/author + year
 % (or "nd") + "_" + word. Entries are sorted by key.
@@ -105,7 +109,7 @@
   doi     = {10.1090/memo/0066}
 }
 
-% verified: Wikipedia article (edition data, ISBNs) and LifeWiki "Winning Ways" via mirror; book not seen
+% verified (secondary): Wikipedia article (edition data, ISBNs) and LifeWiki "Winning Ways" (https://conwaylife.com/wiki/Winning_Ways) via the mirror, 2026-11-10; book not seen
 @book{berlekamp1982winning,
   author    = {Berlekamp, Elwyn R. and Conway, John H. and Guy, Richard K.},
   title     = {Winning Ways for your Mathematical Plays},
@@ -150,6 +154,19 @@
   year    = {1992},
   doi     = {10.1007/BF01049035},
   note    = {Verified via Crossref 2026-11-10}
+}
+
+% verified: arXiv abstract page 1803.09056 (v1 24 March 2018, v2 11 June 2019; journal reference Australasian J. Combinatorics 74(3), 2019, pp. 486-497), read 2026-11-20; found by the prior-art search of research/novelty-11-kuniform-life.md
+@article{bushaw2019note,
+  author  = {Bushaw, Neal and Cranston, Daniel W.},
+  title   = {A Note on Bootstrap Percolation Thresholds in Plane Tilings using Regular Polygons},
+  journal = {Australasian Journal of Combinatorics},
+  volume  = {74},
+  number  = {3},
+  pages   = {486--497},
+  year    = {2019},
+  eprint  = {1803.09056},
+  archivePrefix = {arXiv}
 }
 
 % verified: Crossref record 10.1109/ipsn.2014.6846754 (title, authors, proceedings, pages 215-224, April 2014) and arXiv abstract page 1210.5232 (same title and authors, v1 18 Oct 2012; network cyclic cellular automata)
@@ -204,7 +221,7 @@
   eprint    = {2005.03742}, archiveprefix = {arXiv}
 }
 
-% verified: OEIS A068599 reference list (thesis gives a(3) = 61). Existence only.
+% verified (secondary): OEIS A068599 reference list (thesis gives a(3) = 61). Existence only; thesis not seen
 @phdthesis{chavey1984periodic,
   author = {Chavey, Darrah P.},
   title  = {Periodic Tilings and Tilings by Regular Polygons},
@@ -275,7 +292,7 @@
   note    = {Verified via arXiv 2026-11-10}
 }
 
-% verified: Mathematics Genealogy Project id 100501 (Ph.D. Michigan 1965, advisor John Henry Holland); ProQuest 302172044 seen in search results
+% verified (secondary): Mathematics Genealogy Project id 100501 (Ph.D. Michigan 1965, advisor John Henry Holland); ProQuest 302172044 seen in search results; thesis not seen
 @phdthesis{codd1965propagation,
   author = {Codd, Edgar F.},
   title  = {Propagation, Computation, and Construction in Two-Dimensional Cellular Spaces},
@@ -344,7 +361,7 @@
   note   = {Unrelated to JETCARP's layered rules despite the name}
 }
 
-% verified: page fetched (secondary; gives 1984 for WireWorld's invention)
+% verified: the post itself, fetched 2026-11-10 (cited only as a secondary source for the date 1984, which the WireWorld page says it could not settle)
 @misc{daneelsan2025wireworld,
   author  = {{daneelsan}},
   title   = {Wireworld: Building a Computer from a Cellular Automaton},
@@ -529,7 +546,7 @@
   note          = {Code: https://github.com/jamesedmond/monotile-ca; Zenodo doi:10.5281/zenodo.22836247}
 }
 
-% verified: arXiv abstract page 0911.2890 (journal ref Springer 2010 pp. 71-98)
+% verified: arXiv abstract page 0911.2890 (its journal reference gives pp. 71-98); Crossref record for DOI 10.1007/978-1-84996-217-9_6, 2026-11-20, gives pages 71-97, used here
 @incollection{eppstein2010growth,
   author    = {Eppstein, David},
   title     = {Growth and decay in life-like cellular automata},
@@ -537,7 +554,7 @@
   editor    = {Adamatzky, Andrew},
   publisher = {Springer},
   address   = {London},
-  pages     = {71--98},
+  pages     = {71--97},
   year      = {2010},
   doi       = {10.1007/978-1-84996-217-9_6},
   eprint    = {0911.2890},
@@ -1038,6 +1055,39 @@
   year    = {2012}
 }
 
+% verified: catagolue.hatsya.com/home, /software and /apgsearch read 2026-11-20 ("Catagolue was founded in 2015 by Adam P. Goucher to aggregate results from soup search programs"; apgsearch by Adam P. Goucher "runs random seeds in an infinite universe and censuses the results"); the start date from LifeWiki (lifewikind_catagolue)
+@misc{goucher2015catagolue,
+  author  = {Goucher, Adam P.},
+  title   = {Catagolue},
+  howpublished = {Online census of objects from random soups},
+  year    = {2015},
+  url     = {https://catagolue.hatsya.com/},
+  urldate = {2026-11-20},
+  note    = {Founded 2015 by Adam P. Goucher; source code later contributed to by Apple Bottom, Ian07 and Connor Steppie (its home page)}
+}
+
+% verified: the repository page https://gitlab.com/apgoucher/apgmera ("Program for searching random initial configurations in cellular automata and reporting to a centralised server (Catagolue)"; MIT licence; created 3 March 2016) and its README (apgluxe and lifelib "written by Adam P. Goucher"), and lifelib's classifier.h (object separation), read 2026-11-20
+@misc{goucher2016apgsearch,
+  author  = {Goucher, Adam P.},
+  title   = {apgsearch 5 (apgluxe), the soup searcher for {Catagolue}},
+  howpublished = {Source code, GitLab repository apgoucher/apgmera},
+  year    = {2016},
+  url     = {https://gitlab.com/apgoucher/apgmera},
+  urldate = {2026-11-20},
+  note    = {Repository created 3 March 2016 (apgsearch 3, apgmera); earlier versions were Python scripts (LifeWiki: Apgsearch)}
+}
+
+% verified: the text census https://catagolue.hatsya.com/textcensus/b3s23/C1 downloaded 2026-11-20 at 20:56 EST (556,090 object codes, 7,425,010,913,015,739 objects); its top 30 rows are pinned in docs/data/catagolue-b3s23-C1.tsv
+@misc{goucher2026census,
+  author  = {Goucher, Adam P. and {Catagolue contributors}},
+  title   = {Catagolue census of {Conway's} {Life} from asymmetric 16 by 16 soups (b3s23/{C1})},
+  howpublished = {Catagolue},
+  year    = {2026},
+  url     = {https://catagolue.hatsya.com/census/b3s23/C1},
+  urldate = {2026-11-20},
+  note    = {Text form at https://catagolue.hatsya.com/textcensus/b3s23/C1}
+}
+
 % verified: Crossref
 @article{grassberger2002critical,
   author  = {Grassberger, Peter},
@@ -1277,14 +1327,14 @@
   note    = {Verified via Crossref 2026-11-10}
 }
 
-% verified: abstract page https://www.complex-systems.com/abstracts/v10_i05_a03 fetched (author, title, vol. 10 no. 5); year 1996 and pages 367-373 from the search-engine summary of the full-text PDF (not read)
+% verified: abstract page https://www.complex-systems.com/abstracts/v10_i05_a03 (author, title, vol. 10 no. 5) and the full text it links, https://content.wolfram.com/sites/13/2018/02/10-5-3.pdf, read 2026-11-20: running head "Complex Systems 10 (1996) 367-381"; the rule, Life 1133, is birth on 3 and survival on 1 and 3 (its rules R1-R3), i.e. B3/S13 (LowLife)
 @article{heudin1996new,
   author  = {Heudin, Jean-Claude},
   title   = {A New Candidate Rule for the Game of Two-Dimensional Life},
   journal = {Complex Systems},
   volume  = {10},
   number  = {5},
-  pages   = {367--373},
+  pages   = {367--381},
   year    = {1996},
   url     = {https://www.complex-systems.com/abstracts/v10_i05_a03}
 }
@@ -1452,16 +1502,18 @@
   note      = {Book II, ``Architectonicus, seu ex geometria figurata'', treats tilings by regular polygons. Scan of the Burndy Library copy, Smithsonian Libraries}
 }
 
-% verified: Crossref record for DOI 10.70249/9798893982398 (editors, publisher, year)
+% verified: Crossref record for DOI 10.70249/9798893982398 (publisher, year; it lists A. M. Duncan and E. J. Aiton in the editor role), 2026-11-10 and 2026-11-20; the title-page credit "translated into English with an introduction and notes by E. J. Aiton, A. M. Duncan, J. V. Field" and the series volume from the library record https://humanitieshub.sdsu.edu/omeka/items/show/424, 2026-11-20
 @book{kepler1997harmony,
-  author    = {Kepler, Johannes},
-  editor    = {Duncan, A. M. and Aiton, E. J.},
-  title     = {The Harmony of the World},
-  publisher = {American Philosophical Society},
-  address   = {Philadelphia},
-  year      = {1997},
-  doi       = {10.70249/9798893982398},
-  note      = {English translation of Harmonices mundi}
+  author     = {Kepler, Johannes},
+  translator = {Aiton, E. J. and Duncan, A. M. and Field, J. V.},
+  title      = {The Harmony of the World},
+  series     = {Memoirs of the American Philosophical Society},
+  volume     = {209},
+  publisher  = {American Philosophical Society},
+  address    = {Philadelphia},
+  year       = {1997},
+  doi        = {10.70249/9798893982398},
+  note       = {English translation of Harmonices mundi, with an introduction and notes by the translators}
 }
 
 % verified: page and repository fetched (novelty-03)
@@ -1535,7 +1587,7 @@
   note    = {Verified via Crossref 2026-11-10}
 }
 
-% verified: OEIS A068600 reference list (no DOI; original not seen)
+% verified (secondary): OEIS A068600 reference list (no DOI; original not seen)
 @article{krotenheerdt1969homogenen,
   author  = {Kr{\"o}tenheerdt, Otto},
   title   = {Die homogenen {M}osaike n-ter {O}rdnung in der euklidischen {E}bene {I}},
@@ -1545,7 +1597,7 @@
   year    = {1969}
 }
 
-% verified: OEIS A068600 reference list (no DOI; original not seen)
+% verified (secondary): OEIS A068600 reference list (no DOI; original not seen)
 @article{krotenheerdt1970homogenenii,
   author  = {Kr{\"o}tenheerdt, Otto},
   title   = {Die homogenen {M}osaike n-ter {O}rdnung in der euklidischen {E}bene {II}},
@@ -1555,7 +1607,7 @@
   year    = {1970}
 }
 
-% verified: OEIS A068600 reference list (no DOI; original not seen)
+% verified (secondary): OEIS A068600 reference list (no DOI; original not seen)
 @article{krotenheerdt1970homogeneniii,
   author  = {Kr{\"o}tenheerdt, Otto},
   title   = {Die homogenen {M}osaike n-ter {O}rdnung in der euklidischen {E}bene {III}},
@@ -1644,6 +1696,13 @@
   url = {https://conwaylife.com/wiki/OCA:3-4_Life}, urldate = {2026-11-10}, note = {Revision of 10 August 2026; read through the mirror}
 }
 
+% verified: mirror page https://conwaylife.njohnston.ca/wiki/Apgsearch read 2026-11-20, last edited 10 January 2026 (oldid 167237): "an automated search program created by Adam P. Goucher"; v0.x first published 8 September 2014, v1.x 20 February 2015, v2.x (apgnano) 19 July 2015, v3.x (apgmera) 3 March 2016; "Version 1.x and later upload the results to the online database Catagolue"
+@misc{lifewikind_apgsearch,
+  author = {{LifeWiki contributors}}, title = {Apgsearch}, howpublished = {LifeWiki}, year = {2026},
+  url = {https://conwaylife.com/wiki/Apgsearch}, urldate = {2026-11-20}, note = {Revision of 10 January 2026; read through the mirror}
+}
+
+
 % verified: mirror page OCA:B3678/S23 (redirect from OCA:InverseLife), last edited 9 January 2026 (oldid 167152)
 @misc{lifewikind_b3678s23,
   author = {{LifeWiki contributors}}, title = {{OCA:B3678/S23}}, howpublished = {LifeWiki}, year = {2026},
@@ -1665,6 +1724,12 @@
 @misc{lifewikind_castles,
   author = {{LifeWiki contributors}}, title = {{OCA:Castles}}, howpublished = {LifeWiki}, year = {2026},
   url = {https://conwaylife.com/wiki/OCA:Castles}, urldate = {2026-11-10}, note = {Revision of 27 August 2026; read through the mirror}
+}
+
+% verified: mirror page https://conwaylife.njohnston.ca/wiki/Catagolue read 2026-11-20, last edited 18 April 2026 (oldid 172423): "Catagolue became operative on February 20, 2015"; the census "conducted by Adam P. Goucher, started in late February 2015"; "primarily fed by apgsearch 5.x (apgluxe)"; soups "of size 16x16 with density 0.5 in an infinite planar universe"
+@misc{lifewikind_catagolue,
+  author = {{LifeWiki contributors}}, title = {Catagolue}, howpublished = {LifeWiki}, year = {2026},
+  url = {https://conwaylife.com/wiki/Catagolue}, urldate = {2026-11-20}, note = {Revision of 18 April 2026; read through the mirror}
 }
 
 % verified: mirror page, last edited 15 December 2025
@@ -1841,13 +1906,6 @@
   url = {https://conwaylife.com/wiki/OCA:Vote}, urldate = {2026-11-10}, note = {Revision of 13 August 2026; read through the mirror}
 }
 
-% verified: mirror page fetched 2026-11-10
-@misc{lifewikind_winningways,
-  author = {{LifeWiki contributors}}, title = {Winning Ways for Your Mathematical Plays}, howpublished = {LifeWiki},
-  url = {https://conwaylife.com/wiki/Winning_Ways}, urldate = {2026-11-10},
-  note = {Read through the mirror conwaylife.njohnston.ca}
-}
-
 % verified: LifeWiki page read via mirror conwaylife.njohnston.ca (last edited 9 Jan 2026)
 @misc{lifewikind_wireworld,
   author  = {{LifeWiki contributors}},
@@ -1856,6 +1914,15 @@
   url     = {https://conwaylife.com/wiki/WireWorld},
   urldate = {2026-11-10},
   note    = {Read via mirror conwaylife.njohnston.ca; page last edited 9 Jan 2026}
+}
+
+% verified: Crossref record 10.1109/TVCG.2009.113
+@article{machado2009physiologically,
+  author  = {Machado, Gustavo M. and Oliveira, Manuel M. and Fernandes, Leandro A. F.},
+  title   = {A physiologically-based model for simulation of color vision deficiency},
+  journal = {IEEE Transactions on Visualization and Computer Graphics},
+  volume  = {15}, number = {6}, pages = {1291--1298}, year = {2009},
+  doi     = {10.1109/TVCG.2009.113}
 }
 
 % verified: archive.org records newmathematicalp00macmuoft, cu31924001535024. Existence only
@@ -1939,6 +2006,20 @@
   note      = {DOI is the CRC Press reissue. Verified via arXiv and Crossref 2026-11-10}
 }
 
+% verified: arXiv abstract page 0812.2408 and its full text (v1, 12 Dec 2008), read 2026-11-20; Crossref record for DOI 10.1016/j.physleta.2008.12.013 (Physics Letters A 373(5): 546-549, January 2009)
+@article{marr2009outer,
+  author  = {Marr, Carsten and H{\"u}tt, Marc-Thorsten},
+  title   = {Outer-totalistic cellular automata on graphs},
+  journal = {Physics Letters A},
+  volume  = {373},
+  number  = {5},
+  pages   = {546--549},
+  year    = {2009},
+  doi     = {10.1016/j.physleta.2008.12.013},
+  eprint  = {0812.2408},
+  archivePrefix = {arXiv}
+}
+
 % verified: Crossref record 10.1007/BF01223745
 @article{martin1984algebraic,
   author  = {Martin, Olivier and Odlyzko, Andrew M. and Wolfram, Stephen},
@@ -1989,7 +2070,7 @@
   note    = {Filed 20 January 1908; granted 20 July 1909; pentagonal floor tile}
 }
 
-% verified: by search only (Wikipedia "Edward F. Moore", IMSc library volume record, Wellcome Collection offprint record); paper not seen
+% verified (secondary): by search only (Wikipedia "Edward F. Moore", IMSc library volume record, Wellcome Collection offprint record); paper not seen
 @inproceedings{moore1962machine,
   author    = {Moore, Edward F.},
   title     = {Machine models of self-reproduction},
@@ -2057,7 +2138,7 @@
   url       = {https://archive.org/details/grammaroftextile00nisb}
 }
 
-% verified: catalogue listing in search results (chapter 83; DAEST convegni 1; 1994 Venice seminar) and Turk 2025 reference list; chapter not seen
+% verified (secondary): catalogue listing in search results (chapter 83; DAEST convegni 1; 1994 Venice seminar) and Turk 2025 reference list; chapter not seen
 @incollection{nobili1996generalised,
   author    = {Nobili, Renato and Pesavento, Umberto},
   title     = {Generalised von {Neumann}'s automata {I}: A revisitation},
@@ -2067,6 +2148,25 @@
   publisher = {IUAV, DAEST},
   address   = {Venice},
   year      = {1996}
+}
+
+% verified: abstract page https://wolframscience.com/conference/2006/presentations/nochella.html and the poster https://www.wolframscience.com/conference/2006/presentations/materials/nochella.pdf (text read), 2026-11-20
+@misc{nochella2006cellular,
+  author  = {Nochella, Jesse},
+  title   = {Cellular Automata on Networks},
+  howpublished = {Poster, NKS 2006 Wolfram Science Conference},
+  year    = {2006},
+  url     = {https://wolframscience.com/conference/2006/presentations/nochella.html},
+  urldate = {2026-11-20}
+}
+
+% verified: Crossref record 10.1371/journal.pone.0199239
+@article{nunez2018optimizing,
+  author  = {Nu{\~n}ez, Jamie R. and Anderton, Christopher R. and Renslow, Ryan S.},
+  title   = {Optimizing colormaps with consideration for color vision deficiency to enable accurate interpretation of scientific data},
+  journal = {PLOS ONE},
+  volume  = {13}, number = {7}, pages = {e0199239}, year = {2018},
+  doi     = {10.1371/journal.pone.0199239}
 }
 
 % verified: Crossref record 10.1016/S0378-4371(02)01426-7
@@ -2364,6 +2464,15 @@
   doi     = {10.1162/EVCO_a_00030}
 }
 
+% verified: Crossref record 10.1002/col.20070
+@article{sharma2005ciede2000,
+  author  = {Sharma, Gaurav and Wu, Wencheng and Dalal, Edul N.},
+  title   = {The {CIEDE2000} color-difference formula: implementation notes, supplementary test data, and mathematical observations},
+  journal = {Color Research and Application},
+  volume  = {30}, number = {1}, pages = {21--30}, year = {2005},
+  doi     = {10.1002/col.20070}
+}
+
 % verified (secondary): listed in CelLab manual references (fourmilab.ch/cellab/manual/refs.html); software not seen
 @misc{silverman1987phantom,
   author  = {Silverman, Brian},
@@ -2458,6 +2567,15 @@
   note    = {Verified via Crossref 2026-11-10}
 }
 
+% verified: Crossref record 10.1109/TVCG.2017.2744359
+@article{szafir2018modeling,
+  author  = {Szafir, Danielle Albers},
+  title   = {Modeling color difference for visualization design},
+  journal = {IEEE Transactions on Visualization and Computer Graphics},
+  volume  = {24}, number = {1}, pages = {392--401}, year = {2018},
+  doi     = {10.1109/TVCG.2017.2744359}
+}
+
 % verified: Crossref
 @article{tainaka1988lattice,
   author  = {Tainaka, Kei-ichi},
@@ -2521,7 +2639,7 @@
   doi     = {10.1063/1.445022}
 }
 
-% verified: forum thread read through the mirror conwaylife.njohnston.ca, 2026-11-10 (outreach/forum/research)
+% verified: forum thread read through the mirror conwaylife.njohnston.ca, 2026-11-10
 @misc{trevorrow2026spectrelife,
   author  = {Trevorrow, Andrew},
   title   = {{SpectreLife}},
@@ -2533,7 +2651,7 @@
   note    = {A script for Glu, written with Claude from HatLife, running rules on a patch of 38,194 spectres and later one of over a million, with James Edmond's glider and looper rules, the glider rule modified to support eaters, oscillators and glider guns; read through the mirror conwaylife.njohnston.ca}
 }
 
-% verified: forum thread read through the mirror conwaylife.njohnston.ca, 2026-11-10 (outreach/forum/research); the project page itself was not read
+% verified: forum thread read through the mirror conwaylife.njohnston.ca, 2026-11-10; the project page https://bellissimogiorno.github.io/aperiodic-life/ read 2026-11-20 (version 3.7.6 of 15 October 2026): square, hexagonal, hat and Penrose (P3) boards; presets Conway's Life, HighLife, Seeds, Brian's Brain, Star Wars and Life without Death, custom B/S rules, and James Edmond's hat priority tables
 @misc{bellissimogiorno2026aperiodic,
   author  = {{bellissimogiorno}},
   title   = {Game of life on hexagonal, {Penrose}, and einstein tiling},
@@ -2542,7 +2660,7 @@
   month   = oct,
   url     = {https://conwaylife.com/forums/viewtopic.php?t=7491},
   urldate = {2026-11-10},
-  note    = {Announces a Game of Life package for square, hexagonal and aperiodic tilings, with a catalogue of example configurations, online and downloadable at https://bellissimogiorno.github.io/aperiodic-life/ (16 October 2026); read through the mirror conwaylife.njohnston.ca}
+  note    = {Announces a Game of Life package for square, hexagonal and aperiodic tilings, with a catalogue of example configurations, online and downloadable at https://bellissimogiorno.github.io/aperiodic-life/ (16 October 2026); read through the mirror conwaylife.njohnston.ca. The project page (read 2026-11-20) lists rule presets beyond Life (HighLife, Seeds, Brian's Brain, Star Wars, Life without Death) and Edmond's priority tables}
 }
 
 % verified: forum thread read through mirror conwaylife.njohnston.ca (novelty-06)
@@ -2603,18 +2721,6 @@
   month   = apr,
   url     = {https://uwaterloo.ca/computer-science/news/trick-of-the-hat-finding-the-elusive-einstein-tile},
   urldate = {2026-11-10}
-}
-
-% verified: Crossref API record for DOI 10.1016/0167-2789(84)90253-7; also cited in Toffoli and Margolus (1987) ref. [66]
-@article{vichniac1984simulating,
-  author  = {Vichniac, G{\'e}rard Y.},
-  title   = {Simulating Physics with Cellular Automata},
-  journal = {Physica D: Nonlinear Phenomena},
-  volume  = {10},
-  number  = {1--2},
-  pages   = {96--116},
-  year    = {1984},
-  doi     = {10.1016/0167-2789(84)90253-7}
 }
 
 % verified: Crossref API record for DOI 10.1007/978-3-642-82657-3_1; Toffoli and Margolus (1987) p. 41 credit the ANNEAL rule to this paper (their ref. [67])

@@ -122,7 +122,10 @@ fn table_rotation_symmetry_parity() {
     }
     // Saved scenes carry tables added by command.
     let s = w.to_scene();
-    assert_eq!(World::from_scene(&s).unwrap().state_hash(), w.state_hash());
+    assert_eq!(
+        World::from_scene(&s).unwrap().state_hash_v2(),
+        w.state_hash_v2()
+    );
 }
 
 #[test]
@@ -197,7 +200,7 @@ fn forest_fire_is_thread_independent() {
             .install(|| {
                 let mut w = World::from_scene(&s).unwrap();
                 w.apply(Command::Step { gens: 100 }).unwrap();
-                (w.state_hash(), w.fields[0].population())
+                (w.state_hash_v2(), w.fields[0].population())
             })
     };
     let (a, pop) = run(1);
@@ -285,7 +288,7 @@ fn script_steps_fire_in_order_and_replay() {
     w.apply(Command::Step { gens: 5 }).unwrap();
     // Replays exactly from the saved scene.
     let again = World::from_scene(&w.to_scene()).unwrap();
-    assert_eq!(again.state_hash(), w.state_hash());
+    assert_eq!(again.state_hash_v2(), w.state_hash_v2());
     assert_eq!(again.script_state, w.script_state);
 }
 
