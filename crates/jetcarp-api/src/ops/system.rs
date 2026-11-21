@@ -1059,7 +1059,9 @@ enum Inside {
 /// The files JETCARP keeps at the top of a data folder: the library and what SQLite keeps beside
 /// it; and, on Windows, where the data folder is also the runtime folder and the screen saver's
 /// (`%LOCALAPPDATA%\jetcarp`, whose name Windows reads in any case), the host's and the tuner's
-/// locks, the app's and the host's endpoint files, and `JETCARP.scr`.
+/// locks, the app's and the host's endpoint files, the HTTP endpoints' files (the MCP crate's
+/// `CLI_ENDPOINT` and `APP_ENDPOINT`, which this crate cannot see: the names must stay in step),
+/// and `JETCARP.scr`.
 const DATA_FILES: &[&str] = &[
     "library.sqlite",
     "library.sqlite-wal",
@@ -1069,6 +1071,8 @@ const DATA_FILES: &[&str] = &[
     "tune.lock",
     "host-endpoint.json",
     "app-endpoint.json",
+    "mcp-http-endpoint.json",
+    "app-http-endpoint.json",
     "JETCARP.scr",
 ];
 

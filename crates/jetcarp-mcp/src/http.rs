@@ -51,6 +51,10 @@ pub const PATH: &str = "/mcp";
 /// The runtime file `jetcarp mcp --http` records its URL and token in.
 pub const CLI_ENDPOINT: &str = "mcp-http-endpoint.json";
 /// The runtime file the app's HTTP endpoint records its URL and token in.
+///
+/// On Windows the runtime folder is also the data folder, so `jetcarp uninstall --data` counts
+/// these two files as JETCARP's (`DATA_FILES` in `jetcarp-api`'s `ops/system.rs`, which cannot
+/// see these): the names must stay in step.
 pub const APP_ENDPOINT: &str = "app-http-endpoint.json";
 /// The settings folder's private subfolder (0700 on Linux and macOS) that holds kept tokens.
 /// `jetcarp uninstall --settings` counts it and its two files as JETCARP's (`HTTP_TOKEN_FILES`
