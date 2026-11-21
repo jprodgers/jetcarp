@@ -80,8 +80,8 @@ palette; with the keyboard elsewhere, the grid looks as it always does.
   sight. At the edge of a tiling with dead edges the cursor stays, and the status line says so; on
   wrapped edges it goes round.
 - **Space** draws the cursor's cell, into the automaton and in the state the *Draw* pane chooses
-  (choose *Draw* there to see its *Into* and *State*; the keyboard draws whichever tool the mouse
-  has). **Delete** or **Backspace** erases it.
+  (its *Into* and *State*, shown whatever the mouse's tool; the keyboard draws with them in *Pan*
+  too). **Delete** or **Backspace** erases it.
 - **Shift and the arrows** select: the cells between where you began and the cursor (every cell
   whose centre lies in the rectangle their two centres span). Space then fills the selection, and
   Delete clears it.

@@ -96,7 +96,7 @@ The panes are in two groups of tabs, upper and lower:
 | --- | --- | --- |
 | *Scene* | The world's name, description, tiling, size and generation | [Scenes](../guides/scenes.md) |
 | *Tiling* | The tiling: its family, size and edges, the catalog of 1,254 periodic tilings, *Edit tile…* and *Edit unit cell…* | [Tilings as neighbour graphs](../tilings/neighbour-graphs.md), [Drawing and editing tiles](../guides/drawing-tiles.md) |
-| *Draw* | The mouse's tool (*Pan*, *Draw* or *Erase*), which automaton it paints *Into*, and the state it paints | [Several automata at once](../guides/several-automata.md#in-the-app) |
+| *Draw* | The mouse's tool (*Pan*, *Draw* or *Erase*), and which automaton and state it and the keyboard's cell cursor paint (*Into*, *State*) | [Several automata at once](../guides/several-automata.md#in-the-app) |
 | *Objects* | *Find objects*: the still lifes, oscillators and spaceships in the world now, counted, and highlighted when you click a row | [Life on a new tiling](../tutorials/life-on-a-new-tiling.md) |
 | *Display* | Where the grid shows (this window, full screen, or full-screen *Outputs* on chosen monitors) and the cell size in pixels | [Wallpapers](../guides/wallpapers.md#screensaver-mode-in-the-app) |
 | *Screensaver* | Screensaver mode, its profiles and rotations, and the system screen saver's rotation | [Wallpapers](../guides/wallpapers.md#screensaver-mode-in-the-app) |
