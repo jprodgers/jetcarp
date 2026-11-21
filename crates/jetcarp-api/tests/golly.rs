@@ -250,3 +250,72 @@ fn golly_agrees_on_jetcarp_s_rle() {
         CASES.len() * 2
     );
 }
+
+/// Every find in a library that Golly can hold (two-state B/S rules on squares and hexagons), copied
+/// as RLE, pastes back into JETCARP as the same cells and runs to the same generations in Golly:
+/// over four of its periods, and at least 30 generations. Ignored: it needs `bgolly` and
+/// `JETCARP_GOLLY_LIBRARY`, a library file to read (give it a copy; opening it may update its
+/// format). The release candidates run it on a library of fresh hunts.
+#[test]
+#[ignore = "needs Golly's bgolly and a library; run on the release candidates"]
+fn golly_agrees_on_a_library_s_finds() {
+    let path = std::env::var_os("JETCARP_GOLLY_LIBRARY")
+        .expect("set JETCARP_GOLLY_LIBRARY to a library file");
+    let lib = jetcarp_store::Library::open(std::path::PathBuf::from(path));
+    let records = lib.list().unwrap();
+    let dir = common::scratch("golly-finds");
+    let cx = Ctx::interactive();
+    let (mut checked, mut skipped) = (0usize, 0usize);
+    let mut classes: std::collections::BTreeMap<String, usize> = Default::default();
+    for r in &records {
+        let made = jetcarp_core::pattern::promote::showcase_scene(r, None, None)
+            .and_then(|s| jetcarp_core::World::from_scene(&s))
+            .and_then(|w| rle::of_world(&w, &[]));
+        // Not something Golly holds (another tiling, rule family, or a B0 rule).
+        let Ok(text) = made else {
+            skipped += 1;
+            continue;
+        };
+        let rule = rle::header_rule(&text).unwrap();
+        let (tiling, nb, bs) = if let Some(b) = rule.strip_suffix('H') {
+            ("hex", "touch", b.to_string())
+        } else if let Some(b) = rule.strip_suffix('V') {
+            ("square", "edge", b.to_string())
+        } else {
+            ("square", "touch", rule.clone())
+        };
+        let gens = (r.period.max(1) * 4).clamp(30, 400);
+        let extent = cells(&text).iter().fold(0i64, |m, &(x, y)| m.max(x).max(y)) + 1;
+        let size = (extent + 2 * gens as i64 + 24).min(2000);
+        let world = json!({"tiling": tiling, "width": size, "height": size, "boundary": "dead",
+            "cas": [{"rule": bs, "seed": "empty", "neighborhood": nb}]});
+        let mut h = Session::new();
+        new_world(&cx, &mut h, world);
+        let at = size / 2 - extent / 2;
+        draw(&cx, &mut h, json!({"rle": text, "x": at, "y": at}));
+        let start = rle::of_world(h.world(), &[]).unwrap();
+        let name = format!("{}-{}", r.id, r.class.key());
+        assert_eq!(
+            cells(&start),
+            cells(&text),
+            "{name}: pasted back as other cells\n{text}"
+        );
+        h.exec(Command::Step { gens }).unwrap();
+        let ours = cells(&rle::of_world(h.world(), &[]).unwrap());
+        let theirs = cells(&golly(&dir, &name, &start, gens));
+        assert_eq!(
+            ours,
+            theirs,
+            "{name} ({rule}): generation {gens} differs ({} live here, {} in Golly)",
+            ours.len(),
+            theirs.len()
+        );
+        checked += 1;
+        *classes.entry(r.class.key().to_string()).or_default() += 1;
+    }
+    eprintln!(
+        "golly: {checked} finds agree ({classes:?}); {skipped} of {} are not for Golly",
+        records.len()
+    );
+    assert!(checked > 0, "no find in the library is one Golly holds");
+}
