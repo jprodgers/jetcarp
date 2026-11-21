@@ -347,11 +347,18 @@ fn settings_ui(
         })
         .map(|b| b.name)
         .collect();
+    let pairs: Vec<String> = cvd::JACA_PAIRS
+        .iter()
+        .map(|(p, n)| format!("{p} and {n}"))
+        .collect();
     ui.add(
         egui::Label::new(
             RichText::new(format!(
-                "Built-in palettes that pass JETCARP's colour-vision check: {}.",
-                passing.join(", ")
+                "{} of the {} built-in palettes pass JETCARP's colour-vision check (the book's \
+                 palettes reference marks them). For JACA, these pairs stay apart: {}.",
+                passing.len(),
+                render::PALETTES.len(),
+                pairs.join("; ")
             ))
             .small()
             .weak(),

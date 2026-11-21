@@ -22,6 +22,15 @@ day later (0.4.2: 17 November here, 18 November there).
   Accessibility* makes them, or any palettes, the defaults for scenes that name none.
   ([Palettes](../reference/palettes.md#colour-vision-deficiency),
   [#217](https://github.com/jprodgers/jetcarp/issues/217))
+- **42 more palettes that pass the colour-vision check, 49 of the 75 built-ins in all:** ramps of
+  several hues (Dusk, Furnace, Kelp, Abyss, Rosewood, Harbour, Lagoon), of one hue (Heather,
+  Graphite, Honey, Spruce, Fjord, Copper, Peony, Sulphur, Frost, Sepia), longer ramps on a deeper
+  ground (Midnight Garden, Lava Flow, Nebula), light grounds (Vellum, Linen, Ink Wash, Bluebell,
+  Fern, Brick, Mulberry, Driftwood), two closed wheels for cyclic rules (Tidewheel, Compass Rose),
+  and six more pairs for JACA's two signs (Indigo and Marmalade, Sky and Rust, Iris and Gold, Lapis
+  and Amber, Ice and Ember Red, Delft and Ochre). All join the frozen palette registry. They were
+  designed with `docs/tools/design-palettes.py`, and the tests hold every one, and every JACA pair,
+  to the check. ([Palettes](../reference/palettes.md#colour-vision-deficiency))
 - **The app follows the system's request for reduced motion.** It reads Windows' *Show animations
   in Windows*, macOS's *Reduce motion* and GNOME's *Reduce Animation* at start and every couple of
   seconds. When it is on, the Quick Start's cards and the small animations in the Hunts and Ants
