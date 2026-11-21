@@ -304,7 +304,7 @@ impl HlView {
                 self.scale *= 2.0;
             }
             if self.busy() {
-                ui.spinner();
+                crate::a11y::spinner(ui);
             }
             ui.separator();
             ui.label("Colours");
@@ -339,7 +339,7 @@ impl HlView {
             ui.label(egui::RichText::new(&self.status).small());
         }
         if let Some(e) = &self.error {
-            ui.colored_label(Color32::LIGHT_RED, e);
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
         }
         let size = ui.available_size().max(Vec2::new(200.0, 150.0));
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());

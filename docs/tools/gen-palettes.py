@@ -2,8 +2,11 @@
 """Generate the table of built-in palettes in docs/src/reference/palettes.md.
 
 Source: `jetcarp palettes --json`. The table between the page's GENERATED markers is replaced; a
-palette with a light background is marked "(light)". The page's sentence "JETCARP has N built-in
-palettes" must give the program's count, or the generator stops.
+palette with a light background is marked "(light)", and the last column gives the program's own
+check for colour-vision deficiency (`jetcarp_core::cvd`): "passes", or the smallest difference
+found and where. The page's sentence "JETCARP has N built-in palettes" must give the program's
+count, and its sentence "a CIEDE2000 difference of at least N" the check's distance, or the
+generator stops.
 
 Standard library only. Usage: python3 docs/tools/gen-palettes.py [--jetcarp target/release/jetcarp] [--check]
 """
@@ -37,8 +40,8 @@ def code(c):
 
 def table(palettes):
     rows = [
-        "| Palette | Colours, young or low to old or high, on its background | Stops | Background | Stage |",
-        "| --- | --- | --- | --- | --- |",
+        "| Palette | Colours, young or low to old or high, on its background | Stops | Background | Stage | Colour-vision check |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for p in palettes:
         name = p["name"] + (" (light)" if luminance(p["background"]) > 0.5 else "")
@@ -48,7 +51,14 @@ def table(palettes):
             f'{", ".join(p["stops"])})"></span></span>'
         )
         stops = " ".join(code(s) for s in p["stops"])
-        rows.append(f"| {name} | {bar} | {stops} | {code(p['background'])} | {code(p['stage'])} |")
+        cvd = p["cvd"]
+        if cvd["passes"]:
+            check = f"**Passes** (least {cvd['least']:.1f})"
+        else:
+            check = cvd["failure"]
+        rows.append(
+            f"| {name} | {bar} | {stops} | {code(p['background'])} | {code(p['stage'])} | {check} |"
+        )
     return "\n".join(rows)
 
 
@@ -58,7 +68,8 @@ def main():
     ap.add_argument("--check", action="store_true", help="only check that the page is up to date")
     args = ap.parse_args()
     out = subprocess.run([args.jetcarp, "palettes", "--json"], capture_output=True, text=True, check=True).stdout
-    palettes = json.loads(out)["palettes"]
+    data = json.loads(out)
+    palettes = data["palettes"]
 
     page = PAGE.read_text(encoding="utf-8")
     if BEGIN not in page or END not in page:
@@ -67,6 +78,10 @@ def main():
     if not said or int(said.group(1)) != len(palettes):
         sys.exit(f"{PAGE.name} says {said.group(1) if said else 'no number of'} built-in palettes; "
                  f"the program has {len(palettes)}: correct the sentence")
+    least = re.search(r"a CIEDE2000 difference of at least (\d+(?:\.\d+)?)", page)
+    if not least or float(least.group(1)) != data["cvd_min_difference"]:
+        sys.exit(f"{PAGE.name} says {least.group(1) if least else 'no'} difference for the colour-vision "
+                 f"check; the program asks {data['cvd_min_difference']}: correct the sentence")
     head, rest = page.split(BEGIN, 1)
     _, tail = rest.split(END, 1)
     new = head + BEGIN + "\n" + table(palettes) + "\n" + END + tail

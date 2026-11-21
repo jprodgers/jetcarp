@@ -44,6 +44,14 @@ pollster.workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
 
+# Windows: the system's reduced motion and contrast themes (`src/a11y.rs`, #218, #220), through
+# `SystemParametersInfoW`. windows-sys is already in the tree (the display crate uses it).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_UI_Accessibility",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 # Keep-awake (`src/keepawake.rs`): the XDG portal and session bus. zbus 5 is already in the
 # tree through AccessKit, so this adds no new crates.
 [target.'cfg(target_os = "linux")'.dependencies]

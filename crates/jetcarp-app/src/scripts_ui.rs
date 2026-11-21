@@ -541,8 +541,14 @@ impl ScriptsWindow {
             }
             ui.separator();
             match &self.check {
-                None => ui.colored_label(Color32::LIGHT_GREEN, "No syntax errors"),
-                Some(e) => ui.colored_label(Color32::from_rgb(0xff, 0x80, 0x80), e.to_string()),
+                None => ui.colored_label(
+                    crate::theme::ink(ui, Color32::LIGHT_GREEN),
+                    "No syntax errors",
+                ),
+                Some(e) => ui.colored_label(
+                    crate::theme::ink(ui, Color32::from_rgb(0xff, 0x80, 0x80)),
+                    e.to_string(),
+                ),
             };
         });
         let h = ui.available_height() - 4.0;
@@ -641,7 +647,7 @@ impl ScriptsWindow {
         match &self.estimate {
             Some(Estimating::Running { spec, .. }) if *spec == current || self.confirm => {
                 ui.horizontal(|ui| {
-                    ui.spinner();
+                    crate::a11y::spinner(ui);
                     ui.label("Timing a few runs…");
                 });
             }
@@ -668,7 +674,10 @@ impl ScriptsWindow {
                     }
                 }
                 Err(e) => {
-                    ui.colored_label(Color32::LIGHT_RED, format!("This sweep would fail: {e}"));
+                    ui.colored_label(
+                        crate::theme::ink(ui, Color32::LIGHT_RED),
+                        format!("This sweep would fail: {e}"),
+                    );
                     self.confirm = false;
                 }
             },
@@ -696,12 +705,12 @@ impl ScriptsWindow {
                                 frac * 100.0,
                                 p.item
                             ))
-                            .animate(true),
+                            .animate(crate::a11y::animate_bars(ui.ctx())),
                     );
                 }
                 None => {
                     ui.horizontal(|ui| {
-                        ui.spinner();
+                        crate::a11y::spinner(ui);
                         ui.label(format!(
                             "{} running for {}",
                             r.what,
@@ -751,7 +760,12 @@ impl ScriptsWindow {
                     } else {
                         Color32::from_gray(190)
                     };
-                    ui.label(RichText::new(l).monospace().size(12.0).color(c));
+                    ui.label(
+                        RichText::new(l)
+                            .monospace()
+                            .size(12.0)
+                            .color(crate::theme::ink(ui, c)),
+                    );
                 }
             });
     }

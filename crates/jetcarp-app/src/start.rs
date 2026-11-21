@@ -385,7 +385,7 @@ impl Menu {
                 RichText::new(t.to_uppercase())
                     .size(11.0)
                     .strong()
-                    .color(Color32::from_gray(150)),
+                    .color(crate::theme::ink(ui, Color32::from_gray(150))),
             );
             ui.add_space(2.0);
         };
@@ -468,8 +468,13 @@ impl Menu {
             ui.separator();
             ui.label("Cards");
             ui.add(egui::Slider::new(&mut v.card_w, 140.0..=340.0).show_value(false));
+            let still = if crate::a11y::motion_reduced(ui.ctx()) {
+                ". Reduced motion is on, so the cards start as stills: tick this to run them"
+            } else {
+                ""
+            };
             ui.checkbox(&mut v.live, "Live").on_hover_text(format!(
-                "Run the cards on screen (up to {MAX_LIVE} at once)"
+                "Run the cards on screen (up to {MAX_LIVE} at once){still}"
             ));
             if !v.filter.is_empty()
                 && ui
@@ -788,10 +793,29 @@ fn facet_row(
         return false;
     }
     let p = ui.painter_at(rect);
+    // The standard look, or the high-contrast theme's own colours (#220).
+    let v = ui.visuals();
+    let (sel_bg, hover_bg, text, sel_text, weak) = if crate::a11y::high_contrast(ui.ctx()) {
+        (
+            v.selection.bg_fill,
+            v.widgets.hovered.weak_bg_fill,
+            v.text_color(),
+            v.selection.stroke.color,
+            v.weak_text_color(),
+        )
+    } else {
+        (
+            Color32::from_rgb(0x34, 0x3c, 0x50),
+            Color32::from_gray(38),
+            Color32::from_gray(205),
+            Color32::WHITE,
+            Color32::from_gray(130),
+        )
+    };
     if selected {
-        p.rect_filled(rect, 3.0, Color32::from_rgb(0x34, 0x3c, 0x50));
+        p.rect_filled(rect, 3.0, sel_bg);
     } else if resp.hovered() {
-        p.rect_filled(rect, 3.0, Color32::from_gray(38));
+        p.rect_filled(rect, 3.0, hover_bg);
     }
     let mut x = rect.left() + 5.0;
     if let Some(c) = color {
@@ -803,18 +827,14 @@ fn facet_row(
         egui::Align2::LEFT_CENTER,
         label,
         egui::FontId::proportional(13.0),
-        if selected {
-            Color32::WHITE
-        } else {
-            Color32::from_gray(205)
-        },
+        if selected { sel_text } else { text },
     );
     p.text(
         egui::pos2(rect.right() - 6.0, rect.center().y),
         egui::Align2::RIGHT_CENTER,
         count.to_string(),
         egui::FontId::proportional(11.5),
-        Color32::from_gray(130),
+        if selected { sel_text } else { weak },
     );
     resp.clicked()
 }

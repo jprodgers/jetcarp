@@ -137,7 +137,7 @@ impl JetcarpApp {
                 let frames = self.anim.gens / self.anim.every.max(1) + 1;
                 if frames > MAX_FRAMES {
                     ui.colored_label(
-                        egui::Color32::LIGHT_RED,
+                        crate::theme::ink(ui, egui::Color32::LIGHT_RED),
                         format!(
                             "{frames} frames is over the limit of {MAX_FRAMES}: fewer generations, or a frame every more"
                         ),
