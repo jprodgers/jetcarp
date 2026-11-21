@@ -341,11 +341,17 @@ impl JetcarpApp {
                 if ui
                     .small_button("◀")
                     .on_hover_text("Previous item")
+                    .accessible_name("Previous item")
                     .clicked()
                 {
                     let _ = self.saver_skip(-1);
                 }
-                if ui.small_button("▶").on_hover_text("Next item").clicked() {
+                if ui
+                    .small_button("▶")
+                    .on_hover_text("Next item")
+                    .accessible_name("Next item")
+                    .clicked()
+                {
                     let _ = self.saver_skip(1);
                 }
             }
@@ -465,7 +471,11 @@ impl JetcarpApp {
                                     .hint_text("scene.json")
                                     .desired_width(180.0),
                             );
-                            let clicked = ui.button("…").clicked();
+                            let clicked = ui
+                                .button("…")
+                                .on_hover_text("Choose a scene file")
+                                .accessible_name("Choose a scene file")
+                                .clicked();
                             if let Some(p) = crate::file_dialog::on_click(
                                 ui.ctx(),
                                 "saver.scene",
@@ -876,7 +886,11 @@ impl JetcarpApp {
                                             .desired_width(150.0),
                                     )
                                     .changed();
-                                let clicked = ui.small_button("…").clicked();
+                                let clicked = ui
+                                    .small_button("…")
+                                    .on_hover_text("Choose a scene file")
+                                    .accessible_name("Choose a scene file")
+                                    .clicked();
                                 if let Some(p) = crate::file_dialog::on_click(
                                     ui.ctx(),
                                     "saver.profile_scene",

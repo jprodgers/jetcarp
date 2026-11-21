@@ -23,6 +23,8 @@ pub struct Offscreen {
     /// The last frame's widgets with a text, and where they are (with AccessKit enabled on
     /// `ctx`), for clicking them by name.
     pub widgets: Vec<(String, egui::Rect)>,
+    /// The last frame's whole AccessKit tree (what a screen reader is given).
+    pub tree: Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>,
 }
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -66,6 +68,7 @@ impl Offscreen {
             size: [width, height],
             time: 0.0,
             widgets: vec![],
+            tree: vec![],
         })
     }
 
@@ -126,6 +129,7 @@ impl Offscreen {
                     Some((text, r))
                 })
                 .collect();
+            self.tree = u.nodes;
         }
         let ppp = out.pixels_per_point;
         let prims = self.ctx.tessellate(out.shapes, ppp);

@@ -115,7 +115,14 @@ pub fn os_window<R>(
         // Wayland does not give).
         let r = ui.ctx().content_rect();
         let size = (class != ViewportClass::EmbeddedWindow).then(|| [r.width(), r.height()]);
-        (add(ui, class), size)
+        let out = add(ui, class);
+        // An OS window of its own has its own keyboard focus and accessibility tree (#219).
+        if class != ViewportClass::EmbeddedWindow {
+            let chrome = crate::a11y::find_chrome(ui.ctx());
+            crate::a11y::paint_focus_ring(ui.ctx(), &chrome);
+            crate::a11y::tidy_tree(ui.ctx(), &chrome);
+        }
+        (out, size)
     });
     (r, closed, size)
 }
@@ -214,6 +221,15 @@ pub fn show<R>(
     let resp = w.show(ctx, |ui| add(ui));
     let mut out = None;
     if let Some(resp) = resp {
+        let (layer, rect) = (resp.response.layer_id, resp.response.rect);
+        // The keyboard (#219): a part of the window F6 moves to; its title bar, which only the
+        // mouse uses, passed over; and Esc on one of a tool window's controls closes it (a pane
+        // floats until it is docked or hidden from the Window menu).
+        crate::a11y::window_region(ctx, spec.title, layer, rect);
+        crate::a11y::mouse_only(ctx, id.with("__title_click"));
+        if !spec.dockable && crate::a11y::escape_closes(ctx, layer) {
+            *open = false;
+        }
         if title_buttons(ctx, &resp.response, spec.dockable, &mut events) {
             state.popped = true;
         }
@@ -259,6 +275,7 @@ fn title_buttons(
     if ui
         .add(egui::Button::new("↗").frame(false).small())
         .on_hover_text("Pop out to its own window (move it to any monitor)")
+        .accessible_name("Pop out to its own window")
         .clicked()
     {
         events.push(Chrome::PopOut);
@@ -268,6 +285,7 @@ fn title_buttons(
         && ui
             .add(egui::Button::new("⊟").frame(false).small())
             .on_hover_text("Dock in the main window")
+            .accessible_name("Dock in the main window")
             .clicked()
     {
         events.push(Chrome::Dock);

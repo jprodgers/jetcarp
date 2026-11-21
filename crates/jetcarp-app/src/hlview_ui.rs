@@ -297,10 +297,20 @@ impl HlView {
             if ui.button("Fit").clicked() {
                 self.fit();
             }
-            if ui.button("−").on_hover_text("Zoom out").clicked() {
+            if ui
+                .button("−")
+                .on_hover_text("Zoom out")
+                .accessible_name("Zoom out")
+                .clicked()
+            {
                 self.scale /= 2.0;
             }
-            if ui.button("+").on_hover_text("Zoom in").clicked() {
+            if ui
+                .button("+")
+                .on_hover_text("Zoom in")
+                .accessible_name("Zoom in")
+                .clicked()
+            {
                 self.scale *= 2.0;
             }
             if self.busy() {
@@ -343,6 +353,13 @@ impl HlView {
         }
         let size = ui.available_size().max(Vec2::new(200.0, 150.0));
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+        resp.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::Role::Image,
+                true,
+                "The pattern on the unbounded plane (drag to pan, scroll to zoom)",
+            )
+        });
         if self.fit_pending && self.plane.is_some() {
             self.do_fit(rect.size());
         }
