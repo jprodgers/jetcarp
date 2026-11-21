@@ -483,6 +483,8 @@ pub struct Runs {
     writable: bool,
     /// How new segments are cut and compressed (the defaults; tests make them small).
     pub tuning: seg::Tuning,
+    /// The columns of `runs` its queries read ([`store::run_cols`]).
+    cols: String,
 }
 
 fn uuid_of(dir: &Path) -> String {
@@ -508,6 +510,7 @@ impl Runs {
             .ok_or_else(|| format!("{} has no folder", db_path.display()))?
             .to_path_buf();
         let db = store::open(db_path)?;
+        let cols = store::run_cols(&db)?;
         let format = store::meta_get(&db, "format")?.unwrap_or_default();
         let had = Manifest::read(&dir)?;
         let new_manifest = had.is_none();
@@ -519,6 +522,7 @@ impl Runs {
             unsealed: 0,
             writable: true,
             tuning: seg::Tuning::default(),
+            cols,
         };
         r.recover()?;
         if new_manifest {
@@ -550,6 +554,7 @@ impl Runs {
         // a seal finishing meanwhile shows its runs in both, never in neither.
         db.execute_batch("BEGIN").map_err(e)?;
         store::has_table(&db, "runs")?;
+        let cols = store::run_cols(&db)?;
         let manifest = Manifest::read(&dir)?.unwrap_or_else(|| Manifest::new(&uuid_of(&dir)));
         Ok(Runs {
             dir,
@@ -559,6 +564,7 @@ impl Runs {
             unsealed: 0,
             writable: false,
             tuning: seg::Tuning::default(),
+            cols,
         })
     }
 
@@ -763,7 +769,7 @@ impl Runs {
                 .db
                 .prepare(&format!(
                     "SELECT {} FROM runs WHERE id > ?1 ORDER BY id LIMIT ?2",
-                    store::RUN_COLS
+                    self.cols
                 ))
                 .map_err(e)?;
             let mut rows = st.query(params![after, max as i64]).map_err(e)?;
@@ -923,7 +929,7 @@ impl Runs {
             .db
             .prepare(&format!(
                 "SELECT {} FROM runs WHERE id > ?1 ORDER BY id",
-                store::RUN_COLS
+                self.cols
             ))
             .map_err(e)?;
         let mut rows = st.query([self.manifest.last_id()]).map_err(e)?;
@@ -1085,7 +1091,7 @@ impl Runs {
                 .db
                 .prepare(&format!(
                     "SELECT {} FROM runs WHERE id IN ({})",
-                    store::RUN_COLS,
+                    self.cols,
                     list.join(",")
                 ))
                 .map_err(e)?;
@@ -1500,7 +1506,7 @@ impl Runs {
                 .db
                 .prepare(&format!(
                     "SELECT {} FROM runs WHERE id > ?1 ORDER BY id",
-                    store::RUN_COLS
+                    self.cols
                 ))
                 .map_err(e)?;
             let mut rows = st.query([self.manifest.last_id()]).map_err(e)?;

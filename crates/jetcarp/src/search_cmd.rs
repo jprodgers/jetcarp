@@ -95,7 +95,7 @@ pub struct JobFlags {
     #[arg(long)]
     limit: Option<u64>,
     /// Worker threads (default: all cores; an explore search leaves two free). Results do not
-    /// depend on this.
+    /// depend on this, but for an explore search's: its rounds of runs are sized to its threads.
     #[arg(long)]
     threads: Option<usize>,
     /// Run in a process of its own, and return once that process has taken the job (`jetcarp jobs
@@ -556,12 +556,14 @@ pub struct ExploreArgs {
     /// spectre_glider; default: all).
     #[arg(long)]
     families: Option<String>,
-    /// About this many cells in a screening run's grid.
+    /// About this many cells in a screening run's grid (an aperiodic patch is the level nearest
+    /// it: 4,000 tiles for 16,000).
     #[arg(long, default_value_t = 16000)]
     screen_cells: u32,
     #[arg(long, default_value_t = 1024)]
     screen_gens: u32,
-    /// Cells of a confirmation run (the best runs again, on a bigger grid).
+    /// Cells of a confirmation run (the best runs again, on a bigger grid; an aperiodic patch is
+    /// the level nearest it, and bigger than the screening patch).
     #[arg(long, default_value_t = 64000)]
     confirm_cells: u32,
     #[arg(long, default_value_t = 4096)]
