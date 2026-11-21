@@ -599,6 +599,13 @@ fn free_space_at(_: &Path) -> Option<u64> {
 
 /// What a folder holds, for choosing it as the data folder.
 fn check_data_dir(dir: &Path) -> Result<bool, ApiError> {
+    check_data_dir_beside(dir, jetcarp_core::paths::runtime_dir().as_deref())
+}
+
+/// [`check_data_dir`], with `runtime` the runtime folder. On Windows the default data folder is
+/// also the runtime folder (`%LOCALAPPDATA%\jetcarp`), where JETCARP's running programs keep
+/// their locks, endpoint files and memory records: those don't make it a folder of someone else's.
+fn check_data_dir_beside(dir: &Path, runtime: Option<&Path>) -> Result<bool, ApiError> {
     if !dir.exists() {
         return Ok(false);
     }
@@ -615,10 +622,16 @@ fn check_data_dir(dir: &Path) -> Result<bool, ApiError> {
         .map_err(|e| ApiError::io(format!("reading {}: {e}", dir.display())))?;
     // What a system leaves in a new folder does not count.
     let noise = |n: &str| n.starts_with('.') || n == "Thumbs.db" || n == "desktop.ini";
+    let same = |a: &Path, b: &Path| match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    };
+    let is_runtime = runtime.is_some_and(|r| same(r, dir));
+    let ours = |n: &str| is_runtime && crate::ops::system::runtime_entry(n);
     let mut others: Vec<String> = rd
         .flatten()
         .map(|e| e.file_name().to_string_lossy().to_string())
-        .filter(|n| !noise(n))
+        .filter(|n| !noise(n) && !ours(n))
         .collect();
     if others.is_empty() {
         return Ok(false);
@@ -1761,5 +1774,35 @@ impl Op for SetupApply {
     type Out = Applied;
     fn run(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
         apply(cx, a, p)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// On Windows the default data folder is also the runtime folder (`%LOCALAPPDATA%\jetcarp`):
+    /// what JETCARP's running programs keep there doesn't make it a folder of someone else's.
+    #[test]
+    fn the_runtime_folder_s_own_files_dont_make_a_data_folder_not_empty() {
+        let root = std::env::temp_dir().join(format!("jetcarp-data-check-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let runtime = root.join("jetcarp");
+        std::fs::create_dir_all(runtime.join(jetcarp_core::machine::pool::DIR)).unwrap();
+        std::fs::write(runtime.join("memory").join("4242.json"), "{}").unwrap();
+        std::fs::write(runtime.join("app-endpoint.json"), "{}").unwrap();
+        std::fs::write(runtime.join("host.lock"), "").unwrap();
+        // The runtime folder, holding only JETCARP's own: a new data folder.
+        assert!(!check_data_dir_beside(&runtime, Some(&runtime)).unwrap());
+        // The same files in a folder that isn't the runtime folder are someone else's.
+        let other = root.join("other");
+        std::fs::create_dir_all(other.join("memory")).unwrap();
+        let e = check_data_dir_beside(&other, Some(&runtime)).unwrap_err();
+        assert!(e.message.contains("not empty (memory)"), "{}", e.message);
+        // And a file of someone else's in the runtime folder still counts.
+        std::fs::write(runtime.join("notes.txt"), "mine").unwrap();
+        let e = check_data_dir_beside(&runtime, Some(&runtime)).unwrap_err();
+        assert!(e.message.contains("not empty (notes.txt)"), "{}", e.message);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

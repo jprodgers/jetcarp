@@ -1133,14 +1133,27 @@ const DATA_FILES: &[&str] = &[
 ];
 
 /// The folders JETCARP keeps in a data folder: the library's job locks, its media
-/// (`media/ab/<sha256>.<ext>`), its searches (`searches/<uuid>/`), and the search databases'
-/// folder ([`jetcarp_core::paths::explore_dir`]).
+/// (`media/ab/<sha256>.<ext>`), its searches (`searches/<uuid>/`), the search databases'
+/// folder ([`jetcarp_core::paths::explore_dir`]), and, on Windows, where the data folder is also
+/// the runtime folder, the memory pool's records (`memory/<pid>.json`).
 const DATA_FOLDERS: &[(&str, Inside)] = &[
     ("library.sqlite-jobs", Inside::Files),
     ("media", Inside::HexFolders),
     ("searches", Inside::UuidFolders),
     ("explore", Inside::Anything),
+    (jetcarp_core::machine::pool::DIR, Inside::Files),
 ];
+
+/// Whether `name`, at the top of the runtime folder, is something JETCARP's running programs keep
+/// there: the host's and the tuner's locks, the app's and the host's endpoint files, the memory
+/// pool's records, and on Windows (where the runtime folder is also the data folder and the
+/// screen saver's) `JETCARP.scr`.
+pub(crate) fn runtime_entry(name: &str) -> bool {
+    matches!(
+        name,
+        "host.lock" | "tune.lock" | "host-endpoint.json" | "app-endpoint.json" | "JETCARP.scr"
+    ) || name == jetcarp_core::machine::pool::DIR
+}
 
 /// The files JETCARP keeps at the top of the settings folder: the app's, the host's and setup's
 /// settings, the data folder chosen in setup, the answer to the photosensitive seizure warning,

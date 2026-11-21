@@ -152,7 +152,9 @@ the folder is kept readable by you only (mode 0700) and the files too (0600). It
 every copy of JETCARP you run, whatever folders the others point at, so there is one background
 host per user (the host's `host.lock` is here) and `jetcarp host` and `jetcarp mcp --app` reach the
 one running; `JETCARP_RUNTIME_DIR` gives a copy a runtime folder of its own. `jetcarp paths` and
-`jetcarp doctor` show the one in use.
+`jetcarp doctor` show the one in use. On Windows it is also the default data folder, so the
+data folder holds these files beside the library; setup still takes it as a new data folder when
+they are all it holds, and `jetcarp uninstall --data` counts them as JETCARP's.
 
 To remove what JETCARP set up outside these folders, and optionally the folders themselves, see
 [Uninstalling](../guides/uninstalling.md).
