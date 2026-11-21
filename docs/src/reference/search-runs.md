@@ -115,14 +115,15 @@ says `jetcarp.schema` (`jetcarp-explore-runs 3`), `jetcarp.search` (the uuid), `
 
 **Schema 2** (JETCARP 0.4.2) added the five sign columns at the end. A segment sealed before then is
 of schema 1: it has every column but those, and its runs have no sign measures. **Schema 3** (0.4.3)
-added `parent_job` after them, and from 0.4.3 on a screened run's `parent` names the run it was
+added `parent_job` and `parent_search` after them, and from 0.4.3 on a screened run's `parent` names the run it was
 made from; in a segment of schema 1 or 2 only confirmation runs have a `parent`, and none has a
-`parent_job`. A search sealed under one schema and continued under another holds segments of both,
+`parent_job` or `parent_search`. A search sealed under one schema and continued under another holds segments of both,
 each naming its own; JETCARP reads them all, and skips columns it does not know. DuckDB reads such a
 folder with `read_parquet('runs/part-*.parquet', union_by_name = true)`, the newer columns null in
 the older segments.
 
-Every column is required (never null) except `parent`, the sign columns and `parent_job`.
+Every column is required (never null) except `parent`, the sign columns, `parent_job` and
+`parent_search`.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
@@ -169,7 +170,8 @@ Every column is required (never null) except `parent`, the sign columns and `par
 | `sign_sorted` | float32, null but for JACA | JACA: how well the signs sort into territories at the end: the same-sign fraction among neighbouring live cells (the CA's own neighbourhood), relative to what shuffled signs would give (0 mixed, 1 fully sorted; 0 when one sign is all that is left, and with no live neighbours) |
 | `sign_trade` | float32, null but for JACA | JACA: of the cells live at both the three-quarter mark and the end, the fraction whose sign differs |
 | `sign_lost` | float32, null but for JACA | JACA: when a sign first fell below 1% of live cells, as a fraction of the run (1 if never) |
-| `parent_job` | int64, null but for runs made from another job's | The job whose run `parent` is, when it is not this search's own: a transplant or balance variant of a rule taken with `--parents-from` (its job and run are also in the search's `parents` setting) |
+| `parent_job` | int64, null but for runs made from another job's | The job whose run `parent` is, when it is not this search's own: a transplant or balance variant of a rule taken with `--parents-from`. It is that job's id in the library where the search ran; `parent_search` names it anywhere |
+| `parent_search` | string, null but for runs made from another job's | That job's search, by its uuid (its folder's name, `searches/<uuid>/`), which stays the same in every library and pack the search goes to; null for a run made from this search's own, and for one whose parents were taken before 0.4.3 (their job and run are also in the search's `parents` setting) |
 
 The 18 columns from `density` to `mover_speed`, with `settle` and `period`, are the run's 20 measures,
 and the sign columns five more. The working database stores them as a blob of little-endian 32-bit

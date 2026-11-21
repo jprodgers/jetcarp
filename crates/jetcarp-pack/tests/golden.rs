@@ -100,8 +100,9 @@ fn every_golden_pack_reads_and_checks() {
             }
             "searches3" => {
                 // Run schema 3 (0.4.3): every segment names it, and its runs come back with
-                // their lineage, a parent in the search or (with parent_job) of another job's,
-                // and a run on an aperiodic patch with the patch's tiles as its cells.
+                // their lineage, a parent in the search or (with parent_job and parent_search)
+                // of another job's, and a run on an aperiodic patch with the patch's tiles as its
+                // cells.
                 assert_eq!(r.searches.len(), 1);
                 assert_eq!(r.rebuilt.len(), 1, "{r:?}");
                 assert_eq!(r.rebuilt[0].runs, 6);
@@ -122,7 +123,10 @@ fn every_golden_pack_reads_and_checks() {
                 let back = runs.get(&(1..=6).collect::<Vec<i64>>()).unwrap();
                 let lineage: Vec<_> = back
                     .iter()
-                    .map(|x| (x.id, x.stage, x.parent, x.parent_job, x.origin.as_str()))
+                    .map(|x| {
+                        let s = x.parent_search.as_deref();
+                        (x.id, x.stage, x.parent, x.parent_job, s, x.origin.as_str())
+                    })
                     .collect();
                 assert_eq!(lineage, SEARCH3_LINEAGE.to_vec());
                 let ap = back.iter().find(|x| x.tiling == "penrose-rhomb").unwrap();
@@ -844,35 +848,39 @@ fn tiny_png(w: u32) -> Vec<u8> {
 /// The search uuid of the `searches3` pack.
 const SEARCH3: &str = "00000000-0000-4000-8000-00000000abc3";
 
-/// The `searches3` pack's runs as they read back: (id, stage, parent, parent_job, origin).
-const SEARCH3_LINEAGE: [(i64, i64, Option<i64>, Option<i64>, &str); 6] = [
-    (1, 1, None, None, "random"),
-    (2, 1, Some(1), None, "mutate"),
-    (3, 1, Some(41), Some(7), "transplant"),
-    (4, 2, Some(1), None, "confirm"),
-    (5, 1, Some(2), None, "seed"),
-    (6, 1, Some(42), Some(7), "balance"),
+/// The search the `searches3` pack's transplant and balance variant came from (`--parents-from`).
+const PARENTS_SEARCH: &str = "00000000-0000-4000-8000-0000000000a7";
+
+/// The `searches3` pack's runs as they read back: (id, stage, parent, parent_job,
+/// parent_search, origin).
+type Lineage3 = (
+    i64,
+    i64,
+    Option<i64>,
+    Option<i64>,
+    Option<&'static str>,
+    &'static str,
+);
+const SEARCH3_LINEAGE: [Lineage3; 6] = [
+    (1, 1, None, None, None, "random"),
+    (2, 1, Some(1), None, None, "mutate"),
+    (3, 1, Some(41), Some(7), Some(PARENTS_SEARCH), "transplant"),
+    (4, 2, Some(1), None, None, "confirm"),
+    (5, 1, Some(2), None, None, "seed"),
+    (6, 1, Some(42), Some(7), Some(PARENTS_SEARCH), "balance"),
 ];
 
-/// A run of a golden search: (id, stage, parent, parent_job, origin, tiling, cells).
-type FakeRun = (
-    i64,
-    i64,
-    Option<i64>,
-    Option<i64>,
-    &'static str,
-    &'static str,
-    i64,
-);
+/// A run of a golden search: its lineage as [`SEARCH3_LINEAGE`] gives it, its tiling and cells.
+type FakeRun = (Lineage3, &'static str, i64);
 
 /// The `searches` pack's runs (run schema 2): six screened runs on 4,096 cells.
 const SEARCH_RUNS: [FakeRun; 6] = [
-    (1, 1, None, None, "random", "square", 4096),
-    (2, 1, None, None, "random", "square", 4096),
-    (3, 1, None, None, "random", "square", 4096),
-    (4, 1, None, None, "random", "square", 4096),
-    (5, 1, None, None, "random", "square", 4096),
-    (6, 1, None, None, "random", "square", 4096),
+    ((1, 1, None, None, None, "random"), "square", 4096),
+    ((2, 1, None, None, None, "random"), "square", 4096),
+    ((3, 1, None, None, None, "random"), "square", 4096),
+    ((4, 1, None, None, None, "random"), "square", 4096),
+    ((5, 1, None, None, None, "random"), "square", 4096),
+    ((6, 1, None, None, None, "random"), "square", 4096),
 ];
 
 /// The `searches3` pack's runs: the lineage of [`SEARCH3_LINEAGE`], the fifth run on the
@@ -880,13 +888,13 @@ const SEARCH_RUNS: [FakeRun; 6] = [
 fn search3_runs() -> Vec<FakeRun> {
     SEARCH3_LINEAGE
         .iter()
-        .map(|&(id, stage, parent, job, origin)| {
-            let (tiling, cells) = if id == 5 {
+        .map(|&l| {
+            let (tiling, cells) = if l.0 == 5 {
                 ("penrose-rhomb", 4000)
             } else {
                 ("square", 4096)
             };
-            (id, stage, parent, job, origin, tiling, cells)
+            (l, tiling, cells)
         })
         .collect()
 }
@@ -914,12 +922,14 @@ fn fake_search(dir: &Path, uuid: &str, schema: usize, runs: &[FakeRun]) {
             SegmentWriter::create_of_schema(&dir.join(&file), &kv, schema, &tuning).unwrap();
         for k in 0..3 {
             let id = (seg - 1) * 3 + k + 1;
-            let (_, stage, parent, parent_job, origin, tiling, cells) = runs[id as usize - 1];
+            let ((_, stage, parent, parent_job, parent_search, origin), tiling, cells) =
+                runs[id as usize - 1];
             w.push(RunRec {
                 id,
                 stage,
                 parent,
                 parent_job,
+                parent_search: parent_search.map(String::from),
                 tiling: tiling.into(),
                 fam: "life_like".into(),
                 rule: "B3/S23".into(),

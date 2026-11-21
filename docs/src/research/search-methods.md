@@ -531,7 +531,8 @@ least-tried, 10% catalogue rules).
   end`.
 - **Lineage.** Every run made from another names it as its `parent`: a variation, a new starting
   pattern, a transplant or a balance variant the elite it came from, and a run made from another
-  job's the run there, with that job in `parent_job`; a confirmation run names the run it
+  job's the run there, with that job in `parent_job` and its search's uuid in `parent_search`
+  (which names it in any library or pack); a confirmation run names the run it
   confirms. Following `parent` back from a run gives the chain of runs the search built it from,
   back to a fresh draw or to the job given with `--parents-from`
   ([Search runs](../reference/search-runs.md)).

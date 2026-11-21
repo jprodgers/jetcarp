@@ -49,10 +49,12 @@ day later (0.4.2: 17 November here, 18 November there).
 - **An explore search records where each run came from.** A screened run's `parent` now names the
   run it was made from: the elite a variation, a new starting pattern, a transplant or a balance
   variant came from, or the run of the job given with `--parents-from`, whose job is in the new
-  column `parent_job`. A confirmation run's `parent` is the run it confirms, as before, and a fresh
-  draw has none. Segments are of schema 3 (`jetcarp-explore-runs 3`), with `parent_job` last;
-  older ones read as before, and a new golden pack, `searches3`, holds such segments. `jetcarp jobs runs --format csv`, `--json` and the MCP tool
-  `search_runs` give `parent_job` after `parent`.
+  column `parent_job` and its search's uuid in `parent_search`, which names that search in any
+  library or pack. A confirmation run's `parent` is the run it confirms, as before, and a fresh
+  draw has none. Segments are of schema 3 (`jetcarp-explore-runs 3`), with the two new columns
+  last; older ones read as before, and a new golden pack, `searches3`, holds such segments.
+  `jetcarp jobs runs --format csv`, `--json` and the MCP tool `search_runs` give them after
+  `parent`.
   ([Search runs](../reference/search-runs.md), [#28](https://github.com/jprodgers/jetcarp/issues/28))
 - **`jetcarp library soup` says when the find first shows in its soup.** Each soup given names the
   generation its first copy of the find is there, whole and apart from everything else, and for a

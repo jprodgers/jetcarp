@@ -85,6 +85,8 @@ fn run(id: i64, true_score: bool) -> RunOut {
             (id % 3 == 1).then_some(id / 2)
         },
         parent_job: (stage == 1 && id % 6 == 1).then_some(7),
+        parent_search: (stage == 1 && id % 6 == 1)
+            .then(|| "00000000-0000-4000-8000-000000000007".to_string()),
         seed_kind: ["random", "point", "blob"][k % 3].into(),
         ev: Eval {
             cand,
@@ -417,21 +419,24 @@ fn a_database_from_before_parent_jobs_reads_and_is_brought_up_to_date() {
     let want: Vec<RunRec> = all(&r)
         .into_iter()
         .map(|mut x| {
-            x.parent_job = None;
+            (x.parent_job, x.parent_search) = (None, None);
             x
         })
         .collect();
-    assert!(all(&r).iter().any(|x| x.parent_job.is_some()));
+    assert!(all(&r).iter().any(|x| x.parent_search.is_some()));
     drop(r);
     let c = rusqlite::Connection::open(&path).unwrap();
-    c.execute_batch("ALTER TABLE runs DROP COLUMN parent_job")
-        .unwrap();
+    c.execute_batch(
+        "ALTER TABLE runs DROP COLUMN parent_job; ALTER TABLE runs DROP COLUMN parent_search",
+    )
+    .unwrap();
     drop(c);
     assert_eq!(all(&Runs::open_read(&path).unwrap()), want, "read only");
     let mut w = Runs::open(&path).unwrap();
     assert_eq!(all(&w), want);
     let mut late = run(121, true);
     (late.stage, late.parent, late.parent_job) = (1, Some(3), Some(2));
+    late.parent_search = Some("00000000-0000-4000-8000-000000000002".into());
     w.write(&Delta {
         rows: vec![late],
         ..Default::default()
@@ -439,8 +444,13 @@ fn a_database_from_before_parent_jobs_reads_and_is_brought_up_to_date() {
     .unwrap();
     let back = all(&Runs::open_read(&path).unwrap());
     assert_eq!(
-        back.last().map(|x| (x.parent, x.parent_job)),
-        Some((Some(3), Some(2)))
+        back.last()
+            .map(|x| (x.parent, x.parent_job, x.parent_search.as_deref())),
+        Some((
+            Some(3),
+            Some(2),
+            Some("00000000-0000-4000-8000-000000000002")
+        ))
     );
 }
 

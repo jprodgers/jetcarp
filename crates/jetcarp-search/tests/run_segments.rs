@@ -17,6 +17,8 @@ fn rec(id: i64) -> RunRec {
             (id % 7 < 2).then_some(id / 2)
         },
         parent_job: (id % 5 != 0 && id % 7 == 1).then_some(4),
+        parent_search: (id % 5 != 0 && id % 7 == 1)
+            .then(|| "00000000-0000-4000-8000-000000000004".to_string()),
         tiling: ["square", "hex", "k3-019"][(id % 3) as usize].into(),
         nb: id % 2,
         fam: "life_like".into(),
@@ -170,7 +172,7 @@ fn a_schema_1_segment_reads_without_sign_measures() {
         .into_iter()
         .map(|mut r| {
             r.feat.signs = None;
-            r.parent_job = None;
+            (r.parent_job, r.parent_search) = (None, None);
             r
         })
         .collect();
@@ -204,7 +206,7 @@ fn a_schema_2_segment_reads_without_parent_jobs() {
     assert_eq!(s.meta("jetcarp.schema").as_deref(), Some(RUN_SCHEMAS[1]));
     let mut back = Vec::new();
     s.read(0, ALL, None, None, &mut |_, b| {
-        assert!(b.has(col::SIGN0) && !b.has(col::PARENT_JOB));
+        assert!(b.has(col::SIGN0) && !b.has(col::PARENT_JOB) && !b.has(col::PARENT_SEARCH));
         back.extend((0..b.len).map(|i| b.rec(i)));
         Ok(())
     })
@@ -212,7 +214,7 @@ fn a_schema_2_segment_reads_without_parent_jobs() {
     let want: Vec<RunRec> = recs
         .into_iter()
         .map(|mut r| {
-            r.parent_job = None;
+            (r.parent_job, r.parent_search) = (None, None);
             r
         })
         .collect();

@@ -5,15 +5,15 @@
 //! A **segment** (`runs/part-000001.parquet`) holds runs in id order, in row groups of
 //! [`ROW_GROUP_ROWS`] rows and data pages of at most [`PAGE_ROWS`] rows, with statistics per
 //! row group and per page (the column and offset indexes), so a reader that wants a few runs
-//! skips the pages it does not need. Its columns are [`COLUMNS`]: the 22 columns of the working
+//! skips the pages it does not need. Its columns are [`COLUMNS`]: the 23 columns of the working
 //! database's `runs` table, with the feature blob as typed columns (the blob's `settle` and
 //! `period` are the run's own `settle` and `period` columns, so they are stored once), then JACA's
-//! sign measures (nullable: null for other families) and `parent_job`.
+//! sign measures (nullable: null for other families), `parent_job` and `parent_search`.
 //!
 //! Schema 2 added the five sign columns; a segment of schema 1 has none, and reads as runs
-//! without sign measures. Schema 3 ([`RUN_SCHEMA`]) added `parent_job`, last: a segment of an
-//! older schema reads as runs whose parents are all the search's own. Columns a reader does not
-//! know are skipped.
+//! without sign measures. Schema 3 ([`RUN_SCHEMA`]) added `parent_job` and `parent_search`, last:
+//! a segment of an older schema reads as runs whose parents are all the search's own. Columns a
+//! reader does not know are skipped.
 //!
 //! A **score sidecar** (`scores-<n>/part-000001.parquet`) holds `id` and `score` for every run of
 //! one segment, in the segment's row order and row groups, so a reader swaps one column for the
@@ -82,10 +82,12 @@ pub enum Kind {
     OptF32,
     /// UTF-8 text.
     Str,
+    /// UTF-8 text or null.
+    OptStr,
 }
 
 /// Every column of a run segment, in file order: (name, type).
-pub const COLUMNS: [(&str, Kind); 44] = [
+pub const COLUMNS: [(&str, Kind); 45] = [
     ("id", Kind::I64),
     ("stage", Kind::I8),
     ("parent", Kind::OptI64),
@@ -130,6 +132,7 @@ pub const COLUMNS: [(&str, Kind); 44] = [
     ("sign_trade", Kind::OptF32),
     ("sign_lost", Kind::OptF32),
     ("parent_job", Kind::OptI64),
+    ("parent_search", Kind::OptStr),
 ];
 
 /// Column numbers in [`COLUMNS`].
@@ -161,8 +164,10 @@ pub mod col {
     /// JACA's sign measures (schema 2): pos, balance, sorted, trade, lost.
     pub const SIGN0: usize = 38;
     pub const SIGN_LOST: usize = 42;
-    /// The job whose run `parent` is, when it is another job's (schema 3).
+    /// The job whose run `parent` is, when it is another job's, and its search's uuid
+    /// (schema 3).
     pub const PARENT_JOB: usize = 43;
+    pub const PARENT_SEARCH: usize = 44;
 }
 
 /// A set of columns, one bit per column of [`COLUMNS`].
@@ -204,7 +209,7 @@ pub const EVAL: Cols = FEATURES
         col::BIN,
     ]);
 
-/// One run as stored: the 22 columns of `runs`, with the features typed. A run read with only
+/// One run as stored: the 23 columns of `runs`, with the features typed. A run read with only
 /// some columns has the others at their defaults.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RunRec {
@@ -216,8 +221,10 @@ pub struct RunRec {
     /// balance variant), or with `parent_job` a run of that job (`--parents-from`); none for a
     /// fresh draw.
     pub parent: Option<i64>,
-    /// The job whose run `parent` is, when it is not this search's own.
+    /// The job whose run `parent` is, when it is not this search's own, and that job's search
+    /// (its uuid, which names it in any library or pack; the job's id is its library's).
     pub parent_job: Option<i64>,
+    pub parent_search: Option<String>,
     pub tiling: String,
     /// 0 touch (corners count), 1 edge.
     pub nb: i64,
@@ -329,6 +336,11 @@ fn prim(name: &str, k: Kind) -> TypePtr {
             Some(LogicalType::String),
             Repetition::REQUIRED,
         ),
+        Kind::OptStr => (
+            Phys::BYTE_ARRAY,
+            Some(LogicalType::String),
+            Repetition::OPTIONAL,
+        ),
     };
     Arc::new(
         Type::primitive_type_builder(name, phys)
@@ -347,7 +359,7 @@ fn run_schema() -> TypePtr {
 const SCHEMA1_COLUMNS: usize = col::TS + 1;
 /// Columns of a run segment of schema 2, and of schema 3.
 const SCHEMA2_COLUMNS: usize = col::SIGN_LOST + 1;
-const SCHEMA3_COLUMNS: usize = col::PARENT_JOB + 1;
+const SCHEMA3_COLUMNS: usize = col::PARENT_SEARCH + 1;
 
 /// The run schema of the first `n` columns.
 fn run_schema_of(n: usize) -> TypePtr {
@@ -788,6 +800,19 @@ fn write_column(
                 .write_batch(&v, None, None)
                 .map_err(pe)?;
         }
+        Kind::OptStr => {
+            let v: Vec<ByteArray> = rows
+                .iter()
+                .filter_map(|r| r.parent_search.as_deref().map(ByteArray::from))
+                .collect();
+            let d: Vec<i16> = rows
+                .iter()
+                .map(|r| r.parent_search.is_some() as i16)
+                .collect();
+            cw.typed::<ByteArrayType>()
+                .write_batch(&v, Some(&d), None)
+                .map_err(pe)?;
+        }
     }
     Ok(())
 }
@@ -865,6 +890,7 @@ pub enum ColData {
     F32(Vec<f32>),
     OptF32(Vec<Option<f32>>),
     Str(Vec<ByteArray>),
+    OptStr(Vec<Option<ByteArray>>),
 }
 
 /// Rows of some columns, as read from a file (or the working database).
@@ -924,7 +950,18 @@ impl Batch {
     pub fn bytes(&self, c: usize, i: usize) -> &[u8] {
         match &self.cols[c] {
             Some(ColData::Str(v)) => v[i].data(),
+            Some(ColData::OptStr(v)) => v[i].as_ref().map_or(b"", |b| b.data()),
             _ => b"",
+        }
+    }
+    /// A nullable text column's value (None: null, or the column not read or not in the file).
+    pub fn opt_text(&self, c: usize, i: usize) -> Option<String> {
+        match &self.cols[c] {
+            Some(ColData::OptStr(v)) => v[i]
+                .as_ref()
+                .map(|b| String::from_utf8_lossy(b.data()).into_owned()),
+            Some(ColData::Str(_)) => Some(self.text(c, i)),
+            _ => None,
         }
     }
     pub fn text(&self, c: usize, i: usize) -> String {
@@ -963,6 +1000,7 @@ impl Batch {
             parent_job: self
                 .opt_i64(col::PARENT_JOB, i)
                 .filter(|_| self.has(col::PARENT_JOB)),
+            parent_search: self.opt_text(col::PARENT_SEARCH, i),
             tiling: self.text(col::TILING, i),
             nb: self.i64(col::NB, i),
             fam: self.text(col::FAM, i),
@@ -1041,6 +1079,11 @@ impl Batch {
                         .map(|r| sign_values(&r.feat)[c - col::SIGN0])
                         .collect(),
                 ),
+                Kind::OptStr => ColData::OptStr(
+                    recs.iter()
+                        .map(|r| r.parent_search.as_deref().map(ByteArray::from))
+                        .collect(),
+                ),
                 Kind::Str => ColData::Str(
                     recs.iter()
                         .map(|r| {
@@ -1068,7 +1111,7 @@ enum ColReader {
     I32(ColumnReaderImpl<Int32Type>),
     /// Nullable when the flag is set.
     F32(ColumnReaderImpl<FloatType>, bool),
-    Str(ColumnReaderImpl<ByteArrayType>),
+    Str(ColumnReaderImpl<ByteArrayType>, bool),
 }
 
 fn read_n<T: DataType>(
@@ -1099,7 +1142,8 @@ impl ColReader {
             Kind::I32 | Kind::I8 | Kind::U32 => ColReader::I32(get_typed_column_reader(r)),
             Kind::F32 => ColReader::F32(get_typed_column_reader(r), false),
             Kind::OptF32 => ColReader::F32(get_typed_column_reader(r), true),
-            Kind::Str => ColReader::Str(get_typed_column_reader(r)),
+            Kind::Str => ColReader::Str(get_typed_column_reader(r), false),
+            Kind::OptStr => ColReader::Str(get_typed_column_reader(r), true),
         }
     }
 
@@ -1108,7 +1152,7 @@ impl ColReader {
             ColReader::I64(r, _) => r.skip_records(n),
             ColReader::I32(r) => r.skip_records(n),
             ColReader::F32(r, _) => r.skip_records(n),
-            ColReader::Str(r) => r.skip_records(n),
+            ColReader::Str(r, _) => r.skip_records(n),
         }
         .map_err(pe)?;
         if done != n {
@@ -1153,9 +1197,20 @@ impl ColReader {
                     .collect();
                 (got, ColData::OptF32(full))
             }
-            ColReader::Str(r) => {
+            ColReader::Str(r, false) => {
                 let mut v = Vec::with_capacity(n);
                 (read_n(r, n, None, &mut v)?, ColData::Str(v))
+            }
+            ColReader::Str(r, true) => {
+                let mut v = Vec::with_capacity(n);
+                let mut def = Vec::with_capacity(n);
+                let got = read_n(r, n, Some(&mut def), &mut v)?;
+                let mut it = v.into_iter();
+                let full = def
+                    .iter()
+                    .map(|d| if *d > 0 { it.next() } else { None })
+                    .collect();
+                (got, ColData::OptStr(full))
             }
         };
         if got != n {

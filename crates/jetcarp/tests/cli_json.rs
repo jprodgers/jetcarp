@@ -596,7 +596,7 @@ fn explore_runs_with_measures_as_csv_and_json() {
     let mut lines = text.lines();
     let head = lines.next().unwrap();
     assert!(
-        head.starts_with("id,stage,parent,parent_job,family,"),
+        head.starts_with("id,stage,parent,parent_job,parent_search,family,"),
         "{head}"
     );
     assert!(head.ends_with(",score,sign_pos,sign_lost"), "{head}");

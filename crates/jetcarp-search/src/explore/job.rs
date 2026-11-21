@@ -343,9 +343,21 @@ fn weighted(rng: &mut Rng, w: &[(Fam, f64)]) -> Fam {
     w[0].0
 }
 
-/// Where a run came from (#28): the run it was made from, and the job whose run that is when it
-/// is not this search's own (`--parents-from`); none for a fresh draw.
-pub type Lineage = Option<(i64, Option<i64>)>;
+/// Where a run came from (#28): the run it was made from, and when that is another job's
+/// (`--parents-from`), that job and its search's uuid (empty for a spec made before 0.4.3); none
+/// for a fresh draw.
+pub type Lineage = Option<(i64, Option<(i64, String)>)>;
+
+/// A run's `parent`, `parent_job` and `parent_search` from where it came from.
+fn lineage_cols(from: Lineage) -> (Option<i64>, Option<i64>, Option<String>) {
+    match from {
+        None => (None, None, None),
+        Some((run, None)) => (Some(run), None, None),
+        Some((run, Some((job, search)))) => {
+            (Some(run), Some(job), (!search.is_empty()).then_some(search))
+        }
+    }
+}
 
 /// A candidate made: its rule (none when it could not be made), seed kind, seed, origin, and the
 /// run it was made from.
@@ -364,8 +376,9 @@ struct Pick {
     nb: Nb,
     seed: jetcarp_core::world::SeedSpec,
     weaker: Option<breed::Sign>,
-    /// Its run: an elite of this search, or a run of the job it came from.
-    from: (i64, Option<i64>),
+    /// Its run: an elite of this search, or a run of the job it came from (that job, and its
+    /// search's uuid).
+    from: (i64, Option<(i64, String)>),
 }
 
 /// How a candidate is made.
@@ -1415,7 +1428,7 @@ impl Search {
                     nb: if p.nb == 0 { Nb::Touch } else { Nb::Edge },
                     seed,
                     weaker: p.weaker,
-                    from: (p.run, Some(p.job)),
+                    from: (p.run, Some((p.job, p.search.clone()))),
                 });
             }
             return out;
@@ -1475,7 +1488,7 @@ impl Search {
                         "transplant".to_string(),
                         p.seed.clone(),
                         "transplant-scaled",
-                        Some(p.from),
+                        Some(p.from.clone()),
                     )
                 })
             }
@@ -1611,11 +1624,13 @@ impl Search {
                     catch_unwind(AssertUnwindSafe(|| self.evaluate(grid, &c, &t)))
                         .map_err(|_| self.panics.fetch_add(1, Ordering::Relaxed))
                         .ok()?;
+                let (parent, parent_job, parent_search) = lineage_cols(from);
                 Some(RunOut {
                     id: 0,
                     stage,
-                    parent: from.map(|f| f.0),
-                    parent_job: from.and_then(|f| f.1),
+                    parent,
+                    parent_job,
+                    parent_search,
                     ev: Eval {
                         cand: c,
                         fate,
@@ -2132,11 +2147,13 @@ impl Search {
         if cut.is_some() {
             self.capped.fetch_add(1, Ordering::Relaxed);
         }
+        let (parent, parent_job, parent_search) = lineage_cols(from);
         Ran::Done(Box::new(RunOut {
             id: 0,
             stage,
-            parent: from.map(|f| f.0),
-            parent_job: from.and_then(|f| f.1),
+            parent,
+            parent_job,
+            parent_search,
             ev: Eval {
                 cand: c,
                 fate,
@@ -2895,7 +2912,7 @@ mod tests {
             .map(|(i, r)| Parent {
                 strong: true,
                 weaker: (i % 2 == 1).then_some(breed::Sign::Pos),
-                ..Parent::of(1, r.id, "keep", &r.ev)
+                ..Parent::of(1, OTHER_SEARCH, r.id, "keep", &r.ev)
             })
             .collect();
         assert!(parents.len() >= 4, "{} parents", parents.len());
@@ -2935,6 +2952,9 @@ mod tests {
                 .all(|r| r.ev.cand.fam == Fam::Jaca)
         );
     }
+
+    /// The uuid of the search the tests' parents come from (`--parents-from`).
+    const OTHER_SEARCH: &str = "00000000-0000-4000-8000-0000000000a1";
 
     /// Every run made from another names it as its `parent` (#28): a mutation or a new seed of an
     /// elite (a screened run of the search, before it), a transplant or a balance variant (an
@@ -2981,7 +3001,7 @@ mod tests {
             .map(|(i, r)| Parent {
                 strong: true,
                 weaker: (i % 2 == 1).then_some(breed::Sign::Pos),
-                ..Parent::of(1, r.id, "keep", &r.ev)
+                ..Parent::of(1, OTHER_SEARCH, r.id, "keep", &r.ev)
             })
             .collect();
         assert!(parents.len() >= 4, "{} parents", parents.len());
@@ -3022,6 +3042,7 @@ mod tests {
                     match r.parent_job {
                         Some(job) => {
                             assert_eq!(job, 1, "run {} ({o})", r.id);
+                            assert_eq!(r.parent_search.as_deref(), Some(OTHER_SEARCH));
                             let q = parents.iter().find(|q| q.run == p).expect("its parent");
                             if o != "balance" {
                                 // Transplanted unchanged, or scaled from it.
@@ -3039,6 +3060,13 @@ mod tests {
             if r.parent_job.is_some() {
                 assert!(matches!(o, "transplant" | "transplant-scaled" | "balance"));
             }
+            // A run made from this search's own names no other search.
+            assert_eq!(
+                r.parent_search.is_some(),
+                r.parent_job.is_some(),
+                "run {}",
+                r.id
+            );
         }
         for o in [
             "random",
