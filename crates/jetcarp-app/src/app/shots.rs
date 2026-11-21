@@ -398,14 +398,7 @@ fn shots_tour() {
     h.run(4.0, 0.05, |_| false);
     h.steady();
     h.shot("tour-world");
-    // The Tools menu.
-    h.hold_menu("Tools");
-    let first = h.find("Scripts and sweeps…");
-    let last = h.find("AI control…");
-    let bar = h.find("Tools");
-    h.shot_part("tour-tools-menu", Harness::around(&[first, last, bar], 8.0));
-    h.hold_menu("");
-    h.escape();
+    tools_menu(&mut h);
     // The Window menu: every pane and tool window, and where each is.
     h.hold_menu("Window");
     let bar = h.find("Window");
@@ -414,6 +407,31 @@ fn shots_tour() {
     h.shot_part("tour-window-menu", Harness::around(&[bar, last, wide], 8.0));
     h.hold_menu("");
     h.escape();
+}
+
+/// The Tools menu, as the tour shows it.
+fn tools_menu(h: &mut Harness) {
+    h.hold_menu("Tools");
+    let first = h.find("Scripts and sweeps…");
+    let last = h.find("This computer…");
+    let bar = h.find("Tools");
+    h.shot_part("tour-tools-menu", Harness::around(&[first, last, bar], 8.0));
+    h.hold_menu("");
+    h.escape();
+}
+
+/// The tour's Tools menu alone (the rest of [`shots_tour`] needs the starter pack).
+#[test]
+#[ignore]
+fn shots_tools_menu() {
+    let Some(mut h) = Harness::new(1400, 900) else {
+        return;
+    };
+    h.quick_start_loaded();
+    // In a world, as the tour shows it (a built-in entry).
+    h.open_entry("penrose-rhomb-brain");
+    h.run(1.0, 0.05, |_| false);
+    tools_menu(&mut h);
 }
 
 /// The book's photosensitive seizure warning (`getting-started/photosensitivity.md`, #96): the
@@ -1195,6 +1213,110 @@ fn shots_safety() {
     h.find(ps::GUARD_ALWAYS);
     ps::record_in(&settings, ps::Answer::NoDisorder, "test").unwrap();
     h.app.strobe.reread();
+}
+
+/// Tools → This computer… (`guides/this-computer.md`, #213), on an example 32 GB machine (never
+/// the one running the test), not measured yet: its limits, and one of your own. Then a world
+/// over the machine's limit: asked about, not built on *Cancel*, built on *Build anyway*.
+#[test]
+#[ignore]
+fn shots_this_computer() {
+    use jetcarp_core::machine::{self, GpuMemory, Hardware, Id, Limits, Own};
+    let Some(mut h) = Harness::new(1000, 760) else {
+        return;
+    };
+    let settings = jetcarp_core::paths::config_dir().expect("a scratch settings folder");
+    let _ = std::fs::remove_file(settings.join("limits.json"));
+    let _ = std::fs::remove_file(settings.join("machine.json"));
+    h.action(menu::Action::Tool(menu::ToolWin::Machine));
+    h.run(0.5, 0.05, |_| false);
+    // An example machine, so the picture shows no real one.
+    let example = Hardware {
+        os: "linux".into(),
+        arch: "x86_64".into(),
+        cpu: "An 8-core processor".into(),
+        threads: 16,
+        cores: Some(8),
+        memory_total: 32 << 30,
+        memory_available: Some(21 << 30),
+        gpus: vec![GpuMemory {
+            vendor: 0x1002,
+            device: 0x73df,
+            dedicated: Some(12 << 30),
+            shared: Some(16 << 30),
+            unified: false,
+            source: "sysfs".into(),
+            name: String::new(),
+        }],
+    };
+    let set_example = |h: &mut Harness, own: &Own| {
+        let l = Limits::compute(&example, own);
+        let mut info = h
+            .app
+            .machine
+            .info
+            .clone()
+            .expect("the window read the machine");
+        info.hardware = example.clone();
+        info.adapters = vec![jetcarp_api::ctx::GpuAdapter {
+            name: "An example GPU".into(),
+            backend: "Vulkan".into(),
+            kind: "discrete".into(),
+            ..Default::default()
+        }];
+        // The pool as two example programs would hold it (tests record no memory of their own).
+        info.limits.pool = Some(machine::pool::Pool {
+            total: l.jetcarp_memory(),
+            others: vec![machine::pool::Use {
+                pid: 2,
+                program: "the desktop background".into(),
+                bytes: 1200 << 20,
+                at_ms: 0,
+            }],
+            own: 640 << 20,
+            program: "the app".into(),
+        });
+        info.limits.entries = l.entries;
+        info.limits.memory_total = l.memory_total;
+        h.app.machine.show_info(info);
+    };
+    let own = Limits::compute(&example, &Own::default())
+        .set(&Own::default(), Id::ReservedSystem, (12u64 << 30) as f64)
+        .unwrap();
+    set_example(&mut h, &own);
+    h.run(0.3, 0.05, |_| false);
+    h.find("Measure this computer");
+    h.find("Reserved for the System");
+    h.find("Back to the suggestion");
+    h.shot("this-computer-1-window");
+    // A world over the limit: the reference machine's 4 GB here, lowered to 100 MB for the test.
+    h.app.set_tool_open(menu::ToolWin::Machine, false);
+    h.quick_start_loaded();
+    h.open_entry("penrose-rhomb-brain");
+    let l = Limits::reference();
+    let small = l
+        .set(&Own::default(), Id::World, (100u64 << 20) as f64)
+        .unwrap();
+    small.save(&settings).unwrap();
+    machine::reload();
+    let mut big = jetcarp_core::TilingSpec::new("square");
+    big.size = Some(jetcarp_core::SizeSpec::Rect { w: 4000, h: 4000 });
+    let before = h.app.world.topo.len();
+    h.app.set_tiling_bg(big.clone());
+    h.run(0.3, 0.05, |_| false);
+    assert!(h.app.machine.ask.is_some(), "asked first");
+    h.find("Build anyway");
+    h.shot("this-computer-2-over-limit");
+    h.click("Cancel");
+    assert!(h.app.machine.ask.is_none());
+    assert_eq!(h.app.world.topo.len(), before, "not built on Cancel");
+    h.app.set_tiling_bg(big);
+    h.run(0.3, 0.05, |_| false);
+    h.click("Build anyway");
+    h.built();
+    assert_eq!(h.app.world.topo.len(), 16_000_000, "built when asked");
+    Own::default().save(&settings).unwrap();
+    machine::reload();
 }
 
 /// The grid from the keyboard (`guides/keyboard.md`, #219): Life on squares, the grid given the

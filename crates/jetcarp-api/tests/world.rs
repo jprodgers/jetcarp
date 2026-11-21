@@ -800,6 +800,20 @@ fn paste_from_the_catalog() {
         paste(&mut h, json!({"id": "glider", "x": 1})),
         ErrorKind::Invalid,
     );
+    // An index past what 32 bits hold, or a corner past what the grid's coordinates hold, is
+    // refused, never wrapped round onto a cell of this world (index 2^32 + 5 was cell 5).
+    let before = h.world().log().len();
+    for at in [
+        json!({"index": (1i64 << 32) + 5}),
+        json!({"index": -3}),
+        json!({"x": (1i64 << 31) + 4, "y": 4}),
+        json!({"x": 4, "y": -(1i64 << 31) - 4}),
+    ] {
+        let mut v = at.clone();
+        v["id"] = json!("glider");
+        fails(paste(&mut h, v), ErrorKind::Invalid);
+    }
+    assert_eq!(h.world().log().len(), before);
     // A CA running another rule gets a note.
     new_world(
         &cx,

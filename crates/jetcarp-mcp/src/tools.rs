@@ -8,7 +8,7 @@
 //! | Tool | Operations |
 //! | --- | --- |
 //! | `help` | (the guides, and the book's pages) |
-//! | `reference` | `reference.rules`, `.tilings`, `.isohedral`, `.palettes`, `.seeds` |
+//! | `reference` | `reference.rules`, `.tilings`, `.isohedral`, `.palettes`, `.seeds`, `machine.info` |
 //! | `world_new` | `world.new`, `world.open` |
 //! | `world_status` | `world.status`, `world.save` |
 //! | `world_read` | `world.read`, `world.inspect`, `world.objects` |
@@ -27,8 +27,9 @@
 //! | `files_list` | `files.list` |
 //!
 //! Descriptions are written for a model that has never seen JETCARP: what the tool does, a
-//! minimal example, and the tool to call next. Every call runs with the interactive limits
-//! ([`Limits::INTERACTIVE`]) and the server's folder rules ([`ctx`]).
+//! minimal example, and the tool to call next. Every call runs with an AI's limits
+//! ([`Limits::for_an_ai`]: the interactive limits, with worlds of an AI's share of this machine)
+//! and the server's folder rules ([`ctx`]); the descriptions are written from those live values.
 
 use crate::schema;
 use jetcarp_api::op::Callbacks;
@@ -38,8 +39,16 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
-/// Largest world a tool will build.
-pub const MAX_CELLS: u64 = Limits::INTERACTIVE.max_cells;
+/// Largest world a tool will build: an AI's share of this machine, as the server's limits say
+/// (4 million cells at the small end, the default).
+pub fn max_cells() -> u64 {
+    ctx().limits.max_cells
+}
+
+/// Widest and tallest grid (unit cells) a tool will build.
+pub fn max_grid_side() -> u32 {
+    ctx().limits.max_grid_side
+}
 /// Most generations one call may run.
 pub const MAX_GENS: u64 = Limits::INTERACTIVE.max_gens;
 /// Longest `run_script` run, in seconds.
@@ -393,7 +402,7 @@ impl Folders {
     }
 }
 
-/// What the tools run with: the interactive limits ([`Limits::INTERACTIVE`]), the platform set
+/// What the tools run with: an AI's limits ([`Limits::for_an_ai`]), the platform set
 /// by [`set_platform`], and the folder rules ([`folders`]): files are read and written only in
 /// the output folder, the library's folder and the allowed folders (the bundled packs are read
 /// too), and relative paths start in the output folder.
@@ -407,7 +416,10 @@ pub fn ctx() -> &'static Ctx {
         });
         fs.who = Some("the MCP tools".into());
         // No tool turns the strobe guard off: animations the tools save are always guarded.
-        let cx = Ctx::interactive().with_fs(fs).with_always_guard();
+        let cx = Ctx::interactive()
+            .with_limits(Limits::for_an_ai())
+            .with_fs(fs)
+            .with_always_guard();
         match PLATFORM.get() {
             Some(p) => cx.with_platform(p.clone()),
             None => cx,

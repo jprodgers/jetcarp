@@ -504,6 +504,10 @@ pub struct GpuSim {
     queue: wgpu::Queue,
     name: String,
     max_cells: usize,
+    /// The most cells a world may have here: [`max_cells`](Self::max_cells), and this machine's
+    /// `gpu-world` limit (`jetcarp_core::machine`). A larger world steps on the processor, with
+    /// the same result.
+    world_cells: usize,
     layout1: wgpu::BindGroupLayout,
     layout0: wgpu::BindGroupLayout,
     layout2: wgpu::BindGroupLayout,
@@ -719,6 +723,11 @@ impl GpuSim {
             queue,
             name,
             max_cells,
+            world_cells: max_cells.min(
+                jetcarp_core::machine::current()
+                    .gpu_world_cells()
+                    .min(usize::MAX as u64) as usize,
+            ),
             layout0,
             layout1,
             layout2,
@@ -767,6 +776,13 @@ impl GpuSim {
             return Err(format!(
                 "{n} cells exceed this GPU's buffer limit ({} cells)",
                 self.max_cells
+            ));
+        }
+        if n > self.world_cells {
+            return Err(format!(
+                "{n} cells exceed this machine's limit for a world on the GPU ({} cells, its \
+                 gpu-world limit: `jetcarp limits`)",
+                self.world_cells
             ));
         }
         if let Storage::Explicit(e) = &world.topo.storage {
