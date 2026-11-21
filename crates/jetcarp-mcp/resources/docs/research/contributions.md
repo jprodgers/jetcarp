@@ -1,7 +1,7 @@
 # What is new in JETCARP
 
-> **Status, v0.4.0 (November 2026).** This page is a first draft of JETCARP's contributions,
-> written for the v0.4.0 release and the paper that will follow. Each claim below is limited to what our prior-art search supports.
+> **Status, November 2026.** This page sets out JETCARP's contributions. It was first written for
+> the v0.4.0 release and is kept current with each release, for the paper that will follow. Each claim below is limited to what our prior-art search supports.
 > The spaceship claims have been through the checks described in [How we checked](#how-we-checked),
 > but not yet past the ConwayLife community, whom we will ask; see *Checks still to do* at the end.
 > If you know of earlier work that we have missed, please open an issue. We will correct the page and
@@ -248,7 +248,7 @@ two or more smaller ships flying together, a smaller ship with a passenger, or a
   ([Tessellation Automata 2024](bibliography.md#tessellationautomata2024)); we have not compared them
   with Guttesen's.
   JETCARP's searches found both independently: its kagome ship is exactly Guttesen's glider g, and its
-  snub-square ship matches Guttesen's figure. Ten catalogue entries turned out to be pairs of ships flying side
+  snub-square ship is Guttesen's period-8 glider, cell for cell. Ten catalogue entries turned out to be pairs of ships flying side
   by side without touching: eight pairs of Guttesen's glider g, one pair of the snub-square glider and one
   pair of a 3.6.3.6 ship. All Life candidates on 3.6.3.6 were such pairs. In Life on 3.3.4.3.4,
   JETCARP also found two larger ships built around Guttesen's glider, of periods 16 and 24; we found no
@@ -361,8 +361,8 @@ abelian property and is presumably known. See [The Abelian sandpile](../automata
 ### 6. Tilings as a dimension of an exploratory search
 
 **Claim (to our knowledge).** JETCARP's exploratory search is the first to treat the tiling itself as a
-search dimension: it explores tiling, rule family, rule and starting pattern together, over about 1,200
-periodic and aperiodic tilings and 22 rule families in one archive. (Fewer of the tilings are distinct
+search dimension: it explores tiling, rule family, rule and starting pattern together, over 1,279
+periodic and aperiodic tilings and 22 rule families in one archive (the search can now draw on 1,359 tilings). (Fewer of the tilings are distinct
 as neighbour graphs: the 81 isohedral types among them have only 11.) Its first full run covered about
 15 million runs.
 
@@ -385,16 +385,18 @@ over several tilings had fixed goals, such as gliders on three aperiodic tilings
 ([Edmond 2026](bibliography.md#edmond2026gliders)) or Life on six Archimedean lattices
 ([Guttesen 2026](bibliography.md#guttesen2026game)).
 
-The search will be described in full in [Search methods](search-methods.md).
+The search is described in full in [Search methods](search-methods.md).
 
-### 7. One engine for every family on every tiling
+### 7. One engine for nearly every family on every tiling
 
 **Claim (to our knowledge).** No earlier program runs as many cellular automaton families (Life-like,
 Generations, Larger than Life, JACA, layered, turmites, WireWorld, cyclic, Greenberg–Hastings,
 rock-paper-scissors, Hodgepodge, forest fire, Lenia, sandpiles, priority tables and rule tables) on as
 many classes of tiling (lattices, 1,248 k-uniform tilings, 81 isohedral types with their 11 Laves
-neighbour graphs, drawn tiles, and the Penrose, hat and spectre tilings) with one neighbour model, tested for agreement across thread counts
-and between CPU and GPU.
+neighbour graphs, drawn tiles, and the Penrose, hat and spectre tilings) with one neighbour graph
+(Lenia alone measures distance between tile centres), tested for agreement across thread counts and
+between CPU and GPU. The few families tied to one grid's geometry stay on it
+([what stays on its own grid](../automata/generalising.md#what-stays-on-its-own-grid)).
 
 **Evidence.** Breadth is the contribution, not any one family on any one tiling: Ready runs arbitrary
 rules on meshes ([Ready](bibliography.md#huttonnd_ready)); HatLife ran Life-like, Larger than Life-style
@@ -444,8 +446,6 @@ Guttesen's figures, and the side-by-side run of the hat glider and Edmond's glid
   cell with the census's period-20 ship on k2-007, which is very likely Büttner's.
 - Compare the census's 3.3.3.4.4 ship with EricG's, and look more closely at the large Life ships of
   k3-055, which may share a common engine.
-- Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once they
-  are published.
 - Extend the equivalence survey to the k-uniform tilings with k from 4 to 6.
 - Re-run the key searches just before publication.
 

@@ -238,9 +238,11 @@ object, as Life catalogues keep tag-alongs, but it is not counted as a separate 
   November 2024 ([Guttesen 2024](bibliography.md#guttesen2024answers);
   [Guttesen 2026](bibliography.md#guttesen2026game)). EricG had already reported spaceships in Life
   on both tilings in 2013, without describing them ([EricG 2013](bibliography.md#ericg2013tiling2)). JETCARP's 4-to-5-cell kagome ship is exactly
-  Guttesen's Fig. 4 glider (the same cells in one phase), and its snub-square ship matches Fig. 5 by eye;
-  a cell-for-cell check awaits Guttesen's published configurations. Guttesen's large kagome glider G (period 40) was
-  not found. Glider g also runs in corridors of kagome tiles inside the 3-uniform tilings k3-030,
+  Guttesen's Fig. 4 glider (the same cells in one phase), and its snub-square ship is his Fig. 5 glider
+  too: both were compared cell for cell with the animations in
+  [his repository](https://github.com/henrisro313/Games_of_life), in every phase and under every symmetry
+  of the tiling (November 2026). Guttesen's large kagome glider G (period 40) was not found by JETCARP's searches,
+  though JETCARP's engine runs it from his cells as a period-40 ship, as he reports. Glider g also runs in corridors of kagome tiles inside the 3-uniform tilings k3-030,
   k3-032 and k3-039; the snub-square glider runs only on 3.3.4.3.4.
 - **Lattice objects.** Every ship on an isohedral type, and the unnamed ships of the square and
   triangular grids found along the way, belong to those grids.
@@ -2331,8 +2333,6 @@ immortal. See [Priority rules](../automata/priority-rules.md).
 - Look more closely at the large Life ships of k3-055, which may share a common engine.
 - Run the Life census on more soups, on the k-uniform tilings with k from 4 to 6, and with ships of
   periods above 64, which the census did not look for.
-- Compare the kagome and snub-square ships with Guttesen's configurations cell for cell, once they
-  are published.
 - Extend the equivalence survey to the k-uniform tilings with k from 4 to 6, and the ship comparison
   to aperiodic tilings. Neither can turn a claimed ship into a lattice ship, but either could add
   "also runs on" entries.

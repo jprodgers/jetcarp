@@ -4,7 +4,8 @@ The regular tilings, by triangles, squares or hexagons alone, are the grids most
 were born on. Add the eight Archimedean tilings, which mix regular polygons so that every corner looks
 the same, and you have the eleven *uniform* tilings of the plane. Each gives a rule a different
 neighbour graph: some tiles see three neighbours, some eighteen, and in the mixed tilings
-neighbouring tiles see different numbers. JETCARP runs every rule on all eleven.
+neighbouring tiles see different numbers. JETCARP runs every rule on all eleven,
+but for the few tied to one grid ([what stays on its own grid](../automata/generalising.md#what-stays-on-its-own-grid)).
 
 <div class="thumbs">
 <figure><img src="../images/tilings/thumbs/k1-011.png" alt="3<sup>6</sup> triangular" width="140"><figcaption>3<sup>6</sup> triangular<br><code>triangle</code></figcaption></figure>

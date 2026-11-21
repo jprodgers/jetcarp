@@ -4,7 +4,7 @@ Penrose tilings cover the plane with two tile shapes in a pattern that never rep
 tiling, however large, maps it onto itself. Yet they are highly ordered, with five-fold symmetry
 everywhere at every scale. JETCARP builds both of Roger Penrose's two-tile versions, kites and darts
 (P2) and thick and thin rhombs (P3), as exact finite patches of up to millions of tiles, and every rule
-runs on them.
+not tied to one grid runs on them ([what stays on its own grid](../automata/generalising.md#what-stays-on-its-own-grid)).
 
 <figure class="pair">
 <div><img src="../images/tilings/penrose-rhomb-b2s34.png" alt="Purple and pink clusters on a round patch of Penrose rhombs" width="480"></div>
@@ -85,7 +85,7 @@ edges are dead. Tiles are rigid copies of the two prototiles; their shapes canno
 ## What is new here
 
 Cellular automata on Penrose tilings have a long history, summarised above, and we claim nothing new
-for the tilings themselves. JETCARP runs every family on them, including some (cyclic,
+for the tilings themselves. JETCARP runs every family not tied to one grid on them, including some (cyclic,
 Greenberg–Hastings, rock-paper-scissors, Hodgepodge and forest fire) for which our search found no
 earlier Penrose version; these are direct applications of known rules, so we do not count them as
 discoveries. JETCARP's 71 [JACA](../automata/jaca.md) presets include several on both Penrose tilings.
