@@ -2302,6 +2302,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "httparse"
+version = "1.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2539,8 +2545,10 @@ dependencies = [
 name = "jetcarp-mcp"
 version = "0.4.2"
 dependencies = [
+ "ctrlc",
  "dirs",
  "getrandom 0.3.4",
+ "httparse",
  "jetcarp-api",
  "jetcarp-core",
  "jetcarp-script",

@@ -101,7 +101,7 @@ These options of `jetcarp uninstall` also delete JETCARP's folders:
 
 | Option | Deletes |
 | --- | --- |
-| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, and the host's desktop pictures, but only when everything in it is JETCARP's (below). A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be. **Your publisher key and rater book are kept too** (`pack/`: the key, its public half, `publisher.json` and `raters.json`), and the report says where: the key is your identity as the publisher of every pack you have signed, and the rater book holds your raters' names and their consent, and neither can be made again |
+| `--settings` | The settings folder: the app's and the host's settings, screensaver profiles, rotations, reseed presets you saved, the host's desktop pictures, and a kept MCP HTTP token, but only when everything in it is JETCARP's (below). A picture there that the desktop still shows is kept, and the report names it: on Windows the copy of your own picture that was put back, or a still if it could not be. **Your publisher key and rater book are kept too** (`pack/`: the key, its public half, `publisher.json` and `raters.json`), and the report says where: the key is your identity as the publisher of every pack you have signed, and the rater book holds your raters' names and their consent, and neither can be made again |
 | `--publisher-key` | With `--settings`, the publisher key and rater book as well. Copy `pack/` out first if you might publish again. Without `--settings` it is refused |
 | `--data` | The data folder: the pattern library with its media, jobs and Quick Start entries (the atlas and your own), and the exploratory search's databases, but only when everything in it is JETCARP's (below). **This cannot be undone** |
 
@@ -130,7 +130,8 @@ data folder that is the library and the files SQLite keeps beside it, its folder
 runtime files, the screen saver and the Start menu entry's launcher, which share the folder). In
 the settings folder it is the
 settings files [Folders](../reference/folders.md#what-lives-in-each-folder) lists, the folders of
-screensaver profiles, rotations, desktop stills and *Fit to this computer*'s pictures, and `pack/`
+screensaver profiles, rotations, desktop stills, *Fit to this computer*'s pictures and kept MCP HTTP
+tokens (`http-tokens/`), and `pack/`
 with the publisher's files (and the data folder, where it is inside). A folder holding anything
 else, such as a folder of documents that `JETCARP_DATA_DIR`, `JETCARP_CONFIG_DIR` or a data folder
 chosen in setup names by mistake, is refused before anything is done, even with `--yes`: both

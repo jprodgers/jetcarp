@@ -1792,6 +1792,7 @@ mod tests {
         std::fs::write(runtime.join("memory").join("4242.json"), "{}").unwrap();
         std::fs::write(runtime.join("app-endpoint.json"), "{}").unwrap();
         std::fs::write(runtime.join("host.lock"), "").unwrap();
+        std::fs::write(runtime.join("mcp-http-endpoint.json"), "{}").unwrap();
         // The runtime folder, holding only JETCARP's own: a new data folder.
         assert!(!check_data_dir_beside(&runtime, Some(&runtime)).unwrap());
         // The same files in a folder that isn't the runtime folder are someone else's.
