@@ -577,13 +577,12 @@ fn shots_wallpaper() {
     h.shot("wallpaper-desktop-pane");
 }
 
-/// The Desktop background pane after *Fit to this computer* (`guides/wallpapers.md`): each scene's
-/// cards, with their pictures. A real sweep saved in the scratch settings is shown when there is
-/// one (`jetcarp host tune` run with the same `JETCARP_CONFIG_DIR` first); else two scenes' cards
-/// are made up here, their pictures drawn on the processor.
-///
-/// Fit is switched off in 0.4.2 (#112), so there are no cards to picture and the book has no such
-/// picture: this does nothing until Fit returns in 0.4.3 (#113).
+/// The Desktop background pane after *Fit to this computer* (`guides/wallpapers.md`): the
+/// measured scene's cards, with their pictures, and the other scenes sized from it. A real fit
+/// saved in the scratch settings is shown when there is one (`jetcarp host tune` run with the same
+/// `JETCARP_CONFIG_DIR` first); else a fit of "Until it settles" is made up here, its pictures
+/// drawn on the processor: the sizes a binary search tries (6, 3 and 2 px), and the rotation's
+/// other two scenes, of the same cost, at the measured scene's size.
 #[test]
 #[ignore]
 fn shots_desktop_pane_cards() {
@@ -594,7 +593,7 @@ fn shots_desktop_pane_cards() {
         eprintln!("Fit to this computer is switched off (#112): no cards to picture");
         return;
     }
-    // Tall enough for the Performance group and three scenes' cards below it.
+    // Tall enough for the Performance group and the cards below it.
     let Some(mut h) = Harness::new(1600, 1100) else {
         return;
     };
@@ -605,77 +604,86 @@ fn shots_desktop_pane_cards() {
         .is_some_and(|t| t.scenes.iter().any(|x| !x.rungs.is_empty()));
     if !swept {
         s.screens[0].place = Place::Wallpaper;
-        // The cards show only the scenes of the rotation shown (#73): these two are its first.
+        // The cards show only the scenes of the rotation shown (#73).
         s.screens[0].rotation = "Until it settles".into();
         let dir = crops_dir().unwrap();
         std::fs::create_dir_all(&dir).unwrap();
-        let mut scenes = vec![];
-        for (k, (name, rule, own)) in [
-            ("Quick Start rule:B3/S23", "B3/S23", 3.0f32),
-            ("Quick Start rule:B36/S23", "B36/S23", 4.0),
-        ]
-        .into_iter()
-        .enumerate()
+        let mut rungs = vec![];
+        // The sizes tried, in the search's order: 6 px, then 3, then 2.
+        for (i, (px, load)) in [(6.0f32, 0.22f32), (3.0, 0.62), (2.0, 1.31)]
+            .into_iter()
+            .enumerate()
         {
-            let mut rungs = vec![];
-            for (i, px) in [1.0f32, 2.0, 3.0, 4.0, 6.0, 8.0].into_iter().enumerate() {
-                let (w, h) = (
-                    (192.0 / px).ceil() as u32 + 2,
-                    (120.0 / px).ceil() as u32 + 2,
-                );
-                let mut sc = Scene::new(TilingSpec::rect(
-                    "square",
-                    w.max(8),
-                    h.max(8),
-                    Boundary::Wrap,
-                ));
-                sc.rng_state = 7 + k as u64;
-                sc.cas = vec![CaSpec::new(rule).seed(SeedSpec::Random { density: 0.3 })];
-                let mut world = World::from_scene(&sc).unwrap();
-                let _ = world.apply(Command::Step { gens: 30 });
-                let b = world.topo.bounds;
-                let img = jetcarp_core::render::render_view(
-                    &world,
-                    192,
-                    120,
-                    [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0],
-                    px as f64,
-                    &jetcarp_core::render::ViewOptions::default(),
-                );
-                let file = format!("s0-made-up-{k}-{i}.png");
-                std::fs::write(
-                    dir.join(&file),
-                    jetcarp_core::media::encode::png(&img).unwrap(),
-                )
-                .unwrap();
-                let cells = (2560.0 * 1440.0 / (px * px)) as u64;
-                let load = cells as f32 / 1e6;
-                rungs.push(Rung {
-                    size: Size::px(px),
-                    cells,
-                    cpu_percent: 0.1 + 2.0 * load,
-                    gpu_percent: Some(0.8 + 3.0 * load),
-                    gpu_unmeasured: false,
-                    p95_ms: 1.5 + 3.0 * load,
-                    fps: 30.0,
-                    on_gpu: cells >= 16_000,
-                    fits: px >= 2.0 || k == 0,
-                    over: (px < 2.0 && k == 1)
-                        .then(|| "processor 8.4% (over 8.0%: the 10% limit, less 20%)".into()),
-                    crop: Some(file),
-                    own: px == own,
-                });
-            }
-            let rec = if k == 0 { 1.0 } else { 2.0 };
+            let (w, h) = (
+                (192.0 / px).ceil() as u32 + 2,
+                (120.0 / px).ceil() as u32 + 2,
+            );
+            let mut sc = Scene::new(TilingSpec::rect(
+                "square",
+                w.max(8),
+                h.max(8),
+                Boundary::Wrap,
+            ));
+            sc.rng_state = 7;
+            sc.cas = vec![CaSpec::new("B3/S23").seed(SeedSpec::Random { density: 0.3 })];
+            let mut world = World::from_scene(&sc).unwrap();
+            let _ = world.apply(Command::Step { gens: 30 });
+            let b = world.topo.bounds;
+            let img = jetcarp_core::render::render_view(
+                &world,
+                192,
+                120,
+                [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0],
+                px as f64,
+                &jetcarp_core::render::ViewOptions::default(),
+            );
+            let file = format!("s0-made-up-{i}.png");
+            std::fs::write(
+                dir.join(&file),
+                jetcarp_core::media::encode::png(&img).unwrap(),
+            )
+            .unwrap();
+            let cells = (2560.0 * 1440.0 / (px * px)) as u64;
+            rungs.push(Rung {
+                size: Size::px(px),
+                cells,
+                cpu_percent: 8.0 * load,
+                gpu_percent: Some(2.0 + 10.0 * load),
+                gpu_unmeasured: false,
+                p95_ms: 1.5 + 6.0 * load,
+                fps: 60.0,
+                on_gpu: true,
+                fits: load <= 1.0,
+                over: (load > 1.0)
+                    .then(|| "processor 10.5% (over 8.0%: the 10% limit, less 20%)".into()),
+                load,
+                at_limit: false,
+                crop: Some(file),
+                own: px == 3.0,
+            });
+        }
+        rungs.sort_by(|a, b| a.size.px.total_cmp(&b.size.px));
+        let mut scenes = vec![TunedScene {
+            scene: "Quick Start rule:B3/S23".into(),
+            tiling: "square".into(),
+            design_px: 3.0,
+            cell_px: 3.0,
+            recommended: Size::px(3.0),
+            rungs,
+            gpu_timing: GpuTiming::Kernel,
+            measured: true,
+            cost: 1.0,
+            ..Default::default()
+        }];
+        for name in ["Quick Start rule:B36/S23", "Quick Start rule:B368/S245"] {
             scenes.push(TunedScene {
                 scene: name.into(),
                 tiling: "square".into(),
-                design_px: own,
-                cell_px: if k == 0 { 2.0 } else { rec },
-                chosen: k == 0,
-                recommended: Size::px(rec),
-                rungs,
+                design_px: 3.0,
+                cell_px: 3.0,
+                recommended: Size::px(3.0),
                 gpu_timing: GpuTiming::Kernel,
+                cost: 1.0,
                 ..Default::default()
             });
         }
@@ -683,8 +691,10 @@ fn shots_desktop_pane_cards() {
             rotation: s.screens[0].rotation.clone(),
             canvas: [2560, 1440],
             scale: 1.0,
-            fps: 30.0,
+            fps: 60.0,
             scenes,
+            share: 1.0,
+            max_cells: 4_000_000,
             ..Default::default()
         });
         s.save().unwrap();

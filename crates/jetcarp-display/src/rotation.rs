@@ -461,6 +461,10 @@ pub struct Slot {
     pub schedule: Option<Schedule>,
     /// The series number, for series items.
     pub n: Option<u64>,
+    /// The rotation's item it was expanded from, for a series' rules (None: not a series): a
+    /// fit sizes a series as one scene (#109).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub series: Option<usize>,
 }
 
 impl Slot {
@@ -544,7 +548,8 @@ impl Rotation {
     ) -> (Vec<Slot>, Vec<String>) {
         let mut slots = vec![];
         let mut warn = vec![];
-        for it in &self.items {
+        for (index, it) in self.items.iter().enumerate() {
+            let series = matches!(it.source, Source::Series { .. }).then_some(index);
             let mut made: Vec<(String, Profile, bool, Option<u64>)> = vec![];
             let adhoc = |show: Show, label: String| {
                 let mut p = base.clone();
@@ -610,6 +615,7 @@ impl Rotation {
                     hold_s: it.hold_s,
                     schedule: it.schedule.clone(),
                     n,
+                    series,
                 });
             }
         }

@@ -129,6 +129,7 @@ fn single(label: String, profile: Profile, stored: bool) -> Slot {
         hold_s: 0.0,
         schedule: None,
         n: None,
+        series: None,
     }
 }
 

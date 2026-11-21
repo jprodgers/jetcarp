@@ -66,9 +66,12 @@ impl ProcessMeter {
     }
 }
 
-/// The GPU time this process has used so far, as the kernel counts it for each program (Linux's
-/// DRM `fdinfo`: every engine's `drm-engine-*` time, each GPU client once). None where the system
-/// does not count it, or before this process has opened a GPU.
+/// The GPU time this process has used so far, as the kernel counts it for each program: Linux's
+/// DRM `fdinfo` (every engine's `drm-engine-*` time, each GPU client once), or macOS's task
+/// accounting (`task_info`'s `TASK_POWER_INFO_V2`, its `task_gpu_utilisation` in nanoseconds,
+/// what Activity Monitor's GPU time reads), so the GPU limit is judged on the Mac too (#93). None
+/// where the system does not count it, or before this process has opened a GPU. A fit uses it
+/// only once it has seen it move.
 pub fn process_gpu_time() -> Option<std::time::Duration> {
     #[cfg(target_os = "linux")]
     {
@@ -84,8 +87,58 @@ pub fn process_gpu_time() -> Option<std::time::Duration> {
         }
         total.map(std::time::Duration::from_nanos)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        mac_gpu_ns().map(std::time::Duration::from_nanos)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     None
+}
+
+/// `<mach/task_info.h>`'s `task_power_info_v2`: the processor's and the GPU's accounting for a
+/// task.
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Default)]
+struct TaskPowerInfoV2 {
+    // task_power_info: total_user, total_system, task_interrupt_wakeups,
+    // task_platform_idle_wakeups, task_timer_wakeups_bin_1, task_timer_wakeups_bin_2.
+    cpu_energy: [u64; 6],
+    // gpu_energy_data: task_gpu_utilisation (ns), then three reserved.
+    gpu_energy: [u64; 4],
+    #[cfg(target_arch = "aarch64")]
+    task_energy: u64,
+    task_ptime: u64,
+    task_pset_switches: u64,
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    /// `<mach/mach_init.h>`: this task's port, what `mach_task_self()` reads (libc's wrapper for
+    /// it is deprecated).
+    static mach_task_self_: libc::mach_port_t;
+}
+
+/// This task's GPU time in nanoseconds, from `TASK_POWER_INFO_V2` (None: not answered).
+#[cfg(target_os = "macos")]
+fn mac_gpu_ns() -> Option<u64> {
+    /// `TASK_POWER_INFO_V2`.
+    const FLAVOR: libc::task_flavor_t = 26;
+    let mut info = TaskPowerInfoV2::default();
+    let mut count = (std::mem::size_of::<TaskPowerInfoV2>()
+        / std::mem::size_of::<libc::natural_t>())
+        as libc::mach_msg_type_number_t;
+    // SAFETY: `info` is plain data the size `count` says, which task_info fills at most; the
+    // task is this process's own, its port set before `main`.
+    let r = unsafe {
+        libc::task_info(
+            mach_task_self_,
+            FLAVOR,
+            (&mut info as *mut TaskPowerInfoV2).cast::<libc::integer_t>(),
+            &mut count,
+        )
+    };
+    (r == libc::KERN_SUCCESS).then_some(info.gpu_energy[0])
 }
 
 /// The engine time in one `fdinfo` file of a GPU client not already in `seen` (the same client
