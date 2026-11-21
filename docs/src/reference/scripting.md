@@ -217,7 +217,7 @@ The simulation runs in Rust; the script only orchestrates. Statements end with `
 | `w.neighbours(i)`, `w.neighbours(i, "edge")` | The cell indices of cell `i`'s touch neighbours (cells sharing an edge or a corner), or its edge neighbours. Wrapped edges wrap; cells past a dead edge are left out. Works on every tiling, aperiodic patches too. |
 | `w.tile(i)` | Where cell `i` is and its shape, in world units: `#{ x, y, vertices: [[x, y], ...] }` (`x`, `y`: the tile's centre). |
 | `w.objects()`, `w.objects(#{ max_period: 64 })` | Still lifes, oscillators, spaceships: `#{ summary, live_cells, totals: #{still_life, oscillator, spaceship, other}, counts: [#{name, label, kind, count, period, speed}], objects: [#{name, kind, period, speed, dx, dy, size, x, y, cells}] }`. Objects that never influence each other come apart (two gliders flying side by side are two gliders), and objects that do stay one. |
-| `w.classify()`, `w.classify(#{ max_gens: 2000, explode: 0.5 })` | Run on and classify as `died`, `frozen`, `oscillating` (with `period`), `exploded`, or `active` (with `activity`), like `jetcarp census`. |
+| `w.classify()`, `w.classify(#{ max_gens: 2000, explode: 0.5 })` | Run on and classify as `died`, `frozen`, `oscillating` (with `period`), `exploded`, or `active` (with `activity`), like `jetcarp search census`. |
 | `w.describe()` | The manifest descriptors: population, density, `frac_<state>`, period, distinct_rows, row_period, row_shift, periodic_from, row_class (`empty`, `uniform`, `periodic`, `shifting`, `aperiodic`), row_entropy, row_hint (`nested`, `regular`, `chaotic`). |
 
 ### Saving

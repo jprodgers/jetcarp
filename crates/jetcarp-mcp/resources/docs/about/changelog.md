@@ -3,7 +3,9 @@
 All notable changes to JETCARP are listed here, newest first, in the style of
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Before version 1.0, a release may still
 change the scene format, the command line, the scripting API and the MCP tools; 1.0 is the release
-that will declare them stable.
+that will declare them stable. A release's date here and in `CITATION.cff` is the day it was
+published where the maintainer lives; GitHub, PyPI and Zenodo give the date in UTC, which can be a
+day later (0.4.2: 17 November here, 18 November there).
 
 ## [0.4.3] – unreleased
 
