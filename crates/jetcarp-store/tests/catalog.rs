@@ -90,6 +90,48 @@ fn step(cells: &HashSet<(i32, i32)>, b: u32, s: u32) -> HashSet<(i32, i32)> {
 
 const GLIDER: &str = ".o./..o/ooo";
 
+/// Objects of isotropic rules (#70) are stored like any others. A rule range is a set of B/S rules:
+/// an object whose evolution a B/S rule could give has one, and one whose evolution needs and
+/// forbids the same count (a dead cell born on two neighbours here, not there) has none, rather
+/// than failing to store.
+#[test]
+fn isotropic_objects_store_with_a_range_or_without() {
+    let mut w = World::new(TilingSpec::rect("square", 160, 100, Boundary::Wrap), 7).unwrap();
+    w.apply(Command::AddCa {
+        ca: CaSpec::new("B2-a/S12").seed(SeedSpec::Random { density: 0.3 }),
+    })
+    .unwrap();
+    w.apply(Command::Step { gens: 300 }).unwrap();
+    let r = find_objects(&w, &ObjectOptions::default()).unwrap();
+    let recs: Vec<PatternRecord> = r
+        .objects
+        .iter()
+        .filter(|o| !matches!(o.class, ObjClass::Other { .. }))
+        .map(|o| record_from_object(&w, w.cas[0].id, o, prov(), DiscoveredBy::User).unwrap())
+        .collect();
+    let lib = temp_lib("isotropic");
+    let (mut with, mut without) = (0, 0);
+    for rec in recs {
+        assert_eq!(rec.rule, "B2-a/S12");
+        let ranged = pattern::range::rule_range(&rec).unwrap();
+        match &ranged {
+            Some(x) => {
+                with += 1;
+                assert!(
+                    !x.contains_notation("B2-a/S12"),
+                    "a range holds B/S rules only"
+                );
+            }
+            None => without += 1,
+        }
+        lib.add(rec).unwrap_or_else(|e| panic!("{e}"));
+    }
+    assert!(
+        with > 0 && without > 0,
+        "{with} with a range, {without} without"
+    );
+}
+
 #[test]
 fn glider_has_one_id_across_rules_and_its_hand_derived_range() {
     let life = one("B3/S23", GLIDER);

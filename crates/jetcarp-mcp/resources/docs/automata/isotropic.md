@@ -175,8 +175,10 @@ leaves the same catalogue with or without the GPU. The object finder, puffer det
 library take the rules too. The rules are isotropic, so an object turned or reflected is the same
 object, and the finder's eight symmetries apply. A record's identity uses the same cell model as a
 Life-like rule's (`lifelike`), so a still life is the same pattern whichever rule it was found in;
-its rule is kept with it. Rule ranges (the least and most rules a pattern works in) cover B/S rules
-only for now, and the exploratory search does not sample isotropic rules.
+its rule is kept with it. A record's rule range (the rules it works in, from least to most) is a set
+of B/S rules: an isotropic rule's object has one when some B/S rule gives its evolution too, and
+none when its evolution needs a count's arrangements to differ. Ranges of isotropic rules are for
+later, and the exploratory search does not sample isotropic rules yet.
 
 ### On the GPU
 

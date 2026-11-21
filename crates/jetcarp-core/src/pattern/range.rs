@@ -520,8 +520,9 @@ fn patch_degree(topo: &Topology, nb: Nb) -> u32 {
     d
 }
 
-/// Does this record get a rule range? B/S and Generations still lifes, oscillators, and
-/// spaceships with one step per generation.
+/// Does this record get a rule range? B/S, Generations and isotropic still lifes, oscillators,
+/// and spaceships with one step per generation (an isotropic rule's when a B/S rule could give its
+/// evolution: see [`rule_range`]).
 pub fn ranged(rec: &PatternRecord) -> bool {
     matches!(
         rec.class,
@@ -531,11 +532,22 @@ pub fn ranged(rec: &PatternRecord) -> bool {
         && Rule::parse(&rec.rule).is_ok_and(|(r, _)| cell_model(&r) == "lifelike")
 }
 
-/// The record's rule range, or `None` when it has none (see [`ranged`]).
+/// The record's rule range, or `None` when it has none (see [`ranged`]). A range is a set of B/S
+/// rules: an isotropic rule's object whose evolution needs and forbids the same count (a dead
+/// cell born on two live neighbours in one arrangement and not in another) has none.
 pub fn rule_range(rec: &PatternRecord) -> Result<Option<RuleRange>, String> {
     if !ranged(rec) {
         return Ok(None);
     }
+    let isotropic = Rule::parse(&rec.rule).is_ok_and(|(r, _)| matches!(r, Rule::Isotropic(_)));
+    match bs_range(rec) {
+        Err(_) if isotropic => Ok(None),
+        r => r,
+    }
+}
+
+/// [`rule_range`] without the isotropic case.
+fn bs_range(rec: &PatternRecord) -> Result<Option<RuleRange>, String> {
     let p = rec.period.max(1);
     let phases: Vec<crate::objects::Phase> =
         (0..=p).map(|t| rec.phase(t)).collect::<Result<_, _>>()?;
