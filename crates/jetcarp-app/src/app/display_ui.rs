@@ -269,6 +269,13 @@ impl JetcarpApp {
                 let b = a + egui::vec2((r.size()[0] * k) as f32, (r.size()[1] * k) as f32);
                 let box_ = egui::Rect::from_min_max(a, b).shrink(1.0);
                 let resp = ui.interact(box_, egui::Id::unique(("out-box", i)), Sense::drag());
+                resp.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::Role::Button,
+                        true,
+                        format!("Output {}, which the mouse drags into place", i + 1),
+                    )
+                });
                 if resp.dragged() {
                     let dd = resp.drag_delta();
                     moved = Some((i, [dd.x as f64 / k, dd.y as f64 / k]));
@@ -327,7 +334,12 @@ impl JetcarpApp {
                         {
                             o.pos = None;
                         }
-                        if ui.small_button("×").clicked() {
+                        if ui
+                            .small_button("×")
+                            .on_hover_text("Remove this output")
+                            .accessible_name("Remove this output")
+                            .clicked()
+                        {
                             remove = Some(i);
                         }
                     });

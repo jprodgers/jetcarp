@@ -122,6 +122,9 @@ pub type MakeCtx = Arc<dyn Fn() -> Ctx + Send + Sync>;
 pub struct Wizard {
     pub open: bool,
     page: Page,
+    /// The page whose main button was given the keyboard (#219): as each page shows, its main
+    /// button (Next, Start, Close) has it, so Enter goes on and Esc closes the window.
+    keyed: Option<Page>,
     pub profile: Option<Profile>,
     /// The data folder chosen (Researcher, Everything), as typed or picked.
     pub data_dir: String,
@@ -175,6 +178,7 @@ impl Wizard {
         Wizard {
             open: false,
             page: Page::Welcome,
+            keyed: None,
             profile: None,
             data_dir: String::new(),
             data_note: None,
@@ -220,6 +224,7 @@ impl Wizard {
     /// setup applied earlier in this session included, so another profile can be chosen).
     pub fn show_again(&mut self) {
         self.open = true;
+        self.keyed = None;
         self.refresh();
         let unfinished = self
             .status
@@ -756,17 +761,21 @@ impl Wizard {
                 match self.page {
                     Page::Progress => {
                         if self.settled() {
-                            if ui.button(RichText::new("Close").strong()).clicked() {
+                            let b = ui.button(RichText::new("Close").strong());
+                            self.key_main(&b);
+                            if b.clicked() {
                                 self.close();
                             }
-                        } else if ui
-                            .button(RichText::new("Continue in the background").strong())
-                            .on_hover_text(
-                                "Close this window; the jobs carry on, and Tools → Hunts… shows them",
-                            )
-                            .clicked()
-                        {
-                            self.close();
+                        } else {
+                            let b = ui
+                                .button(RichText::new("Continue in the background").strong())
+                                .on_hover_text(
+                                    "Close this window; the jobs carry on, and Tools → Hunts… shows them",
+                                );
+                            self.key_main(&b);
+                            if b.clicked() {
+                                self.close();
+                            }
                         }
                     }
                     Page::Summary => {
@@ -774,7 +783,9 @@ impl Wizard {
                             .apply_input()
                             .is_some_and(|a| self.would_run_nothing(&a));
                         let label = if nothing { "Finish" } else { "Start" };
-                        if ui.button(RichText::new(label).strong()).clicked() {
+                        let b = ui.button(RichText::new(label).strong());
+                        self.key_main(&b);
+                        if b.clicked() {
                             self.next();
                         }
                         if ui.button("Back").clicked() {
@@ -782,10 +793,12 @@ impl Wizard {
                         }
                     }
                     _ => {
-                        if ui
-                            .add_enabled(self.can_next(), egui::Button::new(RichText::new("Next").strong()))
-                            .clicked()
-                        {
+                        let b = ui.add_enabled(
+                            self.can_next(),
+                            egui::Button::new(RichText::new("Next").strong()),
+                        );
+                        self.key_main(&b);
+                        if b.clicked() {
                             self.next();
                         }
                         if self.page != Page::Welcome && ui.button("Back").clicked() {
@@ -795,6 +808,25 @@ impl Wizard {
                 }
             });
         });
+    }
+
+    /// As a page shows, give its main button the keyboard, once (#219): as soon as it can be
+    /// pressed (Next is greyed out while setup reads where things stand, and on the profile page
+    /// until a profile is chosen), unless the keyboard is already on a control of this window,
+    /// such as the profile just chosen.
+    fn key_main(&mut self, b: &egui::Response) {
+        if self.keyed == Some(self.page) || !b.enabled() {
+            return;
+        }
+        let here = b.ctx.memory(|m| m.focused()).is_some_and(|f| {
+            b.ctx
+                .viewport(|v| v.this_pass.widgets.get(f).map(|w| w.layer_id))
+                == Some(b.layer_id)
+        });
+        if !here {
+            b.request_focus();
+        }
+        self.keyed = Some(self.page);
     }
 
     /// Applying `a` imports and builds nothing (the summary's button says Finish).

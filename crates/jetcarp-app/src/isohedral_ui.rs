@@ -43,6 +43,7 @@ pub fn controls(ui: &mut egui::Ui, id: &str, params: Option<&Value>) -> Option<I
         ui.label("Type");
         if ui
             .add_enabled(idx > 0, egui::Button::new("<").small())
+            .accessible_name("The type before")
             .clicked()
         {
             out = Some(IhChange::Type(IH_FAMILIES[idx - 1].id));
@@ -67,6 +68,7 @@ pub fn controls(ui: &mut egui::Ui, id: &str, params: Option<&Value>) -> Option<I
             });
         if ui
             .add_enabled(idx + 1 < IH_FAMILIES.len(), egui::Button::new(">").small())
+            .accessible_name("The type after")
             .clicked()
         {
             out = Some(IhChange::Type(IH_FAMILIES[idx + 1].id));

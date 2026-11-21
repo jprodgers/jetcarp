@@ -23,6 +23,10 @@ pub fn max_frames() -> u32 {
     jetcarp_core::machine::current().animation_frames()
 }
 
+fn anim_window_id() -> egui::Id {
+    egui::Id::unique("jetcarp-anim-export")
+}
+
 /// The window's settings, kept between exports.
 pub(crate) struct AnimExport {
     pub open: bool,
@@ -32,6 +36,8 @@ pub(crate) struct AnimExport {
     pub webp: bool,
     /// The export under way: frames done, frames in all, and its outcome once finished.
     pub job: Option<Arc<Mutex<AnimJob>>>,
+    /// It was open last frame (it gives its Export button the keyboard as it opens).
+    pub was_open: bool,
 }
 
 impl Default for AnimExport {
@@ -43,6 +49,7 @@ impl Default for AnimExport {
             side: 640,
             webp: false,
             job: None,
+            was_open: false,
         }
     }
 }
@@ -101,12 +108,15 @@ impl JetcarpApp {
                 ctx.request_repaint_after(std::time::Duration::from_millis(200));
             }
         }
+        let opened = self.anim.open && !self.anim.was_open;
+        self.anim.was_open = self.anim.open;
         if !self.anim.open {
             return;
         }
         let mut open = true;
         let mut go = false;
-        egui::Window::new("Export animation")
+        let shown = egui::Window::new("Export animation")
+            .id(anim_window_id())
             .open(&mut open)
             .resizable(false)
             .show(ctx, |ui| {
@@ -164,12 +174,24 @@ impl JetcarpApp {
                         );
                     }
                     None => {
-                        go = ui
-                            .add_enabled(frames <= max_frames(), egui::Button::new("Export…"))
-                            .clicked();
+                        let b = ui.add_enabled(frames <= max_frames(), egui::Button::new("Export…"));
+                        // The dialog opens with the keyboard on Export, so Enter exports (#219).
+                        if opened {
+                            b.request_focus();
+                        }
+                        go = b.clicked();
                     }
                 }
             });
+        // Esc closes it; it is a part of the window F6 moves to (#219).
+        if let Some(r) = &shown {
+            let layer = r.response.layer_id;
+            crate::a11y::window_region(ctx, "Export animation", layer, r.response.rect);
+            crate::a11y::mouse_only(ctx, anim_window_id().with("__title_click"));
+            if crate::a11y::escape_closes_dialog(ctx, layer) {
+                open = false;
+            }
+        }
         self.anim.open = open;
         if go {
             self.start_anim_export();

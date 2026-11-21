@@ -222,7 +222,6 @@ const fn ctrl_shift(k: Key) -> KeyboardShortcut {
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), k)
 }
 /// ⌃⌘ and a key: macOS's own full-screen shortcut is ⌃⌘F. It never matches elsewhere.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const fn ctrl_cmd(k: Key) -> KeyboardShortcut {
     KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::MAC_CMD), k)
 }
@@ -353,9 +352,9 @@ impl Action {
             PasteFromLibrary => "Pick a pattern in the library, then click cells in the view",
             CellOutlines => "Draw tile outlines when tiles are large enough",
             AutoHideMenu => {
-                "Hide the menu bar; it shows when the pointer touches the top edge or Alt is held"
+                "Hide the menu bar; it shows when the pointer touches the top edge, Alt is held, or F10 opens a menu"
             }
-            HidePanes => "Let the grid fill the window (Tab shows the panes again)",
+            HidePanes => "Let the grid fill the window (F9 shows the panes again)",
             GpuSim => {
                 "Follow the shared setting, on, off: step on the GPU; results are identical to the CPU"
             }
@@ -394,9 +393,14 @@ impl Action {
         }
     }
 
-    /// Shortcuts; the first is shown in the menu. Bare keys only act when no text field has
+    /// Shortcuts here; the first is shown in the menu. Bare keys only act when no text field has
     /// keyboard focus.
     pub fn keys(self) -> &'static [KeyboardShortcut] {
+        self.keys_for(cfg!(target_os = "macos"))
+    }
+
+    /// Shortcuts on macOS (`mac`) or on Windows and Linux, for the book's table of both.
+    pub fn keys_for(self, mac: bool) -> &'static [KeyboardShortcut] {
         use Action::*;
         match self {
             // ⌘H hides the app on macOS, so Quick Start is Ctrl+Shift+H (⌘⇧H) everywhere, Ctrl+H
@@ -412,13 +416,14 @@ impl Action {
             Fit => ks!(key(Key::F)),
             ZoomIn => ks!(key(Key::Plus), key(Key::Equals)),
             ZoomOut => ks!(key(Key::Minus)),
-            HidePanes => ks!(key(Key::Tab)),
+            // Tab moves the keyboard between controls (#219); F10 opens the menus.
+            HidePanes => ks!(key(Key::F9)),
             RunPause => ks!(key(Key::Space)),
             Step => ks!(key(Key::S), key(Key::ArrowRight)),
-            AutoHideMenu => ks!(key(Key::F10)),
+            AutoHideMenu => ks!(ctrl(Key::F10)),
             // F11 shows the desktop on macOS; its own full-screen key is ⌃⌘F (#91).
             FullScreen => {
-                if cfg!(target_os = "macos") {
+                if mac {
                     ks!(ctrl_cmd(Key::F), key(Key::F11))
                 } else {
                     ks!(key(Key::F11))
@@ -620,8 +625,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
     ),
 ];
 
-/// Actions a custom entry holds (for the coverage test).
-#[cfg(test)]
+/// Actions a custom entry holds (the coverage test; where the keyboard page says an action is).
 fn custom_actions(c: Custom) -> Vec<Action> {
     match c {
         Custom::PaneList => panes::PANES.iter().map(|p| Action::Pane(p.id)).collect(),
@@ -630,6 +634,24 @@ fn custom_actions(c: Custom) -> Vec<Action> {
         Custom::Gpu => vec![Action::GpuSim],
         _ => vec![],
     }
+}
+
+/// The menu an action is in: the first that has it as an item of its own, else the first that
+/// lists it (the Window menu lists every tool window).
+pub(super) fn menu_of(a: Action) -> Option<&'static str> {
+    let has = |own: bool| {
+        MENUS.iter().find_map(|(title, items)| {
+            items
+                .iter()
+                .any(|it| match it {
+                    A(x) => *x == a,
+                    C(c) => !own && custom_actions(*c).contains(&a),
+                    Sep => false,
+                })
+                .then_some(*title)
+        })
+    };
+    has(true).or_else(|| has(false))
 }
 
 /// Every action reachable from the menu bar.
@@ -1017,28 +1039,29 @@ impl JetcarpApp {
         }
     }
 
-    /// Keyboard shortcuts, from the action table.
+    /// Keyboard shortcuts, from the action table. A key with no Ctrl is typing while a text field
+    /// has the keyboard; Space, Enter, Tab and the arrows belong to whatever control has it (they
+    /// press it, or move in it or from it). The other single keys (R, F, S, + and −) and the
+    /// function keys act while a button or check box has the keyboard, and Esc always stops
+    /// pasting.
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
         // macOS's Minimise: the app has no Window menu for the system's shortcut to act on (#98).
         #[cfg(target_os = "macos")]
         mac_minimise_shortcut(ctx);
-        let typing = ctx.egui_wants_keyboard_input();
+        let typing = ctx.text_edit_focused();
+        let focused = ctx.memory(|m| m.focused().is_some());
         for a in Action::all() {
             for k in a.keys() {
-                // Bare keys belong to text fields while one has focus (Esc still stops pasting).
-                if k.modifiers.is_none() && typing && k.logical_key != Key::Escape {
+                let bare = k.modifiers.is_none()
+                    && k.logical_key != Key::Escape
+                    && !function_key(k.logical_key);
+                if bare && (typing || (focused && super::keyboard::widget_key(k.logical_key))) {
                     continue;
                 }
                 if !self.action_enabled(a) {
                     continue;
                 }
                 if ctx.input_mut(|i| i.consume_shortcut(k)) {
-                    if *k == key(Key::Tab) {
-                        // Tab also moves keyboard focus; keep it off the widgets.
-                        if let Some(f) = ctx.memory(|m| m.focused()) {
-                            ctx.memory_mut(|m| m.surrender_focus(f));
-                        }
-                    }
                     self.run_action(ctx, a);
                     break;
                 }
@@ -1048,7 +1071,8 @@ impl JetcarpApp {
 
     /// The menu bar's menus.
     pub(super) fn menu_bar_contents(&mut self, ui: &mut egui::Ui) {
-        for (title, items) in MENUS {
+        let mut buttons = vec![];
+        for (n, (title, items)) in MENUS.iter().enumerate() {
             let r = ui.menu_button(*title, |ui| {
                 ui.set_min_width(220.0);
                 for it in *items {
@@ -1061,11 +1085,19 @@ impl JetcarpApp {
                     }
                 }
             });
+            let popup = egui::Popup::default_response_id(&r.response);
+            buttons.push((r.response.id, popup));
+            // F10: the keyboard on File, its menu open (↓ goes into it).
+            if n == 0 && std::mem::take(&mut self.kb.menu_request) {
+                r.response.request_focus();
+                egui::Popup::open_id(ui.ctx(), popup);
+            }
             // `JETCARP_MENU=<title>` (screenshots): keep that menu open.
             if self.shell.open_menu.as_deref() == Some(*title) {
-                egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&r.response));
+                egui::Popup::open_id(ui.ctx(), popup);
             }
         }
+        self.kb.menu_buttons = buttons;
     }
 
     fn menu_item(&mut self, ui: &mut egui::Ui, a: Action) {
@@ -1410,41 +1442,46 @@ impl JetcarpApp {
         crate::popout::tool_window(
             ctx,
             crate::popout::Spec::new(ToolWin::Shortcuts.key(), "Keyboard shortcuts")
-                .size(380.0, 420.0),
+                .size(560.0, 560.0),
             &mut open,
             |ui| {
-                ui.label(
-                    RichText::new("Keys without Ctrl act when no text field has keyboard focus.")
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.label(
+                        RichText::new(
+                            "Keys without Ctrl are typing while a text field has the keyboard; \
+                         Space, Enter and the arrows belong to the control that has it.",
+                        )
                         .small()
                         .weak(),
-                );
-                egui::Grid::new("shortcut-grid")
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for a in Action::all() {
-                            if a.keys().is_empty() {
-                                continue;
-                            }
-                            let keys: Vec<String> =
-                                a.keys().iter().map(|k| ctx.format_shortcut(k)).collect();
-                            ui.label(RichText::new(keys.join(" or ")).monospace());
-                            ui.label(a.label());
+                    );
+                    let mac = cfg!(target_os = "macos");
+                    // The same table as `jetcarp shortcuts` and the book's keyboard page.
+                    for (n, g) in super::keyboard::table().iter().enumerate() {
+                        ui.add_space(6.0);
+                        ui.label(RichText::new(&g.name).strong());
+                        egui::Grid::new(("shortcut-grid", n))
+                            .striped(true)
+                            .show(ui, |ui| {
+                                for s in &g.keys {
+                                    let keys = if mac { &s.mac } else { &s.keys };
+                                    if keys.is_empty() {
+                                        continue;
+                                    }
+                                    ui.label(RichText::new(keys).monospace());
+                                    ui.add(egui::Label::new(&s.what).wrap());
+                                    ui.end_row();
+                                }
+                            });
+                    }
+                    ui.add_space(6.0);
+                    egui::Grid::new("shortcut-mouse")
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.label(RichText::new("Right drag").monospace());
+                            ui.label("Pan (any tool); scroll zooms");
                             ui.end_row();
-                        }
-                        // macOS's Minimise, handled outside the action table (#98).
-                        if cfg!(target_os = "macos") {
-                            let k = KeyboardShortcut::new(Modifiers::MAC_CMD, Key::M);
-                            ui.label(RichText::new(ctx.format_shortcut(&k)).monospace());
-                            ui.label("Minimise the window");
-                            ui.end_row();
-                        }
-                        ui.label(RichText::new("Alt").monospace());
-                        ui.label("Show the auto-hidden menu bar");
-                        ui.end_row();
-                        ui.label(RichText::new("Right drag").monospace());
-                        ui.label("Pan (any tool); scroll zooms");
-                        ui.end_row();
-                    });
+                        });
+                });
             },
         );
         self.shell.shortcuts_open = open;
@@ -1483,6 +1520,15 @@ impl JetcarpApp {
         );
         self.shell.about_open = open;
     }
+}
+
+/// F1 to F12: never typing, so they act whatever has the keyboard.
+fn function_key(k: Key) -> bool {
+    use Key::*;
+    matches!(
+        k,
+        F1 | F2 | F3 | F4 | F5 | F6 | F7 | F8 | F9 | F10 | F11 | F12
+    )
 }
 
 /// A small check box drawn in a menu item.

@@ -61,10 +61,11 @@ GROUPS = [
      [("Scripting (Rhai) API", "scripting.md"), ("Scripting a rule sweep", "../tutorials/scripting-a-sweep.md")],
      ["script"]),
     ("The app, the background host and AI assistants", "Control the running app and the background "
-     "host, and serve the MCP tools to an AI assistant.",
+     "host, list the app's keys, and serve the MCP tools to an AI assistant.",
      [("Wallpapers, screensavers and the background host", "../guides/wallpapers.md"),
+      ("Using the app from the keyboard", "../guides/keyboard.md"),
       ("Driving JETCARP from an AI assistant", "../tutorials/mcp.md"), ("MCP tools", "mcp.md")],
-     ["app", "host", "mcp"]),
+     ["app", "shortcuts", "host", "mcp"]),
     ("Lists", "What there is to choose from.",
      [("Named rule catalogue", "../automata/named-rules.md"), ("Rule notation", "rule-notation.md"),
       ("Tiling catalogue", "../tilings/catalogue.md"), ("Palettes", "palettes.md")],
