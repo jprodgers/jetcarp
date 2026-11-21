@@ -38,6 +38,9 @@ as long as it runs. A client that connects to a URL instead uses the server [ove
 | `--allow DIR` | Let the tools read and write in this folder too (repeatable) |
 | `--port N`, `--token T` | The app's port and token, when they are not the ones it recorded |
 | `--http [PORT]` | Serve over HTTP instead, at `http://127.0.0.1:PORT/mcp` ([below](#over-http)); with the global `--json`, print the URL and token as JSON |
+| `--keep-token` | With `--http`: keep the token for the next start, and take the one kept ([below](#keeping-the-token)) |
+| `--new-token` | With `--http`: make a new token even when one is kept, and keep it; the old one stops working |
+| `--allow-origin URL` | With `--http`: let web pages from this exact origin connect, with the token (repeatable; [below](#web-pages-allowed-origins)) |
 
 ### Over HTTP
 
@@ -50,7 +53,7 @@ control window ([Over HTTP](../tutorials/mcp.md#over-http) in the tutorial).
 | | |
 | --- | --- |
 | URL | `http://127.0.0.1:PORT/mcp`: port 47812 unless you give one (another, free, port when 47812 is taken; `--http 0` takes any free port). Only programs on this computer can reach it |
-| Header | `Authorization: Bearer TOKEN`, with the token it prints at the start: 32 hexadecimal digits, new each time it starts. It is also kept, with the URL, in `mcp-http-endpoint.json` in JETCARP's [runtime folder](folders.md#runtime-folder), which only you can read (the app's is `app-http-endpoint.json`) |
+| Header | `Authorization: Bearer TOKEN`, with the token it prints at the start: 32 hexadecimal digits, new each time it starts unless it is [kept](#keeping-the-token). It is also recorded, with the URL, in `mcp-http-endpoint.json` in JETCARP's [runtime folder](folders.md#runtime-folder), which only you can read (the app's is `app-http-endpoint.json`) |
 | Requests | One JSON-RPC message per `POST`, as `Content-Type: application/json`, with `Accept: application/json, text/event-stream` |
 | Sessions | `initialize` starts one, and its answer's `Mcp-Session-Id` header goes with every later request. `DELETE` with that header ends it |
 
@@ -93,7 +96,7 @@ What the endpoint refuses, with a JSON-RPC error (no id) saying what to do:
 | Answer | When |
 | --- | --- |
 | `401` | No `Authorization: Bearer` header, or another token |
-| `403` | A `Host` other than `127.0.0.1:PORT` or `localhost:PORT`, or an `Origin` other than `http://` one of those: a web page elsewhere, DNS rebinding included |
+| `403` | A `Host` other than `127.0.0.1:PORT` or `localhost:PORT`, or an `Origin` other than `http://` one of those and not [allowed](#web-pages-allowed-origins): a web page elsewhere, DNS rebinding included |
 | `400` | No `Mcp-Session-Id` once a session is needed, a batch (an array of messages), JSON that does not parse, or an `MCP-Protocol-Version` the server does not speak |
 | `404` | A session that has ended, or never was (start a new one with `initialize`), or a path other than `/mcp` |
 | `405` | `GET` (the server sends nothing unasked), and any method but `POST` and `DELETE` |
@@ -104,6 +107,45 @@ What the endpoint refuses, with a JSON-RPC error (no id) saying what to do:
 
 A connection with no request for 30 seconds is closed, and a session unused for an hour is ended;
 a 17th session ends the one unused longest.
+
+#### Keeping the token
+
+By default the token is new each time the endpoint starts, so a client has to be given the new one
+each time. `jetcarp mcp --http --keep-token` keeps it: the token stays in the same file, readable
+only by you, when the server stops, and the next start with `--keep-token` takes it back. The file
+then holds the token alone (`{"token": "...", "kept": true}`), since nothing is listening. A start
+without `--keep-token` makes a new token and forgets the kept one; `--new-token` makes a new one and
+keeps that, and the old one is refused from then on. In the app, *Keep this token for next time*
+does the same for its endpoint, and *New token* replaces the token while it runs, ending the
+sessions started with the old one.
+
+A kept token is taken back only from a file that is still private (on Linux and macOS, the folder
+0700 and the file 0600) and was written as kept; otherwise the start makes a new one. The runtime
+folder on Linux, `$XDG_RUNTIME_DIR/jetcarp`, is emptied when you log out, so there the token is
+kept until then; on macOS (`~/.cache/jetcarp`) and Windows (`%LOCALAPPDATA%\jetcarp`) it is kept
+until you make a new one. The token is shown only where it always was: the startup lines, `--json`,
+and the file. [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says what
+keeping it gives up.
+
+#### Web pages (allowed origins)
+
+A client that runs in a web browser (the MCP Inspector, a web-based assistant) sends the origin of
+its page with every request, and the endpoint refuses every origin but its own, so that no website
+you visit can reach it. `--allow-origin URL` names one you trust, exactly: `http://` or `https://`,
+a host, and a port when it is not the scheme's own, such as `http://localhost:6274` or
+`https://client.example`. Give it once for each. A wildcard (`*`, `https://*.example.com`), `null`,
+a path, a query or a user name is refused, and the server does not start; scheme and host are
+compared without regard to case, and a scheme's own port (80, 443) may be given or left out. In
+the app, the origins go under *Web pages that may connect*, and are saved with its settings.
+
+A page from an allowed origin still needs the token. Its browser's preflight (`OPTIONS`, sent
+without the token) is answered `204` with `Access-Control-Allow-Origin` naming that origin, the
+methods `POST` and `DELETE`, the headers MCP uses (`Authorization`, `Content-Type`, `Accept`,
+`Mcp-Session-Id`, `MCP-Protocol-Version`, `Last-Event-ID`), and, when Chrome asks for a public page
+to reach this computer, `Access-Control-Allow-Private-Network: true`. Every answer to such a page,
+refusals included, names its origin and lets it read `Mcp-Session-Id` and `WWW-Authenticate`. No
+answer carries a CORS header for any other origin, or for any request at all while no origin is
+allowed.
 
 ## What the tools may do
 

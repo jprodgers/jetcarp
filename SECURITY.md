@@ -54,15 +54,34 @@ MCP over HTTP* in its AI control window, serve the MCP server over HTTP, for AI 
 to a URL. Nothing listens for HTTP unless you start it so: the app's endpoint closes when you untick
 it or switch AI control off, and is off again at the next launch. It is bound to `127.0.0.1`, which
 other computers cannot reach. Every request must carry a 128-bit token as `Authorization: Bearer`,
-made afresh, from the operating system's random source, each time the endpoint starts, and kept
-with its URL in a file in the runtime folder above that only your user can read, as the link's
-token is; a request without it, or with another, is refused, and the comparison takes the same
-time whichever character is wrong. So that no web page can reach it through your browser, a
-request must be addressed to `127.0.0.1` or `localhost` on its port (its `Host`), any `Origin` must
-be the endpoint's own, bodies must be JSON, and no answer lets another origin read it: a page that
-has its own name resolve to `127.0.0.1` (DNS rebinding) is refused. Requests are limited in size
-(heads of 16 KiB, bodies of 16 MiB) and time, and to 16 connections at once. A client over HTTP
-has the same tools, on the same folders, as one over standard input and output.
+made afresh, from the operating system's random source, each time the endpoint starts (unless you
+keep it, below), and recorded with its URL in a file in the runtime folder above that only your
+user can read, as the link's token is; a request without it, or with another, is refused, and the
+comparison takes the same time whichever character is wrong. So that no web page can reach it
+through your browser, a request must be addressed to `127.0.0.1` or `localhost` on its port (its
+`Host`), any `Origin` must be the endpoint's own or one you have allowed (below), bodies must be
+JSON, and no answer lets any other origin read it: a page that has its own name resolve to
+`127.0.0.1` (DNS rebinding) is refused. Requests are limited in size (heads of 16 KiB, bodies of
+16 MiB) and time, and to 16 connections at once. A client over HTTP has the same tools, on the same
+folders, as one over standard input and output.
+
+Two choices loosen this, for convenience, and both are off unless you make them:
+
+- **Keeping the token** (`jetcarp mcp --http --keep-token`, or *Keep this token for next time* in
+  the app) means a client need not be given a new token each time the endpoint starts. The token
+  stays in the same private file when the endpoint stops, and is taken back only if the file is
+  still readable by you alone. What it gives up: a token that never changes is worth more to
+  anyone who sees it (a screen share, a copied client configuration, a program running as you that
+  reads the file), and whoever has it keeps their access, whenever the endpoint runs, until you make
+  a new one (`--new-token`, or *New token* in the app, which refuses the old one at once). On Linux
+  the runtime folder is emptied when you log out, which ends a kept token too.
+- **Allowing an origin** (`--allow-origin URL`, or *Web pages that may connect* in the app) lets a
+  browser-based client from that one origin connect, with the token, and answers its pages with
+  the CORS headers browsers need. Only exact origins are accepted (no wildcards, no `null`), and
+  every other origin is still refused. What it gives up: any page served from that origin, while
+  it is open in your browser and has the token, can use the tools as you, so a site you allow that
+  is compromised, or that serves other people's pages, is a way in. Allow only origins you
+  control or trust, such as a client you run on this computer, and remove them when you are done.
 
 **An AI client connected to JETCARP can do what its tools allow:** change and run worlds, run
 searches, curate the library, write pictures and run Rhai scripts. Its tools read and write files

@@ -139,7 +139,8 @@ names you type (only the last one of a full path). A folder JETCARP names after 
 <a id="runtime-folder"></a>**Runtime.** One more, small folder holds the files through which the running app and the background
 host accept local control (their port and access token), and those of the MCP server's HTTP
 endpoint while it runs (its URL and token: `mcp-http-endpoint.json` for `jetcarp mcp --http`,
-`app-http-endpoint.json` for the app's): `$XDG_RUNTIME_DIR/jetcarp`, else
+`app-http-endpoint.json` for the app's; a [kept token](mcp.md#keeping-the-token) stays in its file
+after the endpoint stops): `$XDG_RUNTIME_DIR/jetcarp`, else
 `~/.cache/jetcarp`, on Linux and macOS, and `%LOCALAPPDATA%\jetcarp` on Windows. On Linux and macOS
 the folder is kept readable by you only (mode 0700) and the files too (0600). It is the same for
 every copy of JETCARP you run, whatever folders the others point at, so there is one background
