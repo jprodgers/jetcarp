@@ -330,6 +330,15 @@ pub struct Found {
     pub tiles: Vec<Option<(f32, f32)>>,
 }
 
+/// Where windows start along a side of `n` samples: every [`WINDOW`] from 0, and one more against
+/// the far edge when the side is not a whole number of windows, so stripes near the right and
+/// bottom edges are seen (and veiled) as well as anywhere else.
+fn origins(n: u32) -> impl Iterator<Item = u32> {
+    let whole = n / WINDOW;
+    let edge = (whole > 0 && !n.is_multiple_of(WINDOW)).then_some(n - WINDOW);
+    (0..whole).map(|k| k * WINDOW).chain(edge)
+}
+
 /// Every striped window of the frame whose half image is `img`, at every scale from `first` on,
 /// as the tiles they cover; with their area-weighted contrast and their median period in pixels.
 pub fn find(img: &LumImage, first: u32) -> (Found, f32, f32) {
@@ -349,10 +358,8 @@ pub fn find(img: &LumImage, first: u32) -> (Found, f32, f32) {
     for scale in first.min(SCALES - 1)..SCALES {
         // Pixels of the frame each sample covers.
         let px = 2u32 << scale;
-        let mut y0 = 0;
-        while y0 + WINDOW <= level.height {
-            let mut x0 = 0;
-            while x0 + WINDOW <= level.width {
+        for y0 in origins(level.height) {
+            for x0 in origins(level.width) {
                 if let Some(s) = window(&level, x0, y0, min_period(scale)) {
                     periods.push(s.period * px as f32);
                     let area = (WINDOW * px) as f32 * (WINDOW * px) as f32;
@@ -390,9 +397,7 @@ pub fn find(img: &LumImage, first: u32) -> (Found, f32, f32) {
                         }
                     }
                 }
-                x0 += WINDOW;
             }
-            y0 += WINDOW;
         }
         if scale + 1 < SCALES {
             level = halve(&level);
@@ -657,6 +662,18 @@ mod tests {
             |x, y| if x % 10 == 0 || y % 10 == 0 { 40 } else { 255 },
         );
         assert!(harmful(&g), "{:?}", level(&g));
+    }
+
+    #[test]
+    fn stripes_against_the_far_edges_are_found_too() {
+        // Bands 48 pixels high and 96 a pair: only windows 256 pixels on a side see them, and
+        // neither 640 nor 480 is a whole number of those, so windows also sit against the right
+        // and bottom edges. Every tile is found, so the veil covers the whole pattern.
+        let bands = frame(W, H, |_, y| if (y / 48) % 2 == 0 { 0 } else { 255 });
+        let mut m = PatternMeter::new(None);
+        let r = m.update(&bands, 0.0);
+        assert!(r.share > 0.99, "{r:?}");
+        assert!(m.found().tiles.iter().all(|t| t.is_some()), "{r:?}");
     }
 
     /// How long a check of a 1080p frame's half image takes (ignored; run with `--ignored
