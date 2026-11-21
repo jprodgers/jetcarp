@@ -941,8 +941,11 @@ pub fn paint_focus_ring(ctx: &egui::Context, skip: &HashSet<egui::Id>) {
 /// beside it, "Repeating up to" for the number after that box).
 pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
     struct Seen {
-        unnamed: Vec<(egui::Id, egui::Rect)>,
-        labels: Vec<(egui::Id, egui::Rect)>,
+        /// Controls to name: their layer and place.
+        unnamed: Vec<(egui::Id, Option<egui::LayerId>, egui::Rect)>,
+        /// Words that can name them: a label's or a check box's, and whether they only join
+        /// others ("for", "to").
+        labels: Vec<(egui::Id, Option<egui::LayerId>, egui::Rect, bool)>,
         chrome: Vec<egui::Id>,
     }
     let rect_of = |b: accesskit::Rect| {
@@ -965,6 +968,7 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
             }
             let Some(b) = n.bounds() else { continue };
             let r = rect_of(b);
+            let layer = v.this_pass.widgets.get(*id).map(|w| w.layer_id);
             let role = n.role();
             let says = |t: &str| t.chars().any(char::is_alphanumeric);
             let words = match role {
@@ -972,15 +976,24 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
                 accesskit::Role::CheckBox => n.label(),
                 _ => None,
             };
-            if words.is_some_and(says) {
-                s.labels.push((*id, r));
+            const JOINING: [&str; 16] = [
+                "for", "to", "from", "on", "at", "of", "by", "and", "or", "in", "into", "with",
+                "than", "px", "gen", "gens",
+            ];
+            let joins = |w: &str| JOINING.contains(&w.trim().to_lowercase().as_str());
+            if let Some(w) = words.filter(|w| says(w)) {
+                s.labels.push((*id, layer, r, joins(w)));
             }
+            // Named by nothing, by symbols alone or a unit ("%", "px": a number box is named by its
+            // suffix), only by its tooltip (egui names a control by its hover text when it has no
+            // name), or only by the grey hint in its box: the words beside it are the better name;
+            // a tooltip stays its description, a hint its hint.
+            let tooltip_only = n.label().is_some() && n.label() == n.description();
             if egui::accessibility::is_input(role)
-                && n.label().is_none_or(|l| !says(l))
                 && n.labelled_by().is_empty()
-                && n.placeholder().is_none_or(|p| !says(p))
+                && (tooltip_only || n.label().is_none_or(|l| !says(l) || joins(l)))
             {
-                s.unnamed.push((*id, r));
+                s.unnamed.push((*id, layer, r));
             }
         }
         Some(s)
@@ -996,25 +1009,43 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
             }
         });
     }
-    for (id, r) in seen.unnamed {
-        let best = seen
+    for (id, layer, r) in seen.unnamed {
+        // The words on the same line to its left, in the same window.
+        let row: Vec<&(egui::Id, Option<egui::LayerId>, egui::Rect, bool)> = seen
             .labels
             .iter()
-            .filter(|(_, l)| {
+            .filter(|(l_id, l_layer, l, _)| {
                 let overlap = (l.max.y.min(r.max.y) - l.min.y.max(r.min.y)).max(0.0);
-                overlap >= 0.5 * l.height().min(r.height())
+                *l_id != id
+                    && *l_layer == layer
+                    && overlap >= 0.5 * l.height().min(r.height())
                     && l.max.x <= r.min.x + 2.0
                     && r.min.x - l.max.x <= 260.0
             })
-            .min_by(|a, b| (r.min.x - a.1.max.x).total_cmp(&(r.min.x - b.1.max.x)));
-        if let Some((label, _)) = best
-            && *label != id
+            .collect();
+        let Some(near) = row
+            .iter()
+            .min_by(|a, b| (r.min.x - a.2.max.x).total_cmp(&(r.min.x - b.2.max.x)))
+        else {
+            continue;
+        };
+        // A connecting word ("for", "to", "px") is read after the line's first words: "Activity
+        // below, for".
+        let mut by = vec![near.0];
+        if near.3
+            && let Some(first) = row
+                .iter()
+                .min_by(|a, b| a.2.min.x.total_cmp(&b.2.min.x))
+                .filter(|f| f.0 != near.0)
         {
-            ctx.accesskit_node_builder(id, |n| {
-                n.clear_label();
-                n.push_labelled_by(label.accesskit_id());
-            });
+            by.insert(0, first.0);
         }
+        ctx.accesskit_node_builder(id, |n| {
+            n.clear_label();
+            for l in &by {
+                n.push_labelled_by(l.accesskit_id());
+            }
+        });
     }
 }
 
@@ -1174,5 +1205,76 @@ mod tests {
         assert!(dark_of_gnome("'prefer-dark'"));
         assert!(!dark_of_gnome("'prefer-light'"));
         assert!(!dark_of_gnome("'default'"));
+    }
+
+    /// The tidy pass names a control with no name of its own by the words left of it on its
+    /// line: a list by its label, a number after a joining word by the line's first words and
+    /// that word, a number named only by its unit, a list named only by its tooltip (which stays
+    /// its description); a mouse-only widget is hidden; a named button keeps its name.
+    #[test]
+    fn a_control_with_no_name_takes_the_words_beside_it() {
+        use egui::accesskit::{NodeId, Role};
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut ids = vec![];
+        let (mut a, mut b) = (3.0, 5.0);
+        let mut drag = egui::Id::NULL;
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            ui.horizontal(|ui| {
+                ids.push(ui.label("Into").id);
+                let c = egui::ComboBox::from_id_salt("into")
+                    .selected_text("Life")
+                    .show_ui(ui, |_| {});
+                ids.push(c.response.id);
+                ids.push(ui.label("for").id);
+                ids.push(ui.add(egui::DragValue::new(&mut a).suffix(" gens")).id);
+            });
+            ui.horizontal(|ui| {
+                ids.push(ui.label("Cell size").id);
+                ids.push(ui.add(egui::DragValue::new(&mut b).suffix(" px")).id);
+                let c = egui::ComboBox::from_id_salt("fps")
+                    .selected_text("30")
+                    .show_ui(ui, |_| {});
+                ids.push(c.response.on_hover_text("Frames a second").id);
+                ids.push(ui.button("Seed").id);
+            });
+            drag = ui
+                .interact(
+                    egui::Rect::from_min_size(egui::pos2(0.0, 200.0), egui::vec2(6.0, 120.0)),
+                    egui::Id::new("splitter"),
+                    egui::Sense::click_and_drag(),
+                )
+                .id;
+            let chrome = find_chrome(ui.ctx());
+            assert!(chrome.contains(&drag), "a thin dragged line is mouse-only");
+            tidy_tree(ui.ctx(), &chrome);
+        });
+        out.textures_delta.clear();
+        let u = out.platform_output.accesskit_update.expect("a tree");
+        let node = |id: egui::Id| {
+            u.nodes
+                .iter()
+                .find(|(n, _)| *n == id.accesskit_id())
+                .map(|(_, n)| n.clone())
+                .expect("a node")
+        };
+        let by = |id: egui::Id| -> Vec<NodeId> { node(id).labelled_by().to_vec() };
+        let [into, list, for_, gens, size, px, fps, seed] = ids[..] else {
+            panic!("{ids:?}")
+        };
+        assert_eq!(by(list), vec![into.accesskit_id()]);
+        assert_eq!(by(gens), vec![into.accesskit_id(), for_.accesskit_id()]);
+        assert_eq!(by(px), vec![size.accesskit_id()], "a unit is no name");
+        assert_eq!(node(px).label(), None);
+        assert_eq!(
+            by(fps),
+            vec![size.accesskit_id()],
+            "the line's words over a tooltip"
+        );
+        assert_eq!(node(fps).description(), Some("Frames a second"));
+        assert!(by(seed).is_empty() && node(seed).label() == Some("Seed"));
+        let d = node(drag);
+        assert_eq!(d.role(), Role::GenericContainer);
+        assert!(!d.supports_action(egui::accesskit::Action::Focus));
     }
 }

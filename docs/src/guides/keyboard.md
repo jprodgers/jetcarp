@@ -67,7 +67,7 @@ The grid takes the keyboard like any other control: Tab to it, or F6. While it h
 cursor** shows, a ring round one cell in the focus colour on a dark edge, so it shows on any
 palette; with the keyboard elsewhere, the grid looks as it always does.
 
-<img src="../images/guides/keyboard-grid-cursor.webp" alt="The grid with the keyboard on it: Life on a square grid, a glider drawn from the keyboard, a selection of nine cells outlined in blue, and the cell cursor ringed in blue on a dark edge" width="560">
+<img src="../images/guides/keyboard-grid-cursor.webp" alt="The grid with the keyboard on it: Life on a square grid, a glider of five orange cells drawn from the keyboard, beside it a selection of nine cells tinted and outlined in pale blue, and the cell cursor at the selection's corner in a heavier pale blue ring on a dark edge" width="481">
 
 - **The arrow keys** move the cursor to the next cell that way. On any tiling, the next cell is
   the touching cell whose centre lies most nearly that way, keeping to the row or column the
@@ -108,7 +108,7 @@ whatever has the keyboard, except in a text box.
 | <kbd>F10</kbd> | <kbd>F10</kbd> | The menu bar: opens File. ← and → move along it, ↓ goes into a menu, ← comes back out, Enter chooses, Esc closes |
 | <kbd>Space</kbd>, <kbd>Enter</kbd> | <kbd>Space</kbd>, <kbd>Return</kbd> | Press the button, tick the box, choose the item, open the list that has the keyboard |
 | <kbd>Arrow keys</kbd> | <kbd>Arrow keys</kbd> | Between controls; in a menu or list, between its items; on a slider, its value |
-| <kbd>Esc</kbd> | <kbd>Esc</kbd> | Leave a text field; close a menu, a list, a dialog, or the tool window that has the keyboard |
+| <kbd>Esc</kbd> | <kbd>Esc</kbd> | Leave a text box; close a menu, a list, a dialog, or the tool window that has the keyboard |
 | <kbd>Shift+F10</kbd> | <kbd>⇧F10</kbd> | A Quick Start card's menu: rate it, hide it |
 | <kbd>Alt (held)</kbd> | <kbd>⌥ (held)</kbd> | Show the auto-hidden menu bar |
 

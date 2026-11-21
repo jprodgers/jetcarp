@@ -81,7 +81,7 @@ pub(super) struct Node {
 }
 
 impl Node {
-    fn of(n: &accesskit::Node) -> Node {
+    pub(super) fn of(n: &accesskit::Node) -> Node {
         Node {
             role: n.role(),
             label: n.label().map(String::from),
@@ -237,19 +237,7 @@ impl Kb {
     /// What a screen reader calls a node: its own label, the labels it is labelled by, or a text
     /// field's placeholder.
     pub fn name(&self, n: &Node) -> String {
-        if let Some(l) = n.label.as_ref().filter(|l| !l.trim().is_empty()) {
-            return l.clone();
-        }
-        let by: Vec<String> = n
-            .labelled_by
-            .iter()
-            .filter_map(|id| self.nodes.get(id))
-            .filter_map(|m| m.label.clone().or(m.value.clone()))
-            .collect();
-        if !by.is_empty() {
-            return by.join(" ");
-        }
-        n.placeholder.clone().unwrap_or_default()
+        name_in(&self.nodes, n)
     }
 
     /// The widgets that take the keyboard this frame, in the order they were drawn, with their
@@ -284,13 +272,42 @@ impl Kb {
     }
 }
 
+/// What a screen reader calls node `n` of tree `nodes`.
+pub(super) fn name_in(nodes: &HashMap<accesskit::NodeId, Node>, n: &Node) -> String {
+    if let Some(l) = n.label.as_ref().filter(|l| !l.trim().is_empty()) {
+        return l.clone();
+    }
+    let by: Vec<String> = n
+        .labelled_by
+        .iter()
+        .filter_map(|id| nodes.get(id))
+        .filter_map(|m| m.label.clone().or(m.value.clone()))
+        .collect();
+    if !by.is_empty() {
+        return by.join(" ");
+    }
+    n.placeholder.clone().unwrap_or_default()
+}
+
+/// The last frame's tree, by node.
+pub(super) fn tree_of(
+    nodes: &[(accesskit::NodeId, accesskit::Node)],
+) -> HashMap<accesskit::NodeId, Node> {
+    nodes.iter().map(|(id, n)| (*id, Node::of(n))).collect()
+}
+
 /// What a screen reader would find wrong with the tree: interactive nodes with no name, a name
 /// that says nothing (a symbol alone), no role, or a value that does not read.
 pub(super) fn audit(k: &Kb) -> Vec<String> {
+    audit_tree(&k.nodes)
+}
+
+/// [`audit`] of a tree.
+pub(super) fn audit_tree(tree: &HashMap<accesskit::NodeId, Node>) -> Vec<String> {
     use accesskit::Role;
     let mut problems = vec![];
     let says = |s: &str| s.chars().any(|c| c.is_alphanumeric());
-    let mut nodes: Vec<&Node> = k.nodes.values().collect();
+    let mut nodes: Vec<&Node> = tree.values().collect();
     nodes.sort_by(|a, b| {
         let p = |n: &Node| n.bounds.map(|r| (r.min.y, r.min.x)).unwrap_or((0.0, 0.0));
         p(a).partial_cmp(&p(b)).unwrap()
@@ -311,7 +328,18 @@ pub(super) fn audit(k: &Kb) -> Vec<String> {
         if !egui::accessibility::is_input(n.role) {
             continue;
         }
-        let name = k.name(n);
+        let name = name_in(tree, n);
+        // `JETCARP_A11Y_DUMP=1`: every control as a screen reader would name it, for reading by eye.
+        if std::env::var_os("JETCARP_A11Y_DUMP").is_some() {
+            eprintln!(
+                "  {:?} {name:?}{} {at}",
+                n.role,
+                n.value
+                    .as_ref()
+                    .map(|v| format!(" = {v:?}"))
+                    .unwrap_or_default()
+            );
+        }
         if name.trim().is_empty() {
             problems.push(format!(
                 "no name: a {:?} {at}{}",

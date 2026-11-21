@@ -617,9 +617,20 @@ impl JetcarpApp {
         if self.kb.cursor.anchor.is_some() {
             let cells = self.kb.cursor.cells(topo);
             if cells.len() <= 5000 {
-                let s = egui::Stroke::new(1.5, ring.color);
+                // Each selected cell tinted (where it is convex: a hat's or a spectre's outline
+                // alone) and outlined, lighter than the cursor's ring.
+                let s = egui::Stroke::new(1.0, ring.color.gamma_multiply(0.8));
+                let tint = ring.color.gamma_multiply(0.22);
                 for c in cells {
-                    p.add(egui::Shape::closed_line(screen(c), s));
+                    let pts = screen(c);
+                    if convex(&pts) {
+                        p.add(egui::Shape::convex_polygon(
+                            pts.clone(),
+                            tint,
+                            egui::Stroke::NONE,
+                        ));
+                    }
+                    p.add(egui::Shape::closed_line(pts, s));
                 }
             } else {
                 let a = self.kb.cursor.anchor.unwrap();
@@ -635,14 +646,17 @@ impl JetcarpApp {
                 );
             }
         }
+        // The cursor: a heavier ring than the focus ring, on a dark edge so it shows on light
+        // palettes as well as dark ones.
+        let w = ring.width.max(2.0) + 1.0;
         let pts = screen(cell);
         p.add(egui::Shape::closed_line(
             pts.clone(),
-            egui::Stroke::new(ring.width + 3.0, Color32::from_black_alpha(200)),
+            egui::Stroke::new(w + 4.0, Color32::from_black_alpha(210)),
         ));
         p.add(egui::Shape::closed_line(
             pts,
-            egui::Stroke::new(ring.width, ring.color),
+            egui::Stroke::new(w, ring.color),
         ));
     }
 
@@ -770,6 +784,28 @@ pub(crate) fn key_words(k: &egui::KeyboardShortcut, mac: bool) -> String {
         parts.push(key);
         parts.join("+")
     }
+}
+
+/// Whether a polygon on screen is convex (every turn the same way), so it can be filled as one.
+fn convex(pts: &[egui::Pos2]) -> bool {
+    let n = pts.len();
+    if n < 3 {
+        return false;
+    }
+    let mut sign = 0.0f32;
+    for i in 0..n {
+        let (a, b, c) = (pts[i], pts[(i + 1) % n], pts[(i + 2) % n]);
+        let cross = (b - a).x * (c - b).y - (b - a).y * (c - b).x;
+        if cross.abs() < 1e-6 {
+            continue;
+        }
+        if sign == 0.0 {
+            sign = cross.signum();
+        } else if cross.signum() != sign {
+            return false;
+        }
+    }
+    true
 }
 
 /// Take a press of `key` with exactly the modifiers `m` (egui's own matching lets an extra Shift
