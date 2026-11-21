@@ -55,34 +55,44 @@ fn the_chosen_palettes_pass_for_every_kind_of_deficiency() {
 
 #[test]
 fn jaca_s_two_sides_stay_apart_at_every_age_and_from_the_glow() {
-    let (pos, bg_pos) = stops(CHOSEN.jaca_pos);
-    let (neg, bg_neg) = stops(CHOSEN.jaca_neg);
-    // One backdrop whichever side's palette sets it.
-    assert_eq!(bg_pos, bg_neg);
-    // Cells of either sign, of any ages, meet: every stop of one side against every stop of the
-    // other.
-    let w = cvd::closest_between(&pos, &neg);
-    assert!(
-        w.difference >= MIN_DIFFERENCE,
-        "{} stop {} and {} stop {} under {}: {:.1}",
-        CHOSEN.jaca_pos,
-        w.stops.0 + 1,
-        CHOSEN.jaca_neg,
-        w.stops.1 + 1,
-        w.vision.name(),
-        w.difference
+    assert_eq!(
+        cvd::JACA_PAIRS[0],
+        (CHOSEN.jaca_pos, CHOSEN.jaca_neg),
+        "the chosen pair comes first"
     );
-    // Annihilated cells glow pale yellow, fading; at its brightest the glow is told from both.
-    let glow = [GLOW[0], GLOW[1], GLOW[2]];
-    for (name, side) in [(CHOSEN.jaca_pos, &pos), (CHOSEN.jaca_neg, &neg)] {
-        let w = cvd::closest_between(side, &[glow]);
+    for &(pos_name, neg_name) in cvd::JACA_PAIRS {
+        let (pos, bg_pos) = stops(pos_name);
+        let (neg, bg_neg) = stops(neg_name);
+        // One backdrop whichever side's palette sets it.
+        assert_eq!(bg_pos, bg_neg, "{pos_name} and {neg_name}");
+        // Each side passes on its own.
+        for (name, side, bg) in [(pos_name, &pos, bg_pos), (neg_name, &neg, bg_neg)] {
+            let c = cvd::check(side, bg);
+            assert!(c.passes(), "{name}: {:?}", c.failure());
+        }
+        // Cells of either sign, of any ages, meet: every stop of one side against every stop of
+        // the other.
+        let w = cvd::closest_between(&pos, &neg);
         assert!(
             w.difference >= MIN_DIFFERENCE,
-            "{name} stop {} and the glow under {}: {:.1}",
+            "{pos_name} stop {} and {neg_name} stop {} under {}: {:.1}",
             w.stops.0 + 1,
+            w.stops.1 + 1,
             w.vision.name(),
             w.difference
         );
+        // Annihilated cells glow pale yellow, fading; at its brightest the glow is told from both.
+        let glow = [GLOW[0], GLOW[1], GLOW[2]];
+        for (name, side) in [(pos_name, &pos), (neg_name, &neg)] {
+            let w = cvd::closest_between(side, &[glow]);
+            assert!(
+                w.difference >= MIN_DIFFERENCE,
+                "{name} stop {} and the glow under {}: {:.1}",
+                w.stops.0 + 1,
+                w.vision.name(),
+                w.difference
+            );
+        }
     }
 }
 
@@ -108,6 +118,48 @@ const PASSING: &[&str] = &[
     "Lantern",
     "Cobalt",
     "Saffron",
+    "Dusk",
+    "Furnace",
+    "Kelp",
+    "Abyss",
+    "Rosewood",
+    "Harbour",
+    "Lagoon",
+    "Heather",
+    "Graphite",
+    "Honey",
+    "Spruce",
+    "Fjord",
+    "Copper",
+    "Peony",
+    "Sulphur",
+    "Frost",
+    "Sepia",
+    "Midnight Garden",
+    "Lava Flow",
+    "Nebula",
+    "Vellum",
+    "Linen",
+    "Ink Wash",
+    "Bluebell",
+    "Fern",
+    "Brick",
+    "Mulberry",
+    "Driftwood",
+    "Tidewheel",
+    "Compass Rose",
+    "Indigo",
+    "Marmalade",
+    "Sky",
+    "Rust",
+    "Iris",
+    "Gold",
+    "Lapis",
+    "Amber",
+    "Ice",
+    "Ember Red",
+    "Delft",
+    "Ochre",
 ];
 
 #[test]

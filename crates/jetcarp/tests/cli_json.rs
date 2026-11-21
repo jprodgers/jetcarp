@@ -595,7 +595,10 @@ fn explore_runs_with_measures_as_csv_and_json() {
     let text = String::from_utf8(o.stdout).unwrap();
     let mut lines = text.lines();
     let head = lines.next().unwrap();
-    assert!(head.starts_with("id,stage,parent,family,"), "{head}");
+    assert!(
+        head.starts_with("id,stage,parent,parent_job,parent_search,family,"),
+        "{head}"
+    );
     assert!(head.ends_with(",score,sign_pos,sign_lost"), "{head}");
     let n = lines.count();
     assert!(n >= 40, "{n} runs");
@@ -645,8 +648,8 @@ fn explore_runs_with_measures_as_csv_and_json() {
 }
 
 /// A pack carries every run of a stopped explore search that never sealed (one under a million
-/// runs keeps them all in its working database): publishing seals them first (#35), and the
-/// imported library lists them.
+/// runs keeps them all in its working database), its screened runs and its confirmation runs:
+/// publishing seals them first (#35), and the imported library lists them.
 #[test]
 fn a_pack_carries_the_runs_of_a_search_never_sealed() {
     let dir = out_root().join(format!("cli-pack-search-{}", std::process::id()));
@@ -675,12 +678,18 @@ fn a_pack_carries_the_runs_of_a_search_never_sealed() {
         "40",
         "--threads",
         "2",
+        "--cpu",
         "--quiet",
         "--json",
     ]);
+    // On the processor alone, so it confirms elites on every system (a GPU's first batch would
+    // screen a thousand runs and confirm none).
     let pr = &e["progress"];
-    let ran = pr["screened"].as_u64().unwrap_or(0) + pr["confirmed"].as_u64().unwrap_or(0);
-    assert!(ran >= 40, "{e}");
+    let (screened, confirmed) = (
+        pr["screened"].as_u64().unwrap_or(0),
+        pr["confirmed"].as_u64().unwrap_or(0),
+    );
+    assert!(screened >= 40 && confirmed > 0, "{e}");
     json_of(&["--json", "pack", "key", "--name", "Test Publisher"]);
     let o = jetcarp(&[
         "pack",
@@ -725,23 +734,28 @@ fn a_pack_carries_the_runs_of_a_search_never_sealed() {
         .find(|j| j["kind"] == "explore")
         .unwrap_or_else(|| panic!("no explore job in {jobs}"));
     let id = job["job"].to_string();
-    let o = jetcarp(&[
-        "jobs",
-        "--library",
-        &p("lib2"),
-        "runs",
-        &id,
-        "--limit",
-        "0",
-        "--format",
-        "csv",
-    ]);
-    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-    let n = String::from_utf8(o.stdout).unwrap().lines().count() - 1;
-    assert_eq!(
-        n as u64, ran,
-        "every run of the search, in the imported library"
-    );
+    // `jobs runs` lists the screened runs unless asked for the confirmation runs (`--stage 2`).
+    for (stage, want) in [("1", screened), ("2", confirmed)] {
+        let o = jetcarp(&[
+            "jobs",
+            "--library",
+            &p("lib2"),
+            "runs",
+            &id,
+            "--limit",
+            "0",
+            "--stage",
+            stage,
+            "--format",
+            "csv",
+        ]);
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let n = String::from_utf8(o.stdout).unwrap().lines().count() - 1;
+        assert_eq!(
+            n as u64, want,
+            "every run of stage {stage} of the search, in the imported library"
+        );
+    }
     let _ = std::fs::remove_dir_all(dir);
 }
 

@@ -252,6 +252,272 @@ pub static PALETTES: &[Builtin] = &[
         0x0e1118,
         0x07090c,
     ),
+    // More palettes for colour-vision deficiency (#217), designed with `docs/tools/design-palettes.py`
+    // and checked like Lantern: neighbouring stops, and each stop against the background, at least
+    // `cvd::MIN_DIFFERENCE` apart for every kind of deficiency, with lightness running one way.
+    // Ramps of several hues on the dark slate, light to dark:
+    pal(
+        "Dusk",
+        &[0xfff8cd, 0xffab6f, 0xe55c6f, 0x7557b9, 0x23408c],
+        BG,
+        ST,
+    ),
+    pal(
+        "Furnace",
+        &[0xf3e7a1, 0xf1a834, 0xe16300, 0xbe1f23, 0x81162d],
+        BG,
+        ST,
+    ),
+    pal(
+        "Kelp",
+        &[0xe8f77a, 0x7dc75f, 0x1da16c, 0x00766a, 0x005158],
+        BG,
+        ST,
+    ),
+    pal(
+        "Abyss",
+        &[0xaef5f4, 0x59cbe2, 0x1d98d6, 0x3364bd, 0x3b3594],
+        BG,
+        ST,
+    ),
+    pal(
+        "Rosewood",
+        &[0xffdec5, 0xeea48d, 0xd16a71, 0xa63d65, 0x712655],
+        BG,
+        ST,
+    ),
+    pal(
+        "Harbour",
+        &[0xf8e886, 0xc7b985, 0x849099, 0x4c6a90, 0x25457c],
+        BG,
+        ST,
+    ),
+    pal(
+        "Lagoon",
+        &[0xa7f7ec, 0x3eccbd, 0x00a0a0, 0x007684, 0x004f65],
+        BG,
+        ST,
+    ),
+    // One hue each, on the dark slate:
+    pal(
+        "Heather",
+        &[0xebdffb, 0xc2afdd, 0x9980be, 0x7555a3, 0x552b89],
+        BG,
+        ST,
+    ),
+    pal(
+        "Graphite",
+        &[0xe5e5e5, 0xb9b9b9, 0x8e8e8e, 0x686868, 0x474747],
+        BG,
+        ST,
+    ),
+    pal(
+        "Honey",
+        &[0xf8e5a0, 0xe2b044, 0xc07e00, 0x975603, 0x673a17],
+        BG,
+        ST,
+    ),
+    pal(
+        "Spruce",
+        &[0xc5f3cd, 0x92c49f, 0x639a76, 0x397755, 0x005535],
+        BG,
+        ST,
+    ),
+    pal(
+        "Fjord",
+        &[0xd2eaf6, 0xa2bdcd, 0x7593a7, 0x4d6c84, 0x294a65],
+        BG,
+        ST,
+    ),
+    pal(
+        "Copper",
+        &[0xfedfc3, 0xeda779, 0xcc734a, 0xa04c30, 0x6f3223],
+        BG,
+        ST,
+    ),
+    pal(
+        "Peony",
+        &[0xffd9ea, 0xdea6c1, 0xbb7499, 0x994677, 0x791559],
+        BG,
+        ST,
+    ),
+    pal(
+        "Sulphur",
+        &[0xefed6c, 0xbec052, 0x919538, 0x686e23, 0x464b10],
+        BG,
+        ST,
+    ),
+    pal(
+        "Frost",
+        &[0xd1eaf5, 0x97bfd7, 0x6194bb, 0x356ba2, 0x17438b],
+        BG,
+        ST,
+    ),
+    pal(
+        "Sepia",
+        &[0xf4e3c8, 0xc9b59b, 0xa08a71, 0x7c634b, 0x5b402b],
+        BG,
+        ST,
+    ),
+    // On a deeper ground:
+    pal(
+        "Midnight Garden",
+        &[0xfbfe9d, 0x87d17f, 0x00af90, 0x00859d, 0x2d57a0, 0x362b73],
+        0x0b0c10,
+        0x050608,
+    ),
+    pal(
+        "Lava Flow",
+        &[0xfff8cd, 0xf3be3e, 0xe97900, 0xd33222, 0xa0162c],
+        0x0b0c10,
+        0x050608,
+    ),
+    pal(
+        "Nebula",
+        &[0xbffbfe, 0x86cdfe, 0x9e8bf4, 0xb44bae, 0x952e68, 0x65223b],
+        0x0b0c10,
+        0x050608,
+    ),
+    // On a light ground, dark to light (young cells darkest):
+    pal(
+        "Vellum",
+        &[0x001b4e, 0x214671, 0x4b7194, 0x789bb5, 0xacc9da],
+        0xf6f3ea,
+        0xe4dfd2,
+    ),
+    pal(
+        "Linen",
+        &[0x351502, 0x5b3d26, 0x82674f, 0xa99179, 0xd3c1a8],
+        0xf6f3ea,
+        0xe4dfd2,
+    ),
+    pal(
+        "Ink Wash",
+        &[0x1f1f1f, 0x444444, 0x6d6d6d, 0x969696, 0xc4c4c4],
+        0xf6f3ea,
+        0xe4dfd2,
+    ),
+    pal(
+        "Bluebell",
+        &[0x20015d, 0x44367e, 0x6f629f, 0x9a8dbe, 0xc8bde0],
+        0xf6f3ea,
+        0xe4dfd2,
+    ),
+    pal(
+        "Fern",
+        &[0x00280d, 0x245029, 0x51794e, 0x7da272, 0xaed09c],
+        0xf6f3ea,
+        0xe4dfd2,
+    ),
+    pal(
+        "Brick",
+        &[0x430100, 0x712b1e, 0x985a4b, 0xbb8878, 0xe1baac],
+        0xf6f3ea,
+        0xe4dfd2,
+    ),
+    pal(
+        "Mulberry",
+        &[0x3e002a, 0x692a50, 0x915876, 0xb6859d, 0xdeb7c8],
+        0xf6f3ea,
+        0xe4dfd2,
+    ),
+    pal(
+        "Driftwood",
+        &[0x001f44, 0x254a59, 0x607172, 0x859e85, 0xd5c290],
+        0xf6f3ea,
+        0xe4dfd2,
+    ),
+    // Closed wheels for cyclic rules: down in lightness through cool hues, up through warm ones.
+    pal(
+        "Tidewheel",
+        &[
+            0xb4eff2, 0x66beef, 0x6680da, 0x7e428b, 0xcf6139, 0xe7a53c, 0xb4eff2,
+        ],
+        0x0b0c10,
+        0x050608,
+    ),
+    pal(
+        "Compass Rose",
+        &[
+            0xeadcb8, 0xea9952, 0xd35551, 0x883b83, 0x5483d1, 0x60bbde, 0xeadcb8,
+        ],
+        0x0b0c10,
+        0x050608,
+    ),
+    // JACA's pairs, +1 then -1, on JACA's deep ground: cool against warm, every stop of one side
+    // far from every stop of the other and from the glow (`cvd::JACA_PAIRS`).
+    pal(
+        "Indigo",
+        &[0xb4d5ff, 0x7da7eb, 0x5679c9, 0x384da9],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Marmalade",
+        &[0xf0b649, 0xce821e, 0xa75200, 0x7f2800],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Sky",
+        &[0x9adcfc, 0x6bafd6, 0x3d83b1, 0x0b5c90],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Rust",
+        &[0xf4b082, 0xca825c, 0xa05639, 0x792e1b],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Iris",
+        &[0xccccff, 0xa19ce4, 0x7a6cc8, 0x5a3dad],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Gold",
+        &[0xe3c54e, 0xb8982b, 0x8d6d00, 0x634900],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Lapis",
+        &[0xbcd2ff, 0x85a1fa, 0x6472d2, 0x4a45ad],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Amber",
+        &[0xe7bc36, 0xc28a00, 0x975f00, 0x6d3a00],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Ice",
+        &[0x9adcfc, 0x6dafd5, 0x4383ae, 0x1b5c8b],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Ember Red",
+        &[0xffaa79, 0xe56f3e, 0xb3442d, 0x851c1e],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Delft",
+        &[0xafd6ff, 0x7fa9db, 0x537db9, 0x2c5599],
+        0x0e1118,
+        0x07090c,
+    ),
+    pal(
+        "Ochre",
+        &[0xe5bb5f, 0xba8d3a, 0x916312, 0x673f00],
+        0x0e1118,
+        0x07090c,
+    ),
 ];
 
 pub fn palette_names() -> impl Iterator<Item = &'static str> {

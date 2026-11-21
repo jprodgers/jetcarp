@@ -5,7 +5,9 @@
 //!
 //! `write_golden_packs` (ignored; run it by hand with `cargo test -p jetcarp-pack --release
 //! --test golden -- --ignored write_golden_packs`) made them from small libraries with fixed
-//! times, fixed keys (Ed25519 from fixed seeds) and invented raters. Never rerun it to "fix" a
+//! times, fixed keys (Ed25519 from fixed seeds) and invented raters. It writes only the packs
+//! that are not there yet, adding their hashes: one that is there is never rewritten (the
+//! JETCARP of today no longer makes the older ones byte for byte). Never delete one to "fix" a
 //! failing read: a golden pack that no longer reads is a broken promise.
 
 mod common;
@@ -15,6 +17,7 @@ use jetcarp_core::pattern::verify::{default_periods, verify};
 use jetcarp_pack::import::{self, VerifyMode};
 use jetcarp_pack::read::Source;
 use jetcarp_pack::sign;
+use jetcarp_search::explore::runs::Runs;
 use jetcarp_store::Library;
 use std::path::{Path, PathBuf};
 
@@ -52,6 +55,7 @@ fn every_golden_pack_reads_and_checks() {
         "ants",
         "export",
         "numbers",
+        "searches3",
     ] {
         assert!(packs.iter().any(|p| p.0 == want), "no golden pack {want}");
     }
@@ -93,6 +97,42 @@ fn every_golden_pack_reads_and_checks() {
                 // Its working database is rebuilt from its six runs.
                 assert_eq!(r.rebuilt.len(), 1, "{r:?}");
                 assert_eq!(r.rebuilt[0].runs, 6);
+            }
+            "searches3" => {
+                // Run schema 3 (0.4.3): every segment names it, and its runs come back with
+                // their lineage, a parent in the search or (with parent_job and parent_search)
+                // of another job's, and a run on an aperiodic patch with the patch's tiles as its
+                // cells.
+                assert_eq!(r.searches.len(), 1);
+                assert_eq!(r.rebuilt.len(), 1, "{r:?}");
+                assert_eq!(r.rebuilt[0].runs, 6);
+                let folder = lib.folder().join("searches").join(SEARCH3);
+                let runs = Runs::open_read(&folder.join("search.sqlite")).unwrap();
+                assert_eq!(runs.manifest.run_schema, "jetcarp-explore-runs 3");
+                let segments = runs.segment_files();
+                assert_eq!(segments.len(), 2);
+                for s in &segments {
+                    let seg = jetcarp_search::explore::segments::Segment::open(s).unwrap();
+                    assert_eq!(
+                        seg.meta("jetcarp.schema").as_deref(),
+                        Some("jetcarp-explore-runs 3"),
+                        "{}",
+                        s.display()
+                    );
+                }
+                let back = runs.get(&(1..=6).collect::<Vec<i64>>()).unwrap();
+                let lineage: Vec<_> = back
+                    .iter()
+                    .map(|x| {
+                        let s = x.parent_search.as_deref();
+                        (x.id, x.stage, x.parent, x.parent_job, s, x.origin.as_str())
+                    })
+                    .collect();
+                assert_eq!(lineage, SEARCH3_LINEAGE.to_vec());
+                let ap = back.iter().find(|x| x.tiling == "penrose-rhomb").unwrap();
+                let (_, topo) =
+                    jetcarp_core::explore::space::sized_spec(&ap.tiling, ap.cells as u32).unwrap();
+                assert_eq!((ap.cells, topo.len()), (4000, 4000));
             }
             "media" => assert!(r.media > 0),
             "aperiodic" => {
@@ -536,24 +576,34 @@ fn publish_into(lib: &Library, seed: u8, name: &str, o: &publish::Options) -> St
 fn write_golden_packs() {
     let out = golden_dir();
     let work = temp("golden-write");
-    let mut lines = vec![
-        "# The golden packs and their manifest hashes (tests/golden.rs). Never rewritten."
-            .to_string(),
-    ];
-    let mut put = |name: &str, h: String| lines.push(format!("{name} {h}"));
-    for n in [
-        "minimal",
-        "retraction",
-        "merge",
-        "searches",
-        "media",
-        "aperiodic",
-        "ants",
-        "export",
-        "numbers",
-    ] {
-        let _ = std::fs::remove_dir_all(out.join(n));
-    }
+    // A pack that is there already is kept as it is: this run's is written to a scratch folder
+    // and thrown away, and its hash line kept. Only the missing ones go in the golden folder.
+    let path = out.join("hashes.txt");
+    let mut lines: Vec<String> = match std::fs::read_to_string(&path) {
+        Ok(t) => t.lines().map(String::from).collect(),
+        Err(_) => vec![
+            "# The golden packs and their manifest hashes (tests/golden.rs). Never rewritten."
+                .to_string(),
+        ],
+    };
+    let dest = |name: &str| {
+        if out.join(name).exists() {
+            work.join("kept").join(name)
+        } else {
+            out.join(name)
+        }
+    };
+    let kept: Vec<String> = ["minimal", "retraction", "merge", "searches", "media"]
+        .iter()
+        .chain(&["aperiodic", "ants", "export", "numbers", "searches3"])
+        .filter(|n| out.join(n).exists())
+        .map(|n| n.to_string())
+        .collect();
+    let mut put = |name: &str, h: String| {
+        if !kept.iter().any(|k| k == name) {
+            lines.push(format!("{name} {h}"));
+        }
+    };
 
     // minimal: one version of publisher A's library.
     let a = library_a(&work);
@@ -561,14 +611,14 @@ fn write_golden_packs() {
         &a,
         PUBLISHER_A,
         "Golden Publisher A",
-        &opts("golden-a", &out.join("minimal"), "minimal"),
+        &opts("golden-a", &dest("minimal"), "minimal"),
     );
     put("minimal", h);
 
     // retraction: a second version that retracts the blinker, adds a boat and renames the
     // glider (a later annotation, rev 2).
     let ra = library_a(&work.join("r"));
-    let o = opts("golden-a", &out.join("retraction"), "retraction");
+    let o = opts("golden-a", &dest("retraction"), "retraction");
     publish_into(&ra, PUBLISHER_A, "Golden Publisher A", &o);
     let blinker = ra
         .list()
@@ -614,7 +664,7 @@ fn write_golden_packs() {
     )
     .unwrap();
     fix_library(&b);
-    let ob = opts("golden-b", &out.join("merge"), "merge");
+    let ob = opts("golden-b", &dest("merge"), "merge");
     publish_into(&b, PUBLISHER_B, "Golden Publisher B", &ob);
     let mut ob2 = ob.clone();
     ob2.version_label = "golden-2".into();
@@ -624,8 +674,8 @@ fn write_golden_packs() {
         publish_into(&b, PUBLISHER_B, "Golden Publisher B", &ob2),
     );
 
-    // searches: an explore search's folder with two sealed segments and a score sidecar, and
-    // verdicts on its runs.
+    // searches: an explore search's folder with two sealed segments (run schema 2, as 0.4.2
+    // sealed them) and a score sidecar, and verdicts on its runs.
     let s = Library::open(work.join("lib-s"));
     s.add(fixed(one("B3/S23", BLOCK))).unwrap();
     let uuid = "00000000-0000-4000-8000-00000000abcd";
@@ -634,7 +684,12 @@ fn write_golden_packs() {
         &serde_json::json!({"uuid": uuid, "label": "golden explore"}),
     )
     .unwrap();
-    fake_search(&s.folder().join("searches").join(uuid), uuid);
+    fake_search(
+        &s.folder().join("searches").join(uuid),
+        uuid,
+        2,
+        &SEARCH_RUNS,
+    );
     for (run, v) in [(1, "keep"), (4, "drop")] {
         rate(
             &s,
@@ -652,7 +707,7 @@ fn write_golden_packs() {
             &s,
             PUBLISHER_A,
             "Golden Publisher A",
-            &opts("golden-s", &out.join("searches"), "searches"),
+            &opts("golden-s", &dest("searches"), "searches"),
         ),
     );
 
@@ -688,7 +743,7 @@ fn write_golden_packs() {
             &m,
             PUBLISHER_A,
             "Golden Publisher A",
-            &opts("golden-m", &out.join("media"), "media"),
+            &opts("golden-m", &dest("media"), "media"),
         ),
     );
 
@@ -701,7 +756,7 @@ fn write_golden_packs() {
             &ap,
             PUBLISHER_A,
             "Golden Publisher A",
-            &opts("golden-ap", &out.join("aperiodic"), "aperiodic"),
+            &opts("golden-ap", &dest("aperiodic"), "aperiodic"),
         ),
     );
 
@@ -713,14 +768,14 @@ fn write_golden_packs() {
             &an,
             PUBLISHER_A,
             "Golden Publisher A",
-            &opts("golden-ants", &out.join("ants"), "ants"),
+            &opts("golden-ants", &dest("ants"), "ants"),
         ),
     );
 
     // export: the minimal pack laid out for a single download.
     let src = Source::open(&out.join("minimal")).unwrap();
     let v = src.version(&src.default_manifest(None).unwrap()).unwrap();
-    jetcarp_pack::export::export(&src, &v, &out.join("export")).unwrap();
+    jetcarp_pack::export::export(&src, &v, &dest("export")).unwrap();
     put("export", v.hash.clone());
 
     // numbers: random states beyond 2^53, in a scene, a find's history and an ant's start.
@@ -731,11 +786,45 @@ fn write_golden_packs() {
             &nu,
             PUBLISHER_A,
             "Golden Publisher A",
-            &opts("golden-numbers", &out.join("numbers"), "numbers"),
+            &opts("golden-numbers", &dest("numbers"), "numbers"),
         ),
     );
 
-    std::fs::write(out.join("hashes.txt"), lines.join("\n") + "\n").unwrap();
+    // searches3: an explore search sealed with run schema 3 (0.4.3), its runs' lineage
+    // (parent and parent_job) and an aperiodic run of sizing 2 among them.
+    let s3 = Library::open(work.join("lib-s3"));
+    s3.add(fixed(one("B3/S23", BLOCK))).unwrap();
+    s3.create_job(
+        "explore",
+        &serde_json::json!({"uuid": SEARCH3, "label": "golden explore, run schema 3"}),
+    )
+    .unwrap();
+    fake_search(
+        &s3.folder().join("searches").join(SEARCH3),
+        SEARCH3,
+        3,
+        &search3_runs(),
+    );
+    rate(
+        &s3,
+        "search_run",
+        &format!("{SEARCH3}:3"),
+        "user",
+        5.0,
+        Some("keep"),
+    );
+    fix_library(&s3);
+    put(
+        "searches3",
+        publish_into(
+            &s3,
+            PUBLISHER_A,
+            "Golden Publisher A",
+            &opts("golden-s3", &dest("searches3"), "searches3"),
+        ),
+    );
+
+    std::fs::write(&path, lines.join("\n") + "\n").unwrap();
     // Each golden pack stays small.
     for (name, _) in listed() {
         let bytes: usize = files(&out.join(&name)).iter().map(|f| f.1.len()).sum();
@@ -756,8 +845,63 @@ fn tiny_png(w: u32) -> Vec<u8> {
     out
 }
 
-/// A search folder as an explore search seals it: two segments of three runs, one rescore.
-fn fake_search(dir: &Path, uuid: &str) {
+/// The search uuid of the `searches3` pack.
+const SEARCH3: &str = "00000000-0000-4000-8000-00000000abc3";
+
+/// The search the `searches3` pack's transplant and balance variant came from (`--parents-from`).
+const PARENTS_SEARCH: &str = "00000000-0000-4000-8000-0000000000a7";
+
+/// The `searches3` pack's runs as they read back: (id, stage, parent, parent_job,
+/// parent_search, origin).
+type Lineage3 = (
+    i64,
+    i64,
+    Option<i64>,
+    Option<i64>,
+    Option<&'static str>,
+    &'static str,
+);
+const SEARCH3_LINEAGE: [Lineage3; 6] = [
+    (1, 1, None, None, None, "random"),
+    (2, 1, Some(1), None, None, "mutate"),
+    (3, 1, Some(41), Some(7), Some(PARENTS_SEARCH), "transplant"),
+    (4, 2, Some(1), None, None, "confirm"),
+    (5, 1, Some(2), None, None, "seed"),
+    (6, 1, Some(42), Some(7), Some(PARENTS_SEARCH), "balance"),
+];
+
+/// A run of a golden search: its lineage as [`SEARCH3_LINEAGE`] gives it, its tiling and cells.
+type FakeRun = (Lineage3, &'static str, i64);
+
+/// The `searches` pack's runs (run schema 2): six screened runs on 4,096 cells.
+const SEARCH_RUNS: [FakeRun; 6] = [
+    ((1, 1, None, None, None, "random"), "square", 4096),
+    ((2, 1, None, None, None, "random"), "square", 4096),
+    ((3, 1, None, None, None, "random"), "square", 4096),
+    ((4, 1, None, None, None, "random"), "square", 4096),
+    ((5, 1, None, None, None, "random"), "square", 4096),
+    ((6, 1, None, None, None, "random"), "square", 4096),
+];
+
+/// The `searches3` pack's runs: the lineage of [`SEARCH3_LINEAGE`], the fifth run on the
+/// 4,000-tile Penrose rhomb patch (sizing 2's screening patch for 16,000 cells).
+fn search3_runs() -> Vec<FakeRun> {
+    SEARCH3_LINEAGE
+        .iter()
+        .map(|&l| {
+            let (tiling, cells) = if l.0 == 5 {
+                ("penrose-rhomb", 4000)
+            } else {
+                ("square", 4096)
+            };
+            (l, tiling, cells)
+        })
+        .collect()
+}
+
+/// A search folder as an explore search seals it, of run schema `schema`: these runs in two
+/// segments of three, one rescore.
+fn fake_search(dir: &Path, uuid: &str, schema: usize, runs: &[FakeRun]) {
     use jetcarp_search::explore::runs::{Manifest, ScoreFile, ScoreSet, SegmentEntry};
     use jetcarp_search::explore::segments::{RunRec, SegmentWriter, Tuning};
     // The files name the golden version, whatever version writes them.
@@ -774,22 +918,28 @@ fn fake_search(dir: &Path, uuid: &str) {
             ("jetcarp.segment".to_string(), format!("part-{seg:06}")),
             ("jetcarp.engine_version".to_string(), "golden".to_string()),
         ];
-        let mut w = SegmentWriter::create_tuned(&dir.join(&file), &kv, &tuning).unwrap();
+        let mut w =
+            SegmentWriter::create_of_schema(&dir.join(&file), &kv, schema, &tuning).unwrap();
         for k in 0..3 {
             let id = (seg - 1) * 3 + k + 1;
+            let ((_, stage, parent, parent_job, parent_search, origin), tiling, cells) =
+                runs[id as usize - 1];
             w.push(RunRec {
                 id,
-                stage: 1,
-                tiling: "square".into(),
+                stage,
+                parent,
+                parent_job,
+                parent_search: parent_search.map(String::from),
+                tiling: tiling.into(),
                 fam: "life_like".into(),
                 rule: "B3/S23".into(),
                 seed: "{}".into(),
                 seed_kind: "soup".into(),
-                cells: 4096,
+                cells,
                 gens: 1024,
                 steps: 1,
                 rng: id * 7919,
-                origin: "random".into(),
+                origin: origin.into(),
                 fate: "cycle".into(),
                 settle: 100 + id,
                 period: 2,
@@ -832,11 +982,15 @@ fn fake_search(dir: &Path, uuid: &str) {
         search: uuid.into(),
         kind: "explore".into(),
         engine_version: "golden".into(),
-        run_schema: jetcarp_search::explore::segments::RUN_SCHEMA.into(),
+        run_schema: jetcarp_search::explore::segments::RUN_SCHEMAS[schema - 1].into(),
         score_schema: "jetcarp-explore-scores 1".into(),
         created: FIXED.into(),
         updated: FIXED.into(),
-        spec: serde_json::json!({"uuid": uuid, "screen_gens": 1024, "density": 0.35}),
+        spec: if schema >= 3 {
+            serde_json::json!({"uuid": uuid, "screen_gens": 1024, "sizing": 2})
+        } else {
+            serde_json::json!({"uuid": uuid, "screen_gens": 1024, "density": 0.35})
+        },
         segments,
         scores: vec![ScoreSet {
             version: 1,
