@@ -118,7 +118,7 @@ aperiodic) and each rule family. Untick any and it reads **Custom**, and the bui
 what's ticked. `jetcarp setup` builds the same *All* search. A search of your own choosing later is
 in [Searching](../guides/searching.md#choosing-what-to-search).
 
-<img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, and a ten-minute search on the GPU, with What it searches: All closed under it; about 83 MB and 11 minutes" width="600">
+<img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, This computer measured first, and a ten-minute search on the GPU, with What it searches: All closed under it; about 83 MB and 11 minutes" width="600">
 
 **Setting up.** Each job with its progress; each import says who signed the pack and what your
 library knew of their key, with a new key marked again below it. They run in the background, so **Continue in the
