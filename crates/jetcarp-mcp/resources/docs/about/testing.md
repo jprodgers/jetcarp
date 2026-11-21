@@ -90,16 +90,25 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the
   program by its quoted path, and come with the icon at all eight sizes, byte for byte; on macOS
   *JETCARP.app* must hold its `Info.plist`, its launcher naming the program and the `.icns`, and
-  pass `codesign --verify`; on Windows the Start menu's `JETCARP.lnk` must be a shell link. Then
-  `jetcarp uninstall` must list it and take every file out (on Windows, `jetcarp launcher remove`,
-  since `jetcarp uninstall` would reach the real registry), and a menu entry or app of the same
-  name that JETCARP did not make must be neither replaced nor removed
-  (`crates/jetcarp/tests/launcher.rs`). The bundle and the menu entry are also written into scratch
-  folders on every system, and Homebrew's link is found from a version's own folder
-  (`jetcarp-display/src/launcher.rs`). The Windows resource file the build script writes must hold
-  the `.ico` file's seven images as icon resources and list them in icon group 1
-  (`crates/jetcarp/tests/version_res.rs`), and the app's windows' icon must decode to the 256 px
-  picture.
+  pass `codesign --verify`; on Windows the Start menu's `JETCARP.lnk` must be a shell link, with
+  the copy of `jetcarpw.exe` it starts and a record naming the program. `jetcarp doctor` must say
+  where it is. Then `jetcarp uninstall` must list it and take every file out (on Windows,
+  `jetcarp launcher remove`, since `jetcarp uninstall` would reach the real registry), and a menu
+  entry, app or shortcut of the same name that JETCARP did not make must be neither replaced nor
+  removed (`crates/jetcarp/tests/launcher.rs`). On Windows a winget upgrade is played out for
+  real: JETCARP in a versioned folder makes the entry, the folder is replaced by the next
+  version's on the `PATH`, and the entry's launcher must still start JETCARP, whose first run
+  mends the record. How the launcher finds `jetcarp.exe` (beside itself, the record, the screen
+  saver's host command, the `PATH`, a stale record falling through), the record's mending, and a
+  removal that takes only JETCARP's two files are checked on every system with scratch folders
+  (`crates/jetcarp/tests/jetcarpw_find.rs`). The bundle and the menu entry are also written into
+  scratch folders on every system, and Homebrew's link is found from a version's own folder
+  (`jetcarp-display/src/launcher.rs`). Setup's summary must tick the box for every profile when
+  JETCARP isn't among the apps, and add it once (`setup_ui.rs`), and `jetcarp setup --yes` must add
+  it unless `--no-launcher` (`crates/jetcarp/tests/setup.rs`). The Windows resource file the build
+  script writes must hold the `.ico` file's seven images as icon resources and list them in icon
+  group 1 (`crates/jetcarp/tests/version_res.rs`), and the app's windows' icon must decode to the
+  256 px picture.
 - **The book.** The command-line and MCP reference pages and the keyboard page's table of keys are
   generated from the program and checked against it, and the copy of the book built into the
   program must match the book.

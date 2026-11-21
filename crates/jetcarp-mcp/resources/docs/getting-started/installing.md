@@ -108,8 +108,9 @@ pip install jetcarp
 The wheels are built for the same systems as the release archives, for any Python 3.8 or newer;
 there is no source package, so on other systems use [cargo](#with-cargo). The starter pack goes in
 `share/jetcarp/packs` inside the Python environment, and on macOS the screen saver's code in
-`lib/jetcarp`. To open JETCARP from your applications menu, Launchpad or the Start menu, run
-`jetcarp launcher install` once (see [Open the app](#open-the-app)).
+`lib/jetcarp`. To open JETCARP from your applications menu, Launchpad or the Start menu, leave
+that box ticked in the setup window, or run `jetcarp launcher install` once (see
+[Open the app](#open-the-app)).
 
 ## With Homebrew
 
@@ -123,9 +124,9 @@ brew install jetcarp
 `brew install jprodgers/jetcarp/jetcarp` does both in one line. The formula installs the release
 archive; nothing is compiled. The starter pack is in `$(brew --prefix)/share/jetcarp/packs`.
 Homebrew cannot put anything in your home folder, so to open JETCARP from Launchpad and Spotlight
-(as *JETCARP.app*) or from your applications menu, run `jetcarp launcher install` once, as
-Homebrew's message after installing says (see [Open the app](#open-the-app)). It starts Homebrew's
-`jetcarp` link, which an upgrade keeps.
+(as *JETCARP.app*) or from your applications menu, leave that box ticked in the setup window, or
+run `jetcarp launcher install` once, as Homebrew's message after installing says (see
+[Open the app](#open-the-app)). It starts Homebrew's `jetcarp` link, which an upgrade keeps.
 
 To upgrade, run `brew update` before `brew upgrade jetcarp`. Homebrew looks at taps again only
 once a day on its own, so for a day after you last used it, `brew upgrade` alone can miss a new
@@ -368,9 +369,9 @@ On Windows, open a new terminal after installing, so that it sees the new `PATH`
 archive that is not on your `PATH`, run the program in its folder (`./jetcarp`, or `.\jetcarp.exe`
 on Windows).
 
-Or open it like any other app, from its icon. The installers put it among your apps for you; after
-any other way of installing (pipx, uv, pip, Homebrew, winget, cargo, a release archive), run this
-once:
+Or open it like any other app, from its icon. The installers put it among your apps for you, and
+the [setup window](first-run.md) offers to; after any other way of installing (pipx, uv, pip,
+Homebrew, winget, cargo, a release archive) you can also run this once:
 
 ```bash
 jetcarp launcher install
@@ -380,15 +381,20 @@ jetcarp launcher install
 | --- | --- | --- |
 | Linux | `jetcarp.desktop` in `~/.local/share/applications`, and the icon at each size in `~/.local/share/icons/hicolor` (both follow `XDG_DATA_HOME`) | the applications menu: on GNOME, *Activities* and the app grid |
 | macOS | *JETCARP.app* in `~/Applications`, signed ad hoc on your Mac | Launchpad, Spotlight or Finder; keep it in the Dock from there |
-| Windows | `JETCARP.lnk` in your Start menu's folder (`%APPDATA%\Microsoft\Windows\Start Menu\Programs`), starting `jetcarpw.exe`, so no console window opens | the Start menu |
+| Windows | `JETCARP.lnk` in your Start menu's folder (`%APPDATA%\Microsoft\Windows\Start Menu\Programs`), starting a copy of `jetcarpw.exe` in `%LOCALAPPDATA%\jetcarp\launcher`, so no console window opens | the Start menu |
 
-Each starts the program that made it, by a path an upgrade keeps (Homebrew's `jetcarp` link, not
-the version's own folder). *JETCARP.app* holds a small launcher that starts the program, not a copy
-of it, so it needs making only once. Run `jetcarp launcher install` again if you move the program,
-or after each upgrade with winget, whose folder names the version. Scoop adds a *JETCARP* entry of
-its own, so with Scoop there is no need. `jetcarp launcher status` says whether it is there,
-`jetcarp launcher remove` takes it out, and `jetcarp uninstall` removes it with the rest of what
-JETCARP set up. A menu entry or app of the same name that JETCARP did not make is left alone.
+Each keeps working when JETCARP is upgraded. On Linux and macOS it starts the program by a path an
+upgrade keeps (Homebrew's `jetcarp` link, not the version's own folder); *JETCARP.app* holds a
+small launcher that starts the program, not a copy of it. On Windows, winget's and Scoop's folders
+name the version, so the Start menu entry starts a copy of the windowless launcher in a folder of
+JETCARP's own instead, beside a record of the `jetcarp.exe` it starts. Each run of `jetcarp` puts
+its own path in that record, and when the program it names has gone, as after `winget upgrade`,
+the launcher finds JETCARP on your `PATH`, where winget and Scoop keep the current version. Run
+`jetcarp launcher install` again only if you move the program by hand. Scoop adds a *JETCARP* entry
+of its own as well. `jetcarp launcher status` says whether it is there, `jetcarp doctor` says so
+too, `jetcarp launcher remove` takes it out (on Windows with the launcher's copy), and
+`jetcarp uninstall` removes it with the rest of what JETCARP set up. A menu entry, app or shortcut
+of the same name that JETCARP did not make is left alone.
 
 The app's windows carry the icon too: in the title bar and taskbar on Windows and X11, and in the
 Dock on macOS. On Wayland the desktop takes a window's icon from the menu entry named after it, so

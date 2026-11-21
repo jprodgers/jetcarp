@@ -2970,6 +2970,9 @@ Options:
       --no-measure
           Do not measure this computer (the JETCARP Hardware Score, about a minute, which setup does first unless told not to: asked in a terminal, done with --yes)
 
+      --no-launcher
+          Do not add JETCARP to the system's apps (the Start menu, Launchpad, the apps menu), which setup does when it isn't there yet unless told not to: asked in a terminal, done with --yes (`jetcarp launcher install`)
+
   -h, --help
           Print help (see a summary with '-h')
 ```

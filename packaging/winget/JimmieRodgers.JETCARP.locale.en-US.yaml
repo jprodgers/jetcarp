@@ -22,9 +22,10 @@ Tags:
   - simulation
 ReleaseNotesUrl: https://github.com/@REPO@/releases/tag/v@VERSION@
 InstallationNotes: >-
-  Run `jetcarp launcher install` to add JETCARP to the Start menu, and again after each upgrade.
-  Before `winget uninstall JimmieRodgers.JETCARP`, run `jetcarp uninstall` to undo what JETCARP
-  set up outside its folders.
+  To add JETCARP to the Start menu, leave the box ticked in its setup window, or run
+  `jetcarp launcher install`; the entry keeps working after upgrades. Before
+  `winget uninstall JimmieRodgers.JETCARP`, run `jetcarp uninstall` to undo what JETCARP set up
+  outside its folders.
 Documentations:
   - DocumentLabel: Book
     DocumentUrl: https://jprodgers.github.io/jetcarp/

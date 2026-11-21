@@ -77,9 +77,12 @@ It reports each step as *done* or *FAILED* with the reason. The steps it may lis
   JETCARP until you quit and reopen it;
 - **remove JETCARP from the applications menu** (Linux: `jetcarp.desktop` and the icons beside it),
   **remove JETCARP.app from Applications** (macOS) or **remove JETCARP from the Start menu**
-  (Windows): the entry among your apps that the installers or `jetcarp launcher install` made (see
+  (Windows: `JETCARP.lnk`, and the copy of `jetcarpw.exe` it starts with the record beside it,
+  `%LOCALAPPDATA%\jetcarp\launcher`): the entry among your apps that the installers, setup or
+  `jetcarp launcher install` made (see
   [Open the app](../getting-started/installing.md#open-the-app)). One of the same name that JETCARP
-  did not make is left alone. If you keep *JETCARP.app* in the Dock, take it out of the Dock too;
+  did not make is left alone, and so is any other file in that folder. If you keep *JETCARP.app* in
+  the Dock, take it out of the Dock too;
 - **forget the recorded host command**, a small file in the settings folder that GNOME's menu and the
   Windows screen saver use to start the host;
 - **remove the host's lock file**, the empty `host.lock` in the runtime folder that keeps a second
@@ -124,7 +127,8 @@ data folder inside it.
 `--data` and `--settings` delete their folders only when everything in each is JETCARP's. In the
 data folder that is the library and the files SQLite keeps beside it, its folder of job locks, and
 `media/`, `searches/` and `explore/` laid out as JETCARP lays them out (on Windows, also the
-runtime files and the screen saver, which share the folder). In the settings folder it is the
+runtime files, the screen saver and the Start menu entry's launcher, which share the folder). In
+the settings folder it is the
 settings files [Folders](../reference/folders.md#what-lives-in-each-folder) lists, the folders of
 screensaver profiles, rotations, desktop stills and *Fit to this computer*'s pictures, and `pack/`
 with the publisher's files (and the data folder, where it is inside). A folder holding anything
@@ -163,7 +167,7 @@ writes outside the program's own folder. `~` is your home folder.
 | Data folder | `~/.local/share/jetcarp` | `~/Library/Application Support/jetcarp/data` | `%LOCALAPPDATA%\jetcarp` |
 | Output folder (kept) | `~/Pictures/JETCARP` | `~/Pictures/JETCARP` | your Pictures folder, `\JETCARP` |
 | Runtime files (a port number, an access token and a lock file) | `$XDG_RUNTIME_DIR/jetcarp`, else `~/.cache/jetcarp` | `~/.cache/jetcarp` | inside the data folder |
-| Among your apps | `~/.local/share/applications/jetcarp.desktop`, and `jetcarp.png` in each size's `apps` folder in `~/.local/share/icons/hicolor` | `~/Applications/JETCARP.app` | `JETCARP.lnk` in `%APPDATA%\Microsoft\Windows\Start Menu\Programs` |
+| Among your apps | `~/.local/share/applications/jetcarp.desktop`, and `jetcarp.png` in each size's `apps` folder in `~/.local/share/icons/hicolor` | `~/Applications/JETCARP.app` | `JETCARP.lnk` in `%APPDATA%\Microsoft\Windows\Start Menu\Programs`, and `jetcarpw.exe` and `jetcarp-program` in `%LOCALAPPDATA%\jetcarp\launcher` |
 | Start at login | `~/.config/autostart/jetcarp-host.desktop` | `~/Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist` | the value `JETCARP` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |
 | GNOME Shell extension | `~/.local/share/gnome-shell/extensions/jetcarp@jimmieprodgers.com`, and its entry in GNOME's list of enabled extensions | | |
 | Screen saver | | `~/Library/Screen Savers/JETCARP.saver` | `%LOCALAPPDATA%\JETCARP\JETCARP.scr`, and the `SCRNSAVE.EXE` value under `HKEY_CURRENT_USER\Control Panel\Desktop` when it is the chosen one |
@@ -226,8 +230,9 @@ and run it with `-Uninstall`:
 powershell -ExecutionPolicy Bypass -File "$env:TEMP\jetcarp-installer.ps1" -Uninstall
 ```
 
-First it has the program take JETCARP out of the Start menu (`jetcarp launcher remove`), if
-`jetcarp uninstall` has not already. Then it deletes `%LOCALAPPDATA%\Programs\jetcarp`, takes it off
+First it has the program take JETCARP out of the Start menu (`jetcarp launcher remove`, which
+removes the launcher's copy in `%LOCALAPPDATA%\jetcarp\launcher` too), if `jetcarp uninstall` has
+not already. Then it deletes `%LOCALAPPDATA%\Programs\jetcarp`, takes it off
 your user `PATH` if it was there (an install with `-NoModifyPath` never put it there), and deletes
 `%LOCALAPPDATA%\Programs` if it made it and it is empty. If you installed with `-InstallDir`, add it
 again. As with the shell installer, any release's installer removes any version's install.
