@@ -793,25 +793,27 @@ fn facet_row(
         return false;
     }
     let p = ui.painter_at(rect);
-    // The standard look, or the high-contrast theme's own colours (#220).
+    // The standard dark look, or the theme's own colours: the high-contrast theme's (#220), and
+    // the light theme's, where the dark look's pale text was all but invisible on white (#137).
     let v = ui.visuals();
-    let (sel_bg, hover_bg, text, sel_text, weak) = if crate::a11y::high_contrast(ui.ctx()) {
-        (
-            v.selection.bg_fill,
-            v.widgets.hovered.weak_bg_fill,
-            v.text_color(),
-            v.selection.stroke.color,
-            v.weak_text_color(),
-        )
-    } else {
-        (
-            Color32::from_rgb(0x34, 0x3c, 0x50),
-            Color32::from_gray(38),
-            Color32::from_gray(205),
-            Color32::WHITE,
-            Color32::from_gray(130),
-        )
-    };
+    let (sel_bg, hover_bg, text, sel_text, weak) =
+        if crate::a11y::high_contrast(ui.ctx()) || !v.dark_mode {
+            (
+                v.selection.bg_fill,
+                v.widgets.hovered.weak_bg_fill,
+                v.text_color(),
+                v.selection.stroke.color,
+                v.weak_text_color(),
+            )
+        } else {
+            (
+                Color32::from_rgb(0x34, 0x3c, 0x50),
+                Color32::from_gray(38),
+                Color32::from_gray(205),
+                Color32::WHITE,
+                Color32::from_gray(130),
+            )
+        };
     if selected {
         p.rect_filled(rect, 3.0, sel_bg);
     } else if resp.hovered() {
