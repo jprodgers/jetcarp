@@ -19,7 +19,7 @@ pub(crate) fn tools() -> Vec<Tool> {
             read_only: true,
             destructive: false,
             description: || {
-                "Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: \"overview\" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), \"world\" (drawing, pasting, reseeding, commands, objects), \"library\" (finding, reading and curating patterns, ant runs and Quick Start entries), \"searches\" (long searches as background jobs: start, wait, read the finds, stop, resume), \"scripts\" (every run_script function), \"packs\" (checking, importing and publishing packs), \"setup\" (this installation as its user set it up: profile, folders, packs, GPU, library; read only, since setup is the user's choice) or \"pages\" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {\"page\": \"guides/searching\"} (the resources jetcarp://docs/{page}). `schema` returns the settings of a tool argument that names a jetcarp://schema/ resource, e.g. {\"schema\": \"search_start/hunt\"}.".into()
+                "Start here if you are new to JETCARP. Explains what JETCARP is and how these tools fit together, with worked examples you can copy. `topic`: \"overview\" (default: concepts, coordinates, a glider in Life, Brian's Brain, a rule on hexagons, a sandpile), \"world\" (drawing, pasting, reseeding, commands, objects), \"library\" (finding, reading and curating patterns, ant runs and Quick Start entries), \"searches\" (long searches as background jobs: start, wait, read the finds, stop, resume), \"scripts\" (every run_script function), \"packs\" (checking, importing and publishing packs), \"setup\" (this installation as its user set it up: profile, folders, packs, GPU, library; read only, since setup is the user's choice), \"host\" (the background host's actions, and fitting it to this computer) or \"pages\" (the pages of the JETCARP book). `page` returns one book page as Markdown, e.g. {\"page\": \"guides/searching\"} (the resources jetcarp://docs/{page}). `schema` returns the settings of a tool argument that names a jetcarp://schema/ resource, e.g. {\"schema\": \"search_start/hunt\"}.".into()
             },
             schema: || {
                 object(
@@ -29,7 +29,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                             words(
                                 &[
                                     "overview", "world", "library", "searches", "scripts", "packs",
-                                    "setup", "pages",
+                                    "setup", "host", "pages",
                                 ],
                                 "Which guide (default overview).",
                             ),
@@ -120,10 +120,11 @@ fn help(c: &mut Call) -> Res {
             "scripts" | "script" => jetcarp_script::help_text().to_string(),
             "packs" => HELP_PACKS.to_string(),
             "setup" => setup_text(),
+            "host" => help_host(),
             "pages" => pages_text(),
             t => {
                 return Err(format!(
-                    "`topic` is overview, world, library, searches, scripts, packs, setup, or pages, not {t}"
+                    "`topic` is overview, world, library, searches, scripts, packs, setup, host, or pages, not {t}"
                 ));
             }
         },
@@ -489,6 +490,37 @@ Example: an explore search for two minutes, then its best runs
 2. job_status {"job": <job>, "wait_s": 150}
 3. search_runs {"job": <job>, "limit": 10}; search_runs {"job": <job>, "sheet": {"ids": [<run ids>]}}
 4. search_runs {"job": <job>, "scene": {"run": <id>}} gives its scene: open it with world_new {"scene": ...}.
+"#;
+
+/// `help {"topic": "host"}`: the background host's tool, `host_control`, its actions and
+/// options. The tool names this topic rather than carrying the text, since tools/list goes to the
+/// model whole with every request.
+pub fn help_host() -> String {
+    let mut s = HELP_HOST.to_string();
+    if jetcarp_core::fit::FIT {
+        s.push_str(HELP_HOST_FIT);
+    }
+    s
+}
+
+const HELP_HOST: &str = r#"The background host (`host_control`, in the jetcarp-mcp server)
+
+The background host runs live scenes as the desktop background or in windows, without the app, and keeps going when the app closes. `host_control` controls it and returns its status: each screen's scene, cell size and caption, and the host's recent notes. It fails when the host isn't running (the user starts it: `jetcarp host start`), and refuses to start or show scenes until the user has accepted the photosensitive seizure warning.
+
+`action` (default status):
+- status: what each screen shows, and why it is paused or held.
+- next, previous: the next or previous item; `screen` (counted from 0) for one screen, else every screen.
+- pause, resume.
+- rotation: a screen's rotation, `name` (saved); `screen`, else the first.
+- wallpaper: every screen on the desktop background (GNOME: with its extension), or with `on` false in windows.
+- login: start at login, or with `on` false not.
+- open_app: open the JETCARP app.
+- reload: read host.json again.
+- scene: the scene a screen shows (`screen`), its grid's size included, as a scene that replays it.
+- quit.
+"#;
+
+const HELP_HOST_FIT: &str = r#"- tune: fit the desktop background to this computer, in a few seconds, on the screens themselves. The most demanding scene of each screen's rotation that steps on the GPU, and the one that steps on the processor, are shown at a few sizes and measured, every screen at once; the rest of each rotation takes its size from the one measured on its device, by its work a cell, with at most twice that scene's cells' worth of work unless a size is chosen (a `pick` other than recommended, or a size chosen in the app). Options: `cpu_limit` and `gpu_limit` (percent of the machine, one limit for the whole desktop, shared between the screens by their pixel area; saved), `fps` (the frame rate to keep; saved), `pick` (recommended, finest, own, or a cell size in pixels; placed from the last fit while it is current, nothing measured), `fresh` (with `pick`: measure again), `screen` (one screen; it keeps its share of the limits). With `on` false it stops a fit. How it went: `tuning` in the status.
 "#;
 
 /// `help {"topic": "packs"}`.

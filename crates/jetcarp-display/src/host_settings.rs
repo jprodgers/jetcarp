@@ -257,6 +257,16 @@ pub struct Rung {
     /// Which limits it passed, when it did.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub over: Option<String>,
+    /// How near it came to the limits: its largest load over that limit's line (the limit less
+    /// its margin), so 1 is on the line and under 1 within the limits (0: not known, a sweep
+    /// before 0.4.3).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub load: f32,
+    /// Within the measurement's noise of a limit's line, either side ([`crate::tuning::NOISE`]):
+    /// a fit repeated with nothing changed may find it either side, so the size recommended last
+    /// time is kept while it stays this close (#94).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub at_limit: bool,
     /// The picture of the screen at this size: a PNG in the tuning folder ([`crops_dir`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crop: Option<String>,
@@ -287,13 +297,46 @@ pub struct TunedScene {
     pub recommended: Size,
     /// A pattern placed on an empty field, which keeps its own size unless someone chooses another.
     pub placed: bool,
-    /// Every size the sweep showed, finest first.
+    /// Every size the sweep showed, finest first: since 0.4.3 only the scene a fit measured has
+    /// them ([`TunedScene::measured`]).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub rungs: Vec<Rung>,
     pub gpu_timing: GpuTiming,
     /// Why it shows at this size, when that needs saying.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The scene a fast fit measured on its screen: the rotation's most demanding (#113). Every
+    /// other scene takes its size from this one's, by their costs.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub measured: bool,
+    /// Its estimated work per cell, as a share of the measured scene's (1 for that one; 0: not
+    /// known, a sweep before 0.4.3). A scene of half the cost may have twice the cells.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub cost: f32,
+    /// The other rules of its series, which show at its size: a series is fitted as one scene
+    /// (#109).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<String>,
+    /// It steps on the GPU, as the fit planned it: a scene on the other device from the measured
+    /// one is sized no finer than the measured scene's work.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub gpu: bool,
+    /// Its recommended size was held to twice the measured scene's cells (a soft cap: the estimate
+    /// allowed a finer one, which choosing it, or a pick, gives).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub capped: bool,
+}
+
+fn is_zero(x: &f32) -> bool {
+    *x == 0.0
+}
+
+fn is_zero_f64(x: &f64) -> bool {
+    *x == 0.0
+}
+
+fn is_zero_u64(x: &u64) -> bool {
+    *x == 0
 }
 
 impl TunedScene {
@@ -309,6 +352,11 @@ impl TunedScene {
     pub fn set_size(&mut self, size: Size) {
         self.cell_px = size.px;
         self.level = size.level;
+    }
+
+    /// Whether it is the scene labelled `label`: its own label, or one of its series' rules.
+    pub fn names(&self, label: &str) -> bool {
+        self.scene == label || self.also.iter().any(|a| a == label)
     }
 
     /// The rung at the size it shows at. A scene left at its own size is kept at the size it
@@ -346,6 +394,23 @@ pub struct Tuning {
     /// at).
     pub fps: f32,
     pub scenes: Vec<TunedScene>,
+    /// This screen's share of the desktop's limits: its pixel area over that of every screen
+    /// shown at once (#107). 0: not known (a sweep before 0.4.3).
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub share: f64,
+    /// Its monitor's refresh rate when it was found (None: not known), so a monitor whose rate
+    /// changed is fitted again (#110).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hz: Option<f32>,
+    /// The most cells its sizes could hold: the sizes a scene can be chosen at are found from it.
+    #[serde(skip_serializing_if = "is_zero_u64")]
+    pub max_cells: u64,
+    /// The GPU it was measured on (None: the processor alone, or not known).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu: Option<String>,
+    /// The JETCARP that measured it: `--pick` measures again a fit another one made (#77).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub version: String,
 }
 
 impl Default for Tuning {
@@ -357,6 +422,11 @@ impl Default for Tuning {
             limits: TuneLimits::default(),
             fps: 0.0,
             scenes: vec![],
+            share: 0.0,
+            hz: None,
+            max_cells: 0,
+            gpu: None,
+            version: String::new(),
         }
     }
 }
@@ -367,7 +437,7 @@ impl Tuning {
     /// changed size since. On another canvas a lattice keeps its cell count (its cells grow or
     /// shrink with the canvas), and a patch its level.
     pub fn size_for(&self, label: &str, design_px: f32, canvas: [f64; 2]) -> Option<Size> {
-        let t = self.scenes.iter().find(|s| s.scene == label)?;
+        let t = self.scenes.iter().find(|s| s.names(label))?;
         if (t.design_px - design_px).abs() > 1e-3 {
             return None;
         }
@@ -392,6 +462,46 @@ impl Tuning {
         self.canvas == [canvas[0].round() as u32, canvas[1].round() as u32]
     }
 
+    /// Whether it was found for this monitor: the same canvas, pixels per point and refresh rate
+    /// (a rate not known on either side counts as the same). A monitor changed in any of them is
+    /// fitted again by itself (#110).
+    pub fn fits_monitor(&self, canvas: [f64; 2], scale: f64, hz: Option<f32>) -> bool {
+        self.fits_canvas(canvas)
+            && (self.scale - scale).abs() < 1e-3
+            && match (self.hz, hz) {
+                (Some(a), Some(b)) => (a - b).abs() < 0.5,
+                _ => true,
+            }
+    }
+
+    /// Whether `--pick` may place sizes from it without measuring again (#77): found by this
+    /// JETCARP, for `rotation`, every one of its scenes (`labels`), on this monitor, within these
+    /// limits (processor, GPU and frame rate), on this GPU, and with a scene measured.
+    #[allow(clippy::too_many_arguments)]
+    pub fn current(
+        &self,
+        rotation: &str,
+        labels: &[String],
+        canvas: [f64; 2],
+        scale: f64,
+        hz: Option<f32>,
+        limits: &TuneLimits,
+        gpu: Option<&str>,
+        version: &str,
+    ) -> bool {
+        self.version == version
+            && self.rotation == rotation
+            && self.fits_monitor(canvas, scale, hz)
+            && self.limits.cpu_percent == limits.cpu_percent
+            && self.limits.gpu_percent == limits.gpu_percent
+            && self.limits.fps == limits.fps
+            && self.gpu.as_deref() == gpu
+            && self.scenes.iter().any(|s| s.measured)
+            && labels
+                .iter()
+                .all(|l| self.scenes.iter().any(|s| s.names(l)))
+    }
+
     /// Whether the scene labelled `label` is one of `labels`, the scenes of the rotation its screen
     /// shows now (None: not known, so every scene is). A size chosen while another rotation was
     /// shown stays saved, for the sweep to keep while it fits should that scene come back, but it
@@ -407,7 +517,12 @@ impl Tuning {
     ) -> impl Iterator<Item = &'a TunedScene> {
         self.scenes
             .iter()
-            .filter(move |s| Tuning::shows(&s.scene, labels))
+            .filter(move |s| labels.is_none_or(|l| l.iter().any(|x| s.names(x))))
+    }
+
+    /// The scene it measured (#113).
+    pub fn measured(&self) -> Option<&TunedScene> {
+        self.scenes.iter().find(|s| s.measured)
     }
 }
 
@@ -749,12 +864,24 @@ mod tests {
                     on_gpu: true,
                     fits: false,
                     over: Some("GPU".into()),
+                    load: 1.06,
+                    at_limit: true,
                     crop: Some("s0-life-2px.png".into()),
                     own: false,
                 }],
                 gpu_timing: GpuTiming::Kernel,
                 note: None,
+                measured: true,
+                cost: 1.0,
+                also: vec!["profile Life 2".into()],
+                gpu: true,
+                capped: true,
             }],
+            share: 0.64,
+            hz: Some(144.0),
+            max_cells: 4_000_000,
+            gpu: Some("Radeon".into()),
+            version: "0.4.3".into(),
         });
         let back: HostSettings = serde_json::from_str(&serde_json::to_string(&t).unwrap()).unwrap();
         assert_eq!(back.checked(), t);

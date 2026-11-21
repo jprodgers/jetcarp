@@ -105,9 +105,8 @@ fn run_headless(mut core: core::Core, seconds: Option<f64>) -> ! {
     core.attach_gpu(gpu);
     let started = Instant::now();
     while !core.finished() && seconds.is_none_or(|s| started.elapsed().as_secs_f64() < s) {
-        let t0 = Instant::now();
         core.tick();
-        core.frame_done(t0.elapsed().as_secs_f64());
+        core.frame_done();
         // Until the next screen's frame is due (each screen keeps its own rate).
         let rest = core.next_frame().saturating_duration_since(Instant::now());
         if !rest.is_zero() {

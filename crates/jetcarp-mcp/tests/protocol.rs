@@ -265,7 +265,7 @@ fn tools_list_is_well_formed_and_from_the_operations() {
 }
 
 /// tools/list goes to the model whole, so it stays small (the stdio test holds the whole list to
-/// 45 KB): the long settings are resources the tools name, and each of those can be read (and
+/// 48,000 bytes, a hard limit): the long settings are resources the tools name, and each of those can be read (and
 /// through help, for clients without resources).
 #[test]
 fn summarised_settings_are_resources() {
@@ -1134,6 +1134,17 @@ fn help_and_reference() {
     }
     let t = ok(&call(&mut s, &mut h, "help", json!({"topic": "setup"})));
     assert!(t.contains("setup.status") && t.contains("profiles:"), "{t}");
+    // The background host's actions and Fit's options, which `host_control` names rather than
+    // carrying in tools/list.
+    let t = ok(&call(&mut s, &mut h, "help", json!({"topic": "host"})));
+    for w in ["host_control", "wallpaper", "login", "rotation", "scene"] {
+        assert!(t.contains(w), "{w} in {t}");
+    }
+    if jetcarp_core::fit::FIT {
+        for w in ["tune", "cpu_limit", "fps", "pick", "fresh", "pixel area"] {
+            assert!(t.contains(w), "{w} in {t}");
+        }
+    }
     let t = ok(&call(
         &mut s,
         &mut h,

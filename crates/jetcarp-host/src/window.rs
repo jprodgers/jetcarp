@@ -779,6 +779,10 @@ impl App {
             }
         };
         o.starved_since = None;
+        // A frame's work starts once it has a surface to draw on: the wait for one (with
+        // presentation on the monitor's clock, a monitor of another refresh rate's) is not its
+        // work, and a fit judges the work (#106).
+        let painting = Instant::now();
         o.painter.set_guard_on(self.core.desktop_guard_on());
         o.painter
             .set_guard_at_risk(self.core.desktop_guard_at_risk());
@@ -794,6 +798,7 @@ impl App {
         );
         // A wallpaper's window is minimized and gets few frame callbacks, so it must not wait for
         // them: it presents on the host's own timer, from `about_to_wait`.
+        let painted = painting.elapsed().as_secs_f64();
         if let (Some(w), false) = (o.body.os(), o.target.wallpaper) {
             w.pre_present_notify();
         }
@@ -803,6 +808,7 @@ impl App {
         let (id, report) = (o.painter.id(), o.painter.guard_report());
         let notes = o.painter.take_guard_notes();
         let screen_i = o.target.screen;
+        self.core.painted(screen_i, painted);
         if let Some(screen) = self.core.screens.get_mut(screen_i) {
             screen.stage.set_guard(id, now, cap, paused);
             screen.stage.set_guard_report(report);
@@ -1019,9 +1025,10 @@ impl ApplicationHandler for App {
                     w.request_redraw();
                 }
             }
-            // A sweep measures each frame's work, and where the system does not count the
-            // host's GPU time, how long the GPU took over the frame's last submission.
-            self.core.frame_done(now.elapsed().as_secs_f64());
+            // A fit measures each screen's frame's work (its stepping and drawing, not the wait
+            // to present, #106), and where the system does not count the host's GPU time, how
+            // long the GPU took over the frame's last submission.
+            self.core.frame_done();
             if let (Some(acc), Some(g)) = (self.core.sweep_gpu_meter(), &self.gpu) {
                 let t = Instant::now();
                 g.queue.on_submitted_work_done(move || {
