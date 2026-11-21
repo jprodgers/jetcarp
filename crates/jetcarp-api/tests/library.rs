@@ -711,6 +711,76 @@ fn retracted_records_show_as_retracted() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// `library soup` says where to look (#34): the generation the find first shows in its soup,
+/// and for a spaceship the generation the hunt cut it out as it flew off and about when it
+/// reaches the scene's dead edge. Replayed, the scene holds the find at the generation it first
+/// shows.
+#[test]
+fn a_hunt_finds_soup_says_when_the_find_first_shows() {
+    let dir = scratch("lib-soup-first");
+    let cx = jetcarp_api::Ctx::new()
+        .with_library(Some(dir.join("lib")))
+        .with_out_root(Some(dir.join("out")));
+    call_json(
+        &cx,
+        "search.start",
+        json!({"strategy": "hunt", "spec": {"rules": "B3/S23", "tilings": "square",
+               "soups": 200, "size": 16, "seed": 3}}),
+    )
+    .unwrap();
+    let finds = cx.library().list().unwrap();
+    let of = |class: PatternClass| {
+        finds
+            .iter()
+            .filter(|r| r.class == class)
+            .max_by_key(|r| (r.seen, r.id.clone()))
+            .unwrap_or_else(|| panic!("no {class:?} found"))
+            .clone()
+    };
+    let ship = of(PatternClass::Spaceship);
+    let still = of(PatternClass::StillLife);
+    let save = dir.join("ship.json").display().to_string();
+    let v = call_json(&cx, "library.soup", json!({"id": ship.id, "save": save})).unwrap();
+    let m = &v["soups"][0];
+    let seen = m["first_seen"].as_u64().unwrap_or_else(|| panic!("{v}"));
+    let off = m["flew_off"].as_u64().unwrap_or_else(|| panic!("{v}"));
+    let edge = m["edge"].as_u64().unwrap_or_else(|| panic!("{v}"));
+    assert!(seen <= off && off < edge, "{v}");
+    let text = {
+        use jetcarp_api::ops::soup::{LibrarySoup, SoupIn};
+        let a = SoupIn {
+            id: ship.id.clone(),
+            ..Default::default()
+        };
+        LibrarySoup::run(&cx, a, &Quiet).unwrap().text()
+    };
+    assert!(
+        text.contains(&format!("shows at generation {seen}"))
+            && text.contains("reaches the scene's edge at about"),
+        "{text}"
+    );
+    // Replayed, the ship is there at the generation it first shows.
+    let scene = jetcarp_core::Scene::from_json(&std::fs::read_to_string(&save).unwrap()).unwrap();
+    let mut w = jetcarp_core::World::from_scene(&scene).unwrap();
+    w.apply(jetcarp_core::Command::Step { gens: seen }).unwrap();
+    let objs =
+        jetcarp_core::objects::find_objects(&w, &jetcarp_core::objects::ObjectOptions::default())
+            .unwrap();
+    assert!(
+        objs.objects
+            .iter()
+            .any(|o| o.content_id.as_deref() == Some(ship.id.as_str())),
+        "no {} at generation {seen}",
+        ship.id
+    );
+    // A still life shows before the soup ends, and goes nowhere.
+    let v = call_json(&cx, "library.soup", json!({"id": still.id})).unwrap();
+    let m = &v["soups"][0];
+    let seen = m["first_seen"].as_u64().unwrap_or_else(|| panic!("{v}"));
+    assert!(seen <= m["generation"].as_u64().unwrap(), "{v}");
+    assert_eq!((&m["flew_off"], &m["edge"]), (&json!(null), &json!(null)));
+}
+
 #[test]
 fn a_hunt_finds_soup_is_rebuilt_as_a_scene_that_replays_to_it() {
     let dir = scratch("lib-soup");

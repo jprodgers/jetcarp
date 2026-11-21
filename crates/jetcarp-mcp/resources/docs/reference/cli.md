@@ -1069,7 +1069,7 @@ Commands:
   list         List patterns (highest interest score first), optionally filtered
   show         Show one pattern: its record, and a text drawing on square and hexagon grids
   paste        Make a scene from several library patterns placed on one grid
-  soup         Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run again with the hunt's engine to check it); --best N gives the N soups of its hunt that made the most copies of it instead
+  soup         Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run again with the hunt's engine to check it), and say when the find first shows in it (and a spaceship when it flies off and reaches the scene's edge); --best N gives the N soups of its hunt that made the most copies of it instead
   promote      Add a Quick Start entry ("My finds"): a library pattern (ID, which is marked promoted), a run of an explore search (--search-run), or a scene file (--scene)
   promote-run  Promote one run of a sweep folder to the Quick Start ("My finds"): its tiling, CAs, and start, so it replays as in the sweep. The run is also marked a favourite in the folder
   render       Draw a pattern's phases (PNG), or print them as text
@@ -1161,7 +1161,7 @@ Options:
 #### `jetcarp library soup`
 
 ```text
-Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run again with the hunt's engine to check it); --best N gives the N soups of its hunt that made the most copies of it instead
+Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run again with the hunt's engine to check it), and say when the find first shows in it (and a spaceship when it flies off and reaches the scene's edge); --best N gives the N soups of its hunt that made the most copies of it instead
 
 Usage: jetcarp library soup [OPTIONS] <ID>
 

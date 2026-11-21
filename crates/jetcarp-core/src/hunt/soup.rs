@@ -261,6 +261,9 @@ pub struct SoupRun {
     /// Ships cut (with their displacement as they flew, and the independent ships they are made
     /// of when several flew together as one group; empty when one).
     pub cut: Vec<(Arc<Found>, [i32; 2], Vec<Arc<Found>>)>,
+    /// When set, every ship cut is also kept here with its cells ([`CutShip`]), for
+    /// [`sightings`]; a hunt leaves it unset.
+    pub cut_cells: Option<Vec<CutShip>>,
     pub end: Option<End>,
     pub period: u64,
 }
@@ -281,6 +284,7 @@ impl SoupRun {
             limits,
             last_look: None,
             cut: vec![],
+            cut_cells: None,
             end: None,
             period: 0,
         };
@@ -300,6 +304,7 @@ impl SoupRun {
             limits,
             last_look: None,
             cut: vec![],
+            cut_cells: None,
             end: None,
             period: 0,
         }
@@ -466,6 +471,16 @@ impl SoupRun {
                             })
                     });
             if clear && !bound(c, &groups, x) {
+                if let Some(v) = &mut self.cut_cells {
+                    v.push(CutShip {
+                        generation: self.u.generation,
+                        found: ship.found.clone(),
+                        period: p,
+                        d,
+                        cells: g.cells.clone(),
+                        parts: parts[x].clone(),
+                    });
+                }
                 self.cut.push((ship.found.clone(), d, ship.parts.clone()));
                 erase.extend_from_slice(&g.cells);
             }
@@ -692,6 +707,189 @@ pub fn finish(c: &Census, cache: &mut Cache, run: SoupRun, index: u64, rng_state
             out.escaped += parts.len() as u32;
             out.objects.extend(parts);
         }
+    }
+    out
+}
+
+/// A ship cut from a soup, where it was ([`SoupRun::cut_cells`]).
+#[derive(Clone, Debug)]
+pub struct CutShip {
+    /// The generation it was cut at, its find, period and displacement per period.
+    pub generation: u64,
+    pub found: Arc<Found>,
+    pub period: u64,
+    pub d: [i32; 2],
+    /// Its cells then, and when it was several ships flying together, each one's.
+    pub cells: Vec<LCell>,
+    pub parts: Vec<Vec<LCell>>,
+}
+
+/// A copy of a find in a soup, as [`sightings`] followed it back from where the run took it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Sighting {
+    /// The generation the run took it at: as it flew off (`cut`, a spaceship cut out), or at the
+    /// soup's end, in the census of what was left.
+    pub at: u64,
+    pub cut: bool,
+    /// The first generation from which it is there, whole and apart from everything else, until
+    /// `at`, to within its period. `None` when it could not be told apart: taken with other
+    /// objects in one group, it has no cells of its own.
+    pub first: Option<u64>,
+    /// Its cells at `at` (none when it could not be told apart), its period, and its
+    /// displacement per period (zero when it stays put).
+    pub cells: Vec<LCell>,
+    pub period: u64,
+    pub d: [i32; 2],
+}
+
+/// The find in these cells alone, when they are one object and it is the find `id`: its period
+/// and displacement.
+fn alone_as(c: &Census, cache: &mut Cache, cells: &[LCell], id: &str) -> Option<(u64, [i32; 2])> {
+    let parts = c.census(cache, cells);
+    match parts.as_slice() {
+        [p] if matches!(&p.obj, Obj::Pattern(f) if f.id == id) => Some((p.period, p.d)),
+        _ => None,
+    }
+}
+
+/// Every copy of the find `id` in the soup with this RNG state, and the generation each first
+/// shows ([`Sighting`]): the soup is run as [`run_soup`] runs it, every copy taken (cut as it
+/// flew off, or in the census of what was left) noted with its cells, and the soup is run again,
+/// checking at each period before that whether those cells, moved back along its path, are all
+/// there with nothing else within twice the rule's reach of them, so that they run as if alone.
+pub fn sightings(
+    c: &Census,
+    cache: &mut Cache,
+    layout: &Layout,
+    limits: Limits,
+    rng_state: u64,
+    id: &str,
+) -> Vec<Sighting> {
+    let start = layout.soup(rng_state);
+    let mut run = SoupRun::new(
+        Universe::with_cells(c.plan.clone(), &start),
+        layout.region,
+        limits,
+    );
+    run.cut_cells = Some(Vec::new());
+    run.run(c, cache);
+    let mut out = Vec::new();
+    for s in run.cut_cells.take().unwrap_or_default() {
+        if s.parts.is_empty() {
+            if s.found.id == id {
+                out.push(Sighting {
+                    at: s.generation,
+                    cut: true,
+                    first: None,
+                    cells: s.cells,
+                    period: s.period.max(1),
+                    d: s.d,
+                });
+            }
+            continue;
+        }
+        // Several ships flying together, at one speed: each one that is the find.
+        for part in s.parts {
+            if alone_as(c, cache, &part, id).is_some() {
+                out.push(Sighting {
+                    at: s.generation,
+                    cut: true,
+                    first: None,
+                    cells: part,
+                    period: s.period.max(1),
+                    d: s.d,
+                });
+            }
+        }
+    }
+    let end = run.u.generation;
+    if run.end != Some(End::Exploded) {
+        let left = run.u.cells();
+        for g in c.groups(&left) {
+            let parts = c.census(cache, &g.cells);
+            let mine = |p: &&Part| matches!(&p.obj, Obj::Pattern(f) if f.id == id);
+            match parts.as_slice() {
+                // The find alone: followed back from its cells.
+                [p] if mine(&p) => out.push(Sighting {
+                    at: end,
+                    cut: false,
+                    first: None,
+                    cells: g.cells,
+                    period: p.period.max(1),
+                    d: p.d,
+                }),
+                // Copies among other objects in one group: counted, not followed.
+                _ => {
+                    for p in parts.iter().filter(mine) {
+                        out.push(Sighting {
+                            at: end,
+                            cut: false,
+                            first: None,
+                            cells: vec![],
+                            period: p.period.max(1),
+                            d: p.d,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    if out.iter().all(|s| s.cells.is_empty()) {
+        return out;
+    }
+    // Run it again: at each period before a copy was taken, is it there, alone?
+    let margin = [2 * c.plan.reach_i, 2 * c.plan.reach_j];
+    let last = out.iter().map(|s| s.at).max().unwrap_or(0);
+    let mut streak: Vec<Option<u64>> = vec![None; out.len()];
+    let mut again = SoupRun::new(
+        Universe::with_cells(c.plan.clone(), &start),
+        layout.region,
+        limits,
+    );
+    let look = |u: &Universe, streak: &mut Vec<Option<u64>>| {
+        let t = u.generation;
+        for (x, s) in out.iter().enumerate() {
+            if s.cells.is_empty() || t > s.at || (s.at - t) % s.period != 0 {
+                continue;
+            }
+            let k = ((s.at - t) / s.period) as i32;
+            let mut want: Vec<LCell> = s
+                .cells
+                .iter()
+                .map(|q| LCell {
+                    i: q.i - k * s.d[0],
+                    j: q.j - k * s.d[1],
+                    ..*q
+                })
+                .collect();
+            want.sort_unstable();
+            let b = want
+                .iter()
+                .fold([i32::MAX, i32::MIN, i32::MAX, i32::MIN], |b, q| {
+                    [b[0].min(q.i), b[1].max(q.i), b[2].min(q.j), b[3].max(q.j)]
+                });
+            let mut have = u.cells_within([
+                b[0] - margin[0],
+                b[1] + margin[0],
+                b[2] - margin[1],
+                b[3] + margin[1],
+            ]);
+            have.sort_unstable();
+            streak[x] = if have == want {
+                streak[x].or(Some(t))
+            } else {
+                None
+            };
+        }
+    };
+    look(&again.u, &mut streak);
+    while again.end.is_none() && again.u.generation < last {
+        again.u.step();
+        look(&again.u, &mut streak);
+        again.post(c, cache);
+    }
+    for (s, first) in out.iter_mut().zip(streak) {
+        s.first = first;
     }
     out
 }

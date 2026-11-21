@@ -45,8 +45,9 @@ enum LibCmd {
     /// Make a scene from several library patterns placed on one grid.
     Paste(PasteArgs),
     /// Rebuild the exact soup a hunt find came from, as a scene that replays to the find (run
-    /// again with the hunt's engine to check it); --best N gives the N soups of its hunt that made
-    /// the most copies of it instead.
+    /// again with the hunt's engine to check it), and say when the find first shows in it (and a
+    /// spaceship when it flies off and reaches the scene's edge); --best N gives the N soups of its
+    /// hunt that made the most copies of it instead.
     Soup {
         id: String,
         /// The N soups of the find's hunt that made the most copies of it (then the most

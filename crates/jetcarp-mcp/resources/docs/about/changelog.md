@@ -19,6 +19,15 @@ day later (0.4.2: 17 November here, 18 November there).
   older ones read as before. `jetcarp jobs runs --format csv`, `--json` and the MCP tool
   `search_runs` give `parent_job` after `parent`.
   ([Search runs](../reference/search-runs.md), [#28](https://github.com/jprodgers/jetcarp/issues/28))
+- **`jetcarp library soup` says when the find first shows in its soup.** Each soup given names the
+  generation its first copy of the find is there, whole and apart from everything else, and for a
+  spaceship the generation the hunt cut it out as it flew off and about when it reaches the scene's
+  dead edge, where it breaks up: `the first copy shows at generation 176, flies off at 320 and
+  reaches the scene's edge at about 2172`. A ship that flies off is in the scene only between
+  those, so running the scene to the soup's end showed nothing. `--json` and `library.soup` give
+  them as `first_seen`, `flew_off` and `edge`.
+  ([The pattern library](../guides/pattern-library.md),
+  [#34](https://github.com/jprodgers/jetcarp/issues/34))
 - **WireWorld's `circuit` seed has a short form.** The command line, scripts and the MCP tools
   take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
   `reference seeds` lists them; before, only a scene file could name a circuit.
