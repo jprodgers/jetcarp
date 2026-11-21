@@ -223,7 +223,9 @@ on the square grid (Moore, or von Neumann written with a `V`) and on the hexagon
 with Golly's `H`. JETCARP's hexagons have offset rows, while Golly and LifeViewer lay hexagons out
 as a sheared square grid, so a hexagon pattern is written in their layout. Pasting it back into a
 hexagon world, for example with the `rle` of a world edit (MCP, scripts, the command line), turns it
-back, so a copy pastes back as the same pattern. Other tilings, other rule families, rules with B0
+back, so a copy pastes back as the same pattern. JETCARP's tests check this against Golly itself
+on every change: Golly reads a copy as the same cells and runs it to the same generations
+([How JETCARP is tested](../about/testing.md#automated-tests)). Other tilings, other rule families, rules with B0
 and worlds with several automata are refused, with the reason. The rest of the exchange with Golly
 and LifeViewer, reading and writing more of their formats, is planned for 0.4.4
 ([Roadmap](../about/roadmap.md)).
