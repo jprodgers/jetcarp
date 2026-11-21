@@ -199,6 +199,28 @@ fn rect(family: &str, w: u32, h: u32, b: Boundary) -> TilingSpec {
     TilingSpec::rect(family, w, h, b)
 }
 
+/// Built-in entries' old handles and their handles now, so that a rotation, a screensaver profile
+/// or a script naming an old one still finds the entry ([`current_handle`]).
+pub const RENAMED: &[(&str, &str)] = &[
+    // 0.4.3: Larger than Life keeps every count a rule names (#172), so Majority and Majorly
+    // read back as written, and a named rule's handle is its notation.
+    ("rule:R4,C2,S40-80,B41-80", "rule:R4,C2,S40-80,B41-81"),
+    (
+        "rule:R7,C2,S112-224,B113-224",
+        "rule:R7,C2,S112-224,B113-225",
+    ),
+];
+
+/// The handle a built-in entry has now, for one it had before ([`RENAMED`]); any other key as
+/// it is.
+pub fn current_handle(key: &str) -> &str {
+    let key = key.trim();
+    RENAMED
+        .iter()
+        .find(|(old, _)| *old == key)
+        .map_or(key, |(_, new)| new)
+}
+
 /// Starting patterns chosen with `jetcarp quickstart --survey` and a look at the contact sheet:
 /// explosive rules start from a small blob so the growth shows; others from a soup.
 fn start_hint(notation: &str) -> Option<SeedSpec> {

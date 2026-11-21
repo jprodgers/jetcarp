@@ -182,10 +182,12 @@ edge it counts as live. A B0 world counts as repeating only when its cells come 
 background in the same phase too, since with the background in another phase the next steps
 differ: on squares, a pattern kept still against an alternating background repeats with period 2,
 as the real cells do. On a patch whose background does not repeat within a few thousand
-generations, no repeat is reported. The tests check the result against running the rule by brute force: on
-wrapped squares, hexagons and Cairo pentagons, on wrapped 4.8.8, 3.6.3.6, 3.4.6.4, 3.3.4.3.4 and
-4.6.12, on squares, 4.8.8 and 3.4.6.4 with dead and live edges, and on Penrose rhombs and the hat.
-B0 rules also run on the GPU, with the same results, and under HashLife on wrap-edge lattices.
+generations, no repeat is reported.
+
+The tests check the result against running the rule by brute force: on wrapped squares, hexagons
+and Cairo pentagons, on wrapped 4.8.8, 3.6.3.6, 3.4.6.4, 3.3.4.3.4 and 4.6.12, on squares, 4.8.8 and
+3.4.6.4 with dead and live edges, and on Penrose rhombs and the hat. B0 rules also run on the GPU,
+with the same results, and under HashLife on wrap-edge lattices.
 
 ### Speed
 

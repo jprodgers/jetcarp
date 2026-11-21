@@ -124,7 +124,7 @@ pub fn unmade_builtin(lib: &Library, key: &str) -> Option<&'static QuickStartRow
     if lib.path().exists() {
         return None;
     }
-    let key = key.trim();
+    let key = jetcarp_core::quickstart::current_handle(key);
     builtin_rows()
         .iter()
         .find(|r| r.handle == key || r.id == key)

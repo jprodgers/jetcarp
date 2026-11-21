@@ -59,7 +59,8 @@ that will declare them stable.
   larger one is refused with a message, and the notation reads back as written, so Majority and
   Majorly show as `R4,C2,S40-80,B41-81` and `R7,C2,S112-224,B113-225`. On the square grid no rule
   runs differently, but those two rules' Quick Start entries have new handles
-  (`rule:R4,C2,S40-80,B41-81`, `rule:R7,C2,S112-224,B113-225`), and so new random starts. Larger
+  (`rule:R4,C2,S40-80,B41-81`, `rule:R7,C2,S112-224,B113-225`), and so new random starts; the
+  old handles still open them, so rotations and screensaver profiles naming them keep working. Larger
   than Life's [rule-semantics version](../reference/library-format.md#rule-semantics-versions) is
   now 2: scenes of such rules on other tilings replay to other states, and pattern records verified
   under version 1 are flagged for `jetcarp library reverify`.

@@ -467,6 +467,9 @@ it, and it comes from one of four sources:
   built-in's or a pack entry's is its handle, an atlas entry's `atlas-<8 hex>-<run id>`, and a
   promotion's that of what it was made from (a pattern's or ant's id, `sweep-<hash>`,
   `run-<8 hex>-<run id>`, `scene-<hash>`).
+- A built-in whose handle changed still opens by its old one: `rule:R4,C2,S40-80,B41-80` and
+  `rule:R7,C2,S112-224,B113-224` (Majority and Majorly before 0.4.3, now `…B41-81` and
+  `…B113-225`), so rotations and profiles that name them keep working.
 - `target_kind` and `target_id` say what an entry was made from: `pattern`, `ant`, `sweep_run`,
   `search_run` (`<search uuid>:<run id>`) or `scene`. A rating given in the menu goes to the pattern
   or ant run an entry was made from, and otherwise to the entry.

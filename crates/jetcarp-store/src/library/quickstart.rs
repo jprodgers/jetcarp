@@ -309,7 +309,8 @@ impl MenuRow {
 
 /// The stored key of an entry named by its handle, its id, or `find:<id>`.
 fn id_of(c: &Connection, key: &str) -> Result<Option<String>, String> {
-    let key = key.trim();
+    // A built-in's old handle finds the entry under its handle now.
+    let key = jetcarp_core::quickstart::current_handle(key);
     let bare = key.strip_prefix("find:").unwrap_or(key);
     c.prepare_cached(
         "SELECT id FROM quickstart WHERE handle = ?1 OR id = ?1 OR id = ?2

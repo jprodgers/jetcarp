@@ -74,8 +74,8 @@ its own, WireWorld begins with clock loops on the square grid (the `wire_demo` s
 other tiling, with wiring along the borders of random regions, about one region per 70 cells, each
 carrying four signals (the `circuit` seed; see [Scene format](../reference/scene-format.md)).
 Touch neighbours are the default, as in the classic rule; edge neighbours make thin wires behave
-differently at corners. WireWorld can be stepped on the GPU on lattice tilings, and HashLife can jump wrap-edge
-lattice worlds far ahead.
+differently at corners. WireWorld can be stepped on the GPU on lattice tilings, and HashLife can
+jump wrap-edge lattice worlds far ahead.
 
 ### The adder
 
