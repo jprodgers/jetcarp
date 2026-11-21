@@ -199,10 +199,15 @@ fn oscillator_gif_has_period_frames() {
     ] {
         assert_eq!(rec.period, p, "{name}");
         lib.add(rec.clone()).unwrap();
+        // The frames exactly as drawn: the strobe guard may slow or soften an oscillator that
+        // flashes (the pulsar does), which `the_strobe_guard_slows_a_flashing_oscillator` checks.
         let r = jetcarp_store::media::render(
             &lib,
             &MediaTarget::Pattern(rec.id.clone()),
-            &MediaOptions::default(),
+            &MediaOptions {
+                strobe_guard: false,
+                ..Default::default()
+            },
         )
         .unwrap();
         let a = r.animation().unwrap();
@@ -225,6 +230,66 @@ fn oscillator_gif_has_period_frames() {
             "{name}"
         );
     }
+}
+
+/// The strobe guard on catalog media (#149): every animation's record says what the guard found
+/// and did, and what is saved passes the check, whatever was done to it. The pulsar's three phases
+/// change much of its GIF at the house style's speed; with neighbouring tiles changing together
+/// counted (#150) it passes as it is, and a blinker's does.
+#[test]
+fn the_strobe_guard_records_what_it_found_in_catalog_media() {
+    use jetcarp_core::strobe::export::check;
+    let lib = temp_lib("osc-guard");
+    let pulsar = one(
+        "B3/S23",
+        "..ooo...ooo../\
+         ............./\
+         o....o.o....o/\
+         o....o.o....o/\
+         o....o.o....o/\
+         ..ooo...ooo../\
+         ............./\
+         ..ooo...ooo../\
+         o....o.o....o/\
+         o....o.o....o/\
+         o....o.o....o/\
+         ............./\
+         ..ooo...ooo..",
+    );
+    lib.add(pulsar.clone()).unwrap();
+    let r = jetcarp_store::media::render(
+        &lib,
+        &MediaTarget::Pattern(pulsar.id.clone()),
+        &MediaOptions::default(),
+    )
+    .unwrap();
+    let a = r.animation().unwrap();
+    let g = &a.render["strobe_guard"];
+    let treatment = g["treatment"].as_str().unwrap();
+    assert!(["as_is", "slowed", "softened"].contains(&treatment), "{g}");
+    // Something found when something was done, and nothing when not.
+    assert_eq!(g["found"].is_string(), treatment != "as_is", "{g}");
+    let delay = a.render["delay_ms"].as_u64().unwrap() as u32;
+    let frames = encode::decode_gif(&std::fs::read(&a.abs_path).unwrap()).unwrap();
+    assert_eq!(
+        frames.len(),
+        3,
+        "a period of frames, whatever the treatment"
+    );
+    assert!(!check(&frames.iter().collect::<Vec<_>>(), delay).harmful);
+    assert_eq!(g["after"]["harmful"], false);
+    let blinker = one("B3/S23", "ooo");
+    lib.add(blinker.clone()).unwrap();
+    let r = jetcarp_store::media::render(
+        &lib,
+        &MediaTarget::Pattern(blinker.id.clone()),
+        &MediaOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        r.animation().unwrap().render["strobe_guard"]["treatment"],
+        "as_is"
+    );
 }
 
 /// Bill Gosper's glider gun (as in `tests/hunt.rs`).

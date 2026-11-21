@@ -35,12 +35,11 @@ pub fn render(
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
-    let view = tex.create_view(&Default::default());
     let caption = CaptionSettings {
         show: false,
         ..CaptionSettings::default()
     };
-    painter.paint(device, queue, &view, size, scale, stage, &caption, 0.0);
+    painter.paint(device, queue, &tex, size, scale, stage, &caption, 0.0);
     read(device, queue, &tex, [0, 0], size)
 }
 

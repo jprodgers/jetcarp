@@ -406,7 +406,8 @@ pub fn ctx() -> &'static Ctx {
             roots: f.readable(),
         });
         fs.who = Some("the MCP tools".into());
-        let cx = Ctx::interactive().with_fs(fs);
+        // No tool turns the strobe guard off: animations the tools save are always guarded.
+        let cx = Ctx::interactive().with_fs(fs).with_always_guard();
         match PLATFORM.get() {
             Some(p) => cx.with_platform(p.clone()),
             None => cx,

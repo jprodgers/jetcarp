@@ -56,7 +56,8 @@ and keeps a library of the patterns its searches find. Typical flow: world_new (
 -> world_edit (draw or paste) -> world_step -> world_read / world_render. Long searches: \
 search_start, job_status, then library_query for the finds. Call help for worked examples, \
 reference for rule names, tilings, palettes and seeds. The JETCARP book is available as resources \
-(jetcarp://docs/...) and through help {\"page\": ...}.";
+(jetcarp://docs/...) and through help {\"page\": ...}. What JETCARP shows on screen passes through \
+its strobe guard, which softens, slows or pauses scenes that flash; no tool can turn it off.";
 
 pub fn response(id: &Value, result: Value) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "result": result})

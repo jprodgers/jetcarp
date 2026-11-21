@@ -247,6 +247,9 @@ pub struct MediaOptions {
     /// Render even when the stored media are up to date.
     pub force: bool,
     pub style: MediaStyle,
+    /// The strobe guard (#149): an animation that flashes or shows strong stripes is saved
+    /// softened ([`crate::strobe::export`]). Off only when the person turned the app's guard off.
+    pub strobe_guard: bool,
 }
 
 impl Default for MediaOptions {
@@ -260,6 +263,7 @@ impl Default for MediaOptions {
             frames: true,
             force: false,
             style: MediaStyle::default(),
+            strobe_guard: true,
         }
     }
 }
@@ -322,6 +326,31 @@ impl Animation {
             _ => encode::webp(&refs, self.delay_ms, MediaStyle::rgba(style.background))?,
         };
         Ok((f, bytes))
+    }
+    /// Encode the animation through the strobe guard ([`crate::strobe::export::guard`]): checked,
+    /// softened if it flashes or shows strong stripes and `guard` is on, and checked again as
+    /// saved. The format is chosen as [`encode`](Self::encode) chooses it.
+    pub fn encode_guarded(
+        &self,
+        format: MediaFormat,
+        style: &MediaStyle,
+        guard: bool,
+    ) -> Result<(MediaFormat, crate::strobe::export::Guarded), String> {
+        let f = match format {
+            MediaFormat::Auto => self.auto_format(style),
+            f => f,
+        };
+        let background = MediaStyle::rgba(style.background);
+        let enc = |frames: &[&Image], delay: u32| match f {
+            MediaFormat::Gif => encode::gif(frames, delay),
+            _ => encode::webp(frames, delay, background),
+        };
+        let dec = |bytes: &[u8]| match f {
+            MediaFormat::Gif => encode::decode_gif(bytes),
+            _ => encode::decode_webp(bytes),
+        };
+        let g = crate::strobe::export::guard(&self.frames, self.delay_ms, guard, &enc, &dec)?;
+        Ok((f, g))
     }
     pub fn poster_image(&self) -> &Image {
         &self.frames[self.poster.min(self.frames.len() - 1)]

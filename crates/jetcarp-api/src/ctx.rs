@@ -564,6 +564,9 @@ pub struct Ctx {
     /// The jobs running in this process (default: the process's own registry, which the app's
     /// dashboard and the MCP server share).
     registry: &'static Registry,
+    /// Animations this context saves always go through the strobe guard, whatever the app's
+    /// switch says (the MCP tools: no tool turns the guard off).
+    pub always_guard: bool,
 }
 
 impl Default for Ctx {
@@ -592,7 +595,27 @@ impl Ctx {
             store: OnceLock::new(),
             session: Mutex::new(None),
             registry: jetcarp_search::jobs::registry(),
+            always_guard: false,
         }
+    }
+
+    /// Animations saved through this context always go through the strobe guard
+    /// ([`Ctx::always_guard`]).
+    pub fn with_always_guard(mut self) -> Ctx {
+        self.always_guard = true;
+        self
+    }
+
+    /// Whether animations saved through this context go through the strobe guard: always for
+    /// the tools, else as the app's switch says.
+    pub fn strobe_guard(&self) -> bool {
+        use jetcarp_core::photosensitivity::{GuardPlace, guard_on_in};
+        self.always_guard
+            || self
+                .paths()
+                .settings
+                .as_deref()
+                .is_none_or(|d| guard_on_in(d, GuardPlace::App))
     }
 
     /// An interactive caller (the MCP server): [`Limits::INTERACTIVE`].

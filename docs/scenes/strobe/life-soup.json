@@ -1,0 +1,26 @@
+{
+  "name": "Life soup",
+  "description": "Conway's Life from a random soup.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 80,
+        "h": 60
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 7,
+  "cas": [
+    {
+      "rule": "B3/S23",
+      "seed": {
+        "random": {
+          "density": 0.35
+        }
+      },
+      "palette": "Ember"
+    }
+  ]
+}

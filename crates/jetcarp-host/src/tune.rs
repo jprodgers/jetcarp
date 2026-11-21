@@ -1021,11 +1021,11 @@ impl Rig {
                 t.mark(g, 1);
             }
             let mut gpu_secs = 0.0;
-            if let (Some(g), Some((painter, _, view))) = (gpu, draw.as_mut()) {
+            if let (Some(g), Some((painter, tex, _))) = (gpu, draw.as_mut()) {
                 painter.paint_timed(
                     &g.device,
                     &g.queue,
-                    view,
+                    tex,
                     canvas,
                     job.scale as f32,
                     stage,

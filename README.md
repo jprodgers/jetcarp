@@ -5,7 +5,8 @@
 > **Photosensitive seizure warning:** JETCARP's animations can flash and flicker rapidly, and can
 > trigger seizures in people with photosensitive epilepsy. Please read the
 > [warning](https://jprodgers.github.io/jetcarp/getting-started/photosensitivity.html) before you
-> use it.
+> use it. Its [strobe guard](https://jprodgers.github.io/jetcarp/guides/strobe-guard.html) softens,
+> slows or pauses scenes that flash, which lowers the risk but does not remove it.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24191765.svg)](https://doi.org/10.5281/zenodo.24191765)
 

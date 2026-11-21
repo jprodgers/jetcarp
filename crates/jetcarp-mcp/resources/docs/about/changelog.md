@@ -15,6 +15,35 @@ day later (0.4.2: 17 November here, 18 November there).
   take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
   `reference seeds` lists them; before, only a scene file could name a circuit.
   ([Scripting](../reference/scripting.md))
+- **The strobe guard: JETCARP watches what it draws, and softens, slows or pauses a scene before
+  it flashes more than three times a second or shows strong regular stripes.** Every frame is
+  measured as WCAG 2.3.1 defines flashes and red flashes, with its area rule (a quarter of a 10°
+  field, for a screen watched from 40 cm at 96 pixels an inch for each step of its scale factor),
+  and the screen's mean as IRIS measures it; regular high-contrast stripes over a quarter of the
+  screen are measured as ITU-R BT.1702 describes them. The guard first softens the tiles that flash
+  (their brightness may change by at most 0.3 a second), then slows a scene that keeps flashing,
+  down to half a generation a second, then pauses it with a note saying why; strong stripes are
+  veiled. It is on for everyone, in the app's view, full screen, the outputs, the world AI control
+  acts on, the desktop background on all three systems and the screen savers; it never changes what
+  a world computes. Someone who answered the photosensitive seizure warning *I have, or may have, a
+  seizure disorder* can't turn it off; someone who answered *I don't* can, in the app's new
+  *Settings → Safety*, through a confirmation with an unticked box. The desktop background and the
+  screen saver keep their own switch, on until turned off with the same confirmation, since people
+  in the room never answered the warning. The switches are saved with the warning's answer;
+  `jetcarp guard` shows them and `jetcarp guard --on` turns them back on, and no command, script or
+  MCP tool turns them off. Measuring a 1080p frame takes 0.02 ms on a Radeon 8060S.
+  ([The strobe guard](../guides/strobe-guard.md), [#97](https://github.com/jprodgers/jetcarp/issues/97))
+- **Exported animations are checked for flashing and strong stripes before they are saved.** A GIF
+  or WebP is measured at its own frame rate, looping as a player would. *File → Export animation…*
+  holds one that flashes and offers a softened version (or, with the app's guard off, the
+  animation as it is); `jetcarp media render` saves the softened version and says so, and the MCP
+  tool `media_render` always does. The softened version is the animation shown more slowly when up
+  to four times slower is enough (so an oscillator's GIF keeps its frames), and otherwise its
+  flashing softened and strong stripes veiled. The saved file is read
+  back and checked again. The Quick Start's live cards, the *Hunts* window's animations, the ants
+  window's and an explore search's atlas clips are guarded too. Every animation's render key now
+  includes the guard, so `jetcarp media render --missing` renders the old ones again.
+  ([Exported animations](../guides/strobe-guard.md#exported-animations))
 - **Importing a pack says who signed it, and says plainly when their key is new.** The setup
   window shows, under each pack before it is imported and under each import afterwards, the
   publisher's name and the start of their key, marked *New key: never seen in this library* when
@@ -87,6 +116,13 @@ day later (0.4.2: 17 November here, 18 November there).
   monitor that wasn't connected when the host started, with the main monitor taken by another
   screen, had no window but went on stepping and drawing on the GPU. It now waits until its monitor
   comes back, and `jetcarp host status` says so. ([#130](https://github.com/jprodgers/jetcarp/issues/130))
+- **The photosensitive seizure warning's example is Hodgepodge, not B0.** Since B0 rules are drawn
+  relative to their background ([#171](https://github.com/jprodgers/jetcarp/issues/171)), a B0
+  rule no longer turns the whole field over at each step on screen. The warning now gives
+  Hodgepodge, which can flicker across the whole field at each step, and the book's warning page
+  follows it: Hodgepodge as Quick Start shows it, run at 60 generations a second, flashes about
+  four times a second as it settles, and the strobe guard catches it (a scene in its test corpus).
+  ([Photosensitive seizure warning](../getting-started/photosensitivity.md))
 - **Programs starting together no longer fail with "database is locked" on a new library.** When
   the app, the desktop host, the MCP server or a search job opened a library that did not exist
   yet at the same moment as another, one of them could be refused at once, although each waits
