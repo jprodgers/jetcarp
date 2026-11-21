@@ -103,7 +103,10 @@ fn a_whole_session_over_stdio() {
     // 48,000 bytes is a hard limit, the maintainer's (D-44): move text into resources or help
     // topics rather than raise it.
     let size = tools.to_string().len();
-    assert!(size <= 48_000, "tools/list is {size} bytes, over its hard limit of 48,000");
+    assert!(
+        size <= 48_000,
+        "tools/list is {size} bytes, over its hard limit of 48,000"
+    );
 
     let res = c.request("resources/list", json!({}));
     let n = res["result"]["resources"].as_array().unwrap().len();
