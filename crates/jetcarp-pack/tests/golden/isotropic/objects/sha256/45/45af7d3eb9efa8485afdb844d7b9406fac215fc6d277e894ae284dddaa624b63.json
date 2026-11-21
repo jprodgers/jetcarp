@@ -1,0 +1,1 @@
+{"children":[],"format":"jetcarp-index","parts":[{"bytes":2100,"first":"pattern:08e89f80849ffcd3492d31c64898dcfc","last":"pattern:d11577e04576d8365966554a7debe07e","object":"sha256:e84fe87107c61eaa9dd6db0e8844d1d4f91bcc160618597db4ddfbae03d383ad","partition":{},"rows":4}],"schema":"jetcarp-annotations 1","table":"annotations","version":"1.1"}

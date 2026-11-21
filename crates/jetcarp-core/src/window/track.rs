@@ -233,6 +233,11 @@ fn check_rule(spec: &TrackSpec) -> Result<(), String> {
         Rule::LifeLike { birth, .. } | Rule::Generations { birth, .. } if birth & 1 == 1 => {
             Err("B0 rules turn the whole plane on, so they cannot run on a window".into())
         }
+        Rule::Isotropic(_) => Err(format!(
+            "{} is an isotropic rule of the square grid's neighbourhood, and windows are \
+             aperiodic patches",
+            spec.rule
+        )),
         Rule::Turmite(_)
         | Rule::Sandpile
         | Rule::Lenia(_)

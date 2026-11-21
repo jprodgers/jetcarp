@@ -33,6 +33,7 @@ FAMILY_PAGE = {
     "Elementary": "elementary.md",
     "Agents": "turmites.md",
     "Layered": "layered.md",
+    "Isotropic": "isotropic.md",
 }
 ORDER = list(FAMILY_PAGE)
 
@@ -161,9 +162,10 @@ def main():
         "",
         f"JETCARP knows {len(rules)} rules by name, collected from the rule lists that the Life community",
         "has kept for decades. You can type a name anywhere a rule is expected (`jetcarp rules` lists them, with",
-        "a few more built-in names for families that have no standard list). Every one of them runs on any",
-        "tiling, though most were found on the square grid and behave differently elsewhere; see",
-        "[How JETCARP generalises automata](generalising.md).",
+        "a few more built-in names for families that have no standard list). All but the isotropic rules run",
+        "on any tiling, though most were found on the square grid and behave differently elsewhere (see",
+        "[How JETCARP generalises automata](generalising.md)); the isotropic ones name arrangements of the",
+        "square grid's neighbours, and run there only.",
         "",
         "**About the credits.** Most of these rules were named, and often found, by hobbyists: through",
         "Mirek Wójtowicz's MCell program and its rules lexicon in the late 1990s, the ConwayLife.com forums,",

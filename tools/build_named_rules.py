@@ -4,7 +4,9 @@ Input: tools/data/named_rules.tsv (name, notation, family, author, blurb, start,
 status), plus the hand-written EXTRA list below. The rule list (names, notations, credits, start
 hints) was collected from LifeWiki's rule lists (Wayback copies, Dec 2025); source_url links each
 rule to the page its facts came from. The blurbs are JETCARP's own wording, not LifeWiki's text,
-which is GFDL. Three Generations notations (Burst, Chenille, Glissergy) were normalised from
+which is GFDL. The isotropic rules (Nov 2026) come from LifeWiki's list of isotropic non-totalistic
+rules, read through its mirror; Just Friends from Alan Hensel's notation page, which names it, and
+Golly's help, which credits David Bell. Three Generations notations (Burst, Chenille, Glissergy) were normalised from
 LifeWiki's S/B/C column because its B/S/C column had typos.
 Rows with an empty name (unnamed rules) are skipped, as are rules JETCARP cannot run yet (HROT
 custom/weighted/hash neighbourhoods); they stay in the TSV as a complete record.
@@ -24,6 +26,7 @@ FAMILY = {
     "Higher-range outer-totalistic": "Larger than Life",
     "Hexagonal": "Life-like, hexagonal",
     "Von Neumann": "Life-like, von Neumann",
+    "Isotropic non-totalistic": "Isotropic",
 }
 
 out = []

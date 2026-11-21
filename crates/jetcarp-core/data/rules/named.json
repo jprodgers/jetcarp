@@ -1112,6 +1112,62 @@
    "source": "https://conwaylife.com/wiki/Gnarl"
   },
   {
+   "name": "Just Friends",
+   "notation": "B2-a/S12",
+   "family": "Isotropic",
+   "blurb": "Birth on two live neighbours, unless they are a corner and the edge beside it; survival on one or two.",
+   "author": "David Bell",
+   "source": "http://www.ibiblio.org/lifepatterns/neighbors.html"
+  },
+  {
+   "name": "tlife",
+   "notation": "B3/S2-i34q",
+   "family": "Isotropic",
+   "blurb": "Life, except that a cell whose two live neighbours face each other across it dies, and one with four in the q arrangement survives.",
+   "source": "https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules",
+   "note": "Name not confirmed on a LifeWiki rule page."
+  },
+  {
+   "name": "qlife",
+   "notation": "B3-q/S23",
+   "family": "Isotropic",
+   "blurb": "Life without birth on three live neighbours in the q arrangement.",
+   "source": "https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules",
+   "note": "Name not confirmed on a LifeWiki rule page."
+  },
+  {
+   "name": "LeapLife",
+   "notation": "B2n3/S23-q",
+   "family": "Isotropic",
+   "blurb": "Life with birth on two opposite corners as well, and without survival on three in the q arrangement.",
+   "source": "https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules",
+   "note": "Name not confirmed on a LifeWiki rule page."
+  },
+  {
+   "name": "Salad",
+   "notation": "B2i34c/S2-i3",
+   "family": "Isotropic",
+   "blurb": "Birth on two facing edges, on three, or on the four corners; survival on two, unless they face each other, or three.",
+   "source": "https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules",
+   "note": "Name not confirmed on a LifeWiki rule page."
+  },
+  {
+   "name": "Goat Flock",
+   "notation": "B2in3/S123a",
+   "family": "Isotropic",
+   "blurb": "Birth on two facing edges, two opposite corners, or three; survival on one, two, or a corner with its two edges.",
+   "source": "https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules",
+   "note": "Name not confirmed on a LifeWiki rule page."
+  },
+  {
+   "name": "Logic Rule",
+   "notation": "B2ae/S",
+   "family": "Isotropic",
+   "blurb": "Birth on two live neighbours side by side (a corner and the edge beside it, or two edges round a corner); nothing survives.",
+   "source": "https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules",
+   "note": "Name not confirmed on a LifeWiki rule page."
+  },
+  {
    "name": "Turmite RLR",
    "notation": "Turmite RLR",
    "family": "Agents",

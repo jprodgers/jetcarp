@@ -68,6 +68,13 @@ fn ranges(v: &[bool]) -> String {
 }
 
 impl LtlRule {
+    /// A two-state rule with birth on 0: kept relative to its background, as Life-like B0 rules
+    /// are (`b0.rs`, [`step_ltl_b0`]), so empty space stays empty and Golly's runs are matched.
+    /// A rule of more states with birth on 0 runs as written (Golly refuses those).
+    pub fn b0_kept(&self) -> bool {
+        self.states <= 2 && self.birth.first() == Some(&true)
+    }
+
     pub fn notation(&self) -> String {
         let hood = match self.hood {
             Hood::Moore => "",
@@ -354,6 +361,82 @@ pub(crate) fn step_ltl(topo: &Topology, rule: &LtlRule, reach: &Reach, f: &mut F
                 0
             };
         });
+    std::mem::swap(&mut f.state, &mut f.back);
+    std::mem::swap(&mut f.age, &mut f.back_age);
+}
+
+/// A two-state rule with birth on 0 ([`LtlRule::b0_kept`]), stored relative to its background
+/// (`b0.rs`): each step decodes the real states, applies the rule and stores the result against
+/// the next background. On a lattice the background is one state per tile type; a slot past a
+/// dead edge is in the background, past a live edge live. On a patch it is kept per cell and
+/// stepped here. `tick` is the CA's 1-based step count.
+pub(crate) fn step_ltl_b0(
+    topo: &Topology,
+    rule: &LtlRule,
+    reach: &Reach,
+    tick: u64,
+    slot: &mut Option<std::sync::Arc<crate::b0::Background>>,
+    f: &mut Field,
+) {
+    let plain = crate::b0::Plain::Ltl { rule, reach };
+    let Some(bg) = crate::b0::ready_of(slot, topo, &plain, tick - 1) else {
+        return;
+    };
+    let live = topo.live_edges();
+    let a = &f.state;
+    let age = &f.age;
+    match (&bg.kind, reach, &topo.storage) {
+        (crate::b0::Kind::Types(t), Reach::Lattice(per), Storage::Lattice(g)) => {
+            let (p0, p1) = (t.phase(tick - 1), t.phase(tick));
+            f.back
+                .par_iter_mut()
+                .zip(f.back_age.par_iter_mut())
+                .enumerate()
+                .with_min_len(1024)
+                .for_each(|(i, (o, oa))| {
+                    let (u, j, k) = g.decompose(i);
+                    let base = u + g.row_start[j as usize];
+                    let mut c = 0u32;
+                    for off in &per[k as usize] {
+                        let bk = t.state(p0, off.k as usize);
+                        c += match g.resolve(base + off.di, j + off.dj, off.k) {
+                            Some(x) => ((a[x] == 1) as u8 ^ bk) as u32,
+                            None if live => 1,
+                            None => bk as u32,
+                        };
+                    }
+                    let real = (a[i] != 0) as u8 ^ t.state(p0, k as usize);
+                    let v = plain.next(real, c) ^ t.state(p1, k as usize);
+                    *o = v;
+                    *oa = crate::step::b0_age(a[i], v, age[i]);
+                });
+        }
+        (crate::b0::Kind::Cells(cells), Reach::Explicit(csr), _) => {
+            let bgs = &cells.states;
+            let mut next = vec![0u8; bgs.len()];
+            f.back
+                .par_iter_mut()
+                .zip(f.back_age.par_iter_mut())
+                .zip(next.par_iter_mut())
+                .enumerate()
+                .with_min_len(1024)
+                .for_each(|(i, ((o, oa), nbg))| {
+                    let (mut c, mut cb) = (0u32, 0u32);
+                    for &x in csr.row(i) {
+                        let x = x as usize;
+                        c += ((a[x] == 1) as u8 ^ bgs[x]) as u32;
+                        cb += bgs[x] as u32;
+                    }
+                    let b1 = plain.next(bgs[i], cb);
+                    let v = plain.next((a[i] != 0) as u8 ^ bgs[i], c) ^ b1;
+                    *nbg = b1;
+                    *o = v;
+                    *oa = crate::step::b0_age(a[i], v, age[i]);
+                });
+            *slot = Some(std::sync::Arc::new(bg.with_cells(tick, next)));
+        }
+        _ => return,
+    }
     std::mem::swap(&mut f.state, &mut f.back);
     std::mem::swap(&mut f.age, &mut f.back_age);
 }

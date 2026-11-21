@@ -232,6 +232,7 @@ fn check_pattern(r: &PatternRecord, periods: Option<u64>) -> Result<PatternRecor
     x.verified = verify(&x, periods.unwrap_or_else(|| default_periods(x.period)))?;
     if x.range.is_some() {
         x.range = pattern::range::rule_range(&x)?;
+        x.iso_range = pattern::range::iso_range(&x)?;
     }
     x.needs_reverify = false;
     x.engine_version = jetcarp_core::VERSION.into();

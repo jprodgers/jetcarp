@@ -55,6 +55,7 @@ fn every_golden_pack_reads_and_checks() {
         "ants",
         "export",
         "numbers",
+        "isotropic",
         "searches3",
     ] {
         assert!(packs.iter().any(|p| p.0 == want), "no golden pack {want}");
@@ -158,6 +159,30 @@ fn every_golden_pack_reads_and_checks() {
                     ("highway", Some(104), Some(9977))
                 );
                 assert!(ants.iter().any(|a| a.run.symmetry.is_some()));
+            }
+            "isotropic" => {
+                // Format 1.1: every pattern's isotropic rule range comes back as published,
+                // and one that no B/S rule gives has that range and no B/S one.
+                assert_eq!(v.manifest.version, "1.1");
+                let recs = lib.list().unwrap();
+                assert_eq!(recs.len(), 3, "{recs:?}");
+                for r in &recs {
+                    let ir = r.iso_range.as_ref().expect("an isotropic range");
+                    assert!(
+                        ir.contains_notation(&r.rule),
+                        "{}: {}",
+                        r.rule,
+                        ir.describe()
+                    );
+                    assert_eq!(
+                        r.iso_range,
+                        jetcarp_core::pattern::range::iso_range(r).unwrap(),
+                        "{}",
+                        r.label()
+                    );
+                }
+                assert!(recs.iter().any(|r| r.range.is_none()));
+                assert!(recs.iter().any(|r| r.range.is_some()));
             }
             "numbers" => {
                 // Random states beyond 2^53, written as decimal strings, come back exactly.
@@ -1081,4 +1106,82 @@ fn aperiodic_search(lib: &Library) {
         }
     }
     panic!("no pattern found on the Penrose patch");
+}
+
+/// The engine the isotropic golden pack names: isotropic rules are new in 0.4.3.
+const GOLDEN_ENGINE_ISO: &str = "0.4.3";
+
+/// A record verified now, dated [`FIXED`], naming [`GOLDEN_ENGINE_ISO`].
+fn fixed_iso(r: jetcarp_core::pattern::PatternRecord) -> jetcarp_core::pattern::PatternRecord {
+    let mut r = fixed(r);
+    r.provenance.jetcarp_version = GOLDEN_ENGINE_ISO.into();
+    r.verified.jetcarp_version = GOLDEN_ENGINE_ISO.into();
+    r.engine_version = GOLDEN_ENGINE_ISO.into();
+    r
+}
+
+/// Publisher A's isotropic patterns (format 1.1): tlife's boat, and two objects of a Just
+/// Friends soup, one that a B/S rule also gives (it has a B/S range too) and one that no B/S
+/// rule gives (an isotropic range only).
+fn library_iso(dir: &Path) -> Library {
+    use jetcarp_core::objects::{ObjClass, ObjectOptions, find_objects};
+    use jetcarp_core::pattern::{DiscoveredBy, record_from_object};
+    let lib = Library::open(dir.join("lib-iso"));
+    let boat = fixed_iso(one("B3/S2-i34q", "oo./o.o/.o."));
+    let mut w = jetcarp_core::World::new(
+        jetcarp_core::TilingSpec::rect("square", 64, 48, jetcarp_core::Boundary::Wrap),
+        7,
+    )
+    .unwrap();
+    w.apply(jetcarp_core::Command::AddCa {
+        ca: jetcarp_core::CaSpec::new("B2-a/S12")
+            .seed(jetcarp_core::SeedSpec::Random { density: 0.3 }),
+    })
+    .unwrap();
+    w.apply(jetcarp_core::Command::Step { gens: 300 }).unwrap();
+    let found = find_objects(&w, &ObjectOptions::default()).unwrap();
+    let mut recs: Vec<_> = found
+        .objects
+        .iter()
+        .filter(|o| !matches!(o.class, ObjClass::Other { .. }))
+        .map(|o| {
+            let prov = jetcarp_core::pattern::Provenance {
+                source: "golden".into(),
+                jetcarp_version: GOLDEN_ENGINE_ISO.into(),
+                date: FIXED.into(),
+                ..Default::default()
+            };
+            record_from_object(&w, w.cas[0].id, o, prov, DiscoveredBy::User).unwrap()
+        })
+        .collect();
+    recs.sort_by(|a, b| a.id.cmp(&b.id));
+    let with = recs.iter().find(|r| r.range.is_some()).unwrap().clone();
+    let without = recs.iter().find(|r| r.range.is_none()).unwrap().clone();
+    lib.add_many(vec![boat, fixed_iso(with), fixed_iso(without)], None)
+        .unwrap();
+    fix_library(&lib);
+    lib
+}
+
+/// Writes the isotropic golden pack (format 1.1) and adds it to `hashes.txt`, leaving the other
+/// golden packs as they are (they are never rewritten).
+#[test]
+#[ignore]
+fn write_golden_isotropic() {
+    let out = golden_dir();
+    let work = temp("golden-write-iso");
+    let _ = std::fs::remove_dir_all(out.join("isotropic"));
+    let lib = library_iso(&work);
+    let mut o = opts("golden-iso", &out.join("isotropic"), "isotropic");
+    o.engine_version = Some(GOLDEN_ENGINE_ISO.into());
+    let h = publish_into(&lib, PUBLISHER_A, "Golden Publisher A", &o);
+    let path = out.join("hashes.txt");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let mut lines: Vec<String> = text
+        .lines()
+        .filter(|l| !l.starts_with("isotropic "))
+        .map(String::from)
+        .collect();
+    lines.push(format!("isotropic {h}"));
+    std::fs::write(&path, lines.join("\n") + "\n").unwrap();
 }

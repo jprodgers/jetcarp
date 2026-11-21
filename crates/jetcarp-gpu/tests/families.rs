@@ -748,6 +748,79 @@ fn ltl_on_patches() {
     compare_gpu(&mut sim, &sc, &[1, 9, 64, 300], "two LtL CAs in a script");
 }
 
+/// Two-state Larger than Life rules with B0 (#238), kept relative to their background on the GPU
+/// as on the CPU: backgrounds that flash and ones live for good from the start, on lattices with
+/// every edge (one background state per tile type) and on patches (the cells carry it). Also from
+/// an odd tick, with several steps per generation, and the CPU going on from where the GPU
+/// stopped (the background read back).
+#[test]
+fn ltl_b0_rules() {
+    let Some(mut sim) = gpu() else { return };
+    let mut cases: Vec<(TilingSpec, &str, &[u64])> = vec![];
+    for &(fam, w, h) in LATTICES {
+        for b in BOUNDARIES {
+            for rule in [
+                "R2,C2,S0-5,B0-3",
+                "R2,C2,S6-24,B0-2",
+                "R2,C2,S2-12,B0-4,NN",
+                "R1,C2,S2-8,B0-2",
+                "R3,C2,S0-48,B0-9",
+            ] {
+                cases.push((TilingSpec::rect(fam, w, h, b), rule, CHUNKS));
+            }
+        }
+    }
+    for (fam, level) in [("penrose-rhomb", 4), ("hat", 3), ("spectre", 3)] {
+        for rule in [
+            "R2,C2,S0-5,B0-3",
+            "R2,C2,S3-99,B0-2",
+            "R1,C2,S0-3,B0-2",
+            "R2,C2,S2-12,B0-4,NN",
+        ] {
+            let t = TilingSpec::new(fam).with_size(SizeSpec::Level(level));
+            cases.push((t, rule, &[1, 5, 40, 150]));
+        }
+    }
+    for (t, rule, chunks) in cases {
+        let what = format!("{rule} on {} {:?}", t.family, t.boundary);
+        let sc = scene(
+            t.clone(),
+            vec![ca(rule, None, SeedSpec::Random { density: 0.3 })],
+        );
+        compare_gpu(&mut sim, &sc, chunks, &what);
+        // 37 generations on the GPU, then 20 on the CPU, equal 57 on the CPU.
+        let mut cpu = World::from_scene(&sc).unwrap();
+        let mut gw = World::from_scene(&sc).unwrap();
+        cpu.apply(Command::Step { gens: 57 }).unwrap();
+        assert_eq!(sim.step_mixed(&mut gw, 37).unwrap().cpu_gens, 0, "{what}");
+        gw.apply(Command::Step { gens: 20 }).unwrap();
+        same(&cpu, &gw, &format!("{what}: the CPU after the GPU"));
+        // Three steps a generation, from tick 3 (a generation on the CPU first).
+        let sc = scene(
+            t,
+            vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(3)],
+        );
+        let mut cpu = World::from_scene(&sc).unwrap();
+        let mut gw = World::from_scene(&sc).unwrap();
+        for w in [&mut cpu, &mut gw] {
+            w.apply(Command::Step { gens: 1 }).unwrap();
+        }
+        let what = format!("{what} x3 from tick 3");
+        let (_, on_cpu) = compare_worlds(&mut sim, &mut cpu, &mut gw, &[1, 2, 7, 30], &what);
+        assert_eq!(on_cpu, 0, "{what}");
+    }
+    // A patch's cells carry one background, so two B0 CAs on one field run on the CPU.
+    let sc = scene(
+        TilingSpec::new("hat").with_size(SizeSpec::Level(2)),
+        vec![
+            ca("R2,C2,S0-5,B0-3", None, SeedSpec::Random { density: 0.3 }),
+            ca("B0/S8", None, SeedSpec::Random { density: 0.3 }),
+        ],
+    );
+    let w = World::from_scene(&sc).unwrap();
+    assert!(sim.check(&w).is_err(), "two B0 CAs on a patch's field");
+}
+
 // ---------------------------------------------------------------------------------------------
 // Forest fire
 
@@ -925,6 +998,102 @@ fn sandpile_repeats_and_scripts() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Isotropic rules (#70)
+
+const ISO: &[&str] = &[
+    "B2-a/S12",
+    "B3-cnqy/S23-a",
+    "B3/S2-i34q",
+    "B2ci3ai4c8/S02ae3eijkq4iz5ar6i7e",
+    "B2a3-ckn/S1e2-in3/C4",
+    "B1c2-k/S/C3",
+    // B0, without survival on 8 (the background flashes) and with it (live for good).
+    "B01e2a/S2-i3",
+    "B01e3-cnqy/S23-a8",
+];
+
+/// Isotropic rules on the square grid, with every edge, on even and odd sides, from an odd step
+/// count and with several steps per generation (B0's background phase), all on the GPU.
+#[test]
+fn isotropic_rules() {
+    let Some(mut sim) = gpu() else { return };
+    for (w, h) in [(40, 30), (33, 27)] {
+        for b in BOUNDARIES {
+            for &rule in ISO {
+                let sc = scene(
+                    TilingSpec::rect("square", w, h, b),
+                    vec![ca(rule, None, SeedSpec::Random { density: 0.35 })],
+                );
+                compare_gpu(&mut sim, &sc, CHUNKS, &format!("{rule} {w}x{h} {b:?}"));
+            }
+        }
+    }
+    for &rule in ISO {
+        for spg in [1, 2, 3] {
+            let sc = scene(
+                TilingSpec::rect("square", 32, 24, Boundary::Wrap),
+                vec![ca(rule, None, SeedSpec::Random { density: 0.3 }).steps(spg)],
+            );
+            let mut cpu = World::from_scene(&sc).unwrap();
+            let mut gw = World::from_scene(&sc).unwrap();
+            cpu.apply(Command::Step { gens: 1 }).unwrap();
+            gw.apply(Command::Step { gens: 1 }).unwrap();
+            let what = format!("{rule} x{spg} from tick {spg}");
+            let (_, on_cpu) = compare_worlds(&mut sim, &mut cpu, &mut gw, &[1, 2, 7, 50], &what);
+            assert_eq!(on_cpu, 0, "{what}");
+        }
+    }
+}
+
+/// The GPU's isotropic step with every letter of each count is the B/S rule: Life, Day & Night,
+/// Brian's Brain and a B0 rule, run with their totalistic tables on the isotropic path, against
+/// the CPU's B/S steppers.
+#[test]
+fn isotropic_tables_of_b_s_rules() {
+    let Some(mut sim) = gpu() else { return };
+    for rule in [
+        "B3/S23",
+        "B3678/S34678",
+        "B2/S/C3",
+        "B014/S2",
+        "B0123478/S01234678",
+    ] {
+        for b in BOUNDARIES {
+            let sc = scene(
+                TilingSpec::rect("square", 40, 30, b),
+                vec![ca(rule, None, SeedSpec::Random { density: 0.35 })],
+            );
+            let cpu = World::from_scene(&sc).unwrap();
+            let mut gw = World::from_scene(&sc).unwrap();
+            let (birth, survive, states) = match Rule::parse(rule).unwrap().0 {
+                Rule::LifeLike { birth, survive } => (birth, survive, 2),
+                Rule::Generations {
+                    birth,
+                    survive,
+                    states,
+                } => (birth, survive, states),
+                r => panic!("{r:?}"),
+            };
+            gw.cas[0].rule = Rule::Isotropic(Box::new(
+                jetcarp_core::isotropic::IsoRule::from_masks(birth, survive, states),
+            ));
+            gw.cas[0].background = None;
+            let mut cpu = cpu;
+            for g in [1u64, 1, 5, 40] {
+                cpu.apply(Command::Step { gens: g }).unwrap();
+                let m = sim.step_mixed(&mut gw, g).unwrap();
+                assert_eq!(m.cpu_gens, 0, "{rule} {b:?}");
+                assert_eq!(
+                    cpu.fields[0].state, gw.fields[0].state,
+                    "{rule} {b:?} at {}",
+                    cpu.generation
+                );
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Quick Start
 
 /// Every Quick Start entry of these families, at preview size, on the GPU like the CPU.
@@ -937,6 +1106,7 @@ fn quick_start_entries() {
         Rule::Ltl(_) => true,
         Rule::ForestFire { .. } => true,
         Rule::Sandpile => true,
+        Rule::Isotropic(_) => true,
         _ => false,
     };
     let mut counts = std::collections::BTreeMap::<String, (u32, u32)>::new();

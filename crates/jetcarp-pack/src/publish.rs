@@ -675,6 +675,11 @@ pub fn publish(
                     } else {
                         None
                     },
+                    iso_range: if main {
+                        rec.iso_range.as_ref().map(jcs).transpose()?
+                    } else {
+                        None
+                    },
                 },
             )?;
         }
@@ -697,6 +702,7 @@ pub fn publish(
                     date: rec.verified.date.clone(),
                     range: rec.range.as_ref().map(jcs).transpose()?,
                     mover: rec.mover.as_ref().map(jcs).transpose()?,
+                    iso_range: rec.iso_range.as_ref().map(jcs).transpose()?,
                 },
             )?;
         }

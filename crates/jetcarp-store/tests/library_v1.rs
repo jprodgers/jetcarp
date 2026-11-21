@@ -81,13 +81,13 @@ fn the_schema_is_marked_and_other_files_are_refused() {
     assert!(lib.path().ends_with("library.sqlite"));
     lib.add(one("B3/S23", "oo/oo")).unwrap();
     let info = lib.info().unwrap();
-    assert_eq!(info.schema_version, 3);
+    assert_eq!(info.schema_version, 4);
     let c = raw(&lib);
     let app: i64 = c
         .query_row("PRAGMA application_id", [], |r| r.get(0))
         .unwrap();
     assert_eq!(app, jetcarp_store::library::schema::APPLICATION_ID);
-    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("3"));
+    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("4"));
     let uuid = lib.meta("library_uuid").unwrap().unwrap();
     assert_eq!((uuid.len(), uuid.chars().nth(14)), (36, Some('4')));
     // The old stage 1 tables are gone.
@@ -100,7 +100,7 @@ fn the_schema_is_marked_and_other_files_are_refused() {
         .unwrap();
     assert_eq!(n, 0);
     // A library from a newer JETCARP is refused, with what to do.
-    c.execute_batch("PRAGMA user_version = 4").unwrap();
+    c.execute_batch("PRAGMA user_version = 5").unwrap();
     drop(c);
     let e = Library::open(lib.path()).info().unwrap_err();
     assert!(
@@ -407,7 +407,7 @@ fn a_library_from_before_rule_semantics_gains_them_on_opening() {
     }
     let lib = Library::open(&path);
     assert_eq!(lib.info().unwrap().needs_reverify, 1);
-    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("3"));
+    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("4"));
     let c = Connection::open(&path).unwrap();
     let rows: Vec<(String, String, String, i64)> = c
         .prepare("SELECT id, family, semantics, needs_reverify FROM patterns ORDER BY id")
@@ -439,7 +439,7 @@ fn a_library_from_before_rule_semantics_gains_them_on_opening() {
     assert_eq!(lib.get(&g.id).unwrap().semantics, "1");
 }
 
-// B/S rules with birth on 0 became a family of their own (`lifelike_b0`, version 2) in 0.4.3,
+// B/S rules with birth on 0 became a family of their own (`lifelike_b0`, version 2, now 3) in 0.4.3,
 // when their meaning changed (#171); other B/S rules stayed `lifelike`, version 1. A record of a
 // B0 rule filed under `lifelike` before then moves to its family on opening and is flagged; a
 // record of another B/S rule is not.
@@ -826,7 +826,7 @@ fn ant_ids_are_content_ids_on_their_pin() {
 }
 
 #[test]
-fn a_schema_1_library_is_brought_up_to_3_on_opening() {
+fn a_schema_1_library_is_brought_up_to_4_on_opening() {
     let lib = temp_lib("migrate");
     let block = one("B3/S23", "oo/oo");
     lib.add(block.clone()).unwrap();
@@ -857,12 +857,12 @@ fn a_schema_1_library_is_brought_up_to_3_on_opening() {
         .unwrap();
     }
     let lib = Library::open(&path);
-    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("3"));
+    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("4"));
     let c = Connection::open(&path).unwrap();
     let v: i64 = c
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 3);
+    assert_eq!(v, 4);
     // The rating is kept, with the new columns; the old media rows are gone (media are made again).
     let r = lib.ratings(None).unwrap();
     assert_eq!(
@@ -894,4 +894,45 @@ fn a_schema_1_library_is_brought_up_to_3_on_opening() {
         )
         .unwrap();
     assert_eq!(sem, ("lifelike".to_string(), "1".to_string()));
+}
+
+// Schema 3 (0.4.0 to 0.4.2) to 4 (#238): patterns gain their isotropic rule range's columns,
+// empty until a pattern is stored again; its records read as before.
+#[test]
+fn a_schema_3_library_gains_isotropic_ranges_on_opening() {
+    let lib = temp_lib("schema34");
+    let g = one("B3/S23", GLIDER);
+    assert!(g.iso_range.is_some());
+    lib.add(g.clone()).unwrap();
+    let path = lib.path().to_path_buf();
+    drop(lib);
+    {
+        let c = Connection::open(&path).unwrap();
+        for col in [
+            "iso_birth_min",
+            "iso_birth_max",
+            "iso_survive_min",
+            "iso_survive_max",
+            "iso_states_min",
+            "iso_states_max",
+        ] {
+            c.execute_batch(&format!("ALTER TABLE patterns DROP COLUMN {col};"))
+                .unwrap();
+        }
+        c.execute_batch(
+            "UPDATE meta SET value = '3' WHERE key = 'schema'; PRAGMA user_version = 3;",
+        )
+        .unwrap();
+    }
+    let lib = Library::open(&path);
+    assert_eq!(lib.info().unwrap().schema_version, 4);
+    assert_eq!(lib.meta("schema").unwrap().as_deref(), Some("4"));
+    let back = lib.get(&g.id).unwrap();
+    assert_eq!(
+        (back.iso_range.as_ref(), back.range.as_ref()),
+        (None, g.range.as_ref())
+    );
+    // Stored again, it has its range.
+    lib.add(g.clone()).unwrap();
+    assert_eq!(lib.get(&g.id).unwrap().iso_range, g.iso_range);
 }

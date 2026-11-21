@@ -13,6 +13,7 @@ struct Params {
   // Priority rules: packed rows (jetcarp-gpu's `priority_words`), k1 words.
   // Margolus: the block table, one byte per entry, in table[0].
   // Forest fire: the noise key and the two thresholds.
+  // Isotropic rules: birth by neighbourhood in words 0-7, survival in 8-15.
   table: array<vec4<u32>, 11>,
 };
 
@@ -336,6 +337,13 @@ fn ltl_count(i: u32) -> u32 {
   return c;
 }
 
+// Isotropic rules: neighbour k (bit k of a neighbourhood) as (dx, dy), in reading order from the
+// top left with the cell itself left out: NW, N, NE, W, E, SW, S, SE (isotropic.rs `OFFSETS`).
+fn iso_offset(k: u32) -> vec2<i32> {
+  let at = k + select(0u, 1u, k >= 4u);
+  return vec2<i32>(i32(at % 3u) - 1, i32(at / 3u) - 1);
+}
+
 // Margolus: x on an axis of n cells, wrapped when `wrap`; -1 past the edge.
 fn block_fix(x: i32, n: i32, wrap: bool) -> i32 {
   if (wrap) {
@@ -598,9 +606,64 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         na = commit_age(s, v, age);
       }
       // Larger than Life: the reach at aux[k1..], birth bits at aux[k2..] and survival bits
-      // gg words later.
+      // gg words later. thresh 1: two states with B0 (ltl.rs `step_ltl_b0`), stored relative to
+      // the background as for B0 Life-like rules (case 8): a patch's cells carry it in bit 8, a
+      // lattice's is a word per phase and tile type at aux[zin..], at phase table[0].x before
+      // this step and table[0].y after it.
       case 10u: {
-        if (s > 1u) {
+        if (p.thresh == 1u) {
+          let r = p.k1;
+          var c = 0u;
+          var b0 = 0u;
+          var b1 = 0u;
+          if (topo[6] != 0) {
+            let lo = aux[r + i];
+            let hi = aux[r + i + 1u];
+            let at = r + u32(topo[0]) + 1u;
+            var cb = 0u;
+            for (var e = lo; e < hi; e = e + 1u) {
+              let w = src[aux[at + e]];
+              let b = (w >> 8u) & 1u;
+              c += u32((w & 0xffu) == 1u) ^ b;
+              cb += b;
+            }
+            b0 = (old >> 8u) & 1u;
+            let off = p.k2 + select(0u, p.gg, b0 == 1u);
+            b1 = (aux[off + (cb >> 5u)] >> (cb & 31u)) & 1u;
+            glow = b1 << 8u;
+          } else {
+            let nt = u32(topo[3]);
+            let w = u32(topo[1]);
+            let k = i % nt;
+            let cc = i / nt;
+            let j = i32(cc / w);
+            let base = i32(cc % w) + topo[topo[9] + j];
+            let start = aux[r + 2u * k];
+            let cnt = aux[r + 2u * k + 1u];
+            let list = r + 2u * nt;
+            let row0 = p.zin + p.table[0].x * nt;
+            for (var o = 0u; o < cnt; o = o + 1u) {
+              let e = list + (start + o) * 3u;
+              let kk = aux[e + 2u];
+              let x = resolve(base + bitcast<i32>(aux[e]), j + bitcast<i32>(aux[e + 1u]), bitcast<i32>(kk));
+              if (x >= 0) {
+                c += u32((src[u32(x)] & 0xffu) == 1u) ^ aux[row0 + kk];
+              } else if (topo[7] != 0) {
+                c += 1u;
+              } else {
+                c += aux[row0 + kk];
+              }
+            }
+            b0 = aux[row0 + k];
+            b1 = aux[p.zin + p.table[0].y * nt + k];
+          }
+          let real = u32(s != 0u) ^ b0;
+          let off = p.k2 + select(0u, p.gg, real == 1u);
+          v = ((aux[off + (c >> 5u)] >> (c & 31u)) & 1u) ^ b1;
+          if (v == 1u) {
+            if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
+          }
+        } else if (s > 1u) {
           if (s + 1u < p.states) { v = s + 1u; }
         } else {
           let c = ltl_count(i);
@@ -661,6 +724,48 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         }
         val = word;
         was = old;
+      }
+      // Isotropic rules on the square grid (step.rs `step_iso`, `step_iso_b0`): the arrangement
+      // of the state-1 neighbours looks up birth (table words 0-7) or survival (8-15); dying
+      // Generations cells count up. thresh 1: two states with B0, stored relative to the
+      // background, a word per phase at aux[gg..] (one tile type), at phase k1 before this step
+      // and k2 after; a slot past a dead edge is in the background, past a live edge live.
+      case 13u: {
+        var b0 = 0u;
+        var b1 = 0u;
+        if (p.thresh == 1u) {
+          b0 = aux[p.gg + p.k1];
+          b1 = aux[p.gg + p.k2];
+        }
+        var edge = b0;
+        if (topo[7] != 0) { edge = 1u; }
+        if (s >= 2u) {
+          if (s + 1u < p.states) { v = s + 1u; }
+          na = bs_age(s, v, age);
+        } else {
+          let wd = u32(topo[1]);
+          let j = i32(i / wd);
+          let base = i32(i % wd) + topo[topo[9] + j];
+          var x = 0u;
+          for (var k = 0u; k < 8u; k = k + 1u) {
+            let d = iso_offset(k);
+            let c = resolve(base + d.x, j + d.y, 0);
+            var bit = edge;
+            if (c >= 0) { bit = u32((src[u32(c)] & 0xffu) == 1u) ^ b0; }
+            x = x | (bit << k);
+          }
+          let real = u32(s != 0u) ^ b0;
+          let bit = (table_word(8u * real + x / 32u) >> (x % 32u)) & 1u;
+          if (p.thresh == 1u) {
+            v = bit ^ b1;
+            if (v == 1u) {
+              if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
+            }
+          } else {
+            if (s == 0u || bit == 1u) { v = bit; } else if (p.states > 2u) { v = 2u; }
+            na = bs_age(s, v, age);
+          }
+        }
       }
       default: {}
     }
