@@ -83,11 +83,12 @@ with the guard already on.
   frames a second, and JETCARP's verdict on each is pinned
   (`crates/jetcarp-core/tests/strobe_corpus.rs`), its stripes by both rules: the usual one and
   the at-risk one, which counts similar parts as well. The app's view of the outlined fields,
-  drawn on the GPU, is pinned too (`outlines_in_the_app_s_view_are_pinned`). Each is also run through the guard as a screen
-  shows it, readings two frames late, with each rule in turn, and nothing it shows may fail. The corpus found two things
-  the first version got wrong: a Life soup of 4-pixel cells counted as flashing (tiles flickering
-  independently), so a transition now counts only where neighbouring tiles change together; and
-  stripes took about a second to veil, longer than the half second they are allowed.
+  drawn on the GPU, is pinned too (`outlines_in_the_app_s_view_are_pinned`). Each is also run
+  through the guard as a screen shows it, readings two frames late, with each rule in turn, and
+  nothing it shows may fail. The corpus found two things the first version got wrong: a Life soup
+  of 4-pixel cells counted as flashing (tiles flickering independently), so a transition now counts
+  only where neighbouring tiles change together; and stripes took about a second to veil, longer
+  than the half second they are allowed.
 - **Every output path, offscreen**: the shared painter behind the desktop background and the screen
   savers, both ways it can draw, and the app's whole window (ignored test, on the GPU), with the
   flipping field: what they show, read back and measured on the processor, never fails. An exported

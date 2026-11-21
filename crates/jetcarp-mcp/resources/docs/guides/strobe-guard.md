@@ -68,9 +68,8 @@ and hexagons from about 12 pixels a cell) would be strong stripes, rows of repea
 JETCARP draws them there no more than 0.06 darker than the cells: under the stripe check's limit,
 and still visible. Elsewhere, beside darker cells, over small bright shapes, and on tilings whose
 outlines make no stripes, outlines look as they always have. Stripes covering more than a quarter
-of the screen, with
-more than five light-dark pairs across them, are a harmful pattern; harmful for half a second, they
-fail, as IRIS counts them. The guidance allows still stripes over up to 40% of the screen; JETCARP,
+of the screen, with more than five light-dark pairs across them, are a harmful pattern; harmful for
+half a second, they fail, as IRIS counts them. The guidance allows still stripes over up to 40% of the screen; JETCARP,
 like IRIS, uses a quarter for still and moving stripes alike. Stripes finer than 4 pixels a pair
 blur into the half-resolution copy and are not measured; at the assumed distance they are more
 than six cycles a degree.
