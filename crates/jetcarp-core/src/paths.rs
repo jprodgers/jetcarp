@@ -816,7 +816,22 @@ mod length_tests {
                 .join(rel.replace("deep.json", "new.json"))
         );
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "{}");
-        let _ = std::fs::remove_dir_all(&d);
+        remove_deep(&d, depth);
+        assert!(!d.exists(), "the folders many deep are removed");
+    }
+
+    /// Removes `d` with its `depth` nested folders `a/a/…`, the deepest first, one at a time:
+    /// `remove_dir_all` keeps a handle open on every level, more than an open-file limit of 256
+    /// (macOS's default) or 1,024 allows, and then leaves the whole tree behind (#121).
+    fn remove_deep(d: &Path, depth: usize) {
+        for level in (1..=depth).rev() {
+            let dir = d.join("a/".repeat(level));
+            for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                let _ = std::fs::remove_file(entry.path());
+            }
+            let _ = std::fs::remove_dir(&dir);
+        }
+        let _ = std::fs::remove_dir_all(d);
     }
 }
 
