@@ -5,7 +5,10 @@
 //! The app reads and writes its settings, library and output folders, so each test runs in a
 //! process of its own with every folder a scratch one ([`in_scratch`]): the test the suite runs
 //! starts its `#[ignore]`d twin (`child_…`) with those folders set, and fails when it fails. The
-//! twin does nothing when started any other way.
+//! twin does nothing when started any other way. The twins test the interface, not the GPU, so
+//! they run with it switched off, and each ends its process at once when it has passed ([`done`]),
+//! as the app does at exit: a graphics driver's thread still running while the process is torn
+//! down can crash it, which would fail a test that had passed.
 
 use super::*;
 use eframe::egui::accesskit;
@@ -38,10 +41,12 @@ fn in_scratch(name: &str) {
         cmd.env(var, root.join(sub));
     }
     cmd.env(CHILD, "1");
+    cmd.env("JETCARP_GPU", "off");
     for v in [
         "JETCARP_OFFSCREEN_OUT",
         "JETCARP_SCREENSHOT",
         "JETCARP_MENU",
+        "JETCARP_REQUIRE_GPU",
     ] {
         cmd.env_remove(v);
     }
@@ -52,9 +57,19 @@ fn in_scratch(name: &str) {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(
-        out.status.success() && text.contains("1 passed"),
-        "{name} failed in its own process:\n{text}"
+        out.status.success() && text.contains(PASSED),
+        "{name} failed in its own process ({}):\n{text}",
+        out.status
     );
+}
+
+/// What a twin prints when it has passed.
+const PASSED: &str = "keyboard test passed";
+
+/// The end of a twin that passed: say so, and end the process at once.
+fn done() -> ! {
+    println!("{PASSED}");
+    jetcarp_display::exit::end_process(0)
 }
 
 /// In a twin: whether it was started by [`in_scratch`] (else it returns at once, touching no
@@ -451,6 +466,7 @@ fn child_tab_reaches_every_control_of_the_main_window() {
     );
     let back = tab_cycle(&mut k, 600, true);
     assert_eq!(back.len(), got.len(), "Shift+Tab reached as many");
+    done();
 }
 
 impl Kb {
@@ -654,6 +670,7 @@ fn child_tab_reaches_every_control_of_each_tool_window_and_the_quick_start() {
         failures.push(format!("Quick Start: Tab never reached {missed} controls"));
     }
     assert!(failures.is_empty(), "{failures:#?}");
+    done();
 }
 
 #[test]
@@ -713,6 +730,7 @@ fn child_escape_closes_and_enter_confirms_in_dialogs_and_tool_windows() {
     k.key(Key::Escape);
     assert_eq!(k.focused(), None, "Esc left the field");
     assert_eq!(k.app.shell.layout.place("add"), panes::Place::Docked);
+    done();
 }
 
 #[test]
@@ -809,6 +827,7 @@ fn child_tabs_cards_and_the_setup_window_from_the_keyboard() {
     k.key(Key::Escape);
     k.frames(1);
     assert!(!egui::Popup::is_any_open(&k.ctx), "Esc closed it");
+    done();
 }
 
 #[test]
@@ -850,6 +869,7 @@ fn child_f10_opens_the_menus_and_the_arrows_and_enter_choose() {
     k.key(Key::Escape);
     k.frames(1);
     assert!(!egui::Popup::is_any_open(&k.ctx), "Esc closed the menu");
+    done();
 }
 
 #[test]
@@ -914,6 +934,7 @@ fn child_f6_moves_between_the_menu_bar_panes_grid_status_line_and_windows() {
     // From the first stop: the last, then each before it, back to the first.
     back.reverse();
     assert_eq!(back, stops, "Shift+F6 went back the same way");
+    done();
 }
 
 #[test]
@@ -988,6 +1009,7 @@ fn child_the_focused_control_is_scrolled_into_view_and_ringed() {
         }
         assert!(reached > 20, "only {reached} controls reached");
     }
+    done();
 }
 
 #[test]
@@ -1047,6 +1069,7 @@ fn child_bare_keys_work_while_a_button_has_the_keyboard_but_not_while_typing() {
     assert!(k.app.shell.panes_hidden, "F9 hid the panes");
     k.key(Key::F9);
     assert!(!k.app.shell.panes_hidden);
+    done();
 }
 
 #[test]
@@ -1130,6 +1153,7 @@ fn child_the_grid_s_cell_cursor_draws_erases_selects_and_moves() {
     );
     k.key(Key::Escape);
     assert_eq!(k.focused(), None, "the second left the grid");
+    done();
 }
 
 #[test]
@@ -1199,6 +1223,7 @@ fn child_every_window_names_its_controls_for_a_screen_reader() {
         "{} problems a screen reader would meet",
         all.len()
     );
+    done();
 }
 
 #[test]
@@ -1255,4 +1280,5 @@ fn child_changes_are_announced_to_a_screen_reader() {
         "{:?}",
         k.name(live[0])
     );
+    done();
 }

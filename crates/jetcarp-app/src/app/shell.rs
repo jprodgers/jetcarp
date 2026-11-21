@@ -278,80 +278,78 @@ impl JetcarpApp {
 
     /// The status bar's contents, in the place `shell_ui` kept for them.
     fn status_bar(&mut self, ui: &mut egui::Ui) {
-        {
-            ui.horizontal_wrapped(|ui| {
-                if let Some((m, err)) = self.message.clone() {
-                    ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
-                    if ui
-                        .small_button("×")
-                        .on_hover_text("Dismiss")
-                        .accessible_name("Dismiss")
-                        .clicked()
-                    {
-                        self.message = None;
-                    }
-                    ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            if let Some((m, err)) = self.message.clone() {
+                ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
+                if ui
+                    .small_button("×")
+                    .on_hover_text("Dismiss")
+                    .accessible_name("Dismiss")
+                    .clicked()
+                {
+                    self.message = None;
                 }
-                if self.screen != Screen::Sim {
-                    return;
-                }
-                // The strobe guard, while it acts.
-                if let Some((note, strong)) = self.guard_status() {
-                    let c = if strong {
-                        Color32::from_rgb(0xff, 0xb0, 0x60)
-                    } else {
-                        Color32::from_rgb(0xff, 0xd8, 0x90)
-                    };
-                    if ui
-                        .add(
-                            egui::Label::new(RichText::new(note).color(crate::theme::ink(ui, c)))
-                                .sense(egui::Sense::click()),
-                        )
-                        .on_hover_text("Settings → Safety")
-                        .clicked()
-                    {
-                        self.strobe.window_open = true;
-                    }
-                    ui.separator();
-                }
-                let (status, pops) = match &self.stats {
-                    Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
-                    None => (String::new(), vec![]),
+                ui.separator();
+            }
+            if self.screen != Screen::Sim {
+                return;
+            }
+            // The strobe guard, while it acts.
+            if let Some((note, strong)) = self.guard_status() {
+                let c = if strong {
+                    Color32::from_rgb(0xff, 0xb0, 0x60)
+                } else {
+                    Color32::from_rgb(0xff, 0xd8, 0x90)
                 };
-                ui.label(status);
-                ui.separator();
-                for (i, f) in self.world.fields.iter().enumerate() {
-                    let what = if f.kind == FieldKind::Height {
-                        "grains"
-                    } else {
-                        "live"
-                    };
-                    let pop = pops.get(i).copied().unwrap_or(0);
-                    ui.label(format!("field {i}: {pop} {what}"));
-                    if f.kind == FieldKind::Height && f.lost > 0 {
-                        ui.label(format!("({} lost)", f.lost));
-                    }
+                if ui
+                    .add(
+                        egui::Label::new(RichText::new(note).color(crate::theme::ink(ui, c)))
+                            .sense(egui::Sense::click()),
+                    )
+                    .on_hover_text("Settings → Safety")
+                    .clicked()
+                {
+                    self.strobe.window_open = true;
                 }
                 ui.separator();
-                ui.label(format!(
-                    "{} cells, {} storage",
-                    self.world.topo.len(),
-                    self.world.topo.storage_name()
-                ));
+            }
+            let (status, pops) = match &self.stats {
+                Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
+                None => (String::new(), vec![]),
+            };
+            ui.label(status);
+            ui.separator();
+            for (i, f) in self.world.fields.iter().enumerate() {
+                let what = if f.kind == FieldKind::Height {
+                    "grains"
+                } else {
+                    "live"
+                };
+                let pop = pops.get(i).copied().unwrap_or(0);
+                ui.label(format!("field {i}: {pop} {what}"));
+                if f.kind == FieldKind::Height && f.lost > 0 {
+                    ui.label(format!("({} lost)", f.lost));
+                }
+            }
+            ui.separator();
+            ui.label(format!(
+                "{} cells, {} storage",
+                self.world.topo.len(),
+                self.world.topo.storage_name()
+            ));
+            ui.separator();
+            if let Some(s) = self.scripts.status() {
+                ui.label(
+                    RichText::new(s)
+                        .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xc0, 0x80))),
+                );
                 ui.separator();
-                if let Some(s) = self.scripts.status() {
-                    ui.label(
-                        RichText::new(s)
-                            .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xc0, 0x80))),
-                    );
-                    ui.separator();
-                }
-                crate::simgpu::status_ui(&self.sim, ui);
-                if !self.gpu {
-                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), "no GPU renderer");
-                }
-            });
-        }
+            }
+            crate::simgpu::status_ui(&self.sim, ui);
+            if !self.gpu {
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), "no GPU renderer");
+            }
+        });
     }
 
     /// With the status bar off, the grid shows a new message for a few seconds.

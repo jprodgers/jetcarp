@@ -56,11 +56,11 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   generated from the program and checked against it, and the copy of the book built into the
   program must match the book.
 
-About 45 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
-book's pictures of the app, and the rest time the program, run very large worlds, or need a desktop
-session. (The keyboard tests' twelve halves that run in a process of their own are ignored too:
-the suite starts them itself, with their scratch folders, and they do nothing when started any
-other way.)
+About 50 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
+book's pictures of the app, and the rest time the program, run very large worlds, need a desktop
+session, or read the app's accessibility tree with the starter pack set up. (The eleven halves of
+the keyboard tests that run in a process of their own are ignored too: the suite starts them
+itself, with their scratch folders, and they do nothing when started any other way.)
 
 Tests never write to your own settings, data or pictures: they run in scratch folders, and CI fails
 if a test touches the default ones.

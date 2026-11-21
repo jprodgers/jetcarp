@@ -761,18 +761,17 @@ struct Chrome {
     found: HashSet<egui::Id>,
 }
 
-fn chrome_id() -> egui::Id {
-    egui::Id::unique("jetcarp-a11y-chrome")
+/// Each OS window (viewport) has its own: a popped-out window's are found during the main
+/// window's frame.
+fn chrome_id(ctx: &egui::Context) -> egui::Id {
+    egui::Id::unique("jetcarp-a11y-chrome").with(ctx.viewport_id())
 }
 
 /// Mark a widget the mouse uses and the keyboard has no use for (a window's title bar, which
 /// takes double-clicks and drags): Tab and F6 pass over it, and screen readers are not shown it.
 pub fn mouse_only(ctx: &egui::Context, id: egui::Id) {
-    ctx.data_mut(|d| {
-        d.get_temp_mut_or_default::<Chrome>(chrome_id())
-            .named
-            .insert(id)
-    });
+    let key = chrome_id(ctx);
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<Chrome>(key).named.insert(id));
 }
 
 /// The mouse-only widgets drawn this frame: those marked so ([`mouse_only`]), and those egui and
@@ -780,8 +779,9 @@ pub fn mouse_only(ctx: &egui::Context, id: egui::Id) {
 /// dragged background behind other controls (a tab bar's), and the thin lines between docked
 /// panes that resize them.
 pub fn find_chrome(ctx: &egui::Context) -> HashSet<egui::Id> {
-    let named = ctx
-        .data_mut(|d| std::mem::take(&mut d.get_temp_mut_or_default::<Chrome>(chrome_id()).named));
+    let key = chrome_id(ctx);
+    let named =
+        ctx.data_mut(|d| std::mem::take(&mut d.get_temp_mut_or_default::<Chrome>(key).named));
     let mut found: HashSet<egui::Id> = named;
     ctx.viewport(|v| {
         for layer in v.this_pass.widgets.layer_ids() {
@@ -806,14 +806,15 @@ pub fn find_chrome(ctx: &egui::Context) -> HashSet<egui::Id> {
             }
         }
     });
-    ctx.data_mut(|d| d.get_temp_mut_or_default::<Chrome>(chrome_id()).found = found.clone());
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<Chrome>(key).found = found.clone());
     found
 }
 
 /// Mouse-only widgets found at the end of last frame.
 pub fn chrome(ctx: &egui::Context) -> HashSet<egui::Id> {
+    let key = chrome_id(ctx);
     ctx.data(|d| {
-        d.get_temp::<Chrome>(chrome_id())
+        d.get_temp::<Chrome>(key)
             .map(|c| c.found)
             .unwrap_or_default()
     })
@@ -1258,7 +1259,7 @@ mod tests {
             drag = ui
                 .interact(
                     egui::Rect::from_min_size(egui::pos2(0.0, 200.0), egui::vec2(6.0, 120.0)),
-                    egui::Id::new("splitter"),
+                    egui::Id::unique("splitter"),
                     egui::Sense::click_and_drag(),
                 )
                 .id;

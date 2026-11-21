@@ -326,7 +326,8 @@ impl Cursor {
         }
     }
 
-    /// The cells selected, or just the cursor's cell.
+    /// The cells selected, or just the cursor's cell (tests; the app keeps [`Cursor::selected`]).
+    #[cfg(test)]
     pub fn cells(&self, topo: &Topology) -> Vec<usize> {
         self.selected(topo).to_vec()
     }
