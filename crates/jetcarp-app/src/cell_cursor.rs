@@ -5,8 +5,9 @@
 //!
 //! **The next cell** in a direction is found from cell centres: among the cells touching the
 //! cursor's cell, those whose centres lie less than 57° from the direction (so a triangle's
-//! neighbour across its side, at 60°, is not taken for the one above it), the nearest one in that
-//! direction that keeps closest to the line the cursor is moving along. Keeping to a line (the
+//! neighbour across its side, at 60°, is not taken for the one above it; where none does, less
+//! than 81°), the nearest one in that direction that keeps closest to the line the cursor is
+//! moving along. Keeping to a line (the
 //! row's height for moves left and right, the column's for moves up and down) is what makes a run
 //! of moves follow a row of triangles or a column of hexagons, zigzagging about it, rather than
 //! drifting off it. On a grid with wrapped edges the cells across an edge count as next to each
@@ -288,6 +289,9 @@ pub struct Cursor {
     pub line: Option<Line>,
     /// Moves of a pattern along one axis: how far they strayed across it ([`shift`]).
     pub drift: (Option<bool>, f64),
+    /// The cells of the selection last asked for, by its corners and tiling ([`Cursor::selected`]):
+    /// a selection over millions of cells is found once, not each frame.
+    cache: std::cell::RefCell<Option<((usize, usize, usize, usize), std::rc::Rc<Vec<usize>>)>>,
 }
 
 impl Cursor {
@@ -324,11 +328,23 @@ impl Cursor {
 
     /// The cells selected, or just the cursor's cell.
     pub fn cells(&self, topo: &Topology) -> Vec<usize> {
-        match (self.cell, self.anchor) {
-            (Some(c), Some(a)) => selection(topo, a, c),
-            (Some(c), None) => vec![c],
-            _ => vec![],
+        self.selected(topo).to_vec()
+    }
+
+    /// [`Cursor::cells`], found again only when the selection or the tiling changed.
+    pub fn selected(&self, topo: &Topology) -> std::rc::Rc<Vec<usize>> {
+        let (Some(c), Some(a)) = (self.cell, self.anchor) else {
+            return std::rc::Rc::new(self.cell.into_iter().collect());
+        };
+        let key = (a, c, topo as *const Topology as usize, topo.len());
+        if let Some((k, v)) = &*self.cache.borrow()
+            && *k == key
+        {
+            return v.clone();
         }
+        let v = std::rc::Rc::new(selection(topo, a, c));
+        *self.cache.borrow_mut() = Some((key, v.clone()));
+        v
     }
 
     /// The step a pattern moves by in `d`.

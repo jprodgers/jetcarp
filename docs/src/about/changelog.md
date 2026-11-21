@@ -15,9 +15,10 @@ day later (0.4.2: 17 November here, 18 November there).
   the order the window shows them, and scroll each into view; F6 and Shift+F6 move between the menu
   bar, each group of docked panes, the grid, the status line and each floating window; F10 opens
   the menus, and the arrow keys, Enter and Esc work them. A ring shows whatever has the keyboard in
-  every theme, two points wide in the standard ones. Esc closes *Export animation* and the tool
-  window whose control has the keyboard, and *Export animation* opens with *Export…* ready for
-  Enter; Shift+F10 opens a Quick Start card's menu. Widgets only the mouse uses (a window's title
+  every theme, two points wide in the standard ones. Esc closes *Export animation*, the setup
+  window and the tool window whose control has the keyboard; *Export animation* opens with
+  *Export…* ready for Enter, and each page of the setup window with its main button (*Next*,
+  *Start*, *Close*); Shift+F10 opens a Quick Start card's menu. Widgets only the mouse uses (a window's title
   bar, the lines between docked panes) are passed over. Tests drive the whole app with key presses
   and check that Tab reaches every control of the main window, and that F6, F10 and Esc go where
   they should. ([Using the app from the keyboard](../guides/keyboard.md),

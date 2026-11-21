@@ -984,15 +984,25 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
             if let Some(w) = words.filter(|w| says(w)) {
                 s.labels.push((*id, layer, r, joins(w)));
             }
-            // Named by nothing, by symbols alone or a unit ("%", "px": a number box is named by its
-            // suffix), only by its tooltip (egui names a control by its hover text when it has no
-            // name), or only by the grey hint in its box: the words beside it are the better name;
-            // a tooltip stays its description, a hint its hint.
+            // Named by nothing, or by symbols alone; and a control that holds a value (a list, a
+            // number, a slider, a text box) named by a unit ("%", "px": a number box is named by
+            // its suffix), only by its tooltip (egui names a control by its hover text when it has
+            // no name), or only by the grey hint in its box: the words beside it are the better
+            // name; a tooltip stays its description, a hint its hint. A button keeps its name.
+            let holds_value = matches!(
+                role,
+                accesskit::Role::ComboBox
+                    | accesskit::Role::EditableComboBox
+                    | accesskit::Role::SpinButton
+                    | accesskit::Role::Slider
+                    | accesskit::Role::TextInput
+                    | accesskit::Role::MultilineTextInput
+                    | accesskit::Role::SearchInput
+            );
             let tooltip_only = n.label().is_some() && n.label() == n.description();
-            if egui::accessibility::is_input(role)
-                && n.labelled_by().is_empty()
-                && (tooltip_only || n.label().is_none_or(|l| !says(l) || joins(l)))
-            {
+            let weak_name = n.label().is_none_or(|l| !says(l))
+                || (holds_value && (tooltip_only || n.label().is_some_and(joins)));
+            if egui::accessibility::is_input(role) && n.labelled_by().is_empty() && weak_name {
                 s.unnamed.push((*id, layer, r));
             }
         }
@@ -1237,6 +1247,13 @@ mod tests {
                     .show_ui(ui, |_| {});
                 ids.push(c.response.on_hover_text("Frames a second").id);
                 ids.push(ui.button("Seed").id);
+                // A button named as its tooltip says keeps the name.
+                ids.push(
+                    ui.small_button("×")
+                        .on_hover_text("Dismiss")
+                        .accessible_name("Dismiss")
+                        .id,
+                );
             });
             drag = ui
                 .interact(
@@ -1259,7 +1276,7 @@ mod tests {
                 .expect("a node")
         };
         let by = |id: egui::Id| -> Vec<NodeId> { node(id).labelled_by().to_vec() };
-        let [into, list, for_, gens, size, px, fps, seed] = ids[..] else {
+        let [into, list, for_, gens, size, px, fps, seed, dismiss] = ids[..] else {
             panic!("{ids:?}")
         };
         assert_eq!(by(list), vec![into.accesskit_id()]);
@@ -1273,6 +1290,7 @@ mod tests {
         );
         assert_eq!(node(fps).description(), Some("Frames a second"));
         assert!(by(seed).is_empty() && node(seed).label() == Some("Seed"));
+        assert!(by(dismiss).is_empty() && node(dismiss).label() == Some("Dismiss"));
         let d = node(drag);
         assert_eq!(d.role(), Role::GenericContainer);
         assert!(!d.supports_action(egui::accesskit::Action::Focus));

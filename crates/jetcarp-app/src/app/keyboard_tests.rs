@@ -716,6 +716,102 @@ fn child_escape_closes_and_enter_confirms_in_dialogs_and_tool_windows() {
 }
 
 #[test]
+fn tabs_cards_and_the_setup_window_from_the_keyboard() {
+    in_scratch("app::keyboard_tests::child_tabs_cards_and_the_setup_window_from_the_keyboard");
+}
+
+/// A pane's tab shows its pane with Enter; a Quick Start card's menu opens with Shift+F10 and
+/// closes with Esc; the setup window opens with its Next button holding the keyboard, so Enter goes
+/// on to the next page, and Esc closes it, as Later does.
+#[test]
+#[ignore]
+fn child_tabs_cards_and_the_setup_window_from_the_keyboard() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
+    // The upper group shows the Scene pane; its Tiling tab (not the menu bar's Tiling), then
+    // Enter.
+    assert!(k.widget_named("Tiling family").is_none());
+    let tab = k
+        .focusable()
+        .into_iter()
+        .find(|w| {
+            w.2.min.y > 20.0
+                && k.nodes
+                    .get(&w.0.accesskit_id())
+                    .is_some_and(|n| k.name(n) == "Tiling")
+        })
+        .map(|w| w.0)
+        .expect("the Tiling tab");
+    k.ctx.memory_mut(|m| m.request_focus(tab));
+    k.frames(2);
+    k.key(Key::Enter);
+    k.frames(2);
+    assert!(
+        k.widget_named("Tiling family").is_some(),
+        "Enter on the Tiling tab showed the Tiling pane"
+    );
+    // The setup window (its status read on a thread first): Next has the keyboard; Enter goes
+    // on; Esc closes it.
+    k.app.setup.show_again();
+    let t = std::time::Instant::now();
+    while k.focused_name() != "Next" && t.elapsed().as_secs() < 20 {
+        k.frames(1);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(k.focused_name(), "Next");
+    k.key(Key::Enter);
+    k.frames(3);
+    assert!(
+        k.widget_named("Later").is_some() && k.widget_named("Back").is_some(),
+        "the second page: {:?}",
+        k.names()
+    );
+    k.focus_named("Back");
+    k.key(Key::Escape);
+    k.frames(1);
+    assert!(!k.app.setup.open, "Esc closed the setup window");
+    // A Quick Start card's menu.
+    k.app.run_action(&k.ctx.clone(), menu::Action::QuickStart);
+    k.app.menu.view.live = false;
+    k.frames(10);
+    let (handle, _) = k.app.menu.test_first_card().expect("a card drawn");
+    let title = k
+        .app
+        .menu
+        .items
+        .iter()
+        .find(|it| it.handle == handle)
+        .unwrap()
+        .title
+        .clone();
+    let card = k
+        .focusable()
+        .into_iter()
+        .map(|w| w.0)
+        .find(|id| {
+            k.nodes
+                .get(&id.accesskit_id())
+                .is_some_and(|n| k.name(n).starts_with(&format!("{title}:")))
+        })
+        .expect("the card's button, named by its title");
+    k.ctx.memory_mut(|m| m.request_focus(card));
+    k.frames(2);
+    k.key_with(Key::F10, Modifiers::SHIFT);
+    k.frames(2);
+    assert!(
+        egui::Popup::is_any_open(&k.ctx),
+        "Shift+F10 opened its menu"
+    );
+    assert!(k.widget_named("Hide from Quick Start").is_some());
+    assert!(!k.app.shell.menu_autohide, "and did nothing else");
+    k.key(Key::Escape);
+    k.frames(1);
+    assert!(!egui::Popup::is_any_open(&k.ctx), "Esc closed it");
+}
+
+#[test]
 fn f10_opens_the_menus_and_the_arrows_and_enter_choose() {
     in_scratch("app::keyboard_tests::child_f10_opens_the_menus_and_the_arrows_and_enter_choose");
 }

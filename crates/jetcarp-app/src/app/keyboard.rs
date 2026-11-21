@@ -404,9 +404,9 @@ impl JetcarpApp {
         let cells: Vec<[u32; 2]> = self
             .kb
             .cursor
-            .cells(&topo)
-            .into_iter()
-            .map(|c| [c as u32, v])
+            .selected(&topo)
+            .iter()
+            .map(|&c| [c as u32, v])
             .collect();
         self.exec(Command::SetCells { id, cells });
     }
@@ -419,7 +419,7 @@ impl JetcarpApp {
             self.message = Some((format!("Nothing further {} to move to.", d.word()), false));
             return;
         };
-        let cells = self.kb.cursor.cells(&topo);
+        let cells = self.kb.cursor.selected(&topo);
         let mut cmds = vec![];
         let mut lost = 0;
         for (fi, f) in self.world.fields.iter().enumerate() {
@@ -524,7 +524,7 @@ impl JetcarpApp {
             s.push_str(&states.join("; "));
         }
         if self.kb.cursor.anchor.is_some() {
-            let n = self.kb.cursor.cells(topo).len();
+            let n = self.kb.cursor.selected(topo).len();
             s.push_str(&format!(". {n} cells selected"));
         }
         s
@@ -562,7 +562,7 @@ impl JetcarpApp {
         let topo = self.world.topo.clone();
         let words = self.cell_words(cell);
         let selected =
-            self.kb.cursor.anchor.is_some() && self.kb.cursor.cells(&topo).contains(&cell);
+            self.kb.cursor.anchor.is_some() && self.kb.cursor.selected(&topo).contains(&cell);
         let pts: Vec<egui::Pos2> = topo
             .polygon(cell)
             .iter()
@@ -615,13 +615,13 @@ impl JetcarpApp {
             topo.polygon(c).iter().map(|q| xf.to_screen(*q)).collect()
         };
         if self.kb.cursor.anchor.is_some() {
-            let cells = self.kb.cursor.cells(topo);
+            let cells = self.kb.cursor.selected(topo);
             if cells.len() <= 5000 {
                 // Each selected cell tinted (where it is convex: a hat's or a spectre's outline
                 // alone) and outlined, lighter than the cursor's ring.
                 let s = egui::Stroke::new(1.0, ring.color.gamma_multiply(0.8));
                 let tint = ring.color.gamma_multiply(0.22);
-                for c in cells {
+                for &c in cells.iter() {
                     let pts = screen(c);
                     if convex(&pts) {
                         p.add(egui::Shape::convex_polygon(
