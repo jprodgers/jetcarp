@@ -42,6 +42,7 @@ pub enum Page {
     Data,
     Packs,
     Desktop,
+    Measure,
     Summary,
     Progress,
 }
@@ -54,6 +55,7 @@ impl Page {
             Page::Data => "Data folder",
             Page::Packs => "Packs",
             Page::Desktop => "Desktop",
+            Page::Measure => "This computer",
             Page::Summary => "Summary",
             Page::Progress => "Setting up",
         }
@@ -101,6 +103,18 @@ fn wants_log_out(done: &[(Offer, Result<String, String>)], waits: impl FnOnce() 
 pub const LOG_OUT_ONCE: &str = "Log out and back in once to see the live wallpaper on your desktop. \
      Until then it shows in a window.";
 
+/// The measuring's progress, for the Progress page.
+struct Measuring(Arc<std::sync::Mutex<Option<(f32, String)>>>);
+
+impl jetcarp_api::op::Progress for Measuring {
+    fn report(&self, done: u64, total: Option<u64>, msg: &str) {
+        if let Ok(mut m) = self.0.lock() {
+            let f = total.map_or(0.0, |t| done as f32 / t.max(1) as f32);
+            *m = Some((f, msg.to_string()));
+        }
+    }
+}
+
 /// How the wizard makes the operations' context (the app's platform, or a test's folders).
 pub type MakeCtx = Arc<dyn Fn() -> Ctx + Send + Sync>;
 
@@ -120,6 +134,11 @@ pub struct Wizard {
     pub extra: Vec<(PathBuf, Vec<PackEntry>)>,
     pub build_on: bool,
     pub minutes: f64,
+    /// Measure this computer first (the JETCARP Hardware Score, about a minute): ticked by
+    /// default.
+    pub measure_on: bool,
+    /// What the measuring says while it runs.
+    measuring: Arc<std::sync::Mutex<Option<(f32, String)>>>,
     pub offers: BTreeMap<&'static str, bool>,
     status: Option<SetupStatus>,
     loading: Option<Receiver<SetupStatus>>,
@@ -164,6 +183,8 @@ impl Wizard {
             extra: vec![],
             build_on: false,
             minutes: 0.0,
+            measure_on: true,
+            measuring: Default::default(),
             offers: Offer::ALL.iter().map(|o| (offer_key(*o), false)).collect(),
             status: None,
             loading: None,
@@ -268,6 +289,7 @@ impl Wizard {
                 v.push(Page::Desktop);
             }
         }
+        v.push(Page::Measure);
         v.push(Page::Summary);
         v.push(Page::Progress);
         v
@@ -471,6 +493,7 @@ impl Wizard {
             // As JETCARP's GPU setting says.
             gpu: None,
             background: true,
+            measure: Some(self.measure_on),
             ..Default::default()
         })
     }
@@ -504,10 +527,16 @@ impl Wizard {
         self.data_changing = input.data_dir.is_some();
         let (tx, rx) = channel();
         let mk = self.make_ctx.clone();
+        let measuring = self.measuring.clone();
         std::thread::Builder::new()
             .name("jetcarp-setup-apply".into())
             .spawn(move || {
-                let r = setup::SetupApply::run(&mk(), input, &Quiet).map_err(|e| e.to_string());
+                // Only the measuring reports progress (the jobs start in the background).
+                let p = Measuring(measuring.clone());
+                let r = setup::SetupApply::run(&mk(), input, &p).map_err(|e| e.to_string());
+                if let Ok(mut m) = measuring.lock() {
+                    *m = None;
+                }
                 let _ = tx.send(r);
             })
             .ok();
@@ -663,6 +692,7 @@ impl Wizard {
                     Page::Data => self.data_ui(ui),
                     Page::Packs => self.packs_ui(ui),
                     Page::Desktop => self.desktop_ui(ui),
+                    Page::Measure => self.measure_ui(ui),
                     Page::Summary => self.summary_ui(ui),
                     Page::Progress => self.progress_ui(ui),
                 }
@@ -1112,6 +1142,35 @@ impl Wizard {
         }
     }
 
+    /// Measure this computer: about a minute, ticked by default, skippable.
+    fn measure_ui(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Measure this computer");
+        ui.add_space(6.0);
+        ui.label(
+            "JETCARP can measure this computer with about a minute of its own work: Life soups on \
+             five tilings, one core, the GPU, memory and the disk, each answer checked. Nothing \
+             is drawn but a progress bar, and nothing is sent anywhere. Its limits then fit it, \
+             and it gets a JETCARP Hardware Score, kept in the settings folder.",
+        );
+        ui.add_space(6.0);
+        ui.checkbox(
+            &mut self.measure_on,
+            "Measure this computer first (about a minute)",
+        );
+        ui.add_space(6.0);
+        let l = jetcarp_core::machine::current();
+        ui.label(
+            RichText::new(format!(
+                "Without measuring, the limits come from the memory alone: {} reserved for \
+                 JETCARP, worlds of up to {}. Tools → This computer… measures it later and \
+                 changes any limit.",
+                jetcarp_core::machine::bytes_text(l.jetcarp_memory()),
+                jetcarp_core::machine::bytes_text(l.world_bytes())
+            ))
+            .weak(),
+        );
+    }
+
     fn summary_ui(&mut self, ui: &mut egui::Ui) {
         let Some(p) = self.profile else { return };
         ui.heading(format!("Ready to set up JETCARP for {}", p.title()));
@@ -1163,6 +1222,9 @@ impl Wizard {
                         ui.label(RichText::new("None: the built-in examples only.").weak());
                     }
                 });
+                ui.end_row();
+                ui.label(RichText::new("This computer").strong());
+                ui.checkbox(&mut self.measure_on, "Measured first (about a minute)");
                 ui.end_row();
                 ui.label(RichText::new("Quick Start").strong());
                 ui.vertical(|ui| {
@@ -1252,10 +1314,20 @@ impl Wizard {
         });
         ui.add_space(6.0);
         if self.applying.is_some() {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label("Starting…");
-            });
+            let m = self.measuring.lock().ok().and_then(|m| m.clone());
+            match m {
+                // A plain bar, nothing animated (the benchmark draws nothing).
+                Some((f, what)) => {
+                    ui.label("Measuring this computer (about a minute)…");
+                    ui.add(egui::ProgressBar::new(f).text(what));
+                }
+                None => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label("Starting…");
+                    });
+                }
+            }
         }
         for (o, r) in &self.desktop_done {
             match r {
@@ -1526,6 +1598,9 @@ mod tests {
         w.go_to(Page::Desktop);
         shot(&mut o, &mut w, &dir, "setup-5-desktop");
         w.choose(Profile::Explorer);
+        // The limits it shows come from the test's reference machine (16 GB), not this one.
+        w.go_to(Page::Measure);
+        shot(&mut o, &mut w, &dir, "setup-5b-measure");
         w.go_to(Page::Summary);
         shot(&mut o, &mut w, &dir, "setup-6-summary");
     }
@@ -1542,6 +1617,8 @@ mod tests {
         let mut w = fresh_wizard(&mk, &status);
         w.choose(Profile::Explorer);
         w.minutes = 1.0;
+        // The build's pages, without the minute of measuring first.
+        w.measure_on = false;
         w.go_to(Page::Summary);
         w.next();
         let t = std::time::Instant::now();

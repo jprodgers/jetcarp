@@ -90,8 +90,16 @@ impl JetcarpApp {
         self.load_scene_bg_as(scene, self.autoplay);
     }
 
-    /// [`Self::load_scene_bg`], running once loaded or not (`play`).
+    /// [`Self::load_scene_bg`], running once loaded or not (`play`). A scene over this machine's
+    /// memory limit is asked about first (Tools → This computer…'s *Build anyway*, #213).
     pub(super) fn load_scene_bg_as(&mut self, scene: &Scene, play: bool) {
+        use super::machine_ui::Then;
+        if self
+            .ask_over_limit(Then::Scene(Box::new(scene.clone()), play))
+            .is_none()
+        {
+            return;
+        }
         if !heavy(&scene.tiling) {
             return self.load_scene_as(scene, play);
         }
@@ -126,8 +134,13 @@ impl JetcarpApp {
         });
     }
 
-    /// Change the current world's tiling; a large tiling is built in the background.
+    /// Change the current world's tiling; a large tiling is built in the background. One over
+    /// this machine's memory limit is asked about first (#213).
     pub(super) fn set_tiling_bg(&mut self, spec: TilingSpec) {
+        use super::machine_ui::Then;
+        let Some(Then::Tiling(spec)) = self.ask_over_limit(Then::Tiling(spec)) else {
+            return;
+        };
         if self.building.is_some() || !heavy(&spec) {
             self.exec(jetcarp_core::Command::SetTiling { tiling: spec });
             return;

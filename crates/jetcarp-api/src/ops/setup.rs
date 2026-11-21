@@ -1315,12 +1315,20 @@ pub struct ApplyIn {
     /// Say what would be done; do nothing.
     #[serde(default)]
     pub dry_run: bool,
+    /// Measure this computer first (`machine.score`: about a minute of JETCARP's own work, for
+    /// the JETCARP Hardware Score and limits that fit it), before the jobs start so they do not
+    /// slow it. Default: no; the app's setup and `jetcarp setup` ask, ticked by default.
+    #[serde(default)]
+    pub measure: Option<bool>,
+    /// With `measure`: the short run, each workload once for its answers (the tests).
+    #[serde(default)]
+    pub measure_quick: bool,
 }
 
 /// One thing setup does.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct PlanStep {
-    /// `data_dir`, `record`, `pack_import`, `quickstart_build`, `desktop`, `skip`.
+    /// `data_dir`, `measure`, `record`, `pack_import`, `quickstart_build`, `desktop`, `skip`.
     pub kind: String,
     /// What it does, in words.
     pub what: String,
@@ -1579,6 +1587,16 @@ fn apply(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
         planned.push(b);
     }
     let settings = paths.settings.clone();
+    let measure = a.measure.unwrap_or(false);
+    if measure {
+        steps.push(PlanStep {
+            kind: "measure".into(),
+            what: "measure this computer: about a minute of JETCARP's own work, for its JETCARP \
+                   Hardware Score and limits that fit it"
+                .into(),
+            job: None,
+        });
+    }
     steps.push(PlanStep {
         kind: "record".into(),
         what: match &settings {
@@ -1630,6 +1648,26 @@ fn apply(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
     };
     if a.dry_run {
         return Ok(out);
+    }
+    // The measuring first, alone, so nothing of setup's slows it. It does not stop setup.
+    if measure {
+        let m = super::machine::MachineScore::run(
+            cx,
+            super::machine::ScoreIn {
+                quick: a.measure_quick,
+                ..Default::default()
+            },
+            p,
+        );
+        match m {
+            Ok(s) => out.notes.push(format!(
+                "this computer's JETCARP Hardware Score: {}",
+                s.score.text()
+            )),
+            Err(e) => out.notes.push(format!(
+                "this computer was not measured: {e} (`jetcarp score` tries again)"
+            )),
+        }
     }
     // Make the jobs (an unfinished build of an earlier setup is carried on instead), record the
     // choice, then run them.

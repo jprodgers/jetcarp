@@ -135,6 +135,7 @@ impl JetcarpApp {
         // AI control acts on whatever is shown, and its menu item works on both screens; the
         // window drawn only with a world open left it unreachable from the Quick Start (issue #1).
         self.ai_window(ctx);
+        self.machine_window(ctx);
         self.reseed_tick(ctx);
         if self.screen != Screen::Sim {
             self.end_palette_preview();

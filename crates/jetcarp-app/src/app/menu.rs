@@ -23,10 +23,11 @@ pub(super) enum ToolWin {
     About,
     Wallpaper,
     Safety,
+    Machine,
 }
 
 impl ToolWin {
-    pub const ALL: [ToolWin; 16] = [
+    pub const ALL: [ToolWin; 17] = [
         ToolWin::Scripts,
         ToolWin::Results,
         ToolWin::Library,
@@ -43,6 +44,7 @@ impl ToolWin {
         ToolWin::About,
         ToolWin::Wallpaper,
         ToolWin::Safety,
+        ToolWin::Machine,
     ];
 
     /// The window's key in `crate::popout` (and the settings file).
@@ -64,6 +66,7 @@ impl ToolWin {
             ToolWin::About => "about",
             ToolWin::Wallpaper => super::wallpaper_ui::KEY,
             ToolWin::Safety => "safety",
+            ToolWin::Machine => super::machine_ui::KEY,
         }
     }
 
@@ -90,6 +93,7 @@ impl ToolWin {
             ToolWin::About => "About JETCARP…",
             ToolWin::Safety => "Safety…",
             ToolWin::Wallpaper => "Export wallpaper…",
+            ToolWin::Machine => "This computer…",
         }
     }
 
@@ -126,6 +130,9 @@ impl ToolWin {
             ToolWin::Safety => "The strobe guard: what it does now, and its switches",
             ToolWin::Wallpaper => {
                 "Desktop-sized PNGs: each monitor, the span of all monitors, presets, or any size"
+            }
+            ToolWin::Machine => {
+                "This computer's hardware, its JETCARP Hardware Score, and the limits set from them"
             }
         }
     }
@@ -565,6 +572,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             A(A_::Pane("objects")),
             Sep,
             A(A_::Tool(ToolWin::AiControl)),
+            A(A_::Tool(ToolWin::Machine)),
         ],
     ),
     (
@@ -639,6 +647,7 @@ impl JetcarpApp {
             ToolWin::About => self.shell.about_open,
             ToolWin::Wallpaper => self.wallpaper.open,
             ToolWin::Safety => self.strobe.window_open,
+            ToolWin::Machine => self.machine.open,
         }
     }
 
@@ -662,6 +671,7 @@ impl JetcarpApp {
                 ToolWin::About => self.shell.about_open = false,
                 ToolWin::Wallpaper => self.wallpaper.open = false,
                 ToolWin::Safety => self.strobe.window_open = false,
+                ToolWin::Machine => self.machine.open = false,
             }
             return;
         }
@@ -702,6 +712,10 @@ impl JetcarpApp {
             ToolWin::About => self.shell.about_open = true,
             ToolWin::Wallpaper => self.wallpaper.open = true,
             ToolWin::Safety => self.strobe.window_open = true,
+            ToolWin::Machine => {
+                self.machine.open = true;
+                self.machine.reload();
+            }
         }
     }
 

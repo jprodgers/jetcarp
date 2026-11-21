@@ -97,6 +97,7 @@ fn setup_explorer_yes_end_to_end() {
         "--profile",
         "explorer",
         "--yes",
+        "--measure-quick",
         "--quickstart-minutes",
         "0.05",
         "--threads",
@@ -118,6 +119,10 @@ fn setup_explorer_yes_end_to_end() {
     assert!(err.contains("the pack came with JETCARP"), "{err}");
     assert!(out.contains("; signed by "), "{out}");
     assert!(err.contains("search for 3 seconds"), "{err}");
+    // It measured the computer first (ticked by default, as in the app).
+    assert!(err.contains("measure this computer"), "{err}");
+    assert!(err.contains("JETCARP Hardware Score: "), "{err}");
+    assert!(s.0.join("config/machine.json").is_file());
     assert!(out.contains("minimal imported: 3 patterns new"), "{out}");
     assert!(out.contains("Quick Start build"), "{out}");
     assert!(out.contains("recorded Explorer"), "{out}");
@@ -152,7 +157,7 @@ fn setup_explorer_yes_end_to_end() {
     let q = s.json(&["library", "quickstart", "--source", "pack", "--json"]);
     assert!(!q.as_array().unwrap().is_empty(), "{q}");
     // Blank slate afterwards: recorded, and nothing more done.
-    let o = s.run(&["setup", "--profile", "blank-slate", "--yes"]);
+    let o = s.run(&["setup", "--profile", "blank-slate", "--yes", "--no-measure"]);
     assert!(o.status.success());
     let st = s.json(&["setup", "--status", "--json"]);
     assert_eq!(st["record"]["profile"], "blank-slate");
@@ -168,6 +173,7 @@ fn setup_with_the_at_risk_answer_goes_on_and_saves_it() {
         "--profile",
         "blank-slate",
         "--yes",
+        "--no-measure",
         "--seizure-warning",
         "at-risk",
     ]);
@@ -179,6 +185,6 @@ fn setup_with_the_at_risk_answer_goes_on_and_saves_it() {
     assert!(saved.contains(env!("CARGO_PKG_VERSION")), "{saved}");
     assert!(s.0.join("config/setup.json").is_file());
     // Answered once, `--yes` needs no answer again.
-    let o = s.run(&["setup", "--profile", "blank-slate", "--yes"]);
+    let o = s.run(&["setup", "--profile", "blank-slate", "--yes", "--no-measure"]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
 }

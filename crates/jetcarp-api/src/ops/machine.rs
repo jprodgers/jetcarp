@@ -435,6 +435,40 @@ fn report_paths(cx: &Ctx, name: &str) -> Result<(PathBuf, PathBuf), ApiError> {
     ))
 }
 
+/// Write the report of `score` on `hw` with the limits `l` as `<name>.md` and `<name>.json`
+/// (`jetcarp score --report`, and the app's *Save a report*): the machine, its parts, its score
+/// and its limits, for comparing machines. Nothing is sent anywhere.
+pub fn save_report(
+    cx: &Ctx,
+    name: &str,
+    score: &Score,
+    hw: &Hardware,
+    l: &Limits,
+) -> Result<Vec<PathBuf>, ApiError> {
+    let (md, js) = report_paths(cx, name)?;
+    let names: Vec<String> = cx
+        .platform
+        .gpu_adapters()
+        .into_iter()
+        .map(|g| g.name)
+        .collect();
+    std::fs::write(&md, score.markdown(hw, l, &names))
+        .map_err(|e| ApiError::io(format!("{}: {e}", md.display())))?;
+    let body = serde_json::json!({
+        "jetcarp": jetcarp_core::VERSION,
+        "hardware": hw,
+        "adapters": names,
+        "score": score,
+        "limits": l,
+    });
+    std::fs::write(
+        &js,
+        serde_json::to_string_pretty(&body).unwrap_or_default() + "\n",
+    )
+    .map_err(|e| ApiError::io(format!("{}: {e}", js.display())))?;
+    Ok(vec![md, js])
+}
+
 /// `machine.score`.
 pub struct MachineScore;
 impl Op for MachineScore {
@@ -502,31 +536,10 @@ impl Op for MachineScore {
             };
             machine_file = Some(f.save(dir).map_err(ApiError::io)?);
         }
-        let mut report_files = vec![];
-        if let Some(name) = a.report.as_deref() {
-            let (md, js) = report_paths(cx, name)?;
-            let names: Vec<String> = cx
-                .platform
-                .gpu_adapters()
-                .into_iter()
-                .map(|g| g.name)
-                .collect();
-            std::fs::write(&md, score.markdown(&hw, &l, &names))
-                .map_err(|e| ApiError::io(format!("{}: {e}", md.display())))?;
-            let body = serde_json::json!({
-                "jetcarp": jetcarp_core::VERSION,
-                "hardware": hw,
-                "adapters": names,
-                "score": score,
-                "limits": l,
-            });
-            std::fs::write(
-                &js,
-                serde_json::to_string_pretty(&body).unwrap_or_default() + "\n",
-            )
-            .map_err(|e| ApiError::io(format!("{}: {e}", js.display())))?;
-            report_files = vec![md, js];
-        }
+        let report_files = match a.report.as_deref() {
+            Some(name) => save_report(cx, name, &score, &hw, &l)?,
+            None => vec![],
+        };
         Ok(ScoreOut {
             score,
             hardware: hw,

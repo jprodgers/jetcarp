@@ -1173,3 +1173,95 @@ fn shots_safety() {
     ps::record_in(&settings, ps::Answer::NoDisorder, "test").unwrap();
     h.app.strobe.reread();
 }
+
+/// Tools → This computer… (`guides/this-computer.md`, #213), on an example 32 GB machine (never
+/// the one running the test), not measured yet: its limits, and one of your own. Then a world
+/// over the machine's limit: asked about, not built on *Cancel*, built on *Build anyway*.
+#[test]
+#[ignore]
+fn shots_this_computer() {
+    use jetcarp_core::machine::{self, GpuMemory, Hardware, Id, Limits, Own};
+    let Some(mut h) = Harness::new(1000, 760) else {
+        return;
+    };
+    let settings = jetcarp_core::paths::config_dir().expect("a scratch settings folder");
+    let _ = std::fs::remove_file(settings.join("limits.json"));
+    let _ = std::fs::remove_file(settings.join("machine.json"));
+    h.action(menu::Action::Tool(menu::ToolWin::Machine));
+    h.run(0.5, 0.05, |_| false);
+    // An example machine, so the picture shows no real one.
+    let example = Hardware {
+        os: "linux".into(),
+        arch: "x86_64".into(),
+        cpu: "An 8-core processor".into(),
+        threads: 16,
+        cores: Some(8),
+        memory_total: 32 << 30,
+        memory_available: Some(21 << 30),
+        gpus: vec![GpuMemory {
+            vendor: 0x1002,
+            device: 0x73df,
+            dedicated: Some(12 << 30),
+            shared: Some(16 << 30),
+            unified: false,
+            source: "sysfs".into(),
+            name: String::new(),
+        }],
+    };
+    let set_example = |h: &mut Harness, own: &Own| {
+        let l = Limits::compute(&example, own);
+        let mut info = h
+            .app
+            .machine
+            .info
+            .clone()
+            .expect("the window read the machine");
+        info.hardware = example.clone();
+        info.adapters = vec![jetcarp_api::ctx::GpuAdapter {
+            name: "An example GPU".into(),
+            backend: "Vulkan".into(),
+            kind: "discrete".into(),
+            ..Default::default()
+        }];
+        info.limits.entries = l.entries;
+        info.limits.memory_total = l.memory_total;
+        h.app.machine.show_info(info);
+    };
+    let own = Limits::compute(&example, &Own::default())
+        .set(&Own::default(), Id::ReservedSystem, (12u64 << 30) as f64)
+        .unwrap();
+    set_example(&mut h, &own);
+    h.run(0.3, 0.05, |_| false);
+    h.find("Measure this computer");
+    h.find("Reserved for the System");
+    h.find("Back to the suggestion");
+    h.shot("this-computer-1-window");
+    // A world over the limit: the reference machine's 4 GB here, lowered to 100 MB for the test.
+    h.app.set_tool_open(menu::ToolWin::Machine, false);
+    h.quick_start_loaded();
+    h.open_entry("penrose-rhomb-brain");
+    let l = Limits::reference();
+    let small = l
+        .set(&Own::default(), Id::World, (100u64 << 20) as f64)
+        .unwrap();
+    small.save(&settings).unwrap();
+    machine::reload();
+    let mut big = jetcarp_core::TilingSpec::new("square");
+    big.size = Some(jetcarp_core::SizeSpec::Rect { w: 4000, h: 4000 });
+    let before = h.app.world.topo.len();
+    h.app.set_tiling_bg(big.clone());
+    h.run(0.3, 0.05, |_| false);
+    assert!(h.app.machine.ask.is_some(), "asked first");
+    h.find("Build anyway");
+    h.shot("this-computer-2-over-limit");
+    h.click("Cancel");
+    assert!(h.app.machine.ask.is_none());
+    assert_eq!(h.app.world.topo.len(), before, "not built on Cancel");
+    h.app.set_tiling_bg(big);
+    h.run(0.3, 0.05, |_| false);
+    h.click("Build anyway");
+    h.built();
+    assert_eq!(h.app.world.topo.len(), 16_000_000, "built when asked");
+    Own::default().save(&settings).unwrap();
+    machine::reload();
+}
