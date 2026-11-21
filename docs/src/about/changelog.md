@@ -193,6 +193,13 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **Animated WebP exports keep white.** The WebP encoder's colour cache started at the value that
+  is opaque white, so a frame, or the part of a frame that changed, beginning with white pixels
+  stored them under another colour's index: white came out as the frame's first other colour (in a
+  test, black), and a frame all white made a file that decoders refuse. Every version before 0.4.3
+  had this. A test now encodes and decodes frames that start with white, all white, and white among
+  other colours.
+
 - **In the *Desktop background* pane, the processor's percentage after *Pause while the processor
   is busier than* goes to the next line in a narrow pane,** where it ran past the pane's edge, out
   of sight and out of reach.
