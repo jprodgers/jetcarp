@@ -53,6 +53,7 @@ pub mod flash;
 pub mod frame;
 pub mod guard;
 pub mod pattern;
+pub mod similar;
 pub mod soften;
 
 use std::sync::OnceLock;

@@ -389,6 +389,7 @@ impl Worker {
                     let r = MediaStyle::with_palette(palette.as_deref()).and_then(|style| {
                         let o = MediaOptions {
                             style,
+                            strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
                             ..Default::default()
                         };
                         jetcarp_store::media::render_many(&lib, &targets, &o)
@@ -649,6 +650,7 @@ fn make_anim(
     let o = MediaOptions {
         style: small_style(palette)?,
         frames: false,
+        strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
         ..Default::default()
     };
     let anim = match t {

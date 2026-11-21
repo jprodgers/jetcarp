@@ -247,8 +247,20 @@ impl Guard {
         if viewing != self.input.viewing() {
             self.input.set_viewing(viewing, screen_px);
             self.output.set_viewing(viewing, screen_px);
+            let at_risk = self.pattern.at_risk();
             self.pattern = PatternMeter::for_viewing(viewing, screen_px);
+            self.pattern.set_at_risk(at_risk);
         }
+    }
+
+    /// The person watching answered the seizure warning *at risk*: patterns of similar parts are
+    /// veiled as stripes are, as IRIS's pattern check counts them ([`super::similar`]).
+    pub fn set_at_risk(&mut self, at_risk: bool) {
+        self.pattern.set_at_risk(at_risk);
+    }
+
+    pub fn at_risk(&self) -> bool {
+        self.pattern.at_risk()
     }
 
     /// Whether the view can carry out softening (a very large frame's state may not fit on the
@@ -399,10 +411,19 @@ impl Guard {
             }
         }
         if harmful && !was_veiled && self.plan.veil.iter().any(|v| v[0] > 0.0) {
-            self.note(format!(
-                "softening strong stripes over {:.0}% of the view",
-                stripes.share * 100.0
-            ));
+            self.note(if stripes.similar {
+                format!(
+                    "softening a pattern of {} similar parts over {:.0}% of the view (the \
+                     stricter guard for someone at risk)",
+                    stripes.parts,
+                    stripes.share * 100.0
+                )
+            } else {
+                format!(
+                    "softening strong stripes over {:.0}% of the view",
+                    stripes.share * 100.0
+                )
+            });
         }
         // 3. Cap the pace.
         self.worst = self.worst.max(most);
@@ -493,10 +514,20 @@ impl Guard {
                 pace_words(self.cap.unwrap_or(MIN_PACE)),
                 flashes(self.worst.max(drawn.most()))
             )),
-            Action::Softening if veiled && !self.plan.soften.iter().any(|s| *s) => Some(format!(
-                "Strobe guard: softening strong stripes over {:.0}% of the view.",
-                stripes.share * 100.0
-            )),
+            Action::Softening if veiled && !self.plan.soften.iter().any(|s| *s) => {
+                Some(if stripes.similar {
+                    format!(
+                        "Strobe guard: softening a pattern of similar parts over {:.0}% of the \
+                         view (stricter for someone at risk).",
+                        stripes.share * 100.0
+                    )
+                } else {
+                    format!(
+                        "Strobe guard: softening strong stripes over {:.0}% of the view.",
+                        stripes.share * 100.0
+                    )
+                })
+            }
             Action::Softening => Some(format!(
                 "Strobe guard: softening flashes over {:.0}% of the view.",
                 softened * 100.0
@@ -819,6 +850,52 @@ mod tests {
         let half = reduce_both(&s.shown.unwrap(), W, H).1;
         let mut m = PatternMeter::new(None);
         assert_eq!(m.update(&half, 0.0).level, PatternLevel::Pass);
+    }
+
+    /// For someone at risk, a still soup of square cells (no stripes) is veiled as a pattern of
+    /// similar parts, until its light parts are dim; for anyone else it is left alone.
+    #[test]
+    fn the_at_risk_guard_veils_similar_parts() {
+        let mut rng = crate::rng::Rng::new(3);
+        let cells: Vec<bool> = (0..(W / 8 + 1) * (H / 8 + 1))
+            .map(|_| rng.next_f64() < 0.3)
+            .collect();
+        let soup = |_g: u64, _f: u64| {
+            let mut v = Vec::with_capacity((W * H * 4) as usize);
+            for y in 0..H {
+                for x in 0..W {
+                    let c = if cells[(y / 8 * (W / 8 + 1) + x / 8) as usize] {
+                        240
+                    } else {
+                        20
+                    };
+                    v.extend_from_slice(&[c, c, c, 255]);
+                }
+            }
+            v
+        };
+        for at_risk in [false, true] {
+            let mut sim = Sim::new(60.0, 10.0, 2, true);
+            sim.guard.set_at_risk(at_risk);
+            sim.run(2.0, &soup);
+            let veiled = sim.guard.plan().veil.iter().filter(|v| v[0] > 0.0).count();
+            if !at_risk {
+                assert_eq!(veiled, 0, "only for someone at risk");
+                continue;
+            }
+            assert!(veiled * 2 > sim.guard.plan().veil.len(), "{veiled}");
+            let r = sim.guard.report();
+            assert!(
+                r.note.as_deref().unwrap().contains("similar parts"),
+                "{r:?}"
+            );
+            // What is shown: its light parts under the rule's light level, so it passes.
+            let plan = sim.guard.plan().clone();
+            let s = Softener::new().apply(&soup(0, 0), W, H, &plan, 1.0 / 60.0);
+            let half = reduce_both(&s.shown.unwrap(), W, H).1;
+            let p = crate::strobe::similar::find(&half);
+            assert!(p.light < crate::strobe::similar::LIGHT_MIN, "{p:?}");
+        }
     }
 
     #[test]

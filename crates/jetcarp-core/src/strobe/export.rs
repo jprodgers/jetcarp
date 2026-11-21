@@ -1,6 +1,9 @@
 //! Exported animations through the strobe guard (#149). An animated GIF or WebP posted online
 //! flashes for whoever opens it, so an export measures its own frames before it is saved.
 //!
+//! For someone who answered the seizure warning *at risk*, the check and the softening use the
+//! stricter stripe rule, similar parts regular or not ([`super::similar`]); `at_risk` says so.
+//!
 //! **The check** ([`check`]) plays the animation's frames at their own rate, looping as a player
 //! would (at least twice, and for at least six seconds, so the loop's seam and the extended failure
 //! are seen), through the flash meter and the stripe check, as shown at its own size on the screen
@@ -70,10 +73,17 @@ impl Check {
             });
         }
         if self.stripes.level == PatternLevel::Fail {
-            parts.push(format!(
-                "shows strong stripes over {:.0}% of the frame",
-                self.stripes.share * 100.0
-            ));
+            parts.push(if self.stripes.similar {
+                format!(
+                    "shows a pattern of similar parts over {:.0}% of the frame",
+                    self.stripes.share * 100.0
+                )
+            } else {
+                format!(
+                    "shows strong stripes over {:.0}% of the frame",
+                    self.stripes.share * 100.0
+                )
+            });
         }
         (!parts.is_empty()).then(|| parts.join(" and "))
     }
@@ -156,23 +166,25 @@ fn looped(n: usize, delay_ms: u32) -> impl Iterator<Item = usize> {
     (0..total).map(move |k| k % n.max(1))
 }
 
-/// The meters for frames of this size.
-fn meters(w: u32, h: u32) -> (FlashMeter, PatternMeter) {
+/// The meters for frames of this size, with the at-risk stripe rule or not.
+fn meters(w: u32, h: u32, at_risk: bool) -> (FlashMeter, PatternMeter) {
     let v = Viewing::animation(w, h);
-    (FlashMeter::new(v, None), PatternMeter::for_viewing(v, None))
+    let mut p = PatternMeter::for_viewing(v, None);
+    p.set_at_risk(at_risk);
+    (FlashMeter::new(v, None), p)
 }
 
 fn worse(a: &FlashReading, b: &FlashReading) -> bool {
     (b.worst(), b.most()) > (a.worst(), a.most())
 }
 
-/// Checks `frames`, each shown `delay_ms`, looping.
-pub fn check(frames: &[&Image], delay_ms: u32) -> Check {
+/// Checks `frames`, each shown `delay_ms`, looping; with the at-risk stripe rule if `at_risk`.
+pub fn check(frames: &[&Image], delay_ms: u32, at_risk: bool) -> Check {
     let Some(first) = frames.first() else {
         return Check::default();
     };
     let (w, h) = (first.width, first.height);
-    let (mut flash, mut stripes) = meters(w, h);
+    let (mut flash, mut stripes) = meters(w, h, at_risk);
     let mut out = Check::default();
     let dt = delay_ms.max(1) as f64 / 1000.0;
     let mut last_pattern = f64::NEG_INFINITY;
@@ -197,14 +209,15 @@ pub fn check(frames: &[&Image], delay_ms: u32) -> Check {
     out
 }
 
-/// The guard's softening carried out on `frames` (see the module's notes).
-pub fn soften(frames: &[Image], delay_ms: u32) -> Vec<Image> {
+/// The guard's softening carried out on `frames` (see the module's notes); stripes veiled by the
+/// at-risk rule as well if `at_risk`.
+pub fn soften(frames: &[Image], delay_ms: u32, at_risk: bool) -> Vec<Image> {
     let Some(first) = frames.first() else {
         return vec![];
     };
     let (w, h) = (first.width, first.height);
     // Where it flashes and where its stripes are, over the whole loop.
-    let (mut flash, mut stripes) = meters(w, h);
+    let (mut flash, mut stripes) = meters(w, h, at_risk);
     let mut plan = Plan::none_for(w, h);
     let dt = delay_ms.max(1) as f64 / 1000.0;
     let mut last_pattern = f64::NEG_INFINITY;
@@ -283,16 +296,17 @@ pub fn slowed_delay(c: &Check, delay_ms: u32) -> u32 {
 /// Saves `frames` (each shown `delay_ms`) through the strobe guard: checked, and if harmful and
 /// `on`, softened; encoded with `encode`, decoded with `decode` and checked again; slowed if the
 /// softened file still fails. With `on` false a harmful animation is saved as it is, and the check
-/// says so.
+/// says so. `at_risk`: by the stricter stripe rule, for someone who answered the warning at risk.
 pub fn guard(
     frames: &[Image],
     delay_ms: u32,
     on: bool,
+    at_risk: bool,
     encode: &dyn Fn(&[&Image], u32) -> Result<Vec<u8>, String>,
     decode: &dyn Fn(&[u8]) -> Result<Vec<Image>, String>,
 ) -> Result<Guarded, String> {
     let refs: Vec<&Image> = frames.iter().collect();
-    let before = check(&refs, delay_ms);
+    let before = check(&refs, delay_ms, at_risk);
     if !before.harmful || !on {
         return Ok(Guarded {
             bytes: encode(&refs, delay_ms)?,
@@ -309,7 +323,7 @@ pub fn guard(
         if d <= delay_ms.saturating_mul(MAX_SLOWER) {
             let bytes = encode(&refs, d)?;
             let saved = decode(&bytes)?;
-            let after = check(&saved.iter().collect::<Vec<_>>(), d);
+            let after = check(&saved.iter().collect::<Vec<_>>(), d, at_risk);
             if !after.harmful {
                 return Ok(Guarded {
                     bytes,
@@ -321,11 +335,11 @@ pub fn guard(
             }
         }
     }
-    let soft = soften(frames, delay_ms);
+    let soft = soften(frames, delay_ms, at_risk);
     let sref: Vec<&Image> = soft.iter().collect();
     let bytes = encode(&sref, delay_ms)?;
     let saved = decode(&bytes)?;
-    let after = check(&saved.iter().collect::<Vec<_>>(), delay_ms);
+    let after = check(&saved.iter().collect::<Vec<_>>(), delay_ms, at_risk);
     if !after.harmful {
         return Ok(Guarded {
             bytes,
@@ -340,7 +354,7 @@ pub fn guard(
     loop {
         let bytes = encode(&sref, d)?;
         let saved = decode(&bytes)?;
-        let after = check(&saved.iter().collect::<Vec<_>>(), d);
+        let after = check(&saved.iter().collect::<Vec<_>>(), d, at_risk);
         if !after.harmful || d >= SLOWEST_MS {
             return Ok(Guarded {
                 bytes,
@@ -398,20 +412,20 @@ mod tests {
     #[test]
     fn an_animation_is_checked_at_its_own_rate_looping() {
         let (b, w) = (solid(200, 150, [0; 3]), solid(200, 150, [255; 3]));
-        let c = check(&[&b, &w], 50);
+        let c = check(&[&b, &w], 50, false);
         assert!(c.harmful, "{c:?}");
         assert_eq!(c.words().unwrap(), "flashes 4 or more times a second");
-        let c = check(&[&b, &w], 500);
+        let c = check(&[&b, &w], 500, false);
         assert!(!c.harmful, "{c:?}");
         // A loop of black, then many frames of white: one flash a loop, at the seam.
         let mut frames = vec![&b];
         frames.extend(std::iter::repeat_n(&w, 9));
-        let c = check(&frames, 20);
+        let c = check(&frames, 20, false);
         assert!(c.harmful, "five loops a second flash at the seam: {c:?}");
-        assert!(!check(&frames, 100).harmful, "one loop a second");
+        assert!(!check(&frames, 100, false).harmful, "one loop a second");
         // A small animation flashing all over: its frame's mean flashes.
         let (sb, sw) = (solid(48, 48, [0; 3]), solid(48, 48, [255; 3]));
-        let c = check(&[&sb, &sw], 50);
+        let c = check(&[&sb, &sw], 50, false);
         assert!(c.harmful && c.flash.screen_transitions > 6, "{c:?}");
     }
 
@@ -429,7 +443,7 @@ mod tests {
             ),
             ("webp", webp, encode::decode_webp),
         ] {
-            let g = guard(&frames, 50, true, &enc, &dec).unwrap();
+            let g = guard(&frames, 50, true, false, &enc, &dec).unwrap();
             assert!(g.before.harmful);
             assert!(!g.after.harmful, "{name}: {:?}", g.after);
             assert_ne!(g.treatment, Treatment::AsIs, "{name}");
@@ -437,11 +451,39 @@ mod tests {
             let rec = g.record();
             assert_eq!(rec["found"], "flashes 4 or more times a second");
             // With the guard off: as it is, and said so.
-            let g = guard(&frames, 50, false, &enc, &dec).unwrap();
+            let g = guard(&frames, 50, false, false, &enc, &dec).unwrap();
             assert_eq!(g.treatment, Treatment::AsIs);
             assert!(g.after.harmful);
             assert!(g.note().unwrap().contains("strobe guard off"));
         }
+    }
+
+    /// A still soup of square cells: no stripes, so saved as it is for anyone; for someone at
+    /// risk a pattern of similar parts, saved softened, and the file passes.
+    #[test]
+    fn an_export_for_someone_at_risk_is_softened_for_similar_parts() {
+        let mut rng = crate::rng::Rng::new(11);
+        let cells: Vec<bool> = (0..21 * 16).map(|_| rng.next_f64() < 0.3).collect();
+        let mut img = solid(160, 120, [20; 3]);
+        for y in 0..120u32 {
+            for x in 0..160u32 {
+                if cells[(y / 8 * 21 + x / 8) as usize] {
+                    let i = ((y * 160 + x) * 4) as usize;
+                    img.rgba[i..i + 3].copy_from_slice(&[240; 3]);
+                }
+            }
+        }
+        let frames = vec![img; 10];
+        let g = guard(&frames, 100, true, false, &webp, &encode::decode_webp).unwrap();
+        assert_eq!(g.treatment, Treatment::AsIs);
+        let g = guard(&frames, 100, true, true, &webp, &encode::decode_webp).unwrap();
+        assert!(
+            g.before.harmful && g.before.stripes.similar,
+            "{:?}",
+            g.before
+        );
+        assert_eq!(g.treatment, Treatment::Softened);
+        assert!(!g.after.harmful, "{:?}", g.after);
     }
 
     /// Three phases at 10 frames a second, each changing much of the frame: shown three or four
@@ -461,7 +503,7 @@ mod tests {
             img
         };
         let frames: Vec<Image> = (0..3).map(phase).collect();
-        let g = guard(&frames, 100, true, &gif, &encode::decode_gif).unwrap();
+        let g = guard(&frames, 100, true, false, &gif, &encode::decode_gif).unwrap();
         assert!(g.before.harmful, "{:?}", g.before);
         assert_eq!(g.treatment, Treatment::Slowed, "{:?}", g.before);
         assert!(
@@ -477,7 +519,7 @@ mod tests {
     #[test]
     fn harmless_animations_are_saved_untouched() {
         let frames: Vec<Image> = (0..20u8).map(|k| solid(64, 64, [k * 10, 40, 80])).collect();
-        let g = guard(&frames, 50, true, &gif, &encode::decode_gif).unwrap();
+        let g = guard(&frames, 50, true, false, &gif, &encode::decode_gif).unwrap();
         assert_eq!(g.treatment, Treatment::AsIs);
         assert_eq!(g.note(), None);
         let refs: Vec<&Image> = frames.iter().collect();
@@ -488,12 +530,12 @@ mod tests {
     fn moving_stripes_are_veiled_in_the_softened_version() {
         let frames: Vec<Image> = (0..24).map(|k| stripes(320, 240, k)).collect();
         let refs: Vec<&Image> = frames.iter().collect();
-        let c = check(&refs, 50);
+        let c = check(&refs, 50, false);
         assert!(
             c.harmful && c.words().unwrap().contains("strong stripes"),
             "{c:?}"
         );
-        let g = guard(&frames, 50, true, &webp, &encode::decode_webp).unwrap();
+        let g = guard(&frames, 50, true, false, &webp, &encode::decode_webp).unwrap();
         assert!(!g.after.harmful, "{:?}", g.after);
         assert_eq!(g.treatment, Treatment::Softened);
     }
@@ -501,9 +543,9 @@ mod tests {
     #[test]
     fn the_slowed_delay_brings_a_flip_to_one_flash_a_second() {
         let (b, w) = (solid(100, 100, [0; 3]), solid(100, 100, [255; 3]));
-        let c = check(&[&b, &w], 50);
+        let c = check(&[&b, &w], 50, false);
         let d = slowed_delay(&c, 50);
         assert!(d >= 500 && d <= SLOWEST_MS, "{d}");
-        assert!(!check(&[&b, &w], d).harmful);
+        assert!(!check(&[&b, &w], d, false).harmful);
     }
 }

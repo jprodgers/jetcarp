@@ -73,10 +73,10 @@ New world created.
 { "cas": [{"id": 1, "name": "Brian's Brain", "rule": "B2/S/C3", ...}], "cells": 9600, ... }
 
 Ran 200 generation(s) in 0.04s.
-Generation 200. Status: Running. Hash c38568895709dcc6 ...
+Generation 200. Status: Running. Hash fb9769dc44b916fb432c12e3bbf0f5a2420a8c9644b46044096e5bc642892ecb ...
 field 0 [Brian's Brain (id 1)]: 690 live
 
-640 x 427 px picture of generation 200 (Square (parallelogram), 9600 cells; hash c38568895709dcc6).
+640 x 427 px picture of generation 200 (Square (parallelogram), 9600 cells; hash fb9769dc44b916fb432c12e3bbf0f5a2420a8c9644b46044096e5bc642892ecb).
 Saved to /home/ada/Pictures/JETCARP/brain.png.
 ```
 
