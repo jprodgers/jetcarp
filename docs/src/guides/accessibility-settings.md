@@ -10,7 +10,8 @@ you make in your system's settings shows within a moment, without a restart.
 
 The settings are saved with the app's other settings (the `accessibility` section of `app.json`
 in the [settings folder](../reference/folders.md)). They are separate from the strobe guard, which
-is in *Settings → Safety*: the guard acts on what is drawn, whatever these settings say.
+is in *Settings → Safety*: the guard acts on what is drawn, whatever these settings say (see
+[The strobe guard](strobe-guard.md)).
 
 ## Reduced motion
 

@@ -463,9 +463,13 @@ impl App {
         let (body, surface) = self.make_body(el, target)?;
         let gpu = self.gpu_for(&surface)?;
         let caps = surface.get_capabilities(&gpu.adapter);
-        let config = painter::surface_config(&caps, body.size())?;
+        let mut config = painter::surface_config(&caps, body.size())?;
+        // The strobe guard reads each frame where it is drawn, if the surface lets it.
+        let readable = painter::readable(&mut config, &caps, &gpu.adapter);
         surface.configure(&gpu.device, &config);
-        let mut painter = Painter::new(&gpu.device, config.format);
+        let mut painter =
+            Painter::guarded(&gpu.device, config.format, self.core.desktop_guard_on());
+        painter.set_readable(readable);
         painter.insets = self.caption_insets(el, target);
         Ok(Output {
             painter,
@@ -774,11 +778,11 @@ impl App {
             }
         };
         o.starved_since = None;
-        let view = frame.texture.create_view(&Default::default());
+        o.painter.set_guard_on(self.core.desktop_guard_on());
         o.painter.paint(
             &gpu.device,
             &gpu.queue,
-            &view,
+            &frame.texture,
             [o.config.width, o.config.height],
             o.body.scale() as f32,
             &screen.stage,
@@ -791,6 +795,19 @@ impl App {
             w.pre_present_notify();
         }
         gpu.queue.present(frame);
+        // What the strobe guard asks of the stage: a pace cap, or a pause; and what it did.
+        let (cap, paused) = o.painter.guard_hold();
+        let (id, report) = (o.painter.id(), o.painter.guard_report());
+        let notes = o.painter.take_guard_notes();
+        let screen_i = o.target.screen;
+        if let Some(screen) = self.core.screens.get_mut(screen_i) {
+            screen.stage.set_guard(id, now, cap, paused);
+            screen.stage.set_guard_report(report);
+        }
+        for n in notes {
+            self.core
+                .note(format!("screen {screen_i}: strobe guard: {n}"));
+        }
     }
 
     /// Notes GPU errors, and starts again on a new device when the old one was lost.

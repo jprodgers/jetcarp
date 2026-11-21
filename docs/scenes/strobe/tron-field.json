@@ -1,0 +1,22 @@
+{
+  "name": "Tron field",
+  "description": "Toffoli and Margolus's Tron on an empty field: every 2x2 block of the background is uniform, so every block is complemented and the whole field flips black and white each generation. Made to flash.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 80,
+        "h": 60
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 1,
+  "cas": [
+    {
+      "rule": "Margolus Tron",
+      "seed": "empty",
+      "palette": "Mono"
+    }
+  ]
+}

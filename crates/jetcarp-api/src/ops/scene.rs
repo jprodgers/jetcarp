@@ -76,6 +76,8 @@ pub struct Recorded {
     #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
     pub hash: String,
+    /// The state-hash version `hash` is in: 1 (16 hexadecimal digits, before 0.4.3) or 2 (64).
+    pub hash_version: u32,
 }
 
 /// A scene.
@@ -107,6 +109,7 @@ impl Op for SceneLoad {
             recorded: scene.record.as_ref().map(|r| Recorded {
                 generation: r.generation,
                 hash: r.hash.clone(),
+                hash_version: r.hash_version,
             }),
             scene,
         })
@@ -168,7 +171,12 @@ pub struct Verified {
     #[serde(serialize_with = "jetcarp_core::json_int::uint::serialize")]
     #[schemars(schema_with = "crate::op::uint_schema")]
     pub generation: u64,
+    /// The recorded hash, in the version the record names.
     pub hash: String,
+    /// That version: 1 (16 hexadecimal digits, before 0.4.3) or 2 (64).
+    pub hash_version: u32,
+    /// The replayed world's hash in version 2, all 64 digits.
+    pub hash_v2: String,
     /// What loading it let pass (palettes this JETCARP does not know).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
@@ -177,6 +185,13 @@ pub struct Verified {
 impl Report for Verified {
     fn text(&self) -> String {
         let mut s = format!("ok: generation {} hash {}\n", self.generation, self.hash);
+        if self.hash_version != 2 {
+            let _ = writeln!(
+                s,
+                "(a version {} hash; in version 2 the state hash is {})",
+                self.hash_version, self.hash_v2
+            );
+        }
         for w in &self.warnings {
             let _ = writeln!(s, "warning: {w}");
         }
@@ -198,19 +213,22 @@ impl Op for SceneVerify {
         let Some(rec) = sc.record.clone() else {
             return Err(ApiError::invalid("scene has no recorded hash"));
         };
+        // The record's hash in the version it names (no version: 1).
+        let version = jetcarp_core::world::HashVersion::of_record(rec.hash_version)
+            .map_err(ApiError::invalid)?;
         let w = World::from_scene(&sc).map_err(|e| in_file(a.path.as_deref(), e))?;
-        if w.generation != rec.generation || w.hash_hex() != rec.hash {
+        let got = w.hash_hex_as(version);
+        if w.generation != rec.generation || got != rec.hash.trim().to_ascii_lowercase() {
             return Err(ApiError::conflict(format!(
-                "MISMATCH: recorded gen {} hash {}, replayed gen {} hash {}",
-                rec.generation,
-                rec.hash,
-                w.generation,
-                w.hash_hex()
+                "MISMATCH: recorded gen {} hash {}, replayed gen {} hash {got}",
+                rec.generation, rec.hash, w.generation,
             )));
         }
         Ok(Verified {
             generation: w.generation,
             hash: rec.hash,
+            hash_version: version.number(),
+            hash_v2: w.hash_hex(),
             warnings: w.warnings().to_vec(),
         })
     }
@@ -306,20 +324,32 @@ pub struct RunSummary {
     text: String,
     #[serde(skip)]
     expect: Option<String>,
+    /// The final state's hash in version 1, for an `expect` written in it.
+    #[serde(skip)]
+    hash_v1: String,
 }
 
 impl Report for RunSummary {
     fn text(&self) -> String {
         self.text.clone()
     }
+    /// `expect` in either version, told apart by its length: 16 hexadecimal digits are
+    /// version 1, 64 are version 2; anything else is refused.
     fn check(&self) -> Result<(), ApiError> {
-        match &self.expect {
-            Some(e) if *e != self.hash => Err(ApiError::conflict(format!(
-                "hash mismatch: expected {e}, got {}",
-                self.hash
-            ))),
-            _ => Ok(()),
+        let Some(e) = &self.expect else {
+            return Ok(());
+        };
+        let version = jetcarp_core::world::HashVersion::of_hex(e).map_err(ApiError::invalid)?;
+        let got = match version {
+            jetcarp_core::world::HashVersion::V1 => &self.hash_v1,
+            jetcarp_core::world::HashVersion::V2 => &self.hash,
+        };
+        if e.trim().to_ascii_lowercase() != *got {
+            return Err(ApiError::conflict(format!(
+                "hash mismatch: expected {e}, got {got}"
+            )));
         }
+        Ok(())
     }
 }
 
@@ -510,6 +540,7 @@ fn run_scene(cx: &Ctx, a: RunIn, _: &dyn Progress) -> Result<RunSummary, ApiErro
         warnings: w.warnings().to_vec(),
         text: s,
         expect: a.expect,
+        hash_v1: w.hash_hex_v1(),
         hash,
     })
 }

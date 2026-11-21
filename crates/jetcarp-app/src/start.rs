@@ -55,6 +55,8 @@ pub enum MenuAction {
 
 /// The Quick Start menu.
 pub struct Menu {
+    /// The strobe guard's setting for the app, which the cards' pictures follow (#149).
+    pub guard: bool,
     pub items: Vec<Item>,
     pub view: View,
     loading: Option<Receiver<Vec<Item>>>,
@@ -149,6 +151,7 @@ impl Menu {
         let lib = Library::open_default();
         let lib_path = Arc::new(lib.path().to_path_buf());
         let mut m = Menu {
+            guard: true,
             items: vec![],
             view: View::default(),
             loading: None,
@@ -348,7 +351,7 @@ impl Menu {
         self.poll();
         let ctx = ui.ctx().clone();
         let now = self.now();
-        self.pool.begin_frame(&ctx, now);
+        self.pool.begin_frame(&ctx, now, self.guard);
         self.update_order();
         self.update_facets();
         let mut act = None;

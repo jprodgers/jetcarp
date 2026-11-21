@@ -170,6 +170,14 @@ enum Cmd {
     /// What JETCARP sees on this machine: version, folders, graphics adapters, desktop
     /// integration. Include it in bug reports.
     Doctor,
+    /// The strobe guard's switches: on for the app and for the desktop background and screen
+    /// saver unless turned off in the app (Settings → Safety). `--on` turns them back on; nothing
+    /// here turns them off.
+    Guard {
+        /// Turn the strobe guard back on (`app`, `desktop`, or `both`).
+        #[arg(long, value_name = "WHERE", num_args = 0..=1, default_missing_value = "both")]
+        on: Option<String>,
+    },
     /// Undo what JETCARP set up outside its folders (the host and its still on the desktop,
     /// login entry, GNOME extension, screen saver), and optionally delete its settings and data.
     /// Shows the plan unless --yes. The program itself stays; this ends with the command that
@@ -535,6 +543,20 @@ fn run() -> Result<()> {
         Cmd::Site(a) => media_cmd::run_site(a, json)?,
         Cmd::Wallpaper(a) => wallpaper_cmd::run(&cx, *a, json)?,
         Cmd::Doctor => show(&system::SystemDoctor::run(&cx, NoInput {}, &Quiet)?, json)?,
+        Cmd::Guard { on } => match on {
+            Some(place) => show(
+                &system::SystemStrobeGuardOn::run(
+                    &cx,
+                    system::GuardOnIn { place: Some(place) },
+                    &Quiet,
+                )?,
+                json,
+            )?,
+            None => show(
+                &system::SystemStrobeGuard::run(&cx, NoInput {}, &Quiet)?,
+                json,
+            )?,
+        },
         Cmd::Uninstall(a) => {
             let a = system::UninstallIn {
                 yes: a.yes,

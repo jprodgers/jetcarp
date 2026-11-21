@@ -43,6 +43,35 @@ day later (0.4.2: 17 November here, 18 November there).
   take `circuit` (40 regions), `circuit:N` (N regions, four signals each) and `circuit:N:S`, and
   `reference seeds` lists them; before, only a scene file could name a circuit.
   ([Scripting](../reference/scripting.md))
+- **The strobe guard: JETCARP watches what it draws, and softens, slows or pauses a scene before
+  it flashes more than three times a second or shows strong regular stripes.** Every frame is
+  measured as WCAG 2.3.1 defines flashes and red flashes, with its area rule (a quarter of a 10°
+  field, for a screen watched from 40 cm at 96 pixels an inch for each step of its scale factor),
+  and the screen's mean as IRIS measures it; regular high-contrast stripes over a quarter of the
+  screen are measured as ITU-R BT.1702 describes them. The guard first softens the tiles that flash
+  (their brightness may change by at most 0.3 a second), then slows a scene that keeps flashing,
+  down to half a generation a second, then pauses it with a note saying why; strong stripes are
+  veiled. It is on for everyone, in the app's view, full screen, the outputs, the world AI control
+  acts on, the desktop background on all three systems and the screen savers; it never changes what
+  a world computes. Someone who answered the photosensitive seizure warning *I have, or may have, a
+  seizure disorder* can't turn it off; someone who answered *I don't* can, in the app's new
+  *Settings → Safety*, through a confirmation with an unticked box. The desktop background and the
+  screen saver keep their own switch, on until turned off with the same confirmation, since people
+  in the room never answered the warning. The switches are saved with the warning's answer;
+  `jetcarp guard` shows them and `jetcarp guard --on` turns them back on, and no command, script or
+  MCP tool turns them off. Measuring a 1080p frame takes 0.02 ms on a Radeon 8060S.
+  ([The strobe guard](../guides/strobe-guard.md), [#97](https://github.com/jprodgers/jetcarp/issues/97))
+- **Exported animations are checked for flashing and strong stripes before they are saved.** A GIF
+  or WebP is measured at its own frame rate, looping as a player would. *File → Export animation…*
+  holds one that flashes and offers a softened version (or, with the app's guard off, the
+  animation as it is); `jetcarp media render` saves the softened version and says so, and the MCP
+  tool `media_render` always does. The softened version is the animation shown more slowly when up
+  to four times slower is enough (so an oscillator's GIF keeps its frames), and otherwise its
+  flashing softened and strong stripes veiled. The saved file is read
+  back and checked again. The Quick Start's live cards, the *Hunts* window's animations, the ants
+  window's and an explore search's atlas clips are guarded too. Every animation's render key now
+  includes the guard, so `jetcarp media render --missing` renders the old ones again.
+  ([Exported animations](../guides/strobe-guard.md#exported-animations))
 - **Importing a pack says who signed it, and says plainly when their key is new.** The setup
   window shows, under each pack before it is imported and under each import afterwards, the
   publisher's name and the start of their key, marked *New key: never seen in this library* when
@@ -52,8 +81,40 @@ day later (0.4.2: 17 November here, 18 November there).
   such. Before, the app showed only a pack's name and size, and the command line the key alone.
   ([Packs](../guides/packs.md#check-a-pack))
 
+### Changed
+
+- **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
+  64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
+  (the random-number generator, a turmite's internal state, a layered rule's layers, a forest fire's
+  noise seed, a script's streak, the automata's rules and settings), so two different worlds could
+  share it. Version 2 hashes every piece of state that decides what a world does next, and a digest
+  of its tiling: changing any one of them changes the hash, and a world reopened from its saved scene
+  at any generation hashes as the one that ran straight through. `jetcarp run` and `verify`, scene
+  records, PNG metadata, `--json`, the MCP tools and *Copy state hash* carry all 64 digits; the app's
+  menu bar shows the first 16. Records now say `"hash_version": 2`; those written before carry no
+  version, and JETCARP checks them with version 1, kept unchanged, so old scenes, figures and packs
+  still verify. `--expect` takes either version, by length (16 or 64 digits), and refuses anything
+  else. The pinned hashes of every Quick Start entry, the rule-semantics scenes and the portable
+  Lenia runs are now version 2; their version 1 hashes are the old pins, so no state changed.
+  ([The state hash](../research/reproducibility.md#the-state-hash),
+  [#173](https://github.com/jprodgers/jetcarp/issues/173))
+
 ### Fixed
 
+- **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
+  with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
+  with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's
+  lavapipe) and macOS (the runner's own GPU), and the release workflow's tests, which had left
+  lavapipe unused, now run the GPU tests on it.
+  ([Contributing](contributing.md), [Testing](testing.md))
+- **A settled reseed policy fires at the same generation whatever else counts changes.** Its
+  check for a steady cycle of changing cells read every generation whose changes had been counted,
+  and which those were depended on whether the app's activity graph or the desktop host was
+  counting them, or a script trigger, or the GPU: with them it could fire sooner, so a scene saved
+  from the app could replay to another state. It now reads only the generations it measured itself,
+  from the end of its cooldown. A scene in which something else measured activity before a policy's
+  cooldown ended can reseed at another generation than before.
+  ([Reseeding](../guides/reseeding.md))
 - **A world with a B0 rule is said to repeat only when it does.** The period check compared the
   cells JETCARP keeps for a B0 rule, which are relative to its background, but not the
   background's phase, so a world whose kept cells came back with the background in another phase
@@ -115,6 +176,13 @@ day later (0.4.2: 17 November here, 18 November there).
   monitor that wasn't connected when the host started, with the main monitor taken by another
   screen, had no window but went on stepping and drawing on the GPU. It now waits until its monitor
   comes back, and `jetcarp host status` says so. ([#130](https://github.com/jprodgers/jetcarp/issues/130))
+- **The photosensitive seizure warning's example is Hodgepodge, not B0.** Since B0 rules are drawn
+  relative to their background ([#171](https://github.com/jprodgers/jetcarp/issues/171)), a B0
+  rule no longer turns the whole field over at each step on screen. The warning now gives
+  Hodgepodge, which can flicker across the whole field at each step, and the book's warning page
+  follows it: Hodgepodge as Quick Start shows it, run at 60 generations a second, flashes about
+  four times a second as it settles, and the strobe guard catches it (a scene in its test corpus).
+  ([Photosensitive seizure warning](../getting-started/photosensitivity.md))
 - **Programs starting together no longer fail with "database is locked" on a new library.** When
   the app, the desktop host, the MCP server or a search job opened a library that did not exist
   yet at the same moment as another, one of them could be refused at once, although each waits

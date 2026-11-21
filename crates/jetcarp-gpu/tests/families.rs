@@ -1,8 +1,8 @@
-//! CPU vs GPU for the families the world stepper gained in 0.4.2. Every generation must give
-//! the same states, ages, grain counts, generation, step counters and hash (and, for JACA, the
-//! same annihilation glow and counts) on lattices and patches, with every edge, in chunks of
-//! several sizes, through scripts, reseeds and period detection. Skipped (with a note) when no
-//! GPU adapter is available.
+//! CPU vs GPU for the families the world stepper gained in 0.4.2. Every generation must give the
+//! same states, ages, grain counts, generation, step counters and hash (and, for JACA, the same
+//! annihilation glow and counts) on lattices and patches, with every edge, in chunks of several
+//! sizes, through scripts, reseeds and period detection. Skipped (with a note) when no GPU adapter
+//! is available, failed under `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::reseed::{AutoReseed, ReseedMode, ReseedWhen};
 use jetcarp_core::rules::Rule;
@@ -19,7 +19,7 @@ fn gpu() -> Option<MutexGuard<'static, GpuSim>> {
             Some(Mutex::new(s))
         }
         Err(e) => {
-            eprintln!("note: skipping GPU family tests: {e}");
+            jetcarp_gpu::no_gpu("GPU family tests", &e);
             None
         }
     });
@@ -254,6 +254,65 @@ fn jaca_glow_and_counts() {
         assert_eq!(h.glow.len(), gw.topo.len());
         assert!(h.total_destroyed > 0, "{rule}: the halves met");
         assert!(h.glow.contains(&255) || h.glow.iter().any(|&g| g > 0));
+    }
+}
+
+/// A settled policy with a cooldown that looks for a steady cycle fires at the same generations,
+/// with the same version 2 hash after every generation, on the CPU, on the GPU, and on the GPU
+/// while every generation's changes are counted: its decision reads only the generations it
+/// measured itself.
+#[test]
+fn settled_policies_fire_alike_on_the_gpu() {
+    let Some(mut sim) = gpu() else { return };
+    let mut sc = scene(
+        TilingSpec::rect("square", 16, 16, Boundary::Wrap),
+        vec![ca("B3/S23", None, SeedSpec::Random { density: 0.3 })],
+    );
+    sc.reseed = vec![
+        AutoReseed::new(
+            ReseedMode::rain(),
+            ReseedWhen::Settled {
+                activity: 0.0,
+                for_gens: 6,
+                cycle: Some(6),
+                period: None,
+                latest: Some(400),
+            },
+        )
+        .cooldown(40),
+    ];
+    let gens = 600;
+    let run = |w: &mut World, step: &mut dyn FnMut(&mut World)| -> (Vec<u64>, Vec<String>) {
+        let (mut at, mut hashes, mut fired) = (vec![], vec![], 0);
+        for _ in 0..gens {
+            step(w);
+            let f: u64 = w.reseed_status().iter().map(|s| s.fired).sum();
+            if f != fired {
+                at.push(w.generation);
+                fired = f;
+            }
+            hashes.push(w.hash_hex());
+        }
+        (at, hashes)
+    };
+    let mut cpu = World::from_scene(&sc).unwrap();
+    let want = run(&mut cpu, &mut |w| {
+        w.apply(Command::Step { gens: 1 }).unwrap();
+    });
+    assert!(want.0.len() >= 3, "fired at {:?}", want.0);
+    for tracked in [false, true] {
+        let mut gw = World::from_scene(&sc).unwrap();
+        gw.set_track_changes(tracked);
+        let mut on_cpu = 0;
+        let got = run(&mut gw, &mut |w| {
+            on_cpu += sim.step_mixed(w, 1).unwrap().cpu_gens;
+        });
+        assert_eq!(on_cpu, 0, "tracked {tracked}: fell back to the CPU");
+        assert_eq!(
+            got.0, want.0,
+            "tracked {tracked}: fired at other generations"
+        );
+        assert!(got.1 == want.1, "tracked {tracked}: the hashes differ");
     }
 }
 

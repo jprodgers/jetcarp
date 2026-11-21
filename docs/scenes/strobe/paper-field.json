@@ -1,0 +1,27 @@
+{
+  "name": "Paper field",
+  "description": "A sparse scatter of cells on Paper's light background that never changes (B/S012345678). Drawn with cell outlines, a grid of thin dark lines shows over the light ground: a test of what is not a stripe pattern.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 80,
+        "h": 60
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 7,
+  "cas": [
+    {
+      "rule": "B/S012345678",
+      "seed": {
+        "random": {
+          "density": 0.1
+        }
+      },
+      "palette": "Paper",
+      "color_by": "state"
+    }
+  ]
+}

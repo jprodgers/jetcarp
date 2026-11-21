@@ -174,6 +174,7 @@ impl MediaRenderIn {
             frames: self.frames.unwrap_or(true),
             force: self.force,
             style: MediaStyle::with_palette(self.palette.as_deref()).map_err(ApiError::invalid)?,
+            strobe_guard: true,
         })
     }
 }
@@ -226,6 +227,32 @@ pub struct MediaReport {
     /// A scene's files.
     #[serde(skip)]
     pub rows: Vec<MediaRow>,
+    /// What the strobe guard found in the animations, and what it saved (#149).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub strobe_guard: Vec<String>,
+}
+
+/// The strobe guard's notes on these rows' animations: a line for each it found something in.
+pub fn guard_notes<'a>(rows: impl IntoIterator<Item = &'a MediaRow>) -> Vec<String> {
+    rows.into_iter()
+        .filter(|r| r.kind == "gif" || r.kind == "webp")
+        .filter_map(|r| {
+            let g = r.render.get("strobe_guard")?;
+            let found = g.get("found")?.as_str()?;
+            let what = match g.get("treatment").and_then(|t| t.as_str()) {
+                Some("softened") => "the strobe guard saved a softened version".to_string(),
+                Some("slowed") => format!(
+                    "the strobe guard saved it slowed, {} ms a frame",
+                    g.get("delay_ms").and_then(|d| d.as_u64()).unwrap_or(0)
+                ),
+                _ => "saved as it is, with the strobe guard off".to_string(),
+            };
+            Some(format!(
+                "{}: the animation {found}: {what}",
+                r.abs_path.display()
+            ))
+        })
+        .collect()
 }
 
 /// Media files by kind (`anim` for the GIF or WebP; `frames` a list of every frame's file),
@@ -287,6 +314,7 @@ impl MediaReport {
             folder: None,
             files: None,
             frames_count: None,
+            strobe_guard: guard_notes(r.done.iter().flat_map(|d| d.rows.iter())),
             report: Some(r),
             rows: Vec::new(),
         }
@@ -328,10 +356,13 @@ impl Report for MediaReport {
         s
     }
     fn notes(&self) -> String {
-        let Some(r) = &self.report else {
-            return String::new();
-        };
         let mut s = String::new();
+        for n in &self.strobe_guard {
+            let _ = writeln!(s, "{n}");
+        }
+        let Some(r) = &self.report else {
+            return s;
+        };
         for (k, id, e) in &r.failed {
             let _ = writeln!(s, "{k} {id}: {e}");
         }
@@ -369,7 +400,8 @@ impl Op for MediaRender {
 }
 
 fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
-    let o = a.media_options()?;
+    let mut o = a.media_options()?;
+    o.strobe_guard = cx.strobe_guard();
     let lib = cx.library();
     if a.missing {
         let cls = classes(&a.class)?;
@@ -421,6 +453,7 @@ fn render(cx: &Ctx, a: MediaRenderIn) -> Result<MediaReport, ApiError> {
             files: Some(files_by_kind(&rows)),
             frames_count: Some(rows.first().map(|r| r.frames).unwrap_or(0)),
             report: None,
+            strobe_guard: guard_notes(&rows),
             rows,
         });
     }

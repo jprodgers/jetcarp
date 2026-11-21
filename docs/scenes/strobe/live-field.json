@@ -1,0 +1,27 @@
+{
+  "name": "Live field",
+  "description": "Every cell live, white, and nothing changes (B/S012345678). Drawn at a fractional size, seams between cells would show as hairlines; drawn with cell outlines, a grid of thin dark lines shows over it: a test of what is not a stripe pattern.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 80,
+        "h": 60
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 1,
+  "cas": [
+    {
+      "rule": "B/S012345678",
+      "seed": {
+        "random": {
+          "density": 1.0
+        }
+      },
+      "palette": "Mono",
+      "color_by": "state"
+    }
+  ]
+}

@@ -205,18 +205,34 @@ impl World {
         self.generation.is_multiple_of(SETTLE_CHECK) && self.reseed_wants_changes(self.generation)
     }
 
-    /// The changed counts of the last `window` generations (all after `since`) repeat with a
-    /// period of at most `cycle`.
-    fn steady(&self, since: u64, window: u64, cycle: u64) -> bool {
+    /// The generations a settled policy measured itself: those after its last reseed (`since`)
+    /// from the end of its cooldown (`start`), the last `need` of them. A policy past its
+    /// cooldown makes the world count every generation's changes, so these are the same however
+    /// the world is stepped. Generations a front end or the GPU counted besides (while changes
+    /// are tracked, or another policy or a script measures them) are left out: reading them made
+    /// a policy fire at another generation when changes were tracked.
+    pub(super) fn measured(&self, since: u64, start: u64, need: usize) -> Vec<&Activity> {
+        let mut v: Vec<&Activity> = self
+            .activity
+            .iter()
+            .rev()
+            .take_while(|a| a.generation > since && a.generation >= start)
+            .take(need)
+            .collect();
+        v.reverse();
+        v
+    }
+
+    /// The changed counts of the last `window` generations that a policy measured (after
+    /// `since`, from `start`) repeat with a period of at most `cycle`.
+    fn steady(&self, since: u64, start: u64, window: u64, cycle: u64) -> bool {
         let need = (window + cycle) as usize;
-        let h = &self.activity;
-        if h.len() < need {
+        let tail = self.measured(since, start, need);
+        if tail.len() < need {
             return false;
         }
-        let tail: Vec<&Activity> = h.iter().skip(h.len() - need).collect();
-        // Consecutive generations, all after the last reseed, ending now.
-        if tail[0].generation <= since
-            || tail[need - 1].generation != self.generation
+        // Consecutive generations ending now.
+        if tail[need - 1].generation != self.generation
             || tail[need - 1].generation - tail[0].generation != need as u64 - 1
         {
             return false;
@@ -265,7 +281,10 @@ impl World {
                             || population == 0
                             || latest.is_some_and(|l| g >= since.saturating_add(l))
                             || max_period.is_some_and(|m| period.is_some_and(|q| q <= m))
-                            || cycle.is_some_and(|c| self.steady(since, for_gens.max(1), c)));
+                            || cycle.is_some_and(|c| {
+                                let start = since.saturating_add(p.cooldown);
+                                self.steady(since, start, for_gens.max(1), c)
+                            }));
                     self.reseed_status[k].streak = streak;
                     fire
                 }

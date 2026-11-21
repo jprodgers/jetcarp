@@ -8,7 +8,7 @@
 //! `objects_ui`), `tools` (tool windows), `scene` (files), `start_screen`, `autoshot`, `build`,
 //! and `ai_control`.
 
-use crate::gpu::{Geometry, TileCallback, TileRenderer};
+use crate::gpu::{Geometry, TileCallback};
 use crate::start;
 use eframe::egui::{self, Color32, RichText, Sense};
 use jetcarp_core::families::{FAMILIES, FamilyKind};
@@ -46,6 +46,7 @@ mod shell;
 #[cfg(test)]
 mod shots;
 mod start_screen;
+mod strobe;
 mod tiling_ui;
 mod tools;
 mod view;
@@ -199,6 +200,8 @@ pub struct JetcarpApp {
     display: display::DisplayRt,
     /// For saving settings at exit.
     ctx: Option<egui::Context>,
+    /// The strobe guard: its settings, what the views' guards ask, Settings → Safety (#97).
+    strobe: strobe::AppStrobe,
     /// The Reseed pane (`reseed_ui.rs`).
     reseed: reseed_ui::ReseedUi,
     /// The palette window's browser and editor state (`palette_ui.rs`).
@@ -234,7 +237,7 @@ impl JetcarpApp {
     pub fn new(cc: &eframe::CreationContext<'_>, launch: crate::cli::LaunchArgs) -> JetcarpApp {
         let mut slot_cap = crate::gpu::TEX_W as usize * 2048;
         let gpu = if let Some(rs) = cc.wgpu_render_state.as_ref() {
-            let r = TileRenderer::new(&rs.device, rs.target_format);
+            let r = crate::gpu::AppGpu::new(&rs.device, rs.target_format);
             slot_cap = crate::gpu::slot_capacity(&rs.device);
             rs.renderer.write().callback_resources.insert(r);
             true
@@ -332,6 +335,7 @@ impl JetcarpApp {
             shell: shell::ShellState::new(),
             display: Default::default(),
             ctx: Some(cc.egui_ctx.clone()),
+            strobe: Default::default(),
             reseed: Default::default(),
             pal_ui: Default::default(),
             wallpaper: Default::default(),
@@ -545,6 +549,8 @@ impl eframe::App for JetcarpApp {
         if self.screen == Screen::Sim {
             let now = self.started.elapsed().as_secs_f64();
             let t0 = std::time::Instant::now();
+            // What the strobe guard's views asked for after the last frame: a cap, a pause.
+            self.strobe_frame();
             self.run_steps(now);
             if let Some(f) = &mut self.frametime {
                 f.add_step(t0.elapsed().as_secs_f64() * 1e3);
@@ -608,6 +614,8 @@ impl eframe::App for JetcarpApp {
         if !self.windows_hidden() {
             self.tool_windows(&ctx);
         }
+        // The guard's confirmation shows even with the panels hidden.
+        self.safety_window(&ctx);
         self.export_sheet();
         if self.screen == Screen::Sim && self.playing {
             ctx.request_repaint();

@@ -243,7 +243,10 @@ impl AntsWindow {
                     );
                     let mut frames = a.frames;
                     frames.truncate(240);
-                    return Ok((frames, a.delay_ms.max(20), note));
+                    // The strobe guard (#149): frames that flash play softened.
+                    let (frames, delay) =
+                        crate::strobe_cpu::guard_frames(frames, a.delay_ms.max(20));
+                    return Ok((frames, delay, note));
                 }
                 let o = MediaOptions::default();
                 let done = jetcarp_store::media::render(&lib, &MediaTarget::Ant(id.clone()), &o)?;
@@ -270,7 +273,8 @@ impl AntsWindow {
                     a.height,
                     if done.written { ", rendered now" } else { "" }
                 );
-                Ok((frames, delay.max(20), note))
+                let (frames, delay) = crate::strobe_cpu::guard_frames(frames, delay.max(20));
+                Ok((frames, delay, note))
             })();
             let _ = tx.send(res);
         });

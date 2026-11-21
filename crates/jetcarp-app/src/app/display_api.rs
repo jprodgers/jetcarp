@@ -213,6 +213,14 @@ impl JetcarpApp {
             "playing": self.playing,
             "speed": self.speed,
             "max_speed": self.max_speed,
+            // Read-only: only the person, in Settings → Safety, can turn the guard off (#97).
+            "strobe_guard": {
+                "on": self.guard_on_here(),
+                "action": self.strobe.report.as_ref().map(|r| r.action.name()),
+                "cap": self.strobe.cap,
+                "paused": self.strobe.paused,
+                "note": self.strobe.report.as_ref().and_then(|r| r.note.clone()),
+            },
             "gpu": self.sim.mode.name(),
             "gpu_choice": self.shell.gpu.name(),
             "menu_autohide": self.shell.menu_autohide,

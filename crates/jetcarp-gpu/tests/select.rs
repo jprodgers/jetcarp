@@ -1,5 +1,6 @@
-//! Adapter choice and the self-test on this machine's adapters. Skipped (with a note) when there
-//! is no usable adapter; `JETCARP_GPU=software` runs them on a software adapter (CI's lavapipe).
+//! Adapter choice and the self-test on this machine's adapters. Skipped (with a note) when there is
+//! no usable adapter (failed under `JETCARP_REQUIRE_GPU=1`); `JETCARP_GPU=software` runs them on a
+//! software adapter (CI's lavapipe).
 
 use jetcarp_gpu::select::{self, Policy, Purpose, Want};
 
@@ -28,7 +29,7 @@ fn the_compute_choice_passes_the_self_test() {
     let c = match select::pick_from(&adapters(), &policy, Purpose::Compute, None) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("note: skipping the adapter tests: {e}");
+            jetcarp_gpu::no_gpu("the adapter tests", &e);
             return;
         }
     };
@@ -71,7 +72,7 @@ fn the_compute_choice_passes_the_self_test() {
 fn a_display_always_gets_an_adapter_to_draw_with() {
     let all = adapters();
     if all.is_empty() {
-        eprintln!("note: no graphics adapter");
+        jetcarp_gpu::no_gpu("the display adapter test", &"no graphics adapter");
         return;
     }
     let policy = Policy::load();
@@ -125,7 +126,9 @@ fn a_missing_adapter_falls_back_with_a_note() {
     let all = adapters();
     let Ok(best) = select::pick_from(&all, &Policy::from_env("auto"), Purpose::Compute, None)
     else {
-        eprintln!("note: no usable adapter");
+        // The automatic choice takes no software adapter, so this needs a hardware one, which
+        // CI's lavapipe is not: a note, even under JETCARP_REQUIRE_GPU=1.
+        eprintln!("note: skipping the fallback test: no usable hardware adapter");
         return;
     };
     let c = select::pick_from(

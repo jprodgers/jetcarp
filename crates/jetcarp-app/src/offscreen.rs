@@ -28,17 +28,31 @@ pub struct Offscreen {
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 impl Offscreen {
-    /// `None` when there is no GPU adapter.
+    /// `None` when there is no usable GPU adapter (a failure instead under
+    /// `JETCARP_REQUIRE_GPU=1`: [`jetcarp_gpu::no_gpu`]).
     pub fn new(width: u32, height: u32) -> Option<Offscreen> {
+        const WHAT: &str = "the app's offscreen tests";
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         // As the window would choose (`jetcarp_gpu::select`), with no surface.
         let adapter =
-            jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None)
-                .ok()?
-                .adapter;
+            match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None)
+            {
+                Ok(c) => c.adapter,
+                Err(e) => {
+                    jetcarp_gpu::no_gpu(WHAT, &e);
+                    return None;
+                }
+            };
         let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
+            match pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) {
+                Ok(dq) => dq,
+                Err(e) => {
+                    let name = adapter.get_info().name;
+                    jetcarp_gpu::no_gpu(WHAT, &format!("{name} refused a device: {e}"));
+                    return None;
+                }
+            };
         let renderer = egui_wgpu::Renderer::new(&device, FORMAT, Default::default());
         let ctx = egui::Context::default();
         ctx.set_visuals(egui::Visuals::dark());
@@ -304,7 +318,6 @@ mod tests {
         assert!(std::env::var_os("JETCARP_OUT").is_some(), "set JETCARP_OUT");
         for (pal, rev, tiling) in [("Candy", false, "hex:1e5"), ("Aurora", true, "square:2e5")] {
             let Some(mut o) = Offscreen::new(900, 860) else {
-                eprintln!("no GPU adapter");
                 return;
             };
             let mut w = crate::pile_ui::PileWindow::default();

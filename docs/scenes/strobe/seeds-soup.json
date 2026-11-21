@@ -1,0 +1,26 @@
+{
+  "name": "Seeds soup",
+  "description": "B2/S (Seeds) from a random soup: every live cell dies each generation and births are everywhere, so the field flickers at random.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 80,
+        "h": 60
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 5,
+  "cas": [
+    {
+      "rule": "B2/S",
+      "seed": {
+        "random": {
+          "density": 0.3
+        }
+      },
+      "palette": "Mono"
+    }
+  ]
+}

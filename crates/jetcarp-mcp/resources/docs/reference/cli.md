@@ -52,6 +52,7 @@ Commands:
   site        Website export: the public catalog as JSON and media with a manifest and a viewer page, incrementally
   tilings     List tiling families with their neighbour counts
   doctor      What JETCARP sees on this machine: version, folders, graphics adapters, desktop integration. Include it in bug reports
+  guard       The strobe guard's switches: on for the app and for the desktop background and screen saver unless turned off in the app (Settings → Safety). `--on` turns them back on; nothing here turns them off
   uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes. The program itself stays; this ends with the command that removes it
   paths       Print the settings, data, output, and runtime folders JETCARP uses (environment overrides included), and the folder of packs that came with the program
   setup       First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal, the photosensitive seizure warning first; `--profile NAME --yes` asks nothing (`--seizure-warning` answers the warning the first time). `--status` shows where things stand
@@ -128,7 +129,7 @@ App options (with no subcommand):
 - **Scripts**: [`script`](#jetcarp-script). See [Scripting (Rhai) API](scripting.md), [Scripting a rule sweep](../tutorials/scripting-a-sweep.md).
 - **The app, the background host and AI assistants**: [`app`](#jetcarp-app), [`host`](#jetcarp-host), [`mcp`](#jetcarp-mcp). See [Wallpapers, screensavers and the background host](../guides/wallpapers.md), [Driving JETCARP from an AI assistant](../tutorials/mcp.md), [MCP tools](mcp.md).
 - **Lists**: [`rules`](#jetcarp-rules), [`tilings`](#jetcarp-tilings), [`isohedral`](#jetcarp-isohedral), [`palettes`](#jetcarp-palettes). See [Named rule catalogue](../automata/named-rules.md), [Rule notation](rule-notation.md), [Tiling catalogue](../tilings/catalogue.md), [Palettes](palettes.md).
-- **Setup and upkeep**: [`setup`](#jetcarp-setup), [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`uninstall`](#jetcarp-uninstall). See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [Uninstalling](../guides/uninstalling.md).
+- **Setup and upkeep**: [`setup`](#jetcarp-setup), [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`guard`](#jetcarp-guard), [`uninstall`](#jetcarp-uninstall). See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
 
 ## Worlds and scenes
 
@@ -2903,7 +2904,7 @@ Options:
 
 ## Setup and upkeep
 
-Set JETCARP up for what you want it for, where it keeps its files, what it sees on this machine, and how to take it off again. See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [Uninstalling](../guides/uninstalling.md).
+Set JETCARP up for what you want it for, where it keeps its files, what it sees on this machine, the strobe guard's switches, and how to take it off again. See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
 
 ### `jetcarp setup`
 
@@ -2976,6 +2977,19 @@ Usage: jetcarp doctor [OPTIONS]
 Options:
       --json  Print the result as JSON instead of text (commands that report a result)
   -h, --help  Print help
+```
+
+### `jetcarp guard`
+
+```text
+The strobe guard's switches: on for the app and for the desktop background and screen saver unless turned off in the app (Settings → Safety). `--on` turns them back on; nothing here turns them off
+
+Usage: jetcarp guard [OPTIONS]
+
+Options:
+      --json          Print the result as JSON instead of text (commands that report a result)
+      --on [<WHERE>]  Turn the strobe guard back on (`app`, `desktop`, or `both`)
+  -h, --help          Print help
 ```
 
 ### `jetcarp uninstall`

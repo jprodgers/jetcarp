@@ -1,5 +1,6 @@
 //! The host's work, whatever shows it: the stages, the link, the settings, the memory limit.
 
+use jetcarp_core::photosensitivity::GuardPlace;
 use jetcarp_display::autostart;
 use jetcarp_display::host_settings::{HostSettings, LockScreen, Place, ScreenSettings};
 use jetcarp_display::pace::FrameClock;
@@ -43,6 +44,8 @@ const RETUNE_SETTLE: f64 = 15.0;
 pub(crate) const WARNING_HOLD: &str = "warning";
 /// How often a host held by the warning looks for an answer.
 const WARNING_CHECK: f64 = 2.0;
+/// How often the host reads the strobe guard's setting again.
+const GUARD_CHECK: f64 = 2.0;
 /// What a host held by the warning prints on standard error as it starts.
 const WARNING_SAID: &str = "nothing runs until the photosensitive seizure warning has been \
                             accepted: open the JETCARP app, or run `jetcarp setup`";
@@ -235,6 +238,10 @@ pub struct Core {
     retune_tried: Option<Vec<(usize, [u32; 2])>>,
     /// When the host last looked for an answer to the photosensitive seizure warning.
     warning_at: f64,
+    /// The strobe guard's setting for the desktop background and the screen saver (#97), and
+    /// when it was last read.
+    desktop_guard: bool,
+    guard_at: f64,
 }
 
 /// The tuned desktop background screens whose canvas is not the one their tuning was found for,
@@ -457,6 +464,8 @@ impl Core {
             retune_since: None,
             retune_tried: None,
             warning_at: 0.0,
+            desktop_guard: jetcarp_core::photosensitivity::guard_on(GuardPlace::Desktop),
+            guard_at: 0.0,
         };
         if let Some(w) = warning {
             core.note(w);
@@ -821,6 +830,18 @@ impl Core {
             self.still_at = now;
             self.refresh_still();
         }
+        if now - self.guard_at >= GUARD_CHECK {
+            self.guard_at = now;
+            let on = jetcarp_core::photosensitivity::guard_on(GuardPlace::Desktop);
+            if on != self.desktop_guard {
+                self.desktop_guard = on;
+                self.note(if on {
+                    "the strobe guard is on for the desktop background and the screen saver"
+                } else {
+                    "the strobe guard was turned off for the desktop background and the screen saver"
+                });
+            }
+        }
         if self.local_holds.contains(WARNING_HOLD) && now - self.warning_at >= WARNING_CHECK {
             self.warning_at = now;
             self.check_warning();
@@ -859,6 +880,11 @@ impl Core {
         for n in notes {
             self.note(n);
         }
+    }
+
+    /// Whether the strobe guard is on for the desktop background and the screen saver.
+    pub fn desktop_guard_on(&self) -> bool {
+        self.desktop_guard
     }
 
     /// The pause rules: on battery, and while the processor is busy with something else.
@@ -929,6 +955,12 @@ impl Core {
             "max_fps": self.settings.max_fps,
             "caption": self.settings.caption,
             "run_at_login": autostart::enabled(),
+            // On unless turned off in the app's Settings → Safety; each screen's stage says what
+            // it is doing there.
+            "strobe_guard": json!({
+                "on": self.desktop_guard,
+                "for": GuardPlace::Desktop.words(),
+            }),
             "rotations": rotation_names(),
             "login": self.login,
             "screens": self.screens.iter().map(|s| json!({
