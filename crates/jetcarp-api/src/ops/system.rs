@@ -1443,7 +1443,7 @@ fn remove_unheld_lock(lock: &Path, keep: &[PathBuf]) -> Result<Option<String>, S
 pub struct SystemUninstall;
 impl Op for SystemUninstall {
     const NAME: &'static str = "system.uninstall";
-    const SUMMARY: &'static str = "Undo what JETCARP set up outside its folders (the host, its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings (keeping the picture the desktop shows) and data; only lists the steps unless `yes`.";
+    const SUMMARY: &'static str = "Undo what JETCARP set up outside its folders (the host, its still on the desktop, login entry, GNOME extension, screen saver, launcher), and optionally delete its settings (keeping the picture the desktop shows) and data; only lists the steps unless `yes`.";
     const READ_ONLY: bool = false;
     type In = UninstallIn;
     type Out = UninstallReport;

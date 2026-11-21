@@ -16,6 +16,7 @@ mod demo_cmd;
 mod hashlife_cmd;
 mod host_cmd;
 mod jobs_cmd;
+mod launcher_cmd;
 mod library;
 mod media_cmd;
 mod movers_cmd;
@@ -181,10 +182,18 @@ enum Cmd {
         #[arg(long, value_name = "WHERE", num_args = 0..=1, default_missing_value = "both")]
         on: Option<String>,
     },
+    /// JETCARP among the system's apps, with its icon: `install` puts it in the applications menu
+    /// (Linux), Applications (macOS, as JETCARP.app) or the Start menu (Windows), starting this
+    /// program; `remove` takes it out; `status` says whether it is there. The installers run
+    /// `install`, and `jetcarp uninstall` removes it.
+    Launcher {
+        #[arg(value_enum)]
+        action: launcher_cmd::LauncherAction,
+    },
     /// Undo what JETCARP set up outside its folders (the host and its still on the desktop,
-    /// login entry, GNOME extension, screen saver), and optionally delete its settings and data.
-    /// Shows the plan unless --yes. The program itself stays; this ends with the command that
-    /// removes it.
+    /// login entry, GNOME extension, screen saver, launcher), and optionally delete its settings
+    /// and data. Shows the plan unless --yes. The program itself stays; this ends with the
+    /// command that removes it.
     Uninstall(platform::UninstallArgs),
     /// Print the settings, data, output, and runtime folders JETCARP uses (environment overrides
     /// included), and the folder of packs that came with the program.
@@ -589,6 +598,7 @@ fn run() -> Result<()> {
                 json,
             )?,
         },
+        Cmd::Launcher { action } => launcher_cmd::run(action, json)?,
         Cmd::Uninstall(a) => {
             let a = system::UninstallIn {
                 yes: a.yes,

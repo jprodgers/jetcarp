@@ -5,8 +5,9 @@
 //!
 //! **Feature `library`** (on by default): rotations find the Quick Start entries they name in the
 //! user's library ([`stage::library_lookup`]), and the macOS saver can be installed
-//! ([`saver::install`], which bakes those scenes into the bundle). The saver's own code is built
-//! without it, so it links no store, job runner or SQLite.
+//! ([`saver::install`], which bakes those scenes into the bundle), as can the launcher that puts
+//! JETCARP among the system's apps ([`launcher`]). The saver's own code is built without it, so it
+//! links no store, job runner or SQLite.
 
 /// On macOS, names this process `name`. winit makes the application menu's items from the process
 /// name ("About JETCARP", "Hide JETCARP", "Quit JETCARP"), and a program that is not an app bundle
@@ -46,6 +47,9 @@ pub mod exit;
 pub mod gnome;
 pub mod gpu;
 pub mod host_settings;
+pub mod icon;
+#[cfg(feature = "library")]
+pub mod launcher;
 pub mod macsaver;
 pub mod pace;
 pub mod painter;

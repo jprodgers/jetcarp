@@ -17,6 +17,7 @@ mod frametime;
 mod gpu;
 pub mod gpu_info;
 mod hlview_ui;
+mod icon;
 mod isohedral_ui;
 mod jump_ui;
 mod keepawake;
@@ -122,6 +123,7 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("JETCARP")
             .with_app_id("jetcarp")
+            .with_icon(crate::icon::window_icon())
             .with_inner_size(size)
             .with_min_inner_size([800.0, 500.0]),
         ..Default::default()
