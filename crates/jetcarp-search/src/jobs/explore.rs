@@ -29,11 +29,15 @@
 //! (one that would not is given up part way; see [`Search::step`]); a run on the processor is
 //! capped at [`CPU_RUN_S`](crate::explore::job::CPU_RUN_S) seconds anyway. A step can last a
 //! minute or more (a round of slow runs on the processor runs to its end), so while it runs the
-//! job reads its memory every [`MEMORY_S`] seconds, and every [`PUBLISH_S`] writes the runs that
-//! have ended and the job's progress, and stops when another process pauses the job (#129).
+//! job reads its memory every [`MEMORY_S`] seconds, gives the allocator's free pages back every
+//! [`RELEASE_S`], and every [`PUBLISH_S`] writes the runs that have ended and the job's progress,
+//! and stops when another process pauses the job (#129).
 //!
 //! **Memory** ([`Meter`]). `jobs.status` shows the newest reading and the session's highest. Past
-//! `max_rss_gb` the run stops (paused), inside a step too.
+//! `max_rss_gb` the job first gives back what it can (the allocator's free pages, the grids
+//! the search is not using) and reads again; it stops (paused) only once the memory has stayed
+//! over the cap for [`CAP_HOLD_S`] seconds, so a moment's peak does not pause it (#81) but one
+//! that lasts does, inside a step too.
 //!
 //! **Its threads** ([`worker_threads`]): every core but [`FREE_CORES`] unless the run is given a
 //! thread count, a third of them for the GPU's batches when there is a GPU, so the computer
@@ -78,13 +82,20 @@ pub const PUBLISH_S: f64 = 2.0;
 pub const FREE_CORES: usize = 2;
 
 /// Seconds between returns of the memory allocator's free pages to the system
-/// ([`release_free_memory`]).
+/// ([`release_free_memory`]), during steps as between them: a step can last minutes, and the
+/// pages freed meanwhile (each GPU batch's frames, a few hundred MB) counted as the job's memory
+/// until it ended (#81).
 pub const RELEASE_S: f64 = 30.0;
 
 /// Seconds between readings of the job's memory while a step runs: reading it costs microseconds
 /// (`/proc/self/statm`, `proc_pid_rusage`, `GetProcessMemoryInfo`), and a step can last minutes,
 /// so `jobs.status` and the memory cap see what it is now, not at the step's start (#129).
 pub const MEMORY_S: f64 = 0.5;
+
+/// Seconds the memory must stay over `max_rss_gb`, after giving back what the job can, before
+/// the job stops: a peak of a few seconds (a batch's frames, a few large runs at once) does not
+/// pause a search whose cap is near its steady level (#81).
+pub const CAP_HOLD_S: f64 = 10.0;
 
 /// Give the memory allocator's free pages back to the system. glibc keeps what the search frees
 /// (each GPU batch's frames, a few hundred MB, and the grids the cache lets go) in its arenas,
@@ -604,7 +615,7 @@ pub fn rss_gb() -> f64 {
     memory_bytes().map_or(0.0, |b| b as f64 / (1u64 << 30) as f64)
 }
 
-/// The job's memory as it watches it ([`MEMORY_S`]).
+/// The job's memory as it watches it ([`MEMORY_S`], [`RELEASE_S`], [`CAP_HOLD_S`]).
 pub struct Meter {
     /// The newest reading, in GB, and the highest this session.
     pub rss: f64,
@@ -612,6 +623,8 @@ pub struct Meter {
     /// When it was read, and when the allocator's free pages were last given back.
     read: Instant,
     released: Instant,
+    /// Since when the memory has been over the cap, though the job gave back what it could.
+    over_since: Option<Instant>,
     /// Why the run stopped itself (its memory).
     pub note: Option<String>,
 }
@@ -624,22 +637,48 @@ impl Meter {
             peak: rss,
             read: Instant::now(),
             released: Instant::now(),
+            over_since: None,
             note: None,
         }
     }
 
-    /// Read the memory now. Over `cap`, say why (the note) and return true: the run is to stop.
-    fn check(&mut self, cap: Option<f64>, _search: &Search) -> bool {
-        self.rss = rss_gb();
-        self.peak = self.peak.max(self.rss);
+    fn take(&mut self, rss: f64) {
+        self.rss = rss;
+        self.peak = self.peak.max(rss);
         self.read = Instant::now();
+    }
+
+    /// Read the memory now, giving the allocator's free pages back first when it is time to.
+    /// Over `cap`, give back what can be (the free pages, and the grids `search` is not using)
+    /// and read again; still over, note since when, and once that is [`CAP_HOLD_S`] ago, say
+    /// why (the note) and return true: the run is to stop.
+    fn check(&mut self, cap: Option<f64>, search: &Search) -> bool {
+        if self.released.elapsed().as_secs_f64() >= RELEASE_S {
+            release_free_memory();
+            self.released = Instant::now();
+        }
+        self.take(rss_gb());
         let Some(cap) = cap else { return false };
         if self.rss <= cap {
+            self.over_since = None;
+            return false;
+        }
+        search.shed_grids();
+        release_free_memory();
+        self.released = Instant::now();
+        self.take(rss_gb());
+        if self.rss <= cap {
+            self.over_since = None;
+            return false;
+        }
+        let since = *self.over_since.get_or_insert_with(Instant::now);
+        if since.elapsed().as_secs_f64() < CAP_HOLD_S {
             return false;
         }
         self.note = Some(format!(
-            "memory {:.1} GB is over the cap of {cap} GB",
-            self.rss
+            "memory {:.1} GB has been over the cap of {cap} GB for {:.0} s",
+            self.rss,
+            since.elapsed().as_secs_f64()
         ));
         true
     }
@@ -953,12 +992,6 @@ impl Strategy for ExploreRun {
         runs.write(&d)?;
         runs.seal_full(r.spec.seal_rows.unwrap_or(SEAL_ROWS))?;
         r.rate.note(r.search.screened());
-        // Between steps no run is under way, so nothing waits on the allocator meanwhile.
-        let m = r.meter.get_mut().unwrap();
-        if m.released.elapsed().as_secs_f64() >= RELEASE_S {
-            release_free_memory();
-            m.released = Instant::now();
-        }
         Ok(Step::More)
     }
 

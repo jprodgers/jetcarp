@@ -133,10 +133,13 @@ It prints:
   resumable, once JETCARP uses more memory than that. The job keeps the cap, so a resumed run keeps
   to it too, and `jetcarp jobs status JOB` says why it paused. An explore search reads its memory
   every half second, even inside a step of a minute; `jetcarp jobs status` shows that reading and
-  the session's highest. It keeps the grids it has built for reuse, up to about 3 GB, so over hours
-  its memory grows towards that as it reaches more tilings; on Linux it gives the memory it has
-  freed back to the system between its steps. "Memory" is the physical footprint on macOS, the
-  figure Activity Monitor shows, and the resident size elsewhere (the working set on Windows).
+  the session's highest. Over the cap it first gives back what it can (the memory it has freed, and
+  the grids it keeps for reuse but is not using) and reads again, and pauses only once its memory
+  has stayed over the cap for 10 seconds, so a moment's peak does not pause it but a lasting one
+  does. It keeps the grids it has built for reuse, up to about 3 GB, so over hours its memory grows
+  towards that as it reaches more tilings; on Linux it gives the memory it has freed back to the
+  system every 30 seconds. "Memory" is the physical footprint on macOS, the figure Activity
+  Monitor shows, and the resident size elsewhere (the working set on Windows).
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB` carries it on from there. It ends exactly where an

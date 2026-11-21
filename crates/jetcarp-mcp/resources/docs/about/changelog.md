@@ -109,8 +109,15 @@ day later (0.4.2: 17 November here, 18 November there).
   showed and the cap read were taken at each step's start, so the status could be a minute old and a
   peak inside a step went unseen, and a step's runs were written only at its end. The job now reads
   its memory every half second, shows the newest reading and the session's highest, acts on the cap
-  at the reading that goes over it, and writes the runs that have ended every two seconds.
+  as soon as the reading calls for it, and writes the runs that have ended every two seconds.
   ([Searching](../guides/searching.md), [#129](https://github.com/jprodgers/jetcarp/issues/129))
+- **A memory peak no longer pauses an explore search whose cap is near its steady level.** Over
+  the cap, the search first gives back what it can, the memory it has freed and the grids it keeps
+  for reuse but is not using, and reads again; it pauses only once its memory has stayed over the
+  cap for 10 seconds. It also gives freed memory back every 30 seconds during a step, not only
+  between steps: with steps of minutes, memory freed during them (a GPU batch's frames, a few
+  hundred MB each) counted as the search's until the step ended.
+  ([Searching](../guides/searching.md), [#81](https://github.com/jprodgers/jetcarp/issues/81))
 - **An explore search's aperiodic patches are the size asked for, and its confirming patch is
   bigger than its screening one.** A patch comes in levels of about 500, 4,000, 35,000 and 280,000
   tiles, and a search took the first level with at least half the cells asked, so the default

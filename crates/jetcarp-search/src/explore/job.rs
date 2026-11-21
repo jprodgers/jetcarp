@@ -100,6 +100,26 @@ impl GridCache {
         Some(g.clone())
     }
 
+    /// Let the least recently used grids that no run is using go, until the cache holds at most
+    /// `cells` cells.
+    fn shed(&mut self, cells: usize) {
+        let mut idle: Vec<((String, u32), u64)> = self
+            .map
+            .iter()
+            .filter(|(_, (g, _))| Arc::strong_count(g) == 1)
+            .map(|(k, (_, used))| (k.clone(), *used))
+            .collect();
+        idle.sort_by_key(|x| x.1);
+        for (k, _) in idle {
+            if self.cells <= cells {
+                break;
+            }
+            if let Some((g, _)) = self.map.remove(&k) {
+                self.cells -= g.topo.len();
+            }
+        }
+    }
+
     /// Keeps `g` (unless another thread built the same grid meanwhile: then that one), letting the
     /// least recently used others go while the cache is over its limit.
     fn insert(&mut self, key: (String, u32), g: Arc<Grid>) -> Arc<Grid> {
@@ -926,6 +946,15 @@ impl Search {
             key,
             space::confirm_cells(key, s.screen_cells, s.confirm_cells, s.sizing),
         )
+    }
+
+    /// Let go of the grids no run is using, down to half the grid cache's limit: what a search
+    /// gives back when its memory is over its cap. A grid let go is built again when a run needs
+    /// it (the same grid: nothing a run measures changes).
+    pub fn shed_grids(&self) {
+        let mut c = self.grids.lock().unwrap();
+        let half = c.limit / 2;
+        c.shed(half);
     }
 
     /// The grid cache's size and how it has done ([`GRID_CACHE_CELLS`]).
