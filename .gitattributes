@@ -5,3 +5,7 @@
 /crates/jetcarp-pack/tests/golden/** -text
 # The starter pack is a signed store too: its bytes must reach every checkout unchanged.
 /packaging/starter-pack/** -text
+# The app icon's files are made byte for byte by packaging/gen-icons.py, which checks them.
+/packaging/icons/** -text
+/crates/jetcarp-display/icons/** -text
+/crates/jetcarp/jetcarp.ico -text

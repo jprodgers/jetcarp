@@ -53,13 +53,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run, and Golly)
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run, Golly, librsvg for the icons' check, and desktop-file-validate for the menu entry's)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
-            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers golly
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers golly \
+            librsvg2-bin desktop-file-utils
       - name: The Windows installer parses, and a refusal is one clean line (#117)
         # Windows PowerShell 5.1, as people run it. Nothing else checks install.ps1.
         if: runner.os == 'Windows'
@@ -142,9 +143,10 @@ jobs:
             echo "$left"
             exit 1
           fi
-      - name: The generated book pages, the keyboard page's table and the rule notation table match the program
+      - name: The generated book pages, the keyboard page's table, the rule notation table and the app icon's files match their sources
         if: runner.os == 'Linux'
         run: |
+          python3 packaging/gen-icons.py --check
           python3 docs/tools/gen-mcp.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/gen-cli.py --check --jetcarp target/release/jetcarp
           python3 docs/tools/gen-named-rules.py --check --jetcarp target/release/jetcarp
