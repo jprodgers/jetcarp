@@ -13,6 +13,10 @@
 //! Generations rules add decay planes: a cell in state `s >= 2` stores `s` in binary over the
 //! planes, state 1 is the live plane, and only state-1 neighbours are counted.
 //!
+//! Isotropic rules (Hensel's notation, on the square grid's touching neighbours) read the eight
+//! shifted planes themselves instead of their count: birth and survival are each a decision
+//! diagram over them ([`crate::isotropic::Diagram`]), evaluated 64 cells at a time.
+//!
 //! The universe grows as the pattern grows, so nothing is lost at an edge. Each step computes
 //! only the live bounding box plus one generation's reach, and skips rows with nothing nearby.
 //!
@@ -88,9 +92,21 @@ pub struct Plan {
     pub dbits: usize,
     pub(crate) birth_t: Terms,
     pub(crate) survive_t: Terms,
+    /// An isotropic rule, read from the neighbour planes instead of the counts.
+    pub iso: Option<Arc<IsoPlan>>,
 }
 
-/// The `(birth, survive, states)` of a B/S or Generations rule without B0.
+/// An isotropic rule for the bit engine: which neighbour slot of the (one) tile type holds each
+/// of [`crate::isotropic::OFFSETS`], and the birth and survival diagrams over those eight.
+#[derive(Clone, Debug)]
+pub struct IsoPlan {
+    pub slots: [usize; 8],
+    pub birth: crate::isotropic::Diagram,
+    pub survive: crate::isotropic::Diagram,
+}
+
+/// The `(birth, survive, states)` of a B/S or Generations rule without B0 (an isotropic rule's
+/// B0 bit as its birth, and its state count).
 pub fn bs_rule(rule: &Rule) -> Result<(u32, u32, u8), String> {
     let (b, s, c) = match *rule {
         Rule::LifeLike { birth, survive } => (birth, survive, 2),
@@ -99,9 +115,10 @@ pub fn bs_rule(rule: &Rule) -> Result<(u32, u32, u8), String> {
             survive,
             states,
         } => (birth, survive, states),
+        Rule::Isotropic(ref r) => (r.b0() as u32, 0, r.states),
         _ => {
             return Err(format!(
-                "the hunter runs B/S and Generations rules, not {}",
+                "the hunter runs B/S, Generations and isotropic rules, not {}",
                 rule.notation()
             ));
         }
@@ -123,7 +140,19 @@ impl Plan {
             .map(|v| v.iter().map(|o| (o.di, o.dj, o.k)).collect())
             .collect();
         let (b, s, c) = bs_rule(rule)?;
-        Plan::from_offsets(offs, b, s, c)
+        let mut plan = Plan::from_offsets(offs, b, s, c)?;
+        if let Rule::Isotropic(r) = rule {
+            let xy: Vec<(i32, i32)> = plan.offs[0].iter().map(|o| (o.0, o.1)).collect();
+            let slots = crate::isotropic::slots(&xy)
+                .filter(|_| plan.ntypes == 1 && plan.offs[0].iter().all(|o| o.2 == 0))
+                .ok_or("isotropic rules run on the square grid's eight touching neighbours")?;
+            plan.iso = Some(Arc::new(IsoPlan {
+                slots,
+                birth: crate::isotropic::Diagram::of(r, false),
+                survive: crate::isotropic::Diagram::of(r, true),
+            }));
+        }
+        Ok(plan)
     }
 
     /// The plan for explicit offsets (tests and tools).
@@ -158,6 +187,7 @@ impl Plan {
             ntypes,
             birth_t: Terms::new(birth, max_degree),
             survive_t: Terms::new(survive, max_degree),
+            iso: None,
             offs,
             reach_i,
             reach_j,
@@ -701,6 +731,7 @@ impl Universe {
         let rj = rj as usize;
         let mut bases: Vec<(usize, i32)> =
             Vec::with_capacity(plan.offs.iter().map(|v| v.len()).sum());
+        let mut scratch: Vec<u64> = Vec::new();
         #[allow(clippy::needless_range_loop)]
         for r in r_lo..=r_hi {
             // Nothing within reach: the row stays empty.
@@ -739,11 +770,21 @@ impl Universe {
                     if any_in == 0 && alive == 0 && !gens {
                         continue;
                     }
-                    let full = count(&xs, offs.len());
-                    let mut c = [0u64; CB];
-                    c.copy_from_slice(&full[..CB]);
-                    let bm = plan.birth_t.eval(&c);
-                    let sm = plan.survive_t.eval(&c);
+                    let (bm, sm) = match &plan.iso {
+                        Some(iso) => {
+                            let x: [u64; 8] = std::array::from_fn(|b| xs[iso.slots[b]]);
+                            (
+                                iso.birth.eval(&x, &mut scratch),
+                                iso.survive.eval(&x, &mut scratch),
+                            )
+                        }
+                        None => {
+                            let full = count(&xs, offs.len());
+                            let mut c = [0u64; CB];
+                            c.copy_from_slice(&full[..CB]);
+                            (plan.birth_t.eval(&c), plan.survive_t.eval(&c))
+                        }
+                    };
                     if !gens {
                         let v = (!alive & bm) | (alive & sm);
                         self.nxt[ia] = v;

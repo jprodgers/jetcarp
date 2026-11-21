@@ -233,6 +233,14 @@ fn cases() -> Vec<Case> {
             soup(0.3, 1, 1),
             32,
         ),
+        // The issue's example (#70): every count's letters both taken and left out.
+        c(
+            "isotropic",
+            rect("square", 32, 32, Wrap),
+            "B3-cnqy/S23-a",
+            soup(0.35, 1, 1),
+            48,
+        ),
     ]
 }
 

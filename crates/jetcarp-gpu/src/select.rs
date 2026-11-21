@@ -869,7 +869,7 @@ const TEST_GENS: u64 = 24;
 /// Draws of a family's rules until one runs on the GPU.
 const TEST_DRAWS: usize = 64;
 /// Changes when the self-test itself changes, so results are taken again.
-const TEST_VERSION: u32 = 2;
+const TEST_VERSION: u32 = 3;
 
 static TESTED: Mutex<Option<HashMap<String, SelfTest>>> = Mutex::new(None);
 
@@ -1042,15 +1042,22 @@ fn test_world(grid: &Grid, rule: &Rule, nb: Nb, seed: &SeedSpec, drop: u32) -> O
 }
 
 /// Kernels a family's random draws may miss, always checked where they run: a B0 rule, JACA with
-/// a blast, Margolus blocks (square grids), Larger than Life, forest fire and sandpiles (one with
-/// no drop, one dropping grains, one whose drop saturates the centre cell: #20), each with a seed
-/// that sets it going and its grains dropped per generation. Add a line here for a variant the
-/// draws may not reach.
+/// a blast, Margolus blocks and isotropic rules (square grids; two states, B0 and Generations),
+/// Larger than Life, forest fire and sandpiles (one with no drop, one dropping grains, one whose
+/// drop saturates the centre cell: #20), each with a seed that sets it going and its grains
+/// dropped per generation. Add a line here for a variant the draws may not reach.
 fn extra_rules() -> Vec<(&'static str, SeedSpec, u32)> {
     vec![
         ("B013/S1", SeedSpec::Random { density: 0.35 }, 0),
         ("JACA B3/S23 blast 2", SeedSpec::Halves { density: 0.35 }, 0),
         ("Margolus Critters", SeedSpec::Random { density: 0.3 }, 0),
+        ("B3-cnqy/S23-a", SeedSpec::Random { density: 0.35 }, 0),
+        ("B01e2a/S2-i3", SeedSpec::Random { density: 0.35 }, 0),
+        (
+            "B2a3-ckn/S1e2-in3/C4",
+            SeedSpec::Random { density: 0.35 },
+            0,
+        ),
         ("R2,C3,S5-9,B7-8", SeedSpec::Random { density: 0.4 }, 0),
         ("ForestFire 0.05/0.001", SeedSpec::RandomStates, 0),
         ("Sandpile", SeedSpec::Pile { grains: 2_000 }, 0),
@@ -1622,6 +1629,7 @@ mod tests {
             ];
             if grid.topo.rows().is_some() {
                 want.push(Fam::Margolus);
+                want.push(Fam::Isotropic);
             }
             for fam in want {
                 assert!(picked.contains(&fam), "{fam:?} on {key}: {picked:?}");

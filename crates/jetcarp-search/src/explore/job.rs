@@ -590,7 +590,12 @@ impl Search {
         for (i, t) in tilings.iter().enumerate() {
             if t.twin_of.is_none() {
                 for e in jetcarp_core::rules::catalog() {
-                    named.push((i, e.notation.to_string()));
+                    // Families the search does not sample are left out (isotropic rules).
+                    let sampled = Rule::parse(e.notation)
+                        .is_ok_and(|(r, _)| space::ALL_FAMS.contains(&space::Fam::of(&r)));
+                    if sampled {
+                        named.push((i, e.notation.to_string()));
+                    }
                 }
             }
         }

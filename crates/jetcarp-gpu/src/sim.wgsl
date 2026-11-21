@@ -13,6 +13,7 @@ struct Params {
   // Priority rules: packed rows (jetcarp-gpu's `priority_words`), k1 words.
   // Margolus: the block table, one byte per entry, in table[0].
   // Forest fire: the noise key and the two thresholds.
+  // Isotropic rules: birth by neighbourhood in words 0-7, survival in 8-15.
   table: array<vec4<u32>, 11>,
 };
 
@@ -334,6 +335,13 @@ fn ltl_count(i: u32) -> u32 {
     }
   }
   return c;
+}
+
+// Isotropic rules: neighbour k (bit k of a neighbourhood) as (dx, dy), in reading order from the
+// top left with the cell itself left out: NW, N, NE, W, E, SW, S, SE (isotropic.rs `OFFSETS`).
+fn iso_offset(k: u32) -> vec2<i32> {
+  let at = k + select(0u, 1u, k >= 4u);
+  return vec2<i32>(i32(at % 3u) - 1, i32(at / 3u) - 1);
 }
 
 // Margolus: x on an axis of n cells, wrapped when `wrap`; -1 past the edge.
@@ -661,6 +669,48 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
         }
         val = word;
         was = old;
+      }
+      // Isotropic rules on the square grid (step.rs `step_iso`, `step_iso_b0`): the arrangement
+      // of the state-1 neighbours looks up birth (table words 0-7) or survival (8-15); dying
+      // Generations cells count up. thresh 1: two states with B0, stored relative to the
+      // background, a word per phase at aux[gg..] (one tile type), at phase k1 before this step
+      // and k2 after; a slot past a dead edge is in the background, past a live edge live.
+      case 13u: {
+        var b0 = 0u;
+        var b1 = 0u;
+        if (p.thresh == 1u) {
+          b0 = aux[p.gg + p.k1];
+          b1 = aux[p.gg + p.k2];
+        }
+        var edge = b0;
+        if (topo[7] != 0) { edge = 1u; }
+        if (s >= 2u) {
+          if (s + 1u < p.states) { v = s + 1u; }
+          na = bs_age(s, v, age);
+        } else {
+          let wd = u32(topo[1]);
+          let j = i32(i / wd);
+          let base = i32(i % wd) + topo[topo[9] + j];
+          var x = 0u;
+          for (var k = 0u; k < 8u; k = k + 1u) {
+            let d = iso_offset(k);
+            let c = resolve(base + d.x, j + d.y, 0);
+            var bit = edge;
+            if (c >= 0) { bit = u32((src[u32(c)] & 0xffu) == 1u) ^ b0; }
+            x = x | (bit << k);
+          }
+          let real = u32(s != 0u) ^ b0;
+          let bit = (table_word(8u * real + x / 32u) >> (x % 32u)) & 1u;
+          if (p.thresh == 1u) {
+            v = bit ^ b1;
+            if (v == 1u) {
+              if (s == 1u) { na = min(age + 1u, 65000u); } else { na = 1u; }
+            }
+          } else {
+            if (s == 0u || bit == 1u) { v = bit; } else if (p.states > 2u) { v = 2u; }
+            na = bs_age(s, v, age);
+          }
+        }
       }
       default: {}
     }

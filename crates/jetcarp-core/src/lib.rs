@@ -22,6 +22,7 @@ pub mod hashlife;
 pub mod hat;
 pub mod hunt;
 pub mod isohedral;
+pub mod isotropic;
 pub mod jaca;
 pub mod jcs;
 pub mod json_int;

@@ -74,11 +74,12 @@ pub const IDENTITY_VERSION: &str = "jetcarp-pattern-v3";
 /// Most Generations states JETCARP runs.
 pub const MAX_STATES: u8 = 255;
 
-/// The cell-state model part of a pattern's identity: `lifelike` for B/S and Generations rules
-/// (B/S is Generations with 2 states), else the rule family.
+/// The cell-state model part of a pattern's identity: `lifelike` for B/S, Generations and
+/// isotropic rules (B/S is Generations with 2 states; an isotropic rule's cells are the same
+/// live, dying and dead ones), else the rule family.
 pub fn cell_model(rule: &Rule) -> &'static str {
     match rule {
-        Rule::LifeLike { .. } | Rule::Generations { .. } => "lifelike",
+        Rule::LifeLike { .. } | Rule::Generations { .. } | Rule::Isotropic(_) => "lifelike",
         r => rule_family(r),
     }
 }
@@ -95,6 +96,7 @@ pub fn rule_family(rule: &Rule) -> &'static str {
         Rule::Ltl(_) => "ltl",
         Rule::Margolus(_) => "margolus",
         Rule::Lenia(_) => "lenia",
+        Rule::Isotropic(_) => "isotropic",
         _ => "other",
     }
 }

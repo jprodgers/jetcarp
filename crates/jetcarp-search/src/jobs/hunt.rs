@@ -85,6 +85,7 @@ fn rule_space(rule: &str, nb: Option<Nb>) -> Option<(Nb, u32)> {
     let states = match r {
         Rule::LifeLike { .. } => 2,
         Rule::Generations { states, .. } => states as u32,
+        Rule::Isotropic(ref r) => r.states.max(2) as u32,
         _ => return None,
     };
     Some((nb.or(hint).unwrap_or_default(), states))

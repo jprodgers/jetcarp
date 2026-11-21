@@ -8,11 +8,10 @@ use rayon::prelude::*;
 
 pub(crate) const MIN_PAR: usize = 4096;
 
-/// Rules whose steps advance `CaInstance::ticks` in [`step_ca`] (by one per step): B0 Life-like
-/// rules, forest fire, and Margolus blocks.
+/// Rules whose steps advance `CaInstance::ticks` in [`step_ca`] (by one per step): two-state
+/// B0 rules (Life-like and isotropic), forest fire, and Margolus blocks.
 pub(crate) fn counts_ticks(rule: &Rule) -> bool {
-    matches!(rule, Rule::LifeLike { birth, .. } if birth & 1 == 1)
-        || matches!(rule, Rule::ForestFire { .. } | Rule::Margolus(_))
+    rule.b0_masks().is_some() || matches!(rule, Rule::ForestFire { .. } | Rule::Margolus(_))
 }
 
 pub(crate) fn step_ca(topo: &Topology, ca: &mut CaInstance, f: &mut Field, first_of_gen: bool) {
@@ -100,7 +99,135 @@ pub(crate) fn step_ca(topo: &Topology, ca: &mut CaInstance, f: &mut Field, first
             let heat = std::sync::Arc::make_mut(ca.heat.get_or_insert_with(Default::default));
             crate::jaca::update_heat(heat, f.state.len(), stats, &zone);
         }
+        Rule::Isotropic(r) => match ca.rule.b0_masks() {
+            Some(masks) => {
+                ca.ticks += 1;
+                step_iso_b0(topo, r, masks, ca.ticks, &mut ca.background, f)
+            }
+            None => step_iso(topo, r, f),
+        },
     }
+}
+
+/// The live neighbours of square-grid cell `i` as an isotropic rule's neighbourhood
+/// ([`crate::isotropic::OFFSETS`]): bit `k` for a state-1 neighbour, `edge` for a slot past the
+/// edge.
+#[inline]
+fn iso_neighbourhood(g: &crate::topology::LatticeGrid, a: &[u8], i: usize, edge: u8) -> usize {
+    let (u, j, _) = g.decompose(i);
+    let x = u + g.row_start[j as usize];
+    let mut m = 0usize;
+    for (k, &(dx, dy)) in crate::isotropic::OFFSETS.iter().enumerate() {
+        let bit = match g.resolve(x + dx, j + dy, 0) {
+            Some(c) => (a[c] == 1) as u8,
+            None => edge,
+        };
+        m |= (bit as usize) << k;
+    }
+    m
+}
+
+/// Bit `x` of an isotropic rule's table (birth, or with `live` survival).
+#[inline]
+fn iso_bit(t: &[u32; 16], live: bool, x: usize) -> u8 {
+    (t[8 * live as usize + x / 32] >> (x % 32) & 1) as u8
+}
+
+/// Ages for B/S-kind rules: 1 for a cell just born, one more each step it stays live, kept while
+/// a Generations cell decays, 0 when dead.
+#[inline]
+fn bs_age(s: u8, v: u8, age: u16) -> u16 {
+    if v == 1 {
+        if s == 1 {
+            age.saturating_add(1).min(65000)
+        } else {
+            1
+        }
+    } else if v != 0 {
+        age
+    } else {
+        0
+    }
+}
+
+/// An isotropic non-totalistic rule on the square grid (`isotropic.rs`): as [`step_bs`], with the
+/// arrangement of the state-1 neighbours in place of their count. Past a live edge a neighbour is
+/// live.
+fn step_iso(topo: &Topology, r: &crate::isotropic::IsoRule, f: &mut Field) {
+    let Some(g) = topo.rows() else { return };
+    let t = r.table();
+    let edge = topo.live_edges() as u8;
+    let states = r.states;
+    let a = &f.state;
+    let age = &f.age;
+    f.back
+        .par_iter_mut()
+        .zip(f.back_age.par_iter_mut())
+        .enumerate()
+        .with_min_len(MIN_PAR)
+        .for_each(|(i, (o, oa))| {
+            let s = a[i];
+            let v = if s >= 2 {
+                if s + 1 < states { s + 1 } else { 0 }
+            } else {
+                let bit = iso_bit(&t, s == 1, iso_neighbourhood(g, a, i, edge));
+                if s == 0 || bit == 1 {
+                    bit
+                } else if states > 2 {
+                    2
+                } else {
+                    0
+                }
+            };
+            *o = v;
+            *oa = bs_age(s, v, age[i]);
+        });
+    std::mem::swap(&mut f.state, &mut f.back);
+    std::mem::swap(&mut f.age, &mut f.back_age);
+}
+
+/// A two-state isotropic rule with B0 (see [`step_b0`]): stored relative to its background,
+/// uniform on the square grid, whose phases come from the B/S rule `masks`
+/// ([`crate::isotropic::IsoRule::background_masks`]). A slot past a dead edge is in the
+/// background; past a live edge it is live.
+fn step_iso_b0(
+    topo: &Topology,
+    r: &crate::isotropic::IsoRule,
+    masks: (u32, u32),
+    tick: u64,
+    slot: &mut Option<std::sync::Arc<crate::b0::Background>>,
+    f: &mut Field,
+) {
+    let Some(g) = topo.rows() else { return };
+    let Some(bg) = crate::b0::ready(slot, topo, Nb::Touch, masks, tick - 1) else {
+        return;
+    };
+    let crate::b0::Kind::Types(ty) = &bg.kind else {
+        return;
+    };
+    let (b0, b1) = (ty.state(ty.phase(tick - 1), 0), ty.state(ty.phase(tick), 0));
+    let t = r.table();
+    let edge = if topo.live_edges() { 1 } else { b0 };
+    // Every slot's stored state is relative to the background: flip them all where it is live.
+    let flip = if b0 == 1 { 0xff } else { 0 };
+    let a = &f.state;
+    let age = &f.age;
+    f.back
+        .par_iter_mut()
+        .zip(f.back_age.par_iter_mut())
+        .enumerate()
+        .with_min_len(MIN_PAR)
+        .for_each(|(i, (o, oa))| {
+            let s = a[i];
+            // Past an edge `edge` is the real state; the flip below must leave it so.
+            let stored = iso_neighbourhood(g, a, i, edge ^ b0);
+            let real = (s != 0) as u8 ^ b0;
+            let v = iso_bit(&t, real == 1, stored ^ flip) ^ b1;
+            *o = v;
+            *oa = b0_age(s, v, age[i]);
+        });
+    std::mem::swap(&mut f.state, &mut f.back);
+    std::mem::swap(&mut f.age, &mut f.back_age);
 }
 
 /// B0 rules without emulation would flip the whole background every generation. They are stored

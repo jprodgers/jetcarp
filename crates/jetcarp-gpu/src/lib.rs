@@ -8,6 +8,8 @@
 //! - B0 Life-like rules, stored relative to their background on any tiling, and Margolus blocks,
 //!   which follow the step count's parity
 //! - Larger than Life, its reach in an aux buffer
+//! - isotropic rules in Hensel's notation on the square grid (two states, Generations, and B0
+//!   relative to its background), their 512-bit table in the parameters
 //! - forest fire, with the CPU's 64-bit random numbers
 //! - sandpiles, with 64-bit grain totals and losses
 //!
@@ -75,6 +77,7 @@ const R_MARGOLUS: u32 = 9;
 const R_LTL: u32 = 10;
 const R_FOREST: u32 = 11;
 const R_SANDPILE: u32 = 12;
+const R_ISO: u32 = 13;
 /// Fields smaller than this are packed and unpacked on one thread.
 const PAR_CELLS: usize = 1 << 20;
 
@@ -106,6 +109,8 @@ struct Params {
     /// Priority rules: the packed rows (see [`priority_words`]), `k1` words.
     /// Margolus: the block table in `table[0]`.
     /// Forest fire: the noise key and thresholds (see [`forest_threshold`]).
+    /// Isotropic rules: birth and survival by neighbourhood, 16 words
+    /// (`jetcarp_core::isotropic::IsoRule::table`).
     table: [[u32; 4]; 11],
 }
 
@@ -285,9 +290,24 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
             (p.table[1][0], p.table[1][1]) = (s[0], s[1]);
         }
         Rule::Sandpile => p.rule = R_SANDPILE,
+        // `thresh` 1: two states with B0, stored relative to the background (aux at `gg`, its
+        // phases in k1 and k2, as for B0 Life-like rules on a lattice).
+        Rule::Isotropic(ref r) => {
+            (p.rule, p.states) = (R_ISO, r.states as u32);
+            p.thresh = rule.b0_masks().is_some() as u32;
+            for (k, w) in r.table().into_iter().enumerate() {
+                p.table[k / 4][k % 4] = w;
+            }
+        }
         _ => return Err(()),
     }
     Ok(p)
+}
+
+/// Whether these parameters are a two-state B0 rule stored against a lattice background: a B0
+/// Life-like rule, or an isotropic one with B0.
+fn lattice_b0(p: &Params) -> bool {
+    p.rule == R_B0 || (p.rule == R_ISO && p.thresh == 1)
 }
 
 /// Whether the tests were told a usable GPU adapter must be there: `JETCARP_REQUIRE_GPU=1`. CI
@@ -452,19 +472,19 @@ fn is_b0_life(rule: &Rule) -> bool {
     matches!(rule, Rule::LifeLike { birth, .. } if birth & 1 == 1)
 }
 
-/// A B0 Life-like rule's background on a lattice.
+/// A two-state B0 rule's background on a lattice (a B0 Life-like rule, or an isotropic one).
 fn b0_types(topo: &Topology, ca: &jetcarp_core::world::CaInstance) -> Result<Types, String> {
-    let (Rule::LifeLike { birth, survive }, Some(g)) = (&ca.rule, topo.lattice()) else {
-        return Err("not a B0 Life-like rule on a lattice".into());
+    let (Some((birth, survive)), Some(g)) = (ca.rule.b0_masks(), topo.lattice()) else {
+        return Err("not a two-state B0 rule on a lattice".into());
     };
     // The world's own, when it has one for this rule and neighbourhood.
     if let Some(b) = ca.background.as_deref()
-        && (b.nb, b.birth, b.survive) == (ca.nb, *birth, *survive)
+        && (b.nb, b.birth, b.survive) == (ca.nb, birth, survive)
         && let jetcarp_core::b0::Kind::Types(t) = &b.kind
     {
         return Ok(t.clone());
     }
-    Types::new(g, ca.nb, *birth, *survive)
+    Types::new(g, ca.nb, birth, survive)
 }
 
 /// A Larger than Life reach as the shader reads it, with the most cells any cell reaches.
@@ -794,6 +814,15 @@ impl GpuSim {
             {
                 return Err(cpu_only());
             }
+            if p.rule == R_ISO && world.topo.rows().is_none() {
+                return Err(format!(
+                    "{}: isotropic rules need the square grid",
+                    cpu_only()
+                ));
+            }
+            if lattice_b0(&p) && p.rule == R_ISO {
+                b0_types(&world.topo, ca).map_err(|e| format!("{}: {e}", cpu_only()))?;
+            }
             if p.rule == R_B0 {
                 match world.topo.storage {
                     Storage::Lattice(_) => {
@@ -938,7 +967,7 @@ impl GpuSim {
                 }
                 Rule::Sandpile if explicit => add(AuxKey::Open),
                 Rule::Jaca(ref j) if j.blast > 0 => blast = true,
-                Rule::LifeLike { birth, survive } if birth & 1 == 1 && !explicit => {
+                _ if !explicit && let Some((birth, survive)) = ca.rule.b0_masks() => {
                     add(AuxKey::Background(ca.nb as u8, birth, survive))
                 }
                 _ => {}
@@ -1430,7 +1459,7 @@ impl GpuSim {
             }
             // On a lattice, the background's states (the phases go in k1 and k2 per step); on a
             // patch, none: the cells carry it.
-            Rule::LifeLike { birth, survive } if birth & 1 == 1 => {
+            _ if let Some((birth, survive)) = ca.rule.b0_masks() => {
                 p.gg = at(&AuxKey::Background(ca.nb as u8, birth, survive));
             }
             _ => {}
@@ -1466,7 +1495,7 @@ impl GpuSim {
         let types: Vec<Option<Types>> = enabled
             .iter()
             .map(|&ci| {
-                (rule_params(&world.cas[ci].rule).is_ok_and(|p| p.rule == R_B0)
+                (rule_params(&world.cas[ci].rule).is_ok_and(|p| lattice_b0(&p))
                     && world.topo.lattice().is_some())
                 .then(|| b0_types(&world.topo, &world.cas[ci]))
                 .transpose()
@@ -1540,7 +1569,7 @@ impl GpuSim {
                 let ticks = ca.ticks + g as u64 * ca.steps_per_gen as u64 + s;
                 match p.rule {
                     // B0 on a lattice: the background's phases before and after this step.
-                    R_B0 => {
+                    R_B0 | R_ISO => {
                         if let Some(t) = &types[ei] {
                             p.k1 = t.phase(ticks) as u32;
                             p.k2 = t.phase(ticks + 1) as u32;

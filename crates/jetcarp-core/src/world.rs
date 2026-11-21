@@ -490,7 +490,9 @@ pub fn default_seed(rule: &Rule, topo: &Topology) -> SeedSpec {
         Rule::ForestFire { .. } => SeedSpec::Random { density: 0.5 },
         Rule::HexWolfram { .. } | Rule::HexTri { .. } => SeedSpec::TopCenter,
         Rule::Table(_) => SeedSpec::Center,
-        Rule::LifeLike { .. } | Rule::Generations { .. } => SeedSpec::Random { density: 0.3 },
+        Rule::LifeLike { .. } | Rule::Generations { .. } | Rule::Isotropic(_) => {
+            SeedSpec::Random { density: 0.3 }
+        }
         Rule::Ltl(_) => SeedSpec::Random { density: 0.4 },
         Rule::Layered { .. } => SeedSpec::Center,
         Rule::Wolfram(_) => SeedSpec::TopCenter,
@@ -1466,6 +1468,11 @@ impl World {
         {
             return Err("Margolus block rules need the square grid. Remove that CA before switching tilings.".into());
         }
+        if let Rule::Isotropic(_) = rule
+            && self.topo.rows().is_none()
+        {
+            return Err("Isotropic rules in Hensel's notation (such as B2-a/S12) name arrangements of the square grid's eight touching neighbours, so they need the square grid. Remove that CA before switching tilings.".into());
+        }
         if let Rule::VonNeumann = rule
             && self.topo.rows().is_none()
         {
@@ -1591,13 +1598,13 @@ impl World {
                 .or(nb_from_text)
                 .unwrap_or_else(|| rule.default_nb())
         };
-        // A B0 Life-like rule is stored relative to its background, which a lattice works out
+        // A two-state B0 rule is stored relative to its background, which a lattice works out
         // on its unit cell (and refuses if it takes too long to repeat).
-        let background = match rule {
-            Rule::LifeLike { birth, survive } if birth & 1 == 1 => Some(Arc::new(
-                crate::b0::Background::new(&self.topo, nb, birth, survive)?,
-            )),
-            _ => None,
+        let background = match rule.b0_masks() {
+            Some((birth, survive)) => Some(Arc::new(crate::b0::Background::new(
+                &self.topo, nb, birth, survive,
+            )?)),
+            None => None,
         };
         let id = match spec.id {
             Some(id) if !self.cas.iter().any(|c| c.id == id) => id,
@@ -1609,7 +1616,11 @@ impl World {
         // rather than scattering random ones over another CA's work.
         let joins_busy_field = self.fields[field].shared && !self.fields[field].is_empty();
         let seed = spec.seed.clone().unwrap_or_else(|| match rule {
-            Rule::LifeLike { .. } | Rule::Generations { .. } if joins_busy_field => SeedSpec::Empty,
+            Rule::LifeLike { .. } | Rule::Generations { .. } | Rule::Isotropic(_)
+                if joins_busy_field =>
+            {
+                SeedSpec::Empty
+            }
             _ => default_seed(&rule, &self.topo),
         });
         let table = self.table_for(&rule);
@@ -2174,9 +2185,9 @@ impl World {
     pub(crate) fn phases(&self) -> Vec<u64> {
         self.cas
             .iter()
-            .map(|c| match c.rule {
-                Rule::Margolus(_) => c.ticks % 2,
-                Rule::LifeLike { birth, survive } if birth & 1 == 1 => c
+            .map(|c| match (&c.rule, c.rule.b0_masks()) {
+                (Rule::Margolus(_), _) => c.ticks % 2,
+                (_, Some((birth, survive))) => c
                     .background
                     .as_deref()
                     .filter(|b| b.is_for(c.nb, birth, survive))

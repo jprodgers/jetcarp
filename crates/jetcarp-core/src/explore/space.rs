@@ -42,6 +42,9 @@ pub enum Fam {
     Table,
     VonNeumann,
     SpectreGlider,
+    /// Isotropic rules in Hensel's notation. Not in [`ALL_FAMS`]: the explore search does not
+    /// sample them (yet), and leaves the named ones out.
+    Isotropic,
 }
 
 pub const ALL_FAMS: [Fam; 22] = [
@@ -94,6 +97,7 @@ impl Fam {
             Fam::Table => "table",
             Fam::VonNeumann => "von_neumann",
             Fam::SpectreGlider => "spectre_glider",
+            Fam::Isotropic => "isotropic",
         }
     }
 
@@ -121,6 +125,7 @@ impl Fam {
             Rule::VonNeumann => Fam::VonNeumann,
             Rule::Priority(_) => Fam::Priority,
             Rule::Jaca(_) => Fam::Jaca,
+            Rule::Isotropic(_) => Fam::Isotropic,
         }
     }
 
@@ -136,7 +141,9 @@ impl Fam {
     pub fn fits(self, g: &Grid) -> bool {
         let t = &g.topo;
         match self {
-            Fam::Wolfram | Fam::Margolus | Fam::Table | Fam::VonNeumann => t.rows().is_some(),
+            Fam::Wolfram | Fam::Margolus | Fam::Table | Fam::VonNeumann | Fam::Isotropic => {
+                t.rows().is_some()
+            }
             Fam::HexWolfram => t.hex_rows().is_some(),
             Fam::HexTri => t.flat_hex_rows().is_some(),
             _ => true,
@@ -729,6 +736,8 @@ pub fn sample_rule(fam: Fam, grid: &Grid, nb: Nb, rng: &mut Rng) -> Option<Rule>
         Fam::Table => Rule::Table("parity".into()),
         Fam::VonNeumann => Rule::VonNeumann,
         Fam::SpectreGlider => Rule::SpectreGlider,
+        // Not sampled by the explore search (see [`Fam::Isotropic`]).
+        Fam::Isotropic => return None,
     })
 }
 

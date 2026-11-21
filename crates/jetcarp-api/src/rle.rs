@@ -2,8 +2,10 @@
 //! hexagonal layout back (#145).
 //!
 //! Only what both programs read the same way for now: two-state B/S rules on the square grid
-//! (Moore, or von Neumann written with a `V`) and on JETCARP's hexagon grid (`H`). Everything else
-//! is refused with its reason. The rest of the exchange with Golly and LifeViewer is #152.
+//! (Moore, or von Neumann written with a `V`) and on JETCARP's hexagon grid (`H`), and two-state
+//! isotropic rules in Hensel's notation on the square grid (`B2-a/S12`, named as Golly names
+//! them). Everything else is refused with its reason. The rest of the exchange with Golly and
+//! LifeViewer is #152.
 //!
 //! **Hexagons.** JETCARP's hexagon grid has offset rows: an odd row sits half a cell to the right,
 //! so a cell's neighbours depend on its row's parity. Golly and LifeViewer use a sheared square
@@ -160,13 +162,18 @@ pub fn of_world(w: &World, comments: &[String]) -> Result<String, String> {
             w.cas.len()
         ));
     };
-    let Rule::LifeLike { birth, .. } = &ca.rule else {
+    let two_state = match &ca.rule {
+        Rule::LifeLike { .. } => true,
+        Rule::Isotropic(r) => r.states <= 2,
+        _ => false,
+    };
+    if !two_state {
         return Err(format!(
-            "Copy as RLE writes two-state B/S rules for now; {} is another kind",
+            "Copy as RLE writes two-state B/S and isotropic rules for now; {} is another kind",
             ca.rule.notation()
         ));
-    };
-    if birth & 1 == 1 {
+    }
+    if ca.rule.is_b0() {
         return Err(
             "Copy as RLE leaves out rules with B0 for now: JETCARP keeps their cells relative to \
              a background that Golly and LifeViewer don't share"
@@ -238,6 +245,19 @@ mod tests {
         assert!(t.lines().all(|l| l.len() <= 70), "{t}");
         let back: Vec<(i64, i64)> = parse_rle(&t).unwrap().iter().map(|c| (c.0, c.1)).collect();
         assert_eq!(back, many);
+    }
+
+    #[test]
+    fn isotropic_rules_are_named_as_golly_names_them() {
+        // Written any way, named canonically: letters in alphabetical order, or `-` where shorter.
+        let w = world("square", "B2kicen/S21", &[(3, 3), (4, 3)]);
+        let t = of_world(&w, &[]).unwrap();
+        assert_eq!(header_rule(&t).as_deref(), Some("B2-a/S12"), "{t}");
+        // Generations and B0 are left out, as for B/S rules.
+        for rule in ["B2a/S/C3", "B01e/S8"] {
+            let w = world("square", rule, &[(3, 3), (4, 3)]);
+            assert!(of_world(&w, &[]).is_err(), "{rule}");
+        }
     }
 
     #[test]

@@ -250,3 +250,379 @@ fn golly_agrees_on_jetcarp_s_rle() {
         CASES.len() * 2
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Isotropic non-totalistic rules (#70)
+
+use jetcarp_core::isotropic::{IsoRule, LETTERS, classes, full};
+use rayon::prelude::*;
+
+/// This test's own generator (xorshift64*), so every run checks the same rules and soups.
+struct Gen(u64);
+impl Gen {
+    fn new(seed: u64) -> Gen {
+        Gen(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1)
+    }
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        self.0.wrapping_mul(0x2545_f491_4f6c_dd1d)
+    }
+    fn unit(&mut self) -> f64 {
+        (self.next() >> 11) as f64 / (1u64 << 53) as f64
+    }
+    fn below(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+}
+
+/// A random isotropic rule: each letter of every count, for birth and for survival, with
+/// probability `p` (birth on 0 only when `b0`).
+fn random_rule(g: &mut Gen, p: f64, states: u8, b0: bool) -> IsoRule {
+    let mut pick = |n: usize| -> u16 {
+        (0..LETTERS[n].len().max(1)).fold(0u16, |m, l| m | ((g.unit() < p) as u16) << l)
+    };
+    let mut birth: [u16; 9] = std::array::from_fn(&mut pick);
+    let survive: [u16; 9] = std::array::from_fn(&mut pick);
+    birth[0] = b0 as u16;
+    IsoRule {
+        birth,
+        survive,
+        states,
+    }
+}
+
+/// One count list written as a person might: per count, its letters in a shuffled order, or a
+/// `-` and the letters it leaves out, or the bare digit for every letter.
+fn written_counts(m: &[u16; 9], g: &mut Gen) -> String {
+    let mut out = String::new();
+    for (n, &bits) in m.iter().enumerate() {
+        if bits == 0 {
+            continue;
+        }
+        out.push(char::from(b'0' + n as u8));
+        if LETTERS[n].is_empty() || (bits == full(n) && g.below(3) != 0) {
+            continue;
+        }
+        let minus = g.below(2) == 0;
+        let mut ls: Vec<char> = LETTERS[n]
+            .chars()
+            .enumerate()
+            .filter(|(i, _)| (bits >> i & 1 == 1) != minus)
+            .map(|(_, c)| c)
+            .collect();
+        for i in (1..ls.len()).rev() {
+            ls.swap(i, g.below(i as u64 + 1) as usize);
+        }
+        if minus {
+            out.push('-');
+        }
+        out.extend(ls);
+    }
+    out
+}
+
+/// The rule written for both programs: `B…/S…`, and `/n` after a Generations rule (the form
+/// Golly and JETCARP both read).
+fn written(r: &IsoRule, g: &mut Gen) -> String {
+    let bs = format!(
+        "B{}/S{}",
+        written_counts(&r.birth, g),
+        written_counts(&r.survive, g)
+    );
+    if r.states > 2 {
+        format!("{bs}/{}", r.states)
+    } else {
+        bs
+    }
+}
+
+/// Golly's name for a rule JETCARP names `ours`: the same for two states; for Generations,
+/// Golly's `S/B/n` form of JETCARP's `B…/S…/Cn`.
+fn golly_name(ours: &str) -> String {
+    let p: Vec<&str> = ours.split('/').collect();
+    match p.as_slice() {
+        [b, s, c] => format!("{}/{}/{}", &s[1..], &b[1..], &c[1..]),
+        _ => ours.to_string(),
+    }
+}
+
+/// Golly's name for the rule and its cells after `gens` generations, with their states, moved so
+/// the lowest x and y are 0.
+fn golly_states(
+    dir: &Path,
+    name: &str,
+    text: &str,
+    gens: u64,
+    generations: bool,
+) -> (Option<String>, BTreeSet<(i64, i64, u32)>) {
+    let input = dir.join(format!("{name}.rle"));
+    let output = dir.join(format!("{name}-golly-{gens}.rle"));
+    std::fs::write(&input, text).unwrap();
+    let _ = std::fs::remove_file(&output);
+    let cmd = bgolly();
+    let mut p = Process::new(&cmd[0]);
+    p.args(&cmd[1..]);
+    if generations {
+        p.args(["-a", "Generations"]);
+    }
+    let out = p
+        .args(["-q", "-q", "-m", &gens.to_string(), "-o"])
+        .arg(&output)
+        .arg(&input)
+        .output()
+        .unwrap_or_else(|e| {
+            panic!("this test needs Golly's bgolly (or JETCARP_BGOLLY naming it): {e}")
+        });
+    assert!(
+        out.status.success(),
+        "bgolly failed on {name}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let back = std::fs::read_to_string(&output)
+        .unwrap_or_else(|e| panic!("bgolly wrote no {}: {e}", output.display()));
+    let _ = std::fs::remove_file(&output);
+    (
+        rle::header_rule(&back),
+        normalised(parse_rle(&back).unwrap()),
+    )
+}
+
+fn normalised(p: Vec<(i64, i64, u32)>) -> BTreeSet<(i64, i64, u32)> {
+    let p: Vec<_> = p.into_iter().filter(|c| c.2 != 0).collect();
+    let x0 = p.iter().map(|c| c.0).min().unwrap_or(0);
+    let y0 = p.iter().map(|c| c.1).min().unwrap_or(0);
+    p.iter().map(|c| (c.0 - x0, c.1 - y0, c.2)).collect()
+}
+
+/// A world's cells with their states, moved so the lowest x and y are 0, and whether any is near
+/// the dead edges (where the world and Golly's unbounded plane would part).
+fn our_states(w: &jetcarp_core::World) -> (BTreeSet<(i64, i64, u32)>, bool) {
+    let grid = Grid::of(&w.topo).unwrap();
+    let mut v = Vec::new();
+    let mut near = false;
+    for (i, &s) in w.fields[0].state.iter().enumerate() {
+        if s != 0 {
+            let (x, y) = grid.xy(i);
+            near |= x < 4 || y < 4 || x + 4 >= grid.w || y + 4 >= grid.h;
+            v.push((x as i64, y as i64, s as u32));
+        }
+    }
+    (normalised(v), near)
+}
+
+/// One isotropic case: the rule as written, and the soups' fills.
+struct IsoCase {
+    written: String,
+    fills: Vec<f64>,
+}
+
+/// Generations every soup is compared for, every one of them.
+const ISO_GENS: u64 = 100;
+
+/// The cases: the rules of Hensel's and Golly's documentation and the issue, Life with every
+/// letter written out, then random rules (two states, B0, Generations), each letter of each count
+/// in about as many as not, written with letters, `-` forms and bare digits in shuffled orders.
+fn iso_cases() -> Vec<IsoCase> {
+    let mut cases: Vec<IsoCase> = [
+        // Hensel's example and Golly's (David Bell's Just Friends), and Golly's equivalent form.
+        "B2-a/S12",
+        "B2cekin/S12",
+        // The issue's examples.
+        "B3-cnqy/S23-a",
+        // Life written with every letter: exactly Life.
+        "B3aceijknqry/S2aceikn3aceijknqry",
+        "B3/S2-3",
+    ]
+    .iter()
+    .map(|w| IsoCase {
+        written: w.to_string(),
+        fills: vec![0.35, 0.5],
+    })
+    .collect();
+    let mut g = Gen::new(70);
+    for k in 0..48u32 {
+        let p = [0.25, 0.4, 0.5, 0.6][k as usize % 4];
+        let r = random_rule(&mut g, p, 2, false);
+        cases.push(IsoCase {
+            written: written(&r, &mut g),
+            fills: vec![0.3 + 0.1 * (k % 3) as f64, 0.55 + 0.1 * (k % 2) as f64],
+        });
+    }
+    // Birth on 0, with and without survival on 8: Golly and JETCARP both keep the cells
+    // relative to the background.
+    for k in 0..8u32 {
+        let mut r = random_rule(&mut g, 0.45, 2, true);
+        r.survive[8] = (k % 2) as u16;
+        cases.push(IsoCase {
+            written: written(&r, &mut g),
+            fills: vec![0.35, 0.5],
+        });
+    }
+    // Generations.
+    for k in 0..10u32 {
+        let r = random_rule(
+            &mut g,
+            [0.3, 0.45][k as usize % 2],
+            3 + (k % 4) as u8,
+            false,
+        );
+        cases.push(IsoCase {
+            written: written(&r, &mut g),
+            fills: vec![0.35, 0.5],
+        });
+    }
+    cases
+}
+
+/// One soup of an isotropic case, in JETCARP and in Golly, every generation to [`ISO_GENS`]:
+/// Golly names the rule as JETCARP does and reaches the same cells, in the same states, every
+/// generation. Returns the classes of arrangement (count and letter, `isotropic::classes`) its
+/// dead cells (0) and live cells (1) had at the start, for the coverage check.
+fn iso_soup(dir: &Path, ci: usize, c: &IsoCase, si: usize, fill: f64) -> [[bool; 256]; 2] {
+    let cx = Ctx::interactive();
+    let (rule, _) = jetcarp_core::rules::Rule::parse(&c.written)
+        .unwrap_or_else(|e| panic!("{}: {e}", c.written));
+    let ours = rule.notation();
+    let generations = matches!(rule.field_kind(), jetcarp_core::rules::FieldKind::Multi(_));
+    let name = format!("iso-{ci}-{si}");
+    let world = json!({"tiling": "square", "width": SIZE, "height": SIZE, "boundary": "dead",
+        "cas": [{"rule": c.written, "seed": "empty"}]});
+    let mut h = Session::new();
+    new_world(&cx, &mut h, world);
+    let x = SIZE / 2 - SOUP as i64 / 2;
+    let seed = 1000 + 10 * ci as u64 + si as u64;
+    draw(
+        &cx,
+        &mut h,
+        json!({"pattern": soup(seed, SOUP, SOUP, fill), "x": x, "y": x}),
+    );
+    let what = format!("{} (soup {si}, fill {fill})", c.written);
+    // A rule with B0 and S8 has a live background from its first step. JETCARP stores its cells
+    // against that background from then on; Golly reads a pattern against it from the start (it
+    // runs the rule's inverse instead). So Golly starts from JETCARP's generation 1.
+    let late =
+        matches!(&rule, jetcarp_core::rules::Rule::Isotropic(r) if r.b0() && r.survive[8] == 1);
+    let mut seen = [[false; 256]; 2];
+    if late {
+        h.exec(Command::Step { gens: 1 }).unwrap();
+    }
+    // The start: the soup's cells, with the rule as written.
+    let (start_cells, _) = our_states(h.world());
+    let cells: Vec<(i64, i64)> = start_cells.iter().map(|c| (c.0, c.1)).collect();
+    let start = rle::write(&cells, &c.written, &[]);
+    // Coverage: the classes of arrangement at the start, by the cell's state.
+    {
+        let w = h.world();
+        let grid = Grid::of(&w.topo).unwrap();
+        let f = &w.fields[0].state;
+        for (i, &s) in f.iter().enumerate() {
+            if s > 1 {
+                continue;
+            }
+            let (x, y) = grid.xy(i);
+            let mut nb = 0u8;
+            for (k, &(dx, dy)) in jetcarp_core::isotropic::OFFSETS.iter().enumerate() {
+                if let Ok(j) = grid.index(x as i64 + dx as i64, y as i64 + dy as i64) {
+                    nb |= ((f[j] == 1) as u8) << k;
+                }
+            }
+            seen[s as usize][classes()[nb as usize] as usize] = true;
+        }
+    }
+    for g in 1..=ISO_GENS {
+        h.exec(Command::Step { gens: 1 }).unwrap();
+        let (live, near) = our_states(h.world());
+        assert!(!near, "{what}: reached the edge by generation {g}");
+        let (named, theirs) = golly_states(dir, &name, &start, g, generations);
+        if g == 1 {
+            assert_eq!(
+                named.as_deref(),
+                Some(golly_name(&ours).as_str()),
+                "{what}: Golly names the rule as JETCARP does ({ours})"
+            );
+        }
+        if live != theirs {
+            let only_ours = live.difference(&theirs).count();
+            let only_theirs = theirs.difference(&live).count();
+            panic!(
+                "{what}, named {ours}: generation {g} differs ({} cells here, {} in Golly; \
+                 {only_ours} only here, {only_theirs} only in Golly)",
+                live.len(),
+                theirs.len()
+            );
+        }
+    }
+    seen
+}
+
+/// Isotropic rules in Hensel's notation against Golly (#70): every case's soups, every
+/// generation to 100, the same cells in the same states, and Golly naming every rule as JETCARP
+/// does. The cases are chosen so that the comparison would fail if any letter's arrangement were
+/// wrong: for every two letters of a count, as birth and as survival, some case's rule takes one
+/// and not the other while its soup has a cell with the first (checked here), so that cell's
+/// next state would differ from Golly's at generation 1.
+#[test]
+#[ignore = "needs Golly's bgolly; run on the release candidates"]
+fn golly_agrees_on_isotropic_rules() {
+    use jetcarp_core::rules::Rule;
+    let dir = common::scratch("golly-iso");
+    let cases = iso_cases();
+    let runs: Vec<(usize, usize, f64)> = cases
+        .iter()
+        .enumerate()
+        .flat_map(|(ci, c)| c.fills.iter().enumerate().map(move |(si, &f)| (ci, si, f)))
+        .collect();
+    let seen: Vec<(usize, [[bool; 256]; 2])> = runs
+        .par_iter()
+        .map(|&(ci, si, fill)| (ci, iso_soup(&dir, ci, &cases[ci], si, fill)))
+        .collect();
+    // Coverage, over the rules without B0 (a B0 rule's stored cells are relative to its
+    // background).
+    let t = classes();
+    let rules: Vec<Option<IsoRule>> = cases
+        .iter()
+        .map(|c| match Rule::parse(&c.written).unwrap().0 {
+            Rule::Isotropic(r) if !r.b0() => Some(*r),
+            _ => None,
+        })
+        .collect();
+    let mut missing = Vec::new();
+    for s in 0..2usize {
+        for (n, ls) in LETTERS.iter().enumerate() {
+            for (a, la) in ls.chars().enumerate() {
+                for (b, lb) in ls.chars().enumerate() {
+                    if a == b {
+                        continue;
+                    }
+                    let (ca, cb) = ((n << 4 | a) as u8, (n << 4 | b) as u8);
+                    let one = |class: u8| t.iter().position(|&c| c == class).unwrap() as u8;
+                    let (xa, xb) = (one(ca), one(cb));
+                    let caught = seen.iter().any(|(ci, sn)| {
+                        rules[*ci].as_ref().is_some_and(|r| {
+                            let bit = |x: u8| if s == 0 { r.born(x) } else { r.survives(x) };
+                            sn[s][ca as usize] && bit(xa) != bit(xb)
+                        })
+                    });
+                    if !caught {
+                        missing.push(format!(
+                            "{} on {n}{la} read as {n}{lb}",
+                            ["birth", "survival"][s]
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "the cases would not catch: {}",
+        missing.join(", ")
+    );
+    eprintln!(
+        "golly: {} isotropic rules, {} soups, {ISO_GENS} generations each, agree",
+        cases.len(),
+        runs.len()
+    );
+}
