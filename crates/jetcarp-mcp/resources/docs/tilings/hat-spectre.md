@@ -5,7 +5,7 @@ single tile could cover the plane only in patterns that never repeat: an *einste
 for "one stone". In 2023 the answer came, twice in quick
 succession: the hat, found by a hobbyist, and then the spectre, which does it without ever needing its
 mirror image. JETCARP builds exact patches of both, up to about 18 million tiles, and runs every rule on
-them.
+them that is not tied to one grid ([what stays on its own grid](../automata/generalising.md#what-stays-on-its-own-grid)).
 
 <figure class="pair">
 <div><img src="../images/tilings/hat-b2s34.png" alt="Pale clusters of hat-shaped tiles on a round patch" width="480"></div>
@@ -101,7 +101,7 @@ as it goes; JETCARP has followed the Spectre glider pair this way for 10 million
 
 The tiles are Smith, Myers, Kaplan and Goodman-Strauss's, and cellular automata on them began with
 Trevorrow and Edmond. JETCARP adds two things that, to our knowledge, have not been done before: it runs
-every rule family on the hat and spectre, including families (turmites, cyclic, Greenberg–Hastings,
+every rule family not tied to one grid on the hat and spectre, including families (turmites, cyclic, Greenberg–Hastings,
 rock-paper-scissors, Hodgepodge, forest fire) for which our search found no earlier monotile version,
 though we count those only as direct applications; and it computes sandpile identities and large
 single-source sandpiles on both monotiles, where our search found no earlier sandpile work at all (see

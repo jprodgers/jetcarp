@@ -1123,6 +1123,7 @@ And the 81 pages of this book, `jetcarp://docs/<page>` by their path without `.m
 - `jetcarp://docs/about/how-made`: How JETCARP was made
 - `jetcarp://docs/about/testing`: How JETCARP is tested
 - `jetcarp://docs/about/changelog`: Changelog
+- `jetcarp://docs/about/roadmap`: Roadmap
 - `jetcarp://docs/about/contributing`: Contributing
 
 </details>

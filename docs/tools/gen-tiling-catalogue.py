@@ -14,7 +14,7 @@ The 1-uniform rows are checked against the program's own counts for the matching
 Thumbnails (docs/src/images/tilings/thumbs/<id>.png) are drawn by JETCARP itself with
 docs/tools/tiling-thumbs.rhai (run by docs/tools/render-figures.sh).
 
-Standard library only. Usage: python3 docs/tools/gen-tiling-catalogue.py [--jetcarp PATH]
+Standard library only. Usage: python3 docs/tools/gen-tiling-catalogue.py [--jetcarp PATH] [--check]
 """
 import argparse
 import json
@@ -141,9 +141,24 @@ def ku_row(rec, with_thumb):
     return "| " + " | ".join(cells) + " |", edge, touch
 
 
+
+def emit(path, text, check, tool):
+    """Writes the page, or with --check only says whether the committed page is current."""
+    old = path.read_text(encoding="utf-8") if path.exists() else None
+    if check:
+        if old != text:
+            print(f"{path.name} is out of date: run python3 docs/tools/{tool}", file=sys.stderr)
+            return False
+        print(f"ok: {path.name} is up to date")
+        return True
+    path.write_text(text, encoding="utf-8")
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--jetcarp", default=str(REPO / "target" / "release" / "jetcarp"))
+    ap.add_argument("--check", action="store_true", help="only check that the pages are up to date")
     args = ap.parse_args()
     fam_text = subprocess.run([args.jetcarp, "tilings"], capture_output=True, text=True, check=True).stdout
     ih_text = subprocess.run([args.jetcarp, "isohedral"], capture_output=True, text=True, check=True).stdout
@@ -257,7 +272,7 @@ def main():
             row, _, _ = ku_row(rec, True)
             L.append(row)
         L.append("")
-    OUT.write_text("\n".join(L), encoding="utf-8")
+    ok = emit(OUT, "\n".join(L), args.check, "gen-tiling-catalogue.py")
 
     L2 = ["# k-uniform tilings, k = 4 to 6", ""] + header
     L2 += [
@@ -274,8 +289,11 @@ def main():
             row, _, _ = ku_row(rec, False)
             L2.append(row)
         L2.append("")
-    OUT2.write_text("\n".join(L2), encoding="utf-8")
-    print(f"wrote {OUT} and {OUT2}", file=sys.stderr)
+    ok = emit(OUT2, "\n".join(L2), args.check, "gen-tiling-catalogue.py") and ok
+    if not ok:
+        sys.exit(1)
+    if not args.check:
+        print(f"wrote {OUT} and {OUT2}", file=sys.stderr)
 
 
 if __name__ == "__main__":

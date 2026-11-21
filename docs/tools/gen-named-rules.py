@@ -6,7 +6,7 @@ Inputs:
   docs/data/named-rule-credits.tsv            credits checked against LifeWiki, MCell and the literature
   `jetcarp rules` (optional, --jetcarp PATH)  which names the program accepts, to flag any it cannot run
 
-Standard library only. Usage: python3 docs/tools/gen-named-rules.py [--jetcarp target/release/jetcarp]
+Standard library only. Usage: python3 docs/tools/gen-named-rules.py [--jetcarp target/release/jetcarp] [--check]
 """
 import argparse
 import json
@@ -70,9 +70,24 @@ def cell(s: str) -> str:
     return s.replace("|", "\\|")
 
 
+
+def emit(path, text, check, tool):
+    """Writes the page, or with --check only says whether the committed page is current."""
+    old = path.read_text(encoding="utf-8") if path.exists() else None
+    if check:
+        if old != text:
+            print(f"{path.name} is out of date: run python3 docs/tools/{tool}", file=sys.stderr)
+            return False
+        print(f"ok: {path.name} is up to date")
+        return True
+    path.write_text(text, encoding="utf-8")
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--jetcarp", default=str(REPO / "target" / "release" / "jetcarp"))
+    ap.add_argument("--check", action="store_true", help="only check that the page is up to date")
     args = ap.parse_args()
 
     rules = json.loads(NAMED.read_text(encoding="utf-8"))["rules"]
@@ -104,8 +119,9 @@ def main():
     try:
         out = subprocess.run([args.jetcarp, "quickstart", "--filter", "Generations"], capture_output=True,
                              text=True, check=True).stdout
+        # Columns: number, id (one word, which can fill its column), title, rule, family, tiling.
         for k, line in enumerate(l for l in out.splitlines() if l.strip()):
-            m = re.match(r"^\s*\d+\s+(.+?)\s{2,}", line)
+            m = re.match(r"^\s*\d+\s+\S+\s+(.+?)\s{2,}", line)
             if m:
                 legend.append(f"{k} {m.group(1)}")
     except (OSError, subprocess.CalledProcessError):
@@ -203,8 +219,10 @@ def main():
                 + ". Coexistence uses a weighted Larger than Life neighbourhood, which JETCARP does not read yet.",
                 "",
             ]
-    OUT.write_text("\n".join(lines), encoding="utf-8")
-    print(f"wrote {OUT} ({len(rules)} rules)", file=sys.stderr)
+    if not emit(OUT, "\n".join(lines), args.check, "gen-named-rules.py"):
+        sys.exit(1)
+    if not args.check:
+        print(f"wrote {OUT} ({len(rules)} rules)", file=sys.stderr)
 
 
 if __name__ == "__main__":
