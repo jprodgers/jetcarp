@@ -84,12 +84,21 @@ fn op_ctx() -> Ctx {
     Ctx::new().with_platform(Arc::new(crate::window_job::AppPlatform))
 }
 
-/// A world of `cas` on `spec` against this machine's memory limit: the refusal's text, if it
-/// is over.
-pub(super) fn over_limit(spec: &TilingSpec, cas: &[jetcarp_core::CaSpec]) -> Option<String> {
-    jetcarp_api::ops::world::check_world_memory(spec, cas, &jetcarp_api::Limits::for_this_machine())
-        .err()
-        .map(|e| e.message)
+/// A world of `cas` on `spec`, in place of `current`, against this machine's memory limit and
+/// what the rest of JETCARP leaves of its pool: the refusal's text, if it is over.
+pub(super) fn over_limit(
+    spec: &TilingSpec,
+    cas: &[jetcarp_core::CaSpec],
+    current: Option<&World>,
+) -> Option<String> {
+    jetcarp_api::ops::world::check_world_memory_replacing(
+        spec,
+        cas,
+        &jetcarp_api::Limits::for_this_machine(),
+        current,
+    )
+    .err()
+    .map(|e| e.message)
 }
 
 impl MachineWin {
@@ -446,12 +455,24 @@ impl JetcarpApp {
             ui.label(
                 RichText::new(
                     "Each is your own value if you give one, else this machine's suggestion, \
-                     never above its ceiling. They only allow or refuse: a world too big is \
-                     refused with the reason, never made smaller, so a result never depends on \
-                     the machine.",
+                     never above its ceiling. All of JETCARP shares the memory reserved for it. \
+                     Limits only allow or refuse: a world too big is refused with the reason, \
+                     never made smaller, so a result never depends on the machine.",
                 )
                 .weak(),
             );
+            if let Some(p) = &info.limits.pool {
+                ui.label(format!(
+                    "JETCARP {}",
+                    jetcarp_api::ops::machine::pool_line(p)
+                ))
+                .on_hover_text(
+                    "Every JETCARP program (the app, the desktop background, commands, MCP servers, \
+                     search jobs) records the memory it holds; a new world must fit what the others \
+                     leave, and the desktop background gives up its largest world when the rest of \
+                     JETCARP needs the memory.",
+                );
+            }
             ui.add_space(4.0);
             let mut set: Option<(Id, String)> = None;
             let mut reset: Option<Option<Id>> = None;
@@ -594,11 +615,12 @@ impl JetcarpApp {
         if self.machine.anyway {
             return Some(then);
         }
+        // The world on screen is replaced, so its memory counts as free.
         let over = match &then {
-            Then::Scene(s, _) => over_limit(&s.tiling, &s.cas),
+            Then::Scene(s, _) => over_limit(&s.tiling, &s.cas, Some(&self.world)),
             Then::Tiling(t) => {
                 let cas: Vec<_> = self.world.cas.iter().map(|c| c.spec()).collect();
-                over_limit(t, &cas)
+                over_limit(t, &cas, Some(&self.world))
             }
         };
         match over {
@@ -643,7 +665,7 @@ mod tests {
         let life = [jetcarp_core::CaSpec::new("B3/S23")];
         let mut big = TilingSpec::new("square");
         big.size = Some(jetcarp_core::SizeSpec::Rect { w: 30000, h: 30000 });
-        let m = over_limit(&big, &life).expect("over the limit");
+        let m = over_limit(&big, &life, None).expect("over the limit");
         assert!(
             m.starts_with("this world needs 6.7 GB; this machine's limit is 4 GB"),
             "{m}"
@@ -651,6 +673,6 @@ mod tests {
         assert_eq!(capital(&m)[..10], *"This world");
         let mut small = TilingSpec::new("square");
         small.size = Some(jetcarp_core::SizeSpec::Rect { w: 300, h: 300 });
-        assert_eq!(over_limit(&small, &life), None);
+        assert_eq!(over_limit(&small, &life, None), None);
     }
 }

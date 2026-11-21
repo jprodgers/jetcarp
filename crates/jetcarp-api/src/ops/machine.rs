@@ -18,6 +18,7 @@ use crate::error::ApiError;
 use crate::op::{NoInput, Op, Progress, Report};
 use jetcarp_core::machine::{
     self, Hardware, Id, Limits, MachineFile, Own, Score, Source, bench, bytes_text, limits,
+    pool::Pool,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -61,11 +62,17 @@ pub struct LimitsOut {
     pub file: Option<PathBuf>,
     /// A `limits.json` that could not be read.
     pub note: Option<String>,
+    /// JETCARP's one pool of memory now: its size (`total`), what each other JETCARP program
+    /// holds (`others`: `pid`, `program`, `bytes`) and this one (`own`). None in a program that
+    /// does not record its memory (tests).
+    #[schemars(with = "Option<Value>")]
+    pub pool: Option<Pool>,
 }
 
 impl LimitsOut {
     fn of(l: Limits, file: Option<PathBuf>, note: Option<String>) -> LimitsOut {
         LimitsOut {
+            pool: Pool::now(&l),
             memory_total: l.memory_total,
             memory_estimated: l.memory_estimated,
             entries: l.entries,
@@ -73,6 +80,17 @@ impl LimitsOut {
             note,
         }
     }
+}
+
+/// The pool in a line: `in use now: the desktop background 1.2 GB, jetcarp limits 20 MB; 76 GB of
+/// the 78 GB reserved for JETCARP left`.
+pub fn pool_line(p: &Pool) -> String {
+    format!(
+        "in use now: {}; {} of the {} reserved for JETCARP left",
+        p.users_text(),
+        bytes_text(p.left(0)),
+        bytes_text(p.total)
+    )
 }
 
 /// One limit in a line: `Largest world  39 GB  (half of the 78 GB reserved for JETCARP)`.
@@ -105,9 +123,14 @@ impl Report for LimitsOut {
         for e in &self.entries {
             let _ = writeln!(s, "{}", limit_line(e));
         }
+        if let Some(p) = &self.pool {
+            let _ = writeln!(s, "\nJETCARP {}", pool_line(p));
+        }
         s.push_str(
             "\nEach is your own value if you set one (`jetcarp limits set NAME VALUE`), else the \
-             machine's suggestion, never above its ceiling. They only allow or refuse: a world \
+             machine's suggestion, never above its ceiling. All of JETCARP (the app, the desktop \
+             background, commands, MCP servers, scripts, searches) shares the memory reserved for \
+             it: a new world must fit what the others leave. Limits only allow or refuse: a world \
              too big is refused with the reason, never made smaller.\n",
         );
         if let Some(n) = &self.note {

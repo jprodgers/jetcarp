@@ -1242,6 +1242,18 @@ fn shots_this_computer() {
             kind: "discrete".into(),
             ..Default::default()
         }];
+        // The pool as two example programs would hold it (tests record no memory of their own).
+        info.limits.pool = Some(machine::pool::Pool {
+            total: l.jetcarp_memory(),
+            others: vec![machine::pool::Use {
+                pid: 2,
+                program: "the desktop background".into(),
+                bytes: 1200 << 20,
+                at_ms: 0,
+            }],
+            own: 640 << 20,
+            program: "the app".into(),
+        });
         info.limits.entries = l.entries;
         info.limits.memory_total = l.memory_total;
         h.app.machine.show_info(info);

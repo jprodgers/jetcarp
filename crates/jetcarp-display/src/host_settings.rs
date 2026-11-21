@@ -487,24 +487,43 @@ pub const OLD_MAX_CELLS: u64 = 64_000_000;
 
 impl HostSettings {
     /// The most cells one of the host's worlds may have: this machine's `host-cells` limit
-    /// (`jetcarp limits`, Tools → This computer…), unless this file holds a value of its own.
+    /// (`jetcarp limits`, Tools → This computer…), unless this file holds a value of its own, and
+    /// never more than a Life world in what the rest of JETCARP leaves of the pool
+    /// ([`jetcarp_core::machine::pool`]).
     pub fn cell_limit(&self) -> u64 {
-        if self.max_cells != OLD_MAX_CELLS {
+        let own = if self.max_cells != OLD_MAX_CELLS {
             self.max_cells
         } else {
             jetcarp_core::machine::current().host_cells()
+        };
+        match pool_left() {
+            Some(left) => own.min(left / jetcarp_core::machine::limits::LIFE_CELL_BYTES),
+            None => own,
         }
     }
 
     /// The memory the host may use before it gives up its largest world, megabytes: this
-    /// machine's `host-memory` limit, unless this file holds a value of its own.
+    /// machine's `host-memory` limit (all of the pool by default), unless this file holds a value
+    /// of its own, and never more than the rest of JETCARP leaves of the pool. So the desktop
+    /// background yields when the app or a command needs the memory.
     pub fn memory_limit_mb(&self) -> u64 {
-        if self.max_memory_mb != OLD_MAX_MEMORY_MB {
+        let own = if self.max_memory_mb != OLD_MAX_MEMORY_MB {
             self.max_memory_mb
         } else {
             jetcarp_core::machine::current().host_memory_mb()
+        };
+        match pool_left() {
+            Some(left) => own.min(left >> 20),
+            None => own,
         }
     }
+}
+
+/// What the other JETCARP programs leave of the pool for this one (none when it does not record
+/// its memory: tests, and code using the crate as a library).
+fn pool_left() -> Option<u64> {
+    let l = jetcarp_core::machine::current();
+    jetcarp_core::machine::pool::Pool::now(&l).map(|p| p.left_for_this_program())
 }
 
 /// Who the host's own GPU choice belongs to, in reports.
@@ -615,11 +634,12 @@ mod tests {
     use super::*;
 
     /// The host's cells and memory come from the machine's limits (the reference machine's in
-    /// tests: the values every host.json had before), unless host.json holds its own.
+    /// tests: the 64 million cells every host.json had before, and all of JETCARP's 8 GB pool),
+    /// unless host.json holds its own.
     #[test]
     fn the_host_limits_come_from_the_machine_unless_set_here() {
         let s = HostSettings::default();
-        assert_eq!((s.cell_limit(), s.memory_limit_mb()), (64_000_000, 6144));
+        assert_eq!((s.cell_limit(), s.memory_limit_mb()), (64_000_000, 8192));
         let own = HostSettings {
             max_cells: 1_000_000,
             max_memory_mb: 2048,

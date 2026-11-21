@@ -110,9 +110,26 @@ pub fn check_grid_cells(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
 /// before any of it is built: refused naming what it needs, the limit and where the limit came
 /// from (`this world needs 31 GB; this machine's limit is 24 GB (half of the 48 GB reserved for
 /// JETCARP, from its hardware: ...)`). Never made smaller to fit.
+///
+/// Then against JETCARP's one pool ([`jetcarp_core::machine::pool`]): what the other JETCARP
+/// programs (the app, the desktop background, other commands, MCP servers, search jobs) and this
+/// one hold leaves so much of *Reserved for JETCARP*, and the world must fit that too (`this world
+/// needs 1.9 GB, and 824 MB of the 8 GB reserved for JETCARP is left (...)`). The pool is checked
+/// only in a program that records its memory (the `jetcarp` program), never in tests.
 pub fn check_world_memory(spec: &TilingSpec, cas: &[CaSpec], l: &Limits) -> Result<(), ApiError> {
+    check_world_memory_replacing(spec, cas, l, None)
+}
+
+/// [`check_world_memory`] for a world that replaces `current` (a new world or scene in its
+/// place): the memory `current` holds is counted as free in the pool.
+pub fn check_world_memory_replacing(
+    spec: &TilingSpec,
+    cas: &[CaSpec],
+    l: &Limits,
+    current: Option<&World>,
+) -> Result<(), ApiError> {
     use crate::ctx::WorldMemory;
-    use jetcarp_core::machine::{self, cost};
+    use jetcarp_core::machine::{self, cost, pool::Pool};
     if l.world_memory == WorldMemory::Unlimited {
         return Ok(());
     }
@@ -126,7 +143,18 @@ pub fn check_world_memory(spec: &TilingSpec, cas: &[CaSpec], l: &Limits) -> Resu
         WorldMemory::Ai => m.check_ai_world(needs),
         WorldMemory::Unlimited => Ok(()),
     };
-    r.map_err(|e| ApiError::limit(e.to_string()))
+    r.map_err(|e| ApiError::limit(e.to_string()))?;
+    let Some(pool) = Pool::now(&m) else {
+        return Ok(());
+    };
+    m.check_world_in_pool(needs, &pool, current.map_or(0, world_cost))
+        .map_err(|e| ApiError::limit(e.to_string()))
+}
+
+/// What a built world holds, by the same table a new one is checked with.
+pub fn world_cost(w: &World) -> u64 {
+    let cas: Vec<CaSpec> = w.cas.iter().map(|c| c.spec()).collect();
+    jetcarp_core::machine::cost::world_bytes(&w.topo.spec, w.topo.len() as u64, &cas)
 }
 
 /// A tiling's size against the limits (an opened scene, `set_tiling`).
@@ -748,7 +776,7 @@ impl WorldOp for WorldNew {
         if scene.cas.len() > 32 {
             return Err(ApiError::limit("at most 32 CAs"));
         }
-        check_world_memory(&scene.tiling, &scene.cas, l)?;
+        check_world_memory_replacing(&scene.tiling, &scene.cas, l, Some(host.world()))?;
         // Palettes named here are typed, so an unknown one is refused (a scene file's would load,
         // drawn in the default, with a warning). A new world has no palettes of its own.
         for c in &scene.cas {
@@ -868,7 +896,7 @@ impl WorldOp for WorldOpen {
     ) -> Result<OpenOut, ApiError> {
         let scene = scene_to_open(cx, &a)?;
         check_tiling_size(&scene.tiling, &cx.limits)?;
-        check_world_memory(&scene.tiling, &scene.cas, &cx.limits)?;
+        check_world_memory_replacing(&scene.tiling, &scene.cas, &cx.limits, Some(host.world()))?;
         let record = scene.record.clone();
         let recorded = record.as_ref().map(|r| Recorded {
             generation: r.generation,
@@ -2226,7 +2254,7 @@ pub fn prepare_command(v: &Value, w: &World, l: &Limits) -> Result<Command, ApiE
         Command::SetTiling { tiling } => {
             check_tiling_size(tiling, l)?;
             let cas: Vec<CaSpec> = w.cas.iter().map(|c| c.spec()).collect();
-            check_world_memory(tiling, &cas, l)?;
+            check_world_memory_replacing(tiling, &cas, l, Some(w))?;
         }
         Command::AddCa { ca } => {
             let mut cas: Vec<CaSpec> = w.cas.iter().map(|c| c.spec()).collect();

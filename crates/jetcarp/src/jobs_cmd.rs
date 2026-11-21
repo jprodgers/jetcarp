@@ -29,6 +29,13 @@ pub struct JobsArgs {
     cmd: JobsCmd,
 }
 
+impl JobsArgs {
+    /// It resumes a job (in a process of its own, a detached search).
+    pub fn resumes(&self) -> bool {
+        matches!(self.cmd, JobsCmd::Resume { .. })
+    }
+}
+
 #[derive(clap::Args)]
 struct Filters {
     /// Only jobs of this kind: hunt, search, ants, census, mover, pile, collide, evolve, explore.

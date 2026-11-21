@@ -144,7 +144,9 @@ names you type (only the last one of a full path). A folder JETCARP names after 
 (`media/<name>`) gets a `_` after such a name, so a scene called "Con" goes to `media/Con_`.
 
 <a id="runtime-folder"></a>**Runtime.** One more, small folder holds the files through which the running app and the background
-host accept local control (their port and access token): `$XDG_RUNTIME_DIR/jetcarp`, else
+host accept local control (their port and access token), and `memory/`, where each running
+JETCARP program records the memory it holds so the others see what is left of the pool reserved
+for JETCARP ([This computer](../guides/this-computer.md#sharing-the-pool)): `$XDG_RUNTIME_DIR/jetcarp`, else
 `~/.cache/jetcarp`, on Linux and macOS, and `%LOCALAPPDATA%\jetcarp` on Windows. On Linux and macOS
 the folder is kept readable by you only (mode 0700) and the files too (0600). It is the same for
 every copy of JETCARP you run, whatever folders the others point at, so there is one background

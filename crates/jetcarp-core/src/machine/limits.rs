@@ -146,7 +146,9 @@ impl Id {
         match self {
             Id::ReservedSystem => "Memory left to the system and other programs.",
             Id::ReservedJetcarp => {
-                "Memory JETCARP may use; every other memory limit is a share of it."
+                "Memory all of JETCARP may use together (the app, the desktop background, the \
+                 command line, MCP servers, scripts and searches); every other memory limit is a \
+                 share of it."
             }
             Id::World => {
                 "Memory one world may take (its cells, and a patch's graph); a larger one is refused, \
@@ -158,7 +160,8 @@ impl Id {
             }
             Id::HostCells => "Cells one world of the desktop background may have.",
             Id::HostMemory => {
-                "Memory the desktop background may use before it gives up its largest world."
+                "Memory the desktop background may use before it gives up its largest world: by \
+                 default all of JETCARP's part, less what the rest of JETCARP holds at the time."
             }
             Id::HashlifeNodes => {
                 "Nodes HashLife keeps before it collects unused ones (about 45 bytes each)."
@@ -195,7 +198,6 @@ impl Id {
     pub fn before(self) -> Option<f64> {
         Some(match self {
             Id::HostCells => 64_000_000.0,
-            Id::HostMemory => (6144 * MIB) as f64,
             Id::HashlifeNodes => 48_000_000.0,
             Id::HuntCache => (1536 * MIB) as f64,
             Id::MediaPixels => 300_000_000.0,
@@ -427,18 +429,31 @@ pub struct OverLimit {
     pub origin: String,
     /// It is the person's own value (so raising it is up to them, not the machine).
     pub own: bool,
+    /// Over what the other JETCARP programs leave of the pool: its size, and who holds what.
+    pub pool: Option<(u64, String)>,
 }
 
 impl std::fmt::Display for OverLimit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "this world needs {}; this machine's limit is {} ({}: Tools → This computer…, or \
-             `jetcarp limits`)",
-            bytes_text(self.needs),
-            bytes_text(self.limit),
-            self.origin
-        )
+        match &self.pool {
+            Some((total, users)) => write!(
+                f,
+                "this world needs {}, and {} of the {} reserved for JETCARP is left ({users}): \
+                 close something, or reserve more for JETCARP (Tools → This computer…, or \
+                 `jetcarp limits`)",
+                bytes_text(self.needs),
+                bytes_text(self.limit),
+                bytes_text(*total)
+            ),
+            None => write!(
+                f,
+                "this world needs {}; this machine's limit is {} ({}: Tools → This computer…, or \
+                 `jetcarp limits`)",
+                bytes_text(self.needs),
+                bytes_text(self.limit),
+                self.origin
+            ),
+        }
     }
 }
 
@@ -552,8 +567,15 @@ impl Limits {
             GPU_CELL_CEILING as f64,
             "what the GPU simulator can number".into(),
         );
-        let (v, why) = scaled(Id::HostMemory);
-        add(Id::HostMemory, v, why, m, all.clone());
+        // The desktop background is part of the one pool, not an allowance on top of it: it may
+        // use what the rest of JETCARP leaves (`pool::Pool::left_for_this_program`).
+        add(
+            Id::HostMemory,
+            m,
+            format!("all {of_jetcarp}, shared with the rest of JETCARP"),
+            m,
+            all.clone(),
+        );
         let (v, why) = scaled(Id::HostCells);
         add(
             Id::HostCells,
@@ -702,6 +724,7 @@ impl Limits {
                 self.get(Id::World).text()
             ),
             own: share.source == Source::Own,
+            pool: None,
         })
     }
 
@@ -714,6 +737,28 @@ impl Limits {
             limit,
             origin: e.origin(),
             own: e.source == Source::Own,
+            pool: None,
+        })
+    }
+
+    /// Refuse a world over what the other JETCARP programs leave of the pool, counting `credit`
+    /// (the world it replaces in this program) as free.
+    pub fn check_world_in_pool(
+        &self,
+        needs: u64,
+        pool: &super::pool::Pool,
+        credit: u64,
+    ) -> Result<(), OverLimit> {
+        let left = pool.left(credit);
+        if needs <= left {
+            return Ok(());
+        }
+        Err(OverLimit {
+            needs,
+            limit: left,
+            origin: "what the rest of JETCARP leaves".into(),
+            own: false,
+            pool: Some((pool.total, pool.users_text())),
         })
     }
 
@@ -870,7 +915,8 @@ mod tests {
     fn the_reference_machine_keeps_the_old_limits() {
         let l = Limits::reference();
         assert_eq!(l.host_cells(), 64_000_000);
-        assert_eq!(l.host_memory_mb(), 6144);
+        // The desktop background shares JETCARP's one pool, all 8 GB of it.
+        assert_eq!(l.host_memory_mb(), 8192);
         assert_eq!(l.hashlife_nodes(), 48_000_000);
         assert_eq!(l.hunt_cache_bytes(), 1536 << 20);
         assert_eq!(l.media_pixels(), 300_000_000);
@@ -879,6 +925,45 @@ mod tests {
         assert_eq!(l.ai_cells(), AI_SMALL_CELLS);
         assert_eq!(l.world_bytes(), 4 * GIB);
         assert!(l.entries.iter().all(|e| e.source == Source::Suggested));
+    }
+
+    /// There is one pool, Reserved for JETCARP. The desktop background is part of it, not an
+    /// allowance scaled on top of it, and no part's limit is ever larger than the pool.
+    #[test]
+    fn one_pool_for_all_of_jetcarp() {
+        for gib in [4, 16, 64, 96, 128] {
+            let l = Limits::compute(&machine(gib), &Own::default());
+            let pool = l.jetcarp_memory() as f64;
+            let host = l.get(Id::HostMemory);
+            assert_eq!(host.suggestion, pool, "{gib} GB: the host may use the pool");
+            assert!(
+                host.why.contains("shared with the rest of JETCARP"),
+                "{}",
+                host.why
+            );
+            for e in &l.entries {
+                if e.unit == Unit::Bytes
+                    && e.id != Id::ReservedSystem
+                    && e.id != Id::ReservedJetcarp
+                {
+                    assert!(
+                        e.value <= pool && e.ceiling <= pool,
+                        "{gib} GB: {} over the pool",
+                        e.name
+                    );
+                }
+            }
+            // Pixels at 4 bytes and nodes at about 45 bytes fit it too.
+            assert!(l.media_pixels() * 4 <= l.jetcarp_memory());
+            assert!(l.hashlife_nodes() as u64 * 45 <= l.jetcarp_memory());
+        }
+        // Lowering the pool lowers the host's limit with it.
+        let hw = machine(64);
+        let l = Limits::compute(&hw, &Own::default());
+        let own = l
+            .set(&Own::default(), Id::ReservedJetcarp, (20 * GIB) as f64)
+            .unwrap();
+        assert_eq!(Limits::compute(&hw, &own).host_memory_mb(), 20 * 1024);
     }
 
     #[test]

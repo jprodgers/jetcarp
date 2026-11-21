@@ -65,14 +65,19 @@ JETCARP the rest:
 | 128 GB | 16 GB | 112 GB |
 
 Someone with a big computer can give JETCARP nearly all of it; at least 512 MB stays on each side.
-Every other memory limit is a share of JETCARP's part, scaled from the value the code had fixed
-before 0.4.3 on a 16 GB computer, so a 16 GB computer keeps the limits it had:
+
+**JETCARP's part is one pool, for all of JETCARP**: the app, the desktop background, every command,
+MCP servers, scripts and search jobs draw on it together, so a desktop with 128 GB that reserves
+16 GB for the system gives all of JETCARP 112 GB, not 112 GB to each program. Every other memory
+limit is a share of that pool, never larger than it: the desktop background may use all of it, less
+what the rest of JETCARP holds, and the others are scaled from the values the code had fixed before
+0.4.3 on a 16 GB computer, so a 16 GB computer keeps the limits it had:
 
 | Limit (`jetcarp limits` name) | What it limits | On 16 GB | On 64 GB | Ceiling |
 | --- | --- | --- | --- | --- |
 | Largest world (`world`) | The memory one world may take | 4 GB (half of JETCARP's part) | 24 GB | all of JETCARP's part, and 4,294,967,295 cells |
 | Largest world on the GPU (`gpu-world`) | Cells a world may have to step on the GPU; a larger one steps on the processor, with the same result | half the GPU's memory at 16 bytes a cell (for an integrated GPU with little of its own, with what it may borrow, within JETCARP's part), within its buffer limits | the same | 2,147,483,647 cells |
-| Desktop background: memory (`host-memory`) | What the background host may use before it gives up its largest world | 6 GB | 36 GB | all of JETCARP's part |
+| Desktop background: memory (`host-memory`) | What the background host may use before it gives up its largest world | the pool, 8 GB, less what the rest of JETCARP holds | the pool, 48 GB, less the same | all of JETCARP's part |
 | Desktop background: cells (`host-cells`) | Cells one of its worlds may have | 64 million | 384 million | 4,294,967,295 |
 | HashLife: nodes (`hashlife-nodes`) | Blocks HashLife keeps before it clears out unused ones (about 45 bytes each) | 48 million | 288 million | 2,147,483,648 |
 | Hunt caches (`hunt-cache`) | What a soup hunt's object caches may hold together | 1.5 GB | 9 GB | all of JETCARP's part |
@@ -103,6 +108,35 @@ run):
 
 So 30,000 by 30,000 cells of Life take 6.7 GB, and a world of several CAs counts each of them.
 
+### Sharing the pool
+
+Each JETCARP program writes down the memory it holds (its resident memory, as the system counts
+it) in the runtime folder, as `memory/<process id>.json`, when it starts and every 2 seconds after,
+and removes it when it ends; a record not renewed for 10 seconds belongs to a program that has gone,
+and no longer counts. From those records:
+
+- **A new world must fit what is left of the pool**, as well as the largest-world limit: the pool,
+  less what every other JETCARP program holds, less what this one holds beyond the world the new
+  one replaces. `jetcarp run`, scripts, the MCP tools and the app all check this before anything is
+  built.
+- **The desktop background yields.** Its memory limit, and the largest grid it builds, are what the
+  rest of JETCARP leaves it. When the app or a command takes the memory, the background gives up its
+  largest world for the next item, as it does when it passes its own limit.
+- `jetcarp limits`, `jetcarp doctor` and *Tools → This computer…* show who holds what:
+
+```text
+JETCARP in use now: the desktop background 1.2 GB, the app 640 MB, jetcarp limits 17 MB; 110 GB of
+the 112 GB reserved for JETCARP left
+```
+
+**What is not enforced across programs.** A world is checked when it is built, not as it grows (a
+sandpile's heights, HashLife's nodes and a hunt's caches grow within limits of their own, each a
+share of the pool, but they are not reserved in advance). Two worlds started in two programs in the
+same moment can each see the same free memory. Programs other than JETCARP, and copies of JETCARP
+from before 0.4.3, are not counted: that is what *Reserved for the System* is for. A program that
+cannot write to the runtime folder is not counted either, and the app asks before a world is built
+over what is left, with *Build anyway*, as it does over any limit.
+
 ### Over a limit
 
 The app asks first, with what the world needs, the limit and where the limit came from:
@@ -115,6 +149,9 @@ scripts and the MCP tools refuse instead, until the limit is raised:
 ```text
 Error: this world needs 31 GB; this machine's limit is 24 GB (half of the 48 GB reserved for
 JETCARP, from its hardware: Tools → This computer…, or `jetcarp limits`)
+Error: this world needs 1.9 GB, and 824 MB of the 8 GB reserved for JETCARP is left (the desktop
+background 7 GB, jetcarp run 200 MB): close something, or reserve more for JETCARP (Tools → This
+computer…, or `jetcarp limits`)
 ```
 
 ### An AI's share
@@ -177,7 +214,7 @@ comparing computers; `--quick` runs each workload once, for its answers alone, i
 
 ## Tools → This computer…
 
-<img src="../images/guides/this-computer-window.webp" alt="The This computer window: an example 8-core, 32 GB machine with a 12 GB GPU, not measured yet, and its limits, with 12 GB reserved for the system as the person's own value" width="800">
+<img src="../images/guides/this-computer-window.webp" alt="The This computer window: an example 8-core, 32 GB machine with a 12 GB GPU, not measured yet, what JETCARP's programs hold of its pool now, and its limits, with 12 GB reserved for the system as the person's own value" width="800">
 
 The window shows the hardware, the score with its parts and the date of the last run, **Measure
 this computer** (then **Run again**) and **Save a report…**, and the limits. Each limit shows what

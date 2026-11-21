@@ -411,6 +411,8 @@ fn main() -> Result<()> {
         eprintln!("note: {n}");
     }
     let r = run();
+    // This program's record in JETCARP's memory pool goes with it.
+    jetcarp_core::machine::pool::stop();
     if let Err(e) = &r
         && broken_pipe::is_broken(e)
     {
@@ -419,8 +421,35 @@ fn main() -> Result<()> {
     r
 }
 
+/// What this program is, in words, for its record in JETCARP's memory pool: `the app`, `the
+/// desktop background`, `an MCP server`, `a search job`, or `jetcarp <command>`.
+fn program_name(cmd: &Option<Cmd>) -> String {
+    match cmd {
+        None => "the app".into(),
+        Some(Cmd::Host(h)) if matches!(h.cmd, host_cmd::HostCmd::Serve(_)) => {
+            "the desktop background".into()
+        }
+        Some(Cmd::Mcp { .. }) => "an MCP server".into(),
+        Some(Cmd::Jobs(j)) if j.resumes() => "a search job".into(),
+        Some(_) => {
+            let names: Vec<String> = Cli::command()
+                .get_subcommands()
+                .map(|c| c.get_name().to_string())
+                .collect();
+            let word = std::env::args().skip(1).find(|a| names.contains(a));
+            format!("jetcarp {}", word.unwrap_or_default())
+        }
+    }
+}
+
 fn run() -> Result<()> {
     let cli = Cli::parse_from(args());
+    // Every JETCARP program records the memory it holds, so each sees what the others leave of
+    // the one pool reserved for JETCARP (`jetcarp_core::machine::pool`).
+    jetcarp_core::machine::pool::start(
+        &program_name(&cli.cmd),
+        jetcarp_search::jobs::explore::memory_bytes,
+    );
     let Some(cmd) = cli.cmd else {
         return jetcarp_app::run(cli.app).map_err(|e| anyhow::anyhow!(e));
     };

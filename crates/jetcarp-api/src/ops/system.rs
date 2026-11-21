@@ -511,6 +511,9 @@ fn machine_text(m: &crate::ops::machine::MachineOut) -> String {
     if let Some(why) = &m.stale {
         let _ = writeln!(s, "      note: {why}: `jetcarp score` measures it again");
     }
+    if let Some(p) = &m.limits.pool {
+        let _ = writeln!(s, "  JETCARP {}", crate::ops::machine::pool_line(p));
+    }
     for id in [Id::ReservedJetcarp, Id::World, Id::AiShare] {
         if let Some(e) = m.limits.entries.iter().find(|e| e.id == id) {
             let _ = writeln!(

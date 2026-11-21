@@ -206,7 +206,8 @@ per generation from the layer before. See [Layered rules](../automata/layered.md
 
 **Limit.** How much of something this computer allows (the memory of one world, the desktop
 background's cells, an AI's share...): your own value if you set one, else the machine's suggestion
-from its memory, never above the code's ceiling. A limit only allows or refuses; it never changes a
+from its memory, never above the code's ceiling. Every memory limit is a share of one pool, the
+memory reserved for all of JETCARP. A limit only allows or refuses; it never changes a
 result. See [This computer](../guides/this-computer.md#the-limits).
 
 ## M

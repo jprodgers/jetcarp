@@ -120,9 +120,12 @@ day later (0.4.2: 17 November here, 18 November there).
   the largest world, the GPU's, the desktop background's cells and memory, HashLife's node cap, the
   hunt caches, media's pixels, the app's wallpaper grid and animation frames, and an AI's share. The
   memory is split in two linked values, *Reserved for the System* (half the memory on a smaller
-  computer, at most 16 GB on a bigger one) and *Reserved for JETCARP* (the rest), and every other
-  memory limit is a share of JETCARP's part, scaled so a 16 GB computer keeps the limits it had and
-  a 64 GB one gets six times as much. Your own values win, up to each limit's ceiling, and are kept
+  computer, at most 16 GB on a bigger one) and *Reserved for JETCARP* (the rest). JETCARP's part is
+  one pool for all of JETCARP: each program records the memory it holds in the runtime folder, a
+  new world must fit what the others leave, and the desktop background, whose limit is the pool,
+  gives up its largest world when the rest of JETCARP needs the memory. Every other memory limit is
+  a share of the pool, scaled so a 16 GB computer keeps the limits it had and a 64 GB one gets six
+  times as much. Your own values win, up to each limit's ceiling, and are kept
   in `limits.json`. A world over the limit is refused before anything is built, naming what it
   needs, the limit and where the limit came from; the app asks first, with *Build anyway*. Nothing
   is ever made smaller to fit, so results never depend on the computer. The benchmark, about a

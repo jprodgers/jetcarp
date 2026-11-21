@@ -113,7 +113,13 @@ fn a_short_score_is_kept_and_reported() {
     let cx = Ctx::new()
         .with_settings_dir(Some(dir.join("settings")))
         .with_out_root(Some(dir.join("out")));
-    assert_eq!(cx.paths().data, dir.join("data"));
+    // `JETCARP_DATA_DIR`, when it is set (CI's main test step, a local run with scratch
+    // folders), comes before the folder chosen here; either way, never the user's own.
+    let want = std::env::var_os("JETCARP_DATA_DIR")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| dir.join("data"));
+    assert_eq!(cx.paths().data, want);
     let info = MachineInfo::run(&cx, NoInput {}, &Quiet).unwrap();
     assert!(info.score.is_none());
     assert!(info.text().contains("not measured yet"), "{}", info.text());
