@@ -300,6 +300,19 @@ impl Harness {
         self.frame_with(0.05, vec![]);
     }
 
+    /// A key pressed with these modifiers and let go.
+    fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
+        let ev = |pressed| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers,
+        };
+        self.frame_with(0.05, vec![ev(true)]);
+        self.frame_with(0.05, vec![ev(false)]);
+    }
+
     /// An app action, as the menu or a shortcut does it.
     fn action(&mut self, a: menu::Action) {
         let ctx = self.o.ctx.clone();
@@ -370,8 +383,17 @@ fn shots_tour() {
     all.extend(places);
     h.shot_part("tour-card-menu", Harness::around(&all, 12.0));
     h.escape();
-    // A world: an entry of the starter pack, its panes docked as at first.
-    let handle = handle_titled(&h.app.menu, "Oscillating GH 6/2");
+    // A world: the starter pack's Greenberg-Hastings spiral on IH30 (the atlas names it by its
+    // rule), or failing that any Greenberg-Hastings entry; its panes docked as at first.
+    let handle = [
+        "Oscillating GH 6/2",
+        "Oscillating Greenberg-Hastings",
+        "Greenberg-Hastings",
+    ]
+    .iter()
+    .find(|t| h.app.menu.items.iter().any(|it| it.title.starts_with(**t)))
+    .map(|t| handle_titled(&h.app.menu, t))
+    .expect("a Greenberg-Hastings entry");
     h.open_entry(&handle);
     h.run(4.0, 0.05, |_| false);
     h.steady();
@@ -1175,6 +1197,82 @@ fn shots_safety() {
     h.app.strobe.reread();
 }
 
+/// The grid from the keyboard (`guides/keyboard.md`, #219): Life on squares, the grid given the
+/// keyboard as Tab gives it, a glider drawn with the arrows and Space, then a selection of nine
+/// cells made with Shift and the arrows, the cell cursor at its corner. The world is made here, so
+/// it needs no library.
+#[test]
+#[ignore]
+fn shots_keyboard() {
+    use egui::{Key, Modifiers};
+    let Some(mut h) = Harness::new(1000, 640) else {
+        return;
+    };
+    let scene = Scene::from_json(
+        r#"{"name": "Life from the keyboard", "tiling": {"family": "square", "size": {"rect": {"w": 48, "h": 32}}, "boundary": "wrap"}, "rng_state": 1, "cas": [{"rule": "B3/S23", "seed": "empty"}]}"#,
+    )
+    .unwrap();
+    h.app.load_scene(&scene);
+    h.app.playing = false;
+    h.app.message = None;
+    h.run(1.0, 0.05, |_| false);
+    // About fourteen cells across the part pictured.
+    h.app.zoom_by(3.6);
+    h.frame_with(0.05, vec![]);
+    let grid = h.app.kb.grid_id.expect("the grid was drawn");
+    h.o.ctx.memory_mut(|m| m.request_focus(grid));
+    h.frame_with(0.05, vec![]);
+    let none = Modifiers::NONE;
+    // A glider, from the cursor's cell: .O. / ..O / OOO.
+    for keys in [
+        &[Key::ArrowRight][..],
+        &[Key::Space],
+        &[Key::ArrowDown, Key::ArrowRight],
+        &[Key::Space],
+        &[Key::ArrowDown],
+        &[Key::Space],
+        &[Key::ArrowLeft],
+        &[Key::Space],
+        &[Key::ArrowLeft],
+        &[Key::Space],
+    ] {
+        for k in keys {
+            h.key(*k, none);
+        }
+    }
+    assert_eq!(h.app.world.fields[0].population(), 5, "a glider drawn");
+    // Off to the right, a selection of three by three.
+    for _ in 0..4 {
+        h.key(Key::ArrowRight, none);
+    }
+    h.key(Key::ArrowUp, none);
+    for k in [
+        Key::ArrowRight,
+        Key::ArrowRight,
+        Key::ArrowDown,
+        Key::ArrowDown,
+    ] {
+        h.key(k, Modifiers::SHIFT);
+    }
+    assert_eq!(
+        h.app.kb.cursor.cells(&h.app.world.topo).len(),
+        9,
+        "nine cells selected"
+    );
+    // The pointer out of the grid, so no hover text shows.
+    h.hover(egui::pos2(2.0, 638.0));
+    let g = h.app.world.topo.lattice().unwrap().clone();
+    let c = h.app.kb.cursor.cell.unwrap();
+    let (u, j, _) = g.decompose(c);
+    eprintln!("cursor at column {}, row {}", u + 1, j + 1);
+    // The glider and the selection, the cursor at the selection's corner.
+    let grid_rect = h.find("World grid: Life from the keyboard");
+    let xf = h.app.tile_xf(grid_rect, h.o.ctx.pixels_per_point());
+    let at = xf.to_screen(h.app.world.topo.centroid(c));
+    let part = egui::Rect::from_center_size(at - egui::vec2(110.0, 40.0), egui::vec2(480.0, 280.0));
+    h.shot_part("keyboard-grid-cursor", part.intersect(grid_rect));
+}
+
 /// Settings → Accessibility (`guides/accessibility-settings.md`, #217, #218, #220): the window in
 /// the standard dark theme, then a JACA world in Cobalt and Saffron (the palettes chosen for
 /// colour-vision deficiency) with its panes and the window, in the high-contrast theme, dark and
@@ -1236,4 +1334,64 @@ fn shots_accessibility() {
     h.quick_start_loaded();
     h.shot("accessibility-check-quick-start-light");
     h.app.a11y.settings = Default::default();
+}
+
+/// Not a picture: what a screen reader is given, with a library set up as the book's pictures are
+/// (#219): the Quick Start's cards drawn, the pattern library with the starter pack's patterns,
+/// its ant runs, a world from the pack with each pane in turn, and every tool window over it. Each
+/// control must have a role, a name that says something, and a value that reads
+/// (`keyboard_tests::audit_tree`), as the suite's own test checks on an empty library.
+#[test]
+#[ignore]
+fn screen_reader_tree_with_the_starter_pack() {
+    use super::keyboard_tests::{audit_tree, tree_of};
+    let Some(mut h) = Harness::new(1400, 900) else {
+        return;
+    };
+    let mut all = vec![];
+    let mut check = |h: &Harness, what: &str| {
+        let tree = tree_of(&h.o.tree);
+        for p in audit_tree(&tree) {
+            all.push(format!("{what}: {p}"));
+        }
+        eprintln!("{what}: {} nodes", tree.len());
+    };
+    h.quick_start_loaded();
+    check(&h, "Quick Start");
+    h.app.menu.view.filter.source = Some(jetcarp_store::QsSource::Pack);
+    h.run(4.0, 0.05, |_| false);
+    check(&h, "Quick Start, the pack's cards");
+    h.app.menu.view.filter.source = None;
+    // A world from the pack, each pane in turn.
+    let handle = h
+        .app
+        .menu
+        .items
+        .iter()
+        .find(|it| it.source == jetcarp_store::QsSource::Pack)
+        .map(|it| it.handle.clone())
+        .expect("a pack entry");
+    h.open_entry(&handle);
+    h.app.playing = false;
+    for p in panes::PANES {
+        h.action(menu::Action::Pane(p.id));
+        h.run(0.5, 0.05, |_| false);
+        check(&h, &format!("{} pane", p.title));
+    }
+    // Every tool window, alone, with the library's records to show.
+    for t in menu::ToolWin::ALL {
+        h.app.set_tool_open(t, true);
+        h.run(3.0, 0.05, |_| false);
+        check(&h, t.label());
+        h.app.set_tool_open(t, false);
+        h.frame_with(0.05, vec![]);
+    }
+    for p in &all {
+        eprintln!("{p}");
+    }
+    assert!(
+        all.is_empty(),
+        "{} problems a screen reader would meet",
+        all.len()
+    );
 }

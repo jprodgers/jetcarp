@@ -1042,6 +1042,8 @@ pub struct DashWindow {
     pack_names: HashMap<String, String>,
     /// Finds chosen to play while motion is reduced (#218).
     stills: crate::a11y::Stills,
+    /// Each job's status as last seen, so one that finishes is announced (#219).
+    seen: HashMap<i64, String>,
 }
 
 impl Default for DashWindow {
@@ -1069,6 +1071,7 @@ impl Default for DashWindow {
             palette: None,
             pack_names: HashMap::new(),
             stills: Default::default(),
+            seen: HashMap::new(),
         }
     }
 }
@@ -1245,6 +1248,10 @@ impl DashWindow {
             }
             if let Some(j) = sh.started.take() {
                 self.pending_select = Some(j);
+            }
+            // A job that ends is said in the status line, which screen readers hear (#219).
+            for t in ended(&mut self.seen, &sh.jobs) {
+                crate::a11y::announce(ctx, t);
             }
         }
         self.messages.retain(|m| m.2.elapsed().as_secs() < 12);
@@ -1801,6 +1808,17 @@ impl DashWindow {
                 ui.label(RichText::new(if tr { "B" } else { "S" }).small().weak());
             });
             let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+            resp.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::Role::Image,
+                    true,
+                    if tr {
+                        "Heat map of births"
+                    } else {
+                        "Heat map of survivals"
+                    },
+                )
+            });
             let p = ui.painter_at(rect);
             p.image(
                 tex.id(),
@@ -1972,6 +1990,9 @@ impl DashWindow {
             ui.set_width(w);
             ui.vertical(|ui| {
                 let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, w * 0.8), Sense::click());
+                resp.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Button, true, &f.subtitle)
+                });
                 // With reduced motion, a still until it is clicked (#218).
                 let key = key_of(&f.target);
                 let time = self.stills.time(&resp, &key, time);
@@ -2013,6 +2034,14 @@ impl DashWindow {
                     let cur = f.rating.unwrap_or(0);
                     for k in 1..=5u8 {
                         let (r, resp) = ui.allocate_exact_size(egui::vec2(15.0, 15.0), Sense::click());
+                        resp.widget_info(|| {
+                            egui::WidgetInfo::selected(
+                                egui::Role::Button,
+                                true,
+                                k <= cur,
+                                format!("Rate {k} of 5"),
+                            )
+                        });
                         let on = k <= cur || (resp.hovered());
                         thumbs::star(
                             ui.painter(),
@@ -2141,6 +2170,37 @@ fn bars(ui: &mut egui::Ui, b: &[(String, u64)]) {
     });
 }
 
+/// What to announce of the jobs that ended since they were last seen (`seen` is updated): a job
+/// seen running that is now done, or has failed. Jobs seen for the first time say nothing.
+fn ended(seen: &mut HashMap<i64, String>, jobs: &[JobSummary]) -> Vec<String> {
+    let mut said = vec![];
+    for j in jobs {
+        let was = seen.insert(j.id, j.status.clone());
+        if was.as_deref() != Some("running") || j.status == "running" {
+            continue;
+        }
+        let what = if j.title.is_empty() {
+            format!("{} {}", j.kind_label, j.id)
+        } else {
+            format!("{} {} ({})", j.kind_label, j.id, j.title)
+        };
+        match j.status.as_str() {
+            "done" => said.push(format!("{what} finished.")),
+            "failed" => said.push(format!(
+                "{what} failed{}",
+                j.error
+                    .as_ref()
+                    .map(|e| format!(": {e}"))
+                    .unwrap_or_else(|| ".".into())
+            )),
+            "paused" => said.push(format!("{what} paused.")),
+            _ => {}
+        }
+    }
+    seen.retain(|id, _| jobs.iter().any(|j| j.id == *id));
+    said
+}
+
 #[cfg(test)]
 impl DashWindow {
     /// Start a hunt from the form, as *Start hunt* does (offscreen checks).
@@ -2172,6 +2232,36 @@ impl DashWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A job seen running that finishes, fails or pauses is announced, once; jobs seen for the
+    /// first time, already done, are not.
+    #[test]
+    fn a_job_that_ends_is_announced_once() {
+        let job = |id: i64, status: &str| JobSummary {
+            id,
+            kind_label: "Hunt".into(),
+            status: status.into(),
+            title: if id == 1 {
+                "Life on hexagons".into()
+            } else {
+                String::new()
+            },
+            error: (status == "failed").then(|| "out of disk".into()),
+            ..Default::default()
+        };
+        let mut seen = HashMap::new();
+        assert!(ended(&mut seen, &[job(1, "running"), job(2, "done")]).is_empty());
+        assert_eq!(
+            ended(&mut seen, &[job(1, "done"), job(2, "done")]),
+            vec!["Hunt 1 (Life on hexagons) finished.".to_string()]
+        );
+        assert!(ended(&mut seen, &[job(1, "done")]).is_empty(), "once");
+        assert!(ended(&mut seen, &[job(3, "running")]).is_empty());
+        assert_eq!(
+            ended(&mut seen, &[job(3, "failed")]),
+            vec!["Hunt 3 failed: out of disk".to_string()]
+        );
+    }
 
     #[test]
     fn the_form_makes_a_checked_hunt() {

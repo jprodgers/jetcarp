@@ -56,7 +56,8 @@ impl JetcarpApp {
                     ui.make_persistent_id(("ca-card", id)),
                     default_open,
                 );
-                state
+                let open = state.is_open();
+                let (toggle, _, _) = state
                     .show_header(ui, |ui| {
                     let mut en = ca.enabled;
                     if ui.checkbox(&mut en, "").on_hover_text("Run this CA").changed() {
@@ -101,11 +102,11 @@ impl JetcarpApp {
                     ui.horizontal(|ui| {
                         ui.label("Rule number");
                         let mut m = n;
-                        if ui.small_button("<").on_hover_text("Previous rule, restarted from its seed").clicked() && m > 0 {
+                        if ui.small_button("<").on_hover_text("Previous rule, restarted from its seed").accessible_name("Previous rule").clicked() && m > 0 {
                             m -= 1;
                         }
                         ui.add(egui::DragValue::new(&mut m).range(0..=kind.max()));
-                        if ui.small_button(">").on_hover_text("Next rule, restarted from its seed").clicked() && m < kind.max() {
+                        if ui.small_button(">").on_hover_text("Next rule, restarted from its seed").accessible_name("Next rule").clicked() && m < kind.max() {
                             m += 1;
                         }
                         if m != n {
@@ -264,6 +265,16 @@ impl JetcarpApp {
                     }
                 });
                     });
+                // The triangle that opens the card, to a screen reader (#219).
+                toggle.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::Role::DisclosureTriangle,
+                        true,
+                        format!("{}'s settings", ca.name),
+                    )
+                });
+                ui.ctx()
+                    .accesskit_node_builder(toggle.id, |n| n.set_expanded(open));
             });
         }
         let rule_changed = cmds
@@ -441,7 +452,7 @@ impl JetcarpApp {
             self.load_table();
         }
         ui.horizontal(|ui| {
-            egui::ComboBox::from_id_salt("add")
+            let named = egui::ComboBox::from_id_salt("add")
                 .selected_text(catalog()[self.add_choice].name)
                 .width(190.0)
                 .show_ui(ui, |ui| {
@@ -449,6 +460,7 @@ impl JetcarpApp {
                         self.add_choice = i;
                     }
                 });
+            crate::a11y::name(&named.response, "Rule to add");
             if ui.button("Add").clicked() {
                 let spec = CaSpec::new(catalog()[self.add_choice].notation);
                 if let Some(a) = self.exec(Command::AddCa { ca: spec }) {

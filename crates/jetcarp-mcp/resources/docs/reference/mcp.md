@@ -81,7 +81,7 @@ settings resources by `docs/tools/gen-mcp.py`.
 
 <!-- BEGIN GENERATED: docs/tools/gen-mcp.py -->
 
-The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 122 resources. Its instructions to the client:
+The server calls itself `jetcarp` (JETCARP cellular automata) and offers 21 tools and 123 resources. Its instructions to the client:
 
 > JETCARP runs cellular automata (the Game of Life and many other rules) on square, hexagon, triangle, Archimedean, k-uniform and aperiodic (Spectre, hat, Penrose) tilings, and keeps a library of the patterns its searches find. Typical flow: world_new (a tiling and rules) -> world_edit (draw or paste) -> world_step -> world_read / world_render. Long searches: search_start, job_status, then library_query for the finds. Call help for worked examples, reference for rule names, tilings, palettes and seeds. The JETCARP book is available as resources (jetcarp://docs/...) and through help {"page": ...}. What JETCARP shows on screen passes through its strobe guard, which softens, slows or pauses scenes that flash; no tool can turn it off.
 
@@ -1043,7 +1043,7 @@ The settings of 32 tool arguments, which `tools/list` only summarises (each argu
 - `pack`: `info`, `check`, `import`, `publish`, `export`, `site` (`jetcarp://schema/pack/<argument>`)
 - `app_display`: `save_rotation`, `saver` (`jetcarp://schema/app_display/<argument>`)
 
-And the 84 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
+And the 85 pages of this book, `jetcarp://docs/<page>` by their path without `.md` (`jetcarp://docs/guides/searching` is [Searching for patterns](../guides/searching.md)), as the server lists them:
 
 <details><summary>The book's pages</summary>
 
@@ -1064,6 +1064,7 @@ And the 84 pages of this book, `jetcarp://docs/<page>` by their path without `.m
 - `jetcarp://docs/guides/drawing-tiles`: Drawing and editing tiles
 - `jetcarp://docs/guides/palettes`: Palettes and colouring
 - `jetcarp://docs/guides/accessibility-settings`: Accessibility settings
+- `jetcarp://docs/guides/keyboard`: Using the app from the keyboard
 - `jetcarp://docs/guides/reseeding`: Reseeding
 - `jetcarp://docs/guides/wallpapers`: Wallpapers, screensavers and the background host
 - `jetcarp://docs/guides/rotations`: Rotations

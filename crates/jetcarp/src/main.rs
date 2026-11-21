@@ -89,6 +89,9 @@ enum Cmd {
     Wallpaper(Box<wallpaper_cmd::WallpaperArgs>),
     /// List the palettes with their background colours.
     Palettes,
+    /// The app's keys: moving about it, the menus' shortcuts, and the grid's cell cursor, on
+    /// Windows and Linux and on macOS, as Help → Keyboard shortcuts lists them.
+    Shortcuts,
     /// Check that a saved scene still replays to its recorded hash (or a PNG JETCARP wrote, which
     /// carries its scene).
     Verify { scene: PathBuf },
@@ -300,6 +303,35 @@ fn args() -> Vec<std::ffi::OsString> {
 
 /// Print an operation's output, as JSON with `--json`, else as text (and its notes on standard
 /// error); then fail if the output's own check failed (`run --expect`).
+/// `jetcarp shortcuts`: the app's table of keys, as text or JSON (`{"groups": [...]}`, which the
+/// book's keyboard page is generated from).
+fn print_shortcuts(json: bool) -> Result<()> {
+    let groups = jetcarp_app::shortcuts();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({ "groups": groups }))?
+        );
+        return Ok(());
+    }
+    let dash = |s: &str| {
+        if s.is_empty() {
+            "-".to_string()
+        } else {
+            s.to_string()
+        }
+    };
+    for g in &groups {
+        println!("{}", g.name);
+        println!("  {:<24} {:<18} What it does", "Windows and Linux", "macOS");
+        for s in &g.keys {
+            println!("  {:<24} {:<18} {}", dash(&s.keys), dash(&s.mac), s.what);
+        }
+        println!();
+    }
+    Ok(())
+}
+
 pub(crate) fn show<T: serde::Serialize + Report>(out: &T, json: bool) -> Result<()> {
     if json {
         println!("{}", op::to_pretty(out));
@@ -567,6 +599,7 @@ fn run() -> Result<()> {
             &reference::ReferencePalettes::run(&cx, NoInput {}, &Quiet)?,
             json,
         )?,
+        Cmd::Shortcuts => print_shortcuts(json)?,
         Cmd::Tilings => show(
             &reference::ReferenceTilings::run(&cx, Default::default(), &Quiet)?,
             json,

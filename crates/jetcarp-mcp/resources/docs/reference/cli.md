@@ -38,6 +38,7 @@ Commands:
   run         Load a scene, run it, and report generation, hash, and populations
   wallpaper   Desktop wallpapers: a scene or Quick Start entry at a monitor's size, a span of monitors, or one image per monitor cut so they line up
   palettes    List the palettes with their background colours
+  shortcuts   The app's keys: moving about it, the menus' shortcuts, and the grid's cell cursor, on Windows and Linux and on macOS, as Help → Keyboard shortcuts lists them
   verify      Check that a saved scene still replays to its recorded hash (or a PNG JETCARP wrote, which carries its scene)
   sheet       Contact sheet: one thumbnail per elementary rule, labelled with its number
   objects     Find still lifes, oscillators, and spaceships in a scene after running it
@@ -127,7 +128,7 @@ App options (with no subcommand):
 - **Packs**: [`pack`](#jetcarp-pack). See [Packs: importing, exporting, checking](../guides/packs.md), [Pack format](pack-format.md).
 - **Pictures, media and the website**: [`sheet`](#jetcarp-sheet), [`media`](#jetcarp-media), [`site`](#jetcarp-site), [`wallpaper`](#jetcarp-wallpaper). See [Pictures and animations](../guides/pictures.md), [Website export](../guides/website-export.md), [Wallpapers, screensavers and the background host](../guides/wallpapers.md).
 - **Scripts**: [`script`](#jetcarp-script). See [Scripting (Rhai) API](scripting.md), [Scripting a rule sweep](../tutorials/scripting-a-sweep.md).
-- **The app, the background host and AI assistants**: [`app`](#jetcarp-app), [`host`](#jetcarp-host), [`mcp`](#jetcarp-mcp). See [Wallpapers, screensavers and the background host](../guides/wallpapers.md), [Driving JETCARP from an AI assistant](../tutorials/mcp.md), [MCP tools](mcp.md).
+- **The app, the background host and AI assistants**: [`app`](#jetcarp-app), [`shortcuts`](#jetcarp-shortcuts), [`host`](#jetcarp-host), [`mcp`](#jetcarp-mcp). See [Wallpapers, screensavers and the background host](../guides/wallpapers.md), [Using the app from the keyboard](../guides/keyboard.md), [Driving JETCARP from an AI assistant](../tutorials/mcp.md), [MCP tools](mcp.md).
 - **Lists**: [`rules`](#jetcarp-rules), [`tilings`](#jetcarp-tilings), [`isohedral`](#jetcarp-isohedral), [`palettes`](#jetcarp-palettes). See [Named rule catalogue](../automata/named-rules.md), [Rule notation](rule-notation.md), [Tiling catalogue](../tilings/catalogue.md), [Palettes](palettes.md).
 - **Setup and upkeep**: [`setup`](#jetcarp-setup), [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`guard`](#jetcarp-guard), [`uninstall`](#jetcarp-uninstall). See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
 
@@ -2150,7 +2151,7 @@ Example scripts are built in, as in the app's Examples menu: --examples lists th
 
 ## The app, the background host and AI assistants
 
-Control the running app and the background host, and serve the MCP tools to an AI assistant. See [Wallpapers, screensavers and the background host](../guides/wallpapers.md), [Driving JETCARP from an AI assistant](../tutorials/mcp.md), [MCP tools](mcp.md).
+Control the running app and the background host, list the app's keys, and serve the MCP tools to an AI assistant. See [Wallpapers, screensavers and the background host](../guides/wallpapers.md), [Using the app from the keyboard](../guides/keyboard.md), [Driving JETCARP from an AI assistant](../tutorials/mcp.md), [MCP tools](mcp.md).
 
 ### `jetcarp app`
 
@@ -2403,6 +2404,18 @@ Options:
       --token <TOKEN>  App token (default: the recorded one)
       --json           Print the app's reply as JSON
   -h, --help           Print help
+```
+
+### `jetcarp shortcuts`
+
+```text
+The app's keys: moving about it, the menus' shortcuts, and the grid's cell cursor, on Windows and Linux and on macOS, as Help → Keyboard shortcuts lists them
+
+Usage: jetcarp shortcuts [OPTIONS]
+
+Options:
+      --json  Print the result as JSON instead of text (commands that report a result)
+  -h, --help  Print help
 ```
 
 ### `jetcarp host`

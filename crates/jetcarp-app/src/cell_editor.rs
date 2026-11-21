@@ -1100,6 +1100,13 @@ impl CellEditor {
     /// Draw the cell and handle editing. Returns true when an edit finished.
     fn canvas(&mut self, ui: &mut egui::Ui, size: Vec2, actions: &mut Vec<EditorAction>) -> bool {
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+        resp.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::Role::Image,
+                true,
+                "The unit cell, whose tiles the mouse edits",
+            )
+        });
         self.canvas = rect;
         if self.view.is_none() {
             self.fit(rect);
