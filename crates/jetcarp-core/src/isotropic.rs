@@ -147,6 +147,32 @@ pub fn full(n: usize) -> u16 {
     (1u16 << LETTERS[n].len().max(1)) - 1
 }
 
+/// The 51 classes of arrangement numbered count by count, letters in [`LETTERS`] order: where
+/// each count's start (0 for 0, 1 for `1c`, 3 for `2c`, ..., 50 for 8).
+pub const CLASS_START: [u32; 9] = [0, 1, 3, 9, 19, 32, 42, 48, 50];
+
+/// How many classes there are.
+pub const CLASSES: u32 = 51;
+
+/// Every class's bit, in a 51-bit mask over [`class_number`]s.
+pub const ALL_CLASSES: u64 = (1u64 << CLASSES) - 1;
+
+/// The number (0 to 50) of a neighbourhood's class.
+#[inline]
+pub fn class_number(nbhd: u8) -> u32 {
+    let c = classes()[nbhd as usize];
+    CLASS_START[(c >> 4) as usize] + (c & 15) as u32
+}
+
+/// A class's count and letter (`2a`), from its number.
+pub fn class_name(k: u32) -> String {
+    let n = CLASS_START.iter().rposition(|&s| s <= k).unwrap_or(0);
+    match LETTERS[n].as_bytes().get((k - CLASS_START[n]) as usize) {
+        Some(&l) => format!("{n}{}", l as char),
+        None => n.to_string(),
+    }
+}
+
 /// An isotropic non-totalistic rule: per count of live neighbours 0 to 8, the letters (bit `l` for
 /// the `l`-th of [`LETTERS`]`[n]`; bit 0 for 0 and 8) on which a dead cell is born and a live one
 /// survives; and the state count (2, or a Generations rule's, whose dying cells count up to it).
@@ -289,6 +315,26 @@ impl IsoRule {
     pub fn from_masks(birth: u32, survive: u32, states: u8) -> IsoRule {
         let per = |m: u32| -> [u16; 9] {
             std::array::from_fn(|n| if m >> n & 1 == 1 { full(n) } else { 0 })
+        };
+        IsoRule {
+            birth: per(birth),
+            survive: per(survive),
+            states,
+        }
+    }
+
+    /// Birth and survival as 51-bit masks over the [`class_number`]s.
+    pub fn class_masks(&self) -> (u64, u64) {
+        let mask = |m: &[u16; 9]| -> u64 {
+            (0..9).fold(0u64, |acc, n| acc | (m[n] as u64) << CLASS_START[n])
+        };
+        (mask(&self.birth), mask(&self.survive))
+    }
+
+    /// The rule of these 51-bit class masks ([`class_masks`](Self::class_masks)).
+    pub fn from_class_masks(birth: u64, survive: u64, states: u8) -> IsoRule {
+        let per = |m: u64| -> [u16; 9] {
+            std::array::from_fn(|n| (m >> CLASS_START[n]) as u16 & full(n))
         };
         IsoRule {
             birth: per(birth),
@@ -701,6 +747,46 @@ mod tests {
                 // Shared nodes keep it small: far fewer than the 255 of a full tree.
                 assert!(d.nodes.len() < 120, "{b}/{s}: {}", d.nodes.len());
             }
+        }
+    }
+
+    // Class numbers run count by count, letter by letter, and the masks over them are the rule.
+    #[test]
+    fn class_numbers_and_masks() {
+        let mut seen = std::collections::BTreeSet::new();
+        for x in 0..=255u8 {
+            let k = class_number(x);
+            assert!(k < CLASSES);
+            seen.insert(k);
+            let c = classes()[x as usize];
+            assert_eq!(k, CLASS_START[(c >> 4) as usize] + (c & 15) as u32);
+        }
+        assert_eq!(seen.len(), 51);
+        assert_eq!(
+            (
+                class_name(0),
+                class_name(1),
+                class_name(4),
+                class_name(18),
+                class_name(50)
+            ),
+            (
+                "0".into(),
+                "1c".into(),
+                "2e".into(),
+                "3r".into(),
+                "8".into()
+            )
+        );
+        let Parsed::Isotropic(r) = parse("3-cnqy", "23-a", 2).unwrap() else {
+            panic!()
+        };
+        let (b, s) = r.class_masks();
+        assert_eq!(IsoRule::from_class_masks(b, s, 2), r);
+        for x in 0..=255u8 {
+            let k = class_number(x);
+            assert_eq!(b >> k & 1 == 1, r.born(x));
+            assert_eq!(s >> k & 1 == 1, r.survives(x));
         }
     }
 

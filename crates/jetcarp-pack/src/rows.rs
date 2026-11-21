@@ -8,7 +8,7 @@
 use crate::tables::*;
 use jetcarp_core::objects::LCell;
 use jetcarp_core::pattern::movers::MoverRecord;
-use jetcarp_core::pattern::range::{self, IDENTITY_VERSION, RuleRange, content_id};
+use jetcarp_core::pattern::range::{self, IDENTITY_VERSION, IsoRange, RuleRange, content_id};
 use jetcarp_core::pattern::site::{GraphCell, Site, SiteGraph, SiteTile};
 use jetcarp_core::pattern::verify::Verification;
 use jetcarp_core::pattern::{
@@ -416,6 +416,11 @@ pub fn record_of(
         .map(serde_json::from_str)
         .transpose()
         .map_err(|e| format!("pattern {}: range: {e}", p.id))?;
+    let iso_range: Option<IsoRange> = main
+        .and_then(|v| v.iso_range.as_deref())
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(|e| format!("pattern {}: iso_range: {e}", p.id))?;
     let gun: Option<GunInfo> = p
         .gun
         .as_deref()
@@ -429,6 +434,7 @@ pub fn record_of(
         rule,
         rules: vec![],
         range,
+        iso_range,
         neighborhood,
         steps_per_gen: u32::try_from(p.steps_per_gen).map_err(|_| "steps per generation")?,
         tiling_name: pattern::tiling_display_name(&tiling),

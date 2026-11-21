@@ -11,6 +11,20 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Added
 
+- **Isotropic rule ranges.** A pattern on the square grid's touching neighbours now carries the
+  isotropic rules it runs in exactly as stored: the births and survivals its evolution needs, and
+  those it must not have, among the 51 arrangements of the live neighbours that Hensel's notation
+  names, as the B/S rule range does with counts. It is worked out when the pattern is verified,
+  whatever B/S, Generations or isotropic rule found it, shown with the record, and matched by
+  `--works-in`, which now takes isotropic rules (Life's glider is found in tlife), and a B/S rule by
+  either range. Libraries go to schema 4 (patterns gain the range's columns; an older library is
+  brought up on opening), and packs to format 1.1, whose `verifications` table gains an `iso_range`
+  column that a 1.0 reader ignores, with a new golden pack, `isotropic`. An object of an isotropic
+  rule that no B/S rule gives is stored with this range and no B/S one.
+  ([Isotropic rules](../automata/isotropic.md#searches-and-the-library),
+  [Pack format](../reference/pack-format.md#versions-and-compatibility),
+  [#238](https://github.com/jprodgers/jetcarp/issues/238))
+
 - **Isotropic rules in Hensel's notation.** A rule family on the square grid's eight touching
   neighbours in which a letter after a count names an arrangement of that many live neighbours, the
   same under turns and reflections: `B2-a/S12` (Just Friends), `B3-cnqy/S23-a`, Generations rules

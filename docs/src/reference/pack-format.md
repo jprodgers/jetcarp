@@ -2,7 +2,8 @@
 
 A **pack** is how JETCARP shares data: patterns, ant and turmite runs, Quick Start scenes, the
 tilings and rules they run on, and optionally search runs, pictures and ratings. This page is the
-normative definition of pack format **1.0**, the first format JETCARP keeps readable for good. It
+normative definition of pack format **1.1** (1.0, the first format JETCARP keeps readable for good,
+with one column more: [versions](#versions-and-compatibility)). It
 is written so that a program can read, check and merge packs without JETCARP; JETCARP itself
 publishes and imports them with `jetcarp pack` (see [Command line](#the-command-line)).
 
@@ -594,6 +595,7 @@ as JSON (`level` among them when the patch gave its level that way).
 | `engine_version: string`, `pin: string`, `semantics: string` | what checked it |
 | `date: string` | when |
 | `range: string?` | on the main row of B/S and Generations patterns: the rule range as JSON (`bits`, `birth_min`, `birth_max`, `survive_min`, `survive_max`, `states_min`, `states_max`: every rule whose masks lie between the bounds runs the pattern as stored; `min_rule` and `max_rule`: the two bounding rules in notation, for people) |
+| `iso_range: string?` | format 1.1, on the main row of patterns on the square grid's touching neighbours (B/S, Generations and isotropic rules): the isotropic rule range as JSON (`birth_min`, `birth_max`, `survive_min`, `survive_max`: 51-bit masks over the arrangements of the eight neighbours up to rotation and reflection, bit *k* for the *k*-th of `0`, `1c`, `1e`, `2c`, `2e`, `2k`, `2a`, `2i`, `2n`, then each count's letters in the order `c e k a i n y q j r t w z`, ending with `8`; `states_min`, `states_max`; `min_rule`, `max_rule`). Every isotropic rule in Hensel's notation whose masks lie between the bounds runs the pattern as stored, and so does every B/S rule whose table, every arrangement of each of its counts, does |
 | `mover: string?` | on the main row of aperiodic movers: how far the tracker followed it (JSON) |
 
 ### `sightings` (events, sorted by `pattern_id`, `rule`, `publisher`, `source`)
@@ -953,6 +955,9 @@ data never carries attribution duties; other publishers may choose any open lice
 
 ## Versions and compatibility
 
+- **Format 1.1** (JETCARP 0.4.3) adds one nullable column, `verifications.iso_range` (the isotropic
+  rule range); its schema id stays `jetcarp-verifications 1`, and a 1.0 reader ignores it. 1.1
+  defines no `requires`. JETCARP writes 1.1 and reads 1.0 and 1.1.
 - **Format `major.minor`.** A reader MUST refuse an unknown major, and MUST read a higher minor,
   ignoring unknown members, tables and columns. Unknown members are ignored in every JSON object:
   documents, and the JSON held in table cells (`range`, `gun`, `ants.run`, `site`, ...) alike.
@@ -983,6 +988,7 @@ packs; none is ever deleted or rewritten.
 | `ants` | two ant runs on the square grid: Langton's ant (a highway, named) and LLRR (symmetric growth) | `sha256:c5f2ab90b2bb2f269a62db194cc951eb77f0753b18e4658d93b0749ad53b317d` |
 | `export` | `minimal` as an export | `sha256:8dbe85670c96804f87db94880c6b1d702d6eae7964fc6fdae11d86fcd3123ed6` |
 | `numbers` | random states beyond 2^53, as decimal strings: a Quick Start scene's `rng_state`, a block's find in `provenance.run`, and Langton's ant from a soup's `state` | `sha256:74f36181bc2ec72a7a9d1c45164d98cfec1e964f224ad704abe9f635cc243e38` |
+| `isotropic` | format 1.1: three patterns of isotropic rules with their isotropic rule ranges (tlife's boat; two Just Friends objects, one that a B/S rule also gives and one that none does) | `sha256:d838ed3d84a8614b307a59d9e6092b205999f7f424f1e8c0fab05be6deea8f70` |
 
 Their keys are Ed25519 keys from fixed seeds and their raters are invented. Every time in them is
 fixed, including the times a search stamps on what it finds (a find's date and its verification's),

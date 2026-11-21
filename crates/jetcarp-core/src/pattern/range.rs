@@ -59,6 +59,17 @@
 //! reach is simply free). Ranges are computed for still lifes, oscillators, and spaceships of
 //! B/S and Generations rules with one step per generation, on lattices and on aperiodic patches
 //! (at the pattern's site). Other families keep only the exact rules they were verified in.
+//!
+//! **Isotropic rule ranges** ([`IsoRange`], #238) are the same over the square grid's touching
+//! neighbours with the arrangement of the live neighbours in place of their number: a transition
+//! is (state, class of arrangement) -> next state, over the 51 classes of
+//! [`crate::isotropic::class_number`], so a range holds the isotropic rules (Hensel's notation)
+//! that run the pattern as stored, as two 51-bit masks per half. B/S rules are the isotropic rules
+//! that take every arrangement of a count or none, so a B/S rule runs a pattern exactly when its
+//! table lies in the pattern's isotropic range. Isotropic ranges are computed for the same
+//! records as B/S ranges, when they are on the square grid with touch neighbours, whatever B/S,
+//! Generations or isotropic rule found them; a pattern of an isotropic rule whose evolution needs
+//! a count's arrangements to differ has an isotropic range and no B/S one.
 
 use super::{PatternClass, PatternRecord, tiling_key};
 use crate::rules::Rule;
@@ -343,6 +354,183 @@ fn group(n: u64) -> String {
     out
 }
 
+/// The isotropic rules (Hensel's notation, on the square grid's touching neighbours) in which a
+/// pattern runs exactly as stored (see the module notes): births and survivals as 51-bit masks
+/// over the classes of arrangement ([`crate::isotropic::class_number`]), the ones its evolution
+/// needs (`*_min`) and the ones it allows (`*_max`), and the Generations state counts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IsoRange {
+    pub birth_min: u64,
+    pub birth_max: u64,
+    pub survive_min: u64,
+    pub survive_max: u64,
+    pub states_min: u8,
+    pub states_max: u8,
+    /// The minimal and maximal rules as notation (`/C<n>` when the state count is fixed above 2).
+    pub min_rule: String,
+    pub max_rule: String,
+}
+
+impl IsoRange {
+    /// A range from its masks and state counts (the notation is filled in).
+    pub fn new(b: [u64; 2], s: [u64; 2], c: [u8; 2]) -> IsoRange {
+        let all = crate::isotropic::ALL_CLASSES;
+        let fixed = if c[0] == c[1] { c[0] } else { 2 };
+        let name = |b: u64, s: u64| {
+            crate::isotropic::IsoRule::from_class_masks(b & all, s & all, fixed.max(2)).notation()
+        };
+        let rule = |b: u64, s: u64| -> String {
+            // Written as JETCARP reads it: every letter or none of each count is the B/S rule.
+            Rule::parse(&name(b, s))
+                .map(|(r, _)| r.notation())
+                .unwrap_or_else(|_| name(b, s))
+        };
+        IsoRange {
+            birth_min: b[0] & all,
+            birth_max: b[1] & all,
+            survive_min: s[0] & all,
+            survive_max: s[1] & all,
+            states_min: c[0],
+            states_max: c[1],
+            min_rule: rule(b[0], s[0]),
+            max_rule: rule(b[1], s[1]),
+        }
+    }
+
+    /// The 51-bit class masks and state count of a rule an isotropic range can hold: an isotropic
+    /// rule, or a B/S or Generations rule as the isotropic rule with every letter of its counts.
+    pub fn masks_of(rule: &Rule) -> Option<(u64, u64, u8)> {
+        let r = match rule {
+            Rule::Isotropic(r) => (**r).clone(),
+            _ => {
+                let (b, s, c) = bs_parts(rule)?;
+                crate::isotropic::IsoRule::from_masks(b, s, c)
+            }
+        };
+        let (b, s) = r.class_masks();
+        Some((b, s, r.states.max(2)))
+    }
+
+    /// Does this rule run the pattern exactly as stored? (A B/S rule on the touching
+    /// neighbours, or an isotropic one.)
+    pub fn contains(&self, rule: &Rule) -> bool {
+        let Some((b, s, c)) = Self::masks_of(rule) else {
+            return false;
+        };
+        b & self.birth_min == self.birth_min
+            && b & !self.birth_max == 0
+            && s & self.survive_min == self.survive_min
+            && s & !self.survive_max == 0
+            && (self.states_min..=self.states_max).contains(&c)
+    }
+
+    /// [`contains`](Self::contains) for rule notation (refused with a `V`: the range is of the
+    /// touching neighbours).
+    pub fn contains_notation(&self, rule: &str) -> bool {
+        Rule::parse(rule).is_ok_and(|(r, nb)| nb != Some(Nb::Edge) && self.contains(&r))
+    }
+
+    /// Free birth and survival classes (in neither the minimal rule nor forbidden).
+    pub fn free_classes(&self) -> (Vec<u32>, Vec<u32>) {
+        let free = |lo: u64, hi: u64| -> Vec<u32> {
+            (0..crate::isotropic::CLASSES)
+                .filter(|k| (hi & !lo) >> k & 1 == 1)
+                .collect()
+        };
+        (
+            free(self.birth_min, self.birth_max),
+            free(self.survive_min, self.survive_max),
+        )
+    }
+
+    /// How many isotropic rules the range holds (choices of the free classes, times state counts).
+    pub fn rule_count(&self) -> f64 {
+        let (b, s) = self.free_classes();
+        2f64.powi((b.len() + s.len()) as i32)
+            * (self.states_max as f64 - self.states_min as f64 + 1.0)
+    }
+
+    /// `B3/S23 to B3-q4z/S2-c3-k (2^38 isotropic rules)`, plus the state counts when more than one.
+    pub fn describe(&self) -> String {
+        let (b, s) = self.free_classes();
+        let mut out = if self.min_rule == self.max_rule {
+            format!("only {} (isotropic)", self.min_rule)
+        } else {
+            format!(
+                "{} to {} (2^{} isotropic rules)",
+                self.min_rule,
+                self.max_rule,
+                b.len() + s.len()
+            )
+        };
+        if self.states_min != self.states_max {
+            out.push_str(&format!(
+                ", with {} to {} states (Generations)",
+                self.states_min, self.states_max
+            ));
+        }
+        out
+    }
+}
+
+/// Does this record get an isotropic rule range? A record that gets a B/S range ([`ranged`]) or
+/// is of an isotropic rule, on the square grid's touching neighbours (a lattice of one tile type
+/// whose touching neighbours are the eight around a square), with one step per generation.
+pub fn iso_ranged(rec: &PatternRecord) -> bool {
+    matches!(
+        rec.class,
+        PatternClass::StillLife | PatternClass::Oscillator | PatternClass::Spaceship
+    ) && rec.steps_per_gen == 1
+        && rec.mover.is_none()
+        && rec.site.is_none()
+        && rec.neighborhood == Nb::Touch
+        && Rule::parse(&rec.rule).is_ok_and(|(r, _)| cell_model(&r) == "lifelike")
+        && moore_offsets(&rec.tiling).is_some()
+}
+
+/// The square grid's eight touching neighbours as lattice steps, when the tiling's touching
+/// neighbours are those (one tile type, the eight `(di, dj)` around it).
+fn moore_offsets(tiling: &TilingSpec) -> Option<Offsets> {
+    let off = lattice_offsets(tiling, Nb::Touch).ok()?;
+    let one = off.first().filter(|_| off.len() == 1)?;
+    let xy: Vec<(i32, i32)> = one.iter().map(|o| (o.0, o.1)).collect();
+    crate::isotropic::slots(&xy)?;
+    Some(off)
+}
+
+/// The record's isotropic rule range, or `None` when it has none (see [`iso_ranged`]).
+pub fn iso_range(rec: &PatternRecord) -> Result<Option<IsoRange>, String> {
+    if !iso_ranged(rec) {
+        return Ok(None);
+    }
+    let p = rec.period.max(1);
+    let phases: Vec<Vec<(LKey, u8)>> = (0..=p)
+        .map(|t| {
+            rec.phase(t)
+                .map(|v| v.iter().map(|c| ((c.i, c.j, c.k), c.s)).collect())
+        })
+        .collect::<Result<_, _>>()?;
+    let t = tally_by(
+        &phases,
+        |(i, j, k), out| {
+            out.extend(
+                crate::isotropic::OFFSETS
+                    .iter()
+                    .map(|&(dx, dy)| (i + dx, j + dy, k)),
+            )
+        },
+        |cur, nbrs| {
+            // `nbrs` is in OFFSETS order: bit k for a state-1 neighbour.
+            let x = nbrs
+                .iter()
+                .enumerate()
+                .fold(0u8, |m, (k, y)| m | ((cur.get(y) == Some(&1)) as u8) << k);
+            crate::isotropic::class_number(x)
+        },
+    )?;
+    t.finish_iso().map(Some)
+}
+
 /// Required and forbidden counts seen so far.
 #[derive(Default, Debug)]
 struct Tally {
@@ -395,6 +583,34 @@ impl Tally {
         Ok(())
     }
 
+    /// The isotropic range of a tally over class numbers ([`iso_range`]).
+    fn finish_iso(self) -> Result<IsoRange, String> {
+        let all = crate::isotropic::ALL_CLASSES;
+        let b_forb = self.b_forb | 1; // B0 is never allowed: empty space must stay empty.
+        if self.b_req & b_forb != 0 || self.s_req & self.s_forb != 0 {
+            return Err(
+                "the evolution needs and forbids the same arrangement: not an isotropic rule"
+                    .into(),
+            );
+        }
+        let c = match self.c_exact {
+            Some(c) if c < self.c_min.max(2) => {
+                return Err(format!(
+                    "the evolution needs {c} states and at least {}",
+                    self.c_min
+                ));
+            }
+            Some(c) if c > MAX_STATES as u32 => return Err(format!("{c} states is too many")),
+            Some(c) => [c as u8, c as u8],
+            None => [self.c_min.max(2) as u8, MAX_STATES],
+        };
+        Ok(IsoRange::new(
+            [self.b_req & all, all & !b_forb],
+            [self.s_req & all, all & !self.s_forb],
+            c,
+        ))
+    }
+
     fn finish(self, bits: u32) -> Result<RuleRange, String> {
         if bits > 32 {
             return Err(format!(
@@ -438,7 +654,19 @@ impl Tally {
 /// the last one the first phase moved by the displacement).
 fn tally_run<K: Copy + Eq + Hash>(
     phases: &[Vec<(K, u8)>],
+    nbrs: impl FnMut(K, &mut Vec<K>),
+) -> Result<Tally, String> {
+    tally_by(phases, nbrs, |cur, buf| {
+        buf.iter().filter(|y| cur.get(y) == Some(&1)).count() as u32
+    })
+}
+
+/// [`tally_run`], with what a transition depends on (`measure`, from the phase and a cell's
+/// neighbours: their number of state-1 cells, or the class of their arrangement) given.
+fn tally_by<K: Copy + Eq + Hash>(
+    phases: &[Vec<(K, u8)>],
     mut nbrs: impl FnMut(K, &mut Vec<K>),
+    measure: impl Fn(&HashMap<K, u8>, &[K]) -> u32,
 ) -> Result<Tally, String> {
     let mut t = Tally::default();
     let maps: Vec<HashMap<K, u8>> = phases.iter().map(|p| p.iter().copied().collect()).collect();
@@ -457,7 +685,7 @@ fn tally_run<K: Copy + Eq + Hash>(
         for x in cand {
             buf.clear();
             nbrs(x, &mut buf);
-            let n = buf.iter().filter(|y| cur.get(y) == Some(&1)).count() as u32;
+            let n = measure(cur, &buf);
             t.add(
                 cur.get(&x).copied().unwrap_or(0),
                 n,

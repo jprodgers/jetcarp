@@ -55,7 +55,7 @@ favours larger periods, faster ships, more cells and rarity. The filters:
 | `--class still_life\|oscillator\|spaceship` | are of that class |
 | `--tiling ID` | are on a tiling: a family id (`hex`), a catalog id (`k2-001`) or part of its name |
 | `--rule TEXT` | were verified in a rule whose notation contains the text |
-| `--works-in RULE` | run in this rule: inside their rule range, or verified there |
+| `--works-in RULE` | run in this rule: inside their rule range or isotropic rule range, or verified there |
 | `--min-period N`, `--max-period N`, `--min-score X` | pass those bounds |
 | `--state new\|reviewed\|promoted\|rejected`, `--tag TAG`, `--text TEXT` | carry that state, tag or text |
 | `--by search\|script\|llm\|user` | were found that way |
@@ -66,7 +66,9 @@ records.
 
 The `--works-in` filter is where the rule ranges pay off: a pattern found in Life also runs in every
 rule in its range, so the example above found oscillators from Life that run unchanged in HighLife
-(`B36/S23`).
+(`B36/S23`). On the square grid's touching neighbours a pattern also has an isotropic rule range, so
+`--works-in` takes [isotropic rules](../automata/isotropic.md) too: `--works-in B3/S2-i34q` finds
+Life's glider, which runs unchanged in tlife.
 
 **One record.** `jetcarp library show ID` (any unique start of the id, or the pattern's name) prints
 everything: the rule range, the displacement and speed, the cells over its period, every sighting,

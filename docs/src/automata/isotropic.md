@@ -175,11 +175,15 @@ leaves the same catalogue with or without the GPU. The object finder, puffer det
 library take the rules too. The rules are isotropic, so an object turned or reflected is the same
 object, and the finder's eight symmetries apply. A record's identity uses the same cell model as a
 Life-like rule's (`lifelike`), so a still life is the same pattern whichever rule it was found in;
-its rule is kept with it. A record's rule range (the rules it works in, from least to most) is a set
-of B/S rules: an isotropic rule's object has one when some B/S rule gives its evolution too, and
-none when its evolution needs a count's arrangements to differ. Ranges of isotropic rules are for
-later; the exploratory search does not sample isotropic rules yet, and HashLife (`jetcarp
-hashlife`) does not run them.
+its rule is kept with it. A record on the square grid's touching neighbours has an **isotropic rule
+range**, whatever B/S, Generations or isotropic rule found it: the births and survivals its
+evolution needs, and those it must not have, among the 51 arrangements, so every isotropic rule
+between the two runs it exactly as stored. It is worked out when the pattern is verified, shown with
+the record (`jetcarp library show`, the app, the MCP tools), stored in the library and in packs
+(format 1.1), and `--works-in` matches a rule against it, so Life's glider is found in tlife. A
+record also has a B/S rule range when a B/S rule gives its evolution; an object of an isotropic rule
+whose evolution needs a count's arrangements to differ has only the isotropic one. The exploratory
+search does not sample isotropic rules yet, and HashLife (`jetcarp hashlife`) does not run them.
 
 ### On the GPU
 

@@ -412,9 +412,14 @@ commit `f3492e8` is the last that has it. What the import did:
 
 ## Tables
 
-`PRAGMA user_version` is the schema version, 3, and `PRAGMA application_id` marks the file as a
-JETCARP library. A library of schema 1 or 2 (made by development builds before the 0.4 release) is
-brought up to 3 the first time it is opened. From schema 1, its ratings gain `verdict` and `source`,
+`PRAGMA user_version` is the schema version, 4, and `PRAGMA application_id` marks the file as a
+JETCARP library. A library of schema 3 (JETCARP 0.4.0 to 0.4.2) is brought up to 4 the first time it
+is opened: its patterns gain the columns of their isotropic rule range (`iso_birth_min`,
+`iso_birth_max`, `iso_survive_min`, `iso_survive_max`, 51-bit masks over the arrangements of the
+square grid's eight neighbours as the [pack format](pack-format.md) numbers them, and
+`iso_states_min`, `iso_states_max`), empty until a pattern is next stored or verified again. A
+library of schema 1 or 2 (made by development builds before the 0.4 release) is brought up to 4 the
+same way, after the steps that follow. From schema 1, its ratings gain `verdict` and `source`,
 and its media rows, which named files in per-record folders, are dropped, since media are always made
 again from their records. From schema 2, its Quick Start rows become rows of the one Quick Start table
 (see [Quick Start entries](#quick-start-entries)): an entry under a pack id stays a pack's entry, every
@@ -431,7 +436,7 @@ schema number stayed 2 for them, since schema 2 gained them before the 0.4.0 rel
 | `meta` | library fact: `schema`, `library_uuid`, `created`, `created_by`, and `builtin_version`, the JETCARP whose built-in Quick Start entries the library holds |
 | `engine_pins` | tiling in use: its pin key (its identity key), the engine's pin, the polygon and neighbour hashes, which engine computed them, when |
 | `rules` | rule as run: notation, neighbourhood, steps per generation, family, birth and survival masks |
-| `patterns` | pattern: content id, tiling, pin key and geometry pin, class, period, displacement, cells, canonical form, rule and rule range, its rule's `family` and that family's `semantics` version, seen count, score, curation, `needs_reverify`, `engine_version`, and the record's phases and verification |
+| `patterns` | pattern: content id, tiling, pin key and geometry pin, class, period, displacement, cells, canonical form, rule, rule range and isotropic rule range, its rule's `family` and that family's `semantics` version, seen count, score, curation, `needs_reverify`, `engine_version`, and the record's phases and verification |
 | `pattern_rules` | rule a pattern was verified in, with the verification and engine version |
 | `sightings` | pattern seen by a job in a rule: copies, soups, first and last seen |
 | `unstored` | object a hunt counted but did not store as a record |
