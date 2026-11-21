@@ -4,7 +4,9 @@
 
 use super::{BoardRef, Pile, RunOptions, RunSummary};
 use crate::geom::*;
-use crate::render::{Image, Palette, Rgba, draw_line, fill_polygon, ramp_palette};
+use crate::render::{
+    Image, Palette, Rgba, draw_line, fade_striped_outlines_if, fill_polygon, ramp_palette,
+};
 use rayon::prelude::*;
 use serde_json::{Value, json};
 use std::path::Path;
@@ -275,6 +277,18 @@ fn outlines<'a>(b: &'a BoardRef) -> &'a [Vec<P>] {
 
 /// Render pixel rows `y0..y1` of a view.
 pub fn render_rows(b: &BoardRef, v: &View, cols: &Colors, y0: u32, y1: u32) -> Image {
+    render_rows_drawn(b, v, cols, y0, y1, true)
+}
+
+/// [`render_rows`], with outlines where cells are large enough, or never.
+fn render_rows_drawn(
+    b: &BoardRef,
+    v: &View,
+    cols: &Colors,
+    y0: u32,
+    y1: u32,
+    outlines: bool,
+) -> Image {
     let lut = &cols.lut;
     let mut img = Image {
         width: v.width,
@@ -289,8 +303,8 @@ pub fn render_rows(b: &BoardRef, v: &View, cols: &Colors, y0: u32, y1: u32) -> I
         v.rect[1] + y1 as f64 / s,
     ];
     let to_px = |p: P| [(p[0] - v.rect[0]) * s, (p[1] - v.rect[1]) * s - y0 as f64];
-    let outline = cell_size(b) * s >= 7.0;
-    let shapes = outlines(b);
+    let outline = outlines && cell_size(b) * s >= 7.0;
+    let shapes = self::outlines(b);
     let mut poly: Vec<P> = Vec::with_capacity(16);
     for_cells_in(b, rect, &mut |m, sh, h| {
         poly.clear();
@@ -309,21 +323,33 @@ pub fn render_rows(b: &BoardRef, v: &View, cols: &Colors, y0: u32, y1: u32) -> I
 /// colour of the cells whose centres fall in it.
 pub fn render_view(b: &BoardRef, v: &View, look: &Look) -> Image {
     let cols = Colors::new(max_degree(b), look);
-    let strips: Vec<(u32, u32)> = (0..v.height)
-        .step_by(64)
-        .map(|y| (y, (y + 64).min(v.height)))
-        .collect();
-    let parts: Vec<Image> = strips
-        .par_iter()
-        .map(|&(a, z)| render_rows(b, v, &cols, a, z))
-        .collect();
-    let mut img = Image {
-        width: v.width,
-        height: v.height,
-        rgba: Vec::with_capacity(v.width as usize * v.height as usize * 4),
+    let whole = |outlines: bool| {
+        let strips: Vec<(u32, u32)> = (0..v.height)
+            .step_by(64)
+            .map(|y| (y, (y + 64).min(v.height)))
+            .collect();
+        let parts: Vec<Image> = strips
+            .par_iter()
+            .map(|&(a, z)| render_rows_drawn(b, v, &cols, a, z, outlines))
+            .collect();
+        let mut img = Image {
+            width: v.width,
+            height: v.height,
+            rgba: Vec::with_capacity(v.width as usize * v.height as usize * 4),
+        };
+        for p in parts {
+            img.rgba.extend_from_slice(&p.rgba);
+        }
+        img
     };
-    for p in parts {
-        img.rgba.extend_from_slice(&p.rgba);
+    let mut img = whole(true);
+    if cell_size(b) * v.s >= 7.0 {
+        // Outlines faint where they would form strong stripes: over an even bright field on a
+        // lattice of one tile, a regular grid (the processor's pictures ask the stripe check of
+        // the tiling itself; a pile's board is no world to ask).
+        let fills = whole(false);
+        let grid = matches!(b, BoardRef::Lattice(l) if l.lat.nt == 1);
+        fade_striped_outlines_if(&mut img, &fills, cols.outline, &|| grid);
     }
     if cell_size(b) * v.s < 1.5 {
         average_into(b, v, &cols.lut, &mut img);

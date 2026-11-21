@@ -848,11 +848,12 @@ pub fn clip(run: &RunRow, cat: &str, frames: u32, px: u32) -> Result<Vec<u8>, St
     }
     // Through the strobe guard (#149): a clip that flashes is saved softened.
     use jetcarp_core::media::encode;
-    use jetcarp_core::photosensitivity::{GuardPlace, guard_on};
+    use jetcarp_core::photosensitivity::{GuardPlace, at_risk, guard_on};
     let g = jetcarp_core::strobe::export::guard(
         &imgs,
         110,
         guard_on(GuardPlace::App),
+        at_risk(),
         &|f, d| encode::gif(f, d),
         &|b| encode::decode_gif(b),
     )?;

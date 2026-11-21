@@ -212,6 +212,7 @@ impl JetcarpApp {
         let (_, back) = jetcarp_core::render::backdrop(&self.world);
         GuardFeed {
             on: self.guard_on_here(),
+            at_risk: self.strobe.answer == Some(ps::Answer::AtRisk),
             now: self.started.elapsed().as_secs_f64(),
             viewing: Viewing::screen(ppp),
             screen_px,
