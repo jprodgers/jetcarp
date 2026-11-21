@@ -2327,7 +2327,10 @@ mod tests {
             ..Default::default()
         };
         let mut started = false;
-        let out = ctx.run_ui(input, |ui| started |= w.explore_form_ui(ui));
+        let mut out = ctx.run_ui(input, |ui| started |= w.explore_form_ui(ui));
+        // Nothing draws the fonts' textures here: their changes are let go, or a debug build
+        // panics as the frame's output is dropped.
+        out.textures_delta.clear();
         let u = out
             .platform_output
             .accesskit_update
