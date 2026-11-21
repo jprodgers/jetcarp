@@ -10,6 +10,9 @@
 //!
 //! When stdin closes (the client has gone), the searches running on the server's own threads are
 //! stopped at their next checkpoint, paused and resumable, before the server exits.
+//!
+//! [`Client`] is one client's state, whatever carries its messages: stdin and stdout here, or one
+//! session of the HTTP endpoint ([`crate::http`]), so both offer the same tools on the same terms.
 
 use crate::link::{AppClient, EndpointInfo};
 use crate::{Server, Session, ToolOutput, protocol, tools};
@@ -148,15 +151,15 @@ impl Link {
         Ok(self.client.as_mut().unwrap())
     }
 
-    /// Forward a tools/call; failures become tool errors so the model sees what to do.
-    fn forward(&mut self, msg: &Value) -> Value {
+    /// Forward a tools/call; failures become tool errors so the model sees what to do. The app's
+    /// notifications meanwhile (progress) go to `notify`, as they come.
+    fn forward(&mut self, msg: &Value, notify: Option<&protocol::Notifier>) -> Value {
         let id = msg.get("id").cloned().unwrap_or(Value::Null);
         let r = self.client().and_then(|c| {
             c.call_with(msg, &mut |note| {
-                // Progress from the app, passed on as it comes.
-                let mut out = std::io::stdout().lock();
-                let _ = writeln!(out, "{note}");
-                let _ = out.flush();
+                if let Some(n) = notify {
+                    n(note.clone());
+                }
             })
         });
         match r {
@@ -175,7 +178,9 @@ impl Link {
     }
 }
 
-fn info_from(
+/// The app's endpoint from `--port` and `--token`, the rest from the file the app recorded
+/// (`None`: neither was given, so the file is read when the app is first reached).
+pub(crate) fn info_from(
     port: Option<u16>,
     token: Option<String>,
 ) -> std::result::Result<Option<EndpointInfo>, String> {
@@ -215,7 +220,7 @@ fn use_app(link: &mut Link, session: &mut Session, args: &Value) -> ToolOutput {
     link.client = None;
     let probe = json!({"jsonrpc": "2.0", "id": "use_app", "method": "tools/call",
                        "params": {"name": "world_status", "arguments": {}}});
-    let reply = link.forward(&probe);
+    let reply = link.forward(&probe, None);
     let result = &reply["result"];
     if result["isError"] == json!(false) {
         link.attached = true;
@@ -232,30 +237,127 @@ fn use_app(link: &mut Link, session: &mut Session, args: &Value) -> ToolOutput {
     }
 }
 
+/// One MCP client of `jetcarp mcp`, whatever carries its messages (stdin and stdout, or one
+/// session of the HTTP endpoint): its protocol state, its private world, and its link to the app.
+/// Every client is offered the same tools: the shared ones, `use_app`, `host_control`, and
+/// `app_display`, which is passed to the app once attached.
+pub struct Client {
+    /// The protocol state. The transport sets its `notifier` (where progress goes), and may give
+    /// it a `cancels` map of its own before taking a [`Canceller`].
+    pub server: Server,
+    session: Session,
+    link: Link,
+}
+
+impl Client {
+    /// A client acting on a private world, or (`app`) on the world in the JETCARP app, reached at
+    /// `info` (`None`: the endpoint the app recorded).
+    pub fn new(app: bool, info: Option<EndpointInfo>) -> Client {
+        let mut server = Server::new();
+        server.extra_tools.push(use_app_definition());
+        server.extra_tools.push(host_control_definition());
+        // App-only tools are forwarded to the app (an error while not attached).
+        server.extra_tools.extend(crate::app_tools::definitions());
+        Client {
+            server,
+            session: Session::new(),
+            link: Link {
+                attached: app,
+                client: None,
+                info,
+                app_writer: Default::default(),
+            },
+        }
+    }
+
+    /// When attached, connect to the app now, so that a missing app is reported at the start
+    /// (the connection is tried again on each tool call).
+    pub fn connect_app(&mut self) {
+        if self.link.attached
+            && let Err(e) = self.link.client()
+        {
+            eprintln!("jetcarp mcp: {e} (will retry on each tool call)");
+        }
+    }
+
+    /// Answer one message: `host_control` and `use_app` here, the world tools passed to the app
+    /// while attached, everything else by the server. `None`: no reply is due.
+    pub fn answer(&mut self, msg: &Value) -> Option<Value> {
+        if msg["method"] == "tools/call" && msg.get("id").is_some() {
+            let name = msg["params"]["name"].as_str().unwrap_or("");
+            let id = msg["id"].clone();
+            if name == crate::link::HOST_TOOL {
+                let args = msg["params"]["arguments"].clone();
+                let o = match host_control(&args) {
+                    Ok(v) => ToolOutput::text(v.to_string()),
+                    Err(e) => ToolOutput::error(e),
+                };
+                return Some(protocol::response(&id, protocol::tool_result(o)));
+            } else if name == "use_app" {
+                let args = msg["params"]["arguments"].clone();
+                let o = use_app(&mut self.link, &mut self.session, &args);
+                if !self.link.attached {
+                    *self.link.app_writer.lock().unwrap() = None;
+                }
+                return Some(protocol::response(&id, protocol::tool_result(o)));
+            } else if self.link.attached && (tools::exists(name) || crate::app_tools::handles(name))
+            {
+                let notify = self.server.notifier.clone();
+                return Some(self.link.forward(msg, notify.as_ref()));
+            }
+        }
+        self.server.handle(&mut self.session, msg)
+    }
+
+    /// [`answer`](Self::answer) one line of input, which may not be JSON at all.
+    pub fn answer_line(&mut self, line: &str) -> Option<String> {
+        match serde_json::from_str::<Value>(line) {
+            Ok(msg) => self.answer(&msg).map(|r| r.to_string()),
+            Err(_) => self.server.handle_line(&mut self.session, line),
+        }
+    }
+
+    /// What another thread needs to cancel this client's calls while one runs.
+    pub fn canceller(&self) -> Canceller {
+        Canceller {
+            cancels: self.server.cancels.clone(),
+            app_writer: self.link.app_writer.clone(),
+        }
+    }
+}
+
+/// Cancels a [`Client`]'s calls from another thread: the transport's reader, which goes on
+/// reading while a call runs.
+#[derive(Clone)]
+pub struct Canceller {
+    cancels: protocol::CancelMap,
+    /// A writer on the app connection, while attached.
+    app_writer: std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
+}
+
+impl Canceller {
+    /// If `msg` is a `notifications/cancelled`: set the flag of the call it names, and pass it to
+    /// the app, where a forwarded call runs. Returns whether it was one.
+    pub fn cancel(&self, msg: &Value) -> bool {
+        if !protocol::cancel_request(&self.cancels, msg) {
+            return false;
+        }
+        if let Some(w) = self.app_writer.lock().unwrap().as_mut() {
+            let _ = writeln!(w, "{msg}");
+            let _ = w.flush();
+        }
+        true
+    }
+}
+
 /// Serve MCP on stdin/stdout until stdin closes, then stop the jobs running on the server's own
 /// threads ([`stop_own_jobs`]). `app`: start attached to the JETCARP app.
 pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), String> {
-    let mut server = Server::new();
-    server.extra_tools.push(use_app_definition());
-    server.extra_tools.push(host_control_definition());
-    // App-only tools are forwarded to the app (an error while not attached).
-    server.extra_tools.extend(crate::app_tools::definitions());
-    let mut session = Session::new();
-    let mut link = Link {
-        attached: app,
-        client: None,
-        info: info_from(port, token)?,
-        app_writer: Default::default(),
-    };
-    if app {
-        match link.client() {
-            Ok(_) => {}
-            Err(e) => eprintln!("jetcarp mcp: {e} (will retry on each tool call)"),
-        }
-    }
+    let mut client = Client::new(app, info_from(port, token)?);
+    client.connect_app();
     // stdout is locked per message: progress notifications come from worker threads while a
     // request runs.
-    server.notifier = Some(std::sync::Arc::new(|msg: Value| {
+    client.server.notifier = Some(std::sync::Arc::new(|msg: Value| {
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "{msg}");
         let _ = out.flush();
@@ -263,8 +365,7 @@ pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), St
     // stdin on its own thread: cancellations act at once, the rest is answered in order.
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     {
-        let cancels = server.cancels.clone();
-        let app_writer = link.app_writer.clone();
+        let canceller = client.canceller();
         std::thread::Builder::new()
             .name("jetcarp-mcp-stdin".into())
             .spawn(move || {
@@ -274,12 +375,8 @@ pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), St
                         continue;
                     }
                     if let Ok(v) = serde_json::from_str::<Value>(&line)
-                        && protocol::cancel_request(&cancels, &v)
+                        && canceller.cancel(&v)
                     {
-                        if let Some(w) = app_writer.lock().unwrap().as_mut() {
-                            let _ = writeln!(w, "{line}");
-                            let _ = w.flush();
-                        }
                         continue;
                     }
                     if tx.send(line).is_err() {
@@ -290,35 +387,7 @@ pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), St
             .map_err(|e| e.to_string())?;
     }
     for line in rx {
-        let reply: Option<String> = match serde_json::from_str::<Value>(&line) {
-            Ok(msg) if msg["method"] == "tools/call" && msg.get("id").is_some() => {
-                let name = msg["params"]["name"].as_str().unwrap_or("");
-                let id = msg["id"].clone();
-                if name == crate::link::HOST_TOOL {
-                    let args = msg["params"]["arguments"].clone();
-                    let o = match host_control(&args) {
-                        Ok(v) => ToolOutput::text(v.to_string()),
-                        Err(e) => ToolOutput::error(e),
-                    };
-                    Some(protocol::response(&id, protocol::tool_result(o)).to_string())
-                } else if name == "use_app" {
-                    let args = msg["params"]["arguments"].clone();
-                    let o = use_app(&mut link, &mut session, &args);
-                    if !link.attached {
-                        *link.app_writer.lock().unwrap() = None;
-                    }
-                    Some(protocol::response(&id, protocol::tool_result(o)).to_string())
-                } else if link.attached && (tools::exists(name) || crate::app_tools::handles(name))
-                {
-                    Some(link.forward(&msg).to_string())
-                } else {
-                    server.handle(&mut session, &msg).map(|r| r.to_string())
-                }
-            }
-            Ok(msg) => server.handle(&mut session, &msg).map(|r| r.to_string()),
-            Err(_) => server.handle_line(&mut session, &line),
-        };
-        if let Some(r) = reply {
+        if let Some(r) = client.answer_line(&line) {
             let mut out = std::io::stdout().lock();
             writeln!(out, "{r}").map_err(|e| e.to_string())?;
             out.flush().map_err(|e| e.to_string())?;
@@ -335,7 +404,7 @@ const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 /// threads (`search_start` without `detach`) would end with it, left marked running with
 /// nothing running them (#64): stop each at its next checkpoint, as `job_stop` does, so it is
 /// left paused and resumable. Searches in processes of their own carry on.
-fn stop_own_jobs() {
+pub(crate) fn stop_own_jobs() {
     let reg = tools::ctx().registry();
     let running: Vec<i64> = {
         let lib = tools::ctx().library();

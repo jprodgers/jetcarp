@@ -31,18 +31,19 @@ ignore = [
     { id = "RUSTSEC-2024-0429", reason = "glib 0.18's VariantStrIter, which JETCARP never uses: #119" },
 ]
 
-# SECURITY.md says that JETCARP makes no network connections today. So that none comes in by
-# accident (a dependency update that pulls in an HTTP client, say), no crate that is an HTTP, TLS,
-# DNS, WebSocket or peer-to-peer client or server may enter the tree, directly or through another
+# SECURITY.md says that JETCARP makes no network connections, and that the only network sockets
+# it opens are local, on 127.0.0.1. So that no networking comes in by accident (a dependency
+# update that pulls in an HTTP client, say), no crate that is an HTTP, TLS, DNS, WebSocket or
+# peer-to-peer client or server, or an HTTP parser, may enter the tree, directly or through another
 # crate, unless an entry below allows it.
 #
-# Networking is planned (an HTTP MCP endpoint, #115; online packs and a BitTorrent client, #169,
-# #170), and is added on purpose: the pull request that adds a network crate allows it here, for
-# the one JETCARP crate that uses it, with `wrappers` and a reason, and updates SECURITY.md:
+# Networking is added on purpose: the pull request that adds a network crate allows it here, for
+# the one JETCARP crate that uses it, with `wrappers` and a reason, and updates SECURITY.md. The
+# first is the MCP server's HTTP endpoint (#115, `jetcarp mcp --http`): `httparse` reads its request
+# heads, for jetcarp-mcp only; the server around it is JETCARP's own and listens on 127.0.0.1 alone.
+# Online packs and a BitTorrent client (#169, #170) are planned.
 #
-#     { crate = "tiny_http", wrappers = ["jetcarp-mcp"], reason = "the MCP server's HTTP endpoint (#115)" },
-#
-# Any other crate that pulls it in still fails the check (tested: tiny_http allowed for
+# Any other crate that pulls an allowed one in still fails the check (tested: httparse allowed for
 # jetcarp-mcp passes there, and fails from jetcarp-core). A crate the allowed one brings in that is
 # also on the list needs the same, with the allowed crate as its wrapper.
 [bans]
@@ -50,6 +51,8 @@ multiple-versions = "allow"
 wildcards = "deny"
 allow-wildcard-paths = true
 deny = [
+    # HTTP parsers: allowed for the MCP server's HTTP endpoint only.
+    { crate = "httparse", wrappers = ["jetcarp-mcp"], reason = "SECURITY.md: only the MCP server's HTTP endpoint on 127.0.0.1 (#115) reads HTTP" },
     # HTTP clients and servers
     { crate = "reqwest", reason = "SECURITY.md: JETCARP makes no network connections" },
     { crate = "hyper", reason = "SECURITY.md: JETCARP makes no network connections" },
