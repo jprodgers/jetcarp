@@ -53,8 +53,40 @@ day later (0.4.2: 17 November here, 18 November there).
   such. Before, the app showed only a pack's name and size, and the command line the key alone.
   ([Packs](../guides/packs.md#check-a-pack))
 
+### Changed
+
+- **The state hash is SHA-256 over the whole state, in all 64 hexadecimal digits.** Version 1, the
+  64-bit FNV-1a hash JETCARP printed as 16 digits, left out part of what decides a world's future
+  (the random-number generator, a turmite's internal state, a layered rule's layers, a forest fire's
+  noise seed, a script's streak, the automata's rules and settings), so two different worlds could
+  share it. Version 2 hashes every piece of state that decides what a world does next, and a digest
+  of its tiling: changing any one of them changes the hash, and a world reopened from its saved scene
+  at any generation hashes as the one that ran straight through. `jetcarp run` and `verify`, scene
+  records, PNG metadata, `--json`, the MCP tools and *Copy state hash* carry all 64 digits; the app's
+  menu bar shows the first 16. Records now say `"hash_version": 2`; those written before carry no
+  version, and JETCARP checks them with version 1, kept unchanged, so old scenes, figures and packs
+  still verify. `--expect` takes either version, by length (16 or 64 digits), and refuses anything
+  else. The pinned hashes of every Quick Start entry, the rule-semantics scenes and the portable
+  Lenia runs are now version 2; their version 1 hashes are the old pins, so no state changed.
+  ([The state hash](../research/reproducibility.md#the-state-hash),
+  [#173](https://github.com/jprodgers/jetcarp/issues/173))
+
 ### Fixed
 
+- **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
+  with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
+  with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's
+  lavapipe) and macOS (the runner's own GPU), and the release workflow's tests, which had left
+  lavapipe unused, now run the GPU tests on it.
+  ([Contributing](contributing.md), [Testing](testing.md))
+- **A settled reseed policy fires at the same generation whatever else counts changes.** Its
+  check for a steady cycle of changing cells read every generation whose changes had been counted,
+  and which those were depended on whether the app's activity graph or the desktop host was
+  counting them, or a script trigger, or the GPU: with them it could fire sooner, so a scene saved
+  from the app could replay to another state. It now reads only the generations it measured itself,
+  from the end of its cooldown. A scene in which something else measured activity before a policy's
+  cooldown ended can reseed at another generation than before.
+  ([Reseeding](../guides/reseeding.md))
 - **A world with a B0 rule is said to repeat only when it does.** The period check compared the
   cells JETCARP keeps for a B0 rule, which are relative to its background, but not the
   background's phase, so a world whose kept cells came back with the background in another phase

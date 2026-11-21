@@ -290,6 +290,22 @@ fn rule_params(rule: &Rule) -> Result<Params, ()> {
     Ok(p)
 }
 
+/// Whether the tests were told a usable GPU adapter must be there: `JETCARP_REQUIRE_GPU=1`. CI
+/// sets it where it expects one (Linux on Mesa's lavapipe, macOS on its own GPU).
+pub fn gpu_required() -> bool {
+    std::env::var("JETCARP_REQUIRE_GPU").is_ok_and(|v| v.trim() == "1")
+}
+
+/// For tests that need a GPU and found none they can use (`why`: no adapter, or the adapter
+/// found and why the self-test or the policy turned it down): skip with a note, or, when
+/// [`gpu_required`], fail, so that tests meant to run never pass without running.
+pub fn no_gpu(what: &str, why: &dyn std::fmt::Display) {
+    if gpu_required() {
+        panic!("{what}: JETCARP_REQUIRE_GPU=1, but there is no usable GPU adapter: {why}");
+    }
+    eprintln!("note: skipping {what}: {why}");
+}
+
 /// Can this rule run on the GPU?
 pub fn supports_rule(rule: &Rule) -> bool {
     rule_params(rule).is_ok()

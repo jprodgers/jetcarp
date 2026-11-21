@@ -144,7 +144,8 @@
       "required": ["generation", "hash"],
       "properties": {
         "generation": {"type": "integer", "minimum": 0},
-        "hash": {"type": "string", "pattern": "^[0-9a-f]{16}$", "description": "The world's state hash, 16 hexadecimal digits."},
+        "hash": {"oneOf": [{"type": "string", "pattern": "^[0-9a-f]{64}$"}, {"type": "string", "pattern": "^[0-9a-f]{16}$"}], "description": "The world's state hash: 64 hexadecimal digits in version 2 (SHA-256, since 0.4.3), 16 in version 1 (before)."},
+        "hash_version": {"enum": [1, 2], "description": "The state-hash version `hash` is in. Absent in records written before 0.4.3, which are version 1."},
         "jetcarp_version": {"type": "string"},
         "dead_boundary": {"type": "boolean"}
       }

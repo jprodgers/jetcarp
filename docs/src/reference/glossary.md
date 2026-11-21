@@ -348,8 +348,9 @@ hexagonal rules use, so (1, 1), halfway between two shortest steps, also counts 
 
 **State.** The value a cell holds: dead or alive, a number, a height or a level.
 
-**State hash.** A 64-bit hash of everything that determines a world's future. Equal hashes mean equal
-states, in practice. See [Reproducibility](../research/reproducibility.md#the-state-hash).
+**State hash.** A SHA-256 hash (64 hexadecimal digits) of everything that determines a world's
+future. Equal hashes mean equal states. Scenes saved before 0.4.3 carry an older, 16-digit hash
+(version 1). See [Reproducibility](../research/reproducibility.md#the-state-hash).
 
 **Still life.** A pattern that does not change.
 

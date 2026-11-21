@@ -303,7 +303,7 @@ fn same_hash_any_thread_count() {
         pool.install(|| {
             let mut w = World::from_scene(scene).unwrap();
             w.apply(Command::Step { gens: 60 }).unwrap();
-            w.state_hash()
+            w.state_hash_v2()
         })
     };
     let all = std::thread::available_parallelism()
@@ -334,7 +334,7 @@ fn same_hash_any_thread_count() {
     let saved = w.to_scene();
     let json = saved.to_json();
     let w2 = World::from_scene(&Scene::from_json(&json).unwrap()).unwrap();
-    assert_eq!(w.state_hash(), w2.state_hash());
+    assert_eq!(w.state_hash_v2(), w2.state_hash_v2());
     assert_eq!(saved.record.as_ref().unwrap().hash, w2.hash_hex());
 }
 
@@ -565,7 +565,12 @@ fn bundled_scenes_run() {
         );
         assert!(img.width > 0 && img.height > 0);
         let again = World::from_scene(&w.to_scene()).unwrap();
-        assert_eq!(again.state_hash(), w.state_hash(), "{}", path.display());
+        assert_eq!(
+            again.state_hash_v2(),
+            w.state_hash_v2(),
+            "{}",
+            path.display()
+        );
         count += 1;
     }
     assert!(count >= 10, "found {count} scenes");
@@ -608,7 +613,7 @@ fn rule30_then_life_then_ants() {
     assert_eq!(w.fields.len(), 1, "all three share one binary field");
     w.apply(Command::Step { gens: 30 }).unwrap();
     let again = World::from_scene(&w.to_scene()).unwrap();
-    assert_eq!(again.state_hash(), w.state_hash());
+    assert_eq!(again.state_hash_v2(), w.state_hash_v2());
 }
 
 // A picture JETCARP writes carries its scene, which reads back and replays to the same state.
@@ -634,7 +639,7 @@ fn a_png_carries_its_scene() {
     let bytes = std::fs::read(&path).unwrap();
     let json = render::png_scene(&bytes).unwrap().expect("a scene chunk");
     let again = World::from_scene(&Scene::from_json(&json).unwrap()).unwrap();
-    assert_eq!(again.state_hash(), w.state_hash());
+    assert_eq!(again.state_hash_v2(), w.state_hash_v2());
     // A PNG without one says so; bytes that aren't a PNG are an error.
     render::write_png(&path, &img, &[]).unwrap();
     assert_eq!(

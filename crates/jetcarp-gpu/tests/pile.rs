@@ -1,5 +1,6 @@
-//! Large sandpiles: the GPU toppler gives the same pile, toppling count, and sweep count as the
-//! CPU on every step, on several tilings and neighbourhoods.
+//! Large sandpiles: the GPU toppler gives the same pile, toppling count, and sweep count as the CPU
+//! on every step, on several tilings and neighbourhoods. Skipped (with a note) when no GPU adapter
+//! is available, failed under `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::pile::{Board, Centre, Ctl, Pile, PileSpec, Toppler};
 use jetcarp_core::{Nb, TilingSpec};
@@ -39,7 +40,7 @@ fn gpu_piles_equal_cpu_piles() {
     let mut gpu = match PileGpu::headless() {
         Ok(g) => g,
         Err(e) => {
-            eprintln!("note: skipping GPU pile test: {e}");
+            jetcarp_gpu::no_gpu("GPU pile test", &e);
             return;
         }
     };
@@ -89,7 +90,7 @@ fn a_gpu_step_stopped_part_way_carries_on() {
     let mut gpu = match PileGpu::headless() {
         Ok(g) => g,
         Err(e) => {
-            eprintln!("note: skipping GPU pile test: {e}");
+            jetcarp_gpu::no_gpu("GPU pile test", &e);
             return;
         }
     };

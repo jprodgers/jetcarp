@@ -26,15 +26,30 @@ fn gpu() -> Option<Gpu> {
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     // The display adapter as JETCARP chooses it: a software one only with JETCARP_GPU=software
     // (Mesa's software Vulkan in CI); Windows' WARP, which crashes these tests, never.
+    // No usable adapter skips these tests, or fails them under JETCARP_REQUIRE_GPU=1.
     let choice =
-        jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None).ok()?;
+        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
+            Ok(c) => c,
+            Err(e) => {
+                jetcarp_gpu::no_gpu("the offscreen display tests", &e);
+                return None;
+            }
+        };
     if let Err(e) = &choice.usable {
-        eprintln!("skipped: {e}");
+        jetcarp_gpu::no_gpu("the offscreen display tests", e);
         return None;
     }
     let adapter = choice.adapter;
     let (device, queue) =
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
+        match pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) {
+            Ok(d) => d,
+            Err(e) => {
+                let name = adapter.get_info().name;
+                let why = format!("{name} refused a device: {e}");
+                jetcarp_gpu::no_gpu("the offscreen display tests", &why);
+                return None;
+            }
+        };
     let renderer = TileRenderer::new(&device, FORMAT);
     Some(Gpu {
         adapter,
@@ -242,7 +257,6 @@ fn check_cells(
 #[test]
 fn a_profile_draws_pixel_exact_without_a_window_toolkit() {
     let Some(mut g) = gpu() else {
-        eprintln!("skipped: no GPU adapter");
         return;
     };
     let (w, h) = (160u32, 120u32);
@@ -291,7 +305,6 @@ fn a_profile_draws_pixel_exact_without_a_window_toolkit() {
 #[test]
 fn an_aperiodic_patch_draws_and_pans_without_a_window_toolkit() {
     let Some(mut g) = gpu() else {
-        eprintln!("skipped: no GPU adapter");
         return;
     };
     // Large enough that one view holds only part of the patch.
@@ -332,7 +345,6 @@ fn a_second_renderer_draws_the_same_aperiodic_patch() {
     // The host and the saver give each screen its own painter, with its own renderer, all on one
     // device and drawing one stage. The second renderer used to find the patch's instances gone.
     let Some(mut g) = gpu() else {
-        eprintln!("skipped: no GPU adapter");
         return;
     };
     let mut scene = Scene::new(TilingSpec::new("penrose-rhomb").with_size(SizeSpec::Level(5)));
@@ -363,7 +375,6 @@ fn a_second_renderer_draws_the_same_aperiodic_patch() {
 fn a_caption_draws_in_its_corner_and_nowhere_else() {
     use jetcarp_display::caption::{CaptionPainter, CaptionSettings, Corner};
     let Some(g) = gpu() else {
-        eprintln!("skipped: no GPU adapter");
         return;
     };
     let (w, h) = (400u32, 200u32);
@@ -405,7 +416,6 @@ fn a_caption_draws_in_its_corner_and_nowhere_else() {
 #[test]
 fn gpu_stepping_matches_the_cpu_without_a_window_toolkit() {
     let Some(g) = gpu() else {
-        eprintln!("skipped: no GPU adapter");
         return;
     };
     let mut p = profiles::builtins().remove(0);
