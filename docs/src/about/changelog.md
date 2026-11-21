@@ -131,6 +131,18 @@ day later (0.4.2: 17 November here, 18 November there).
   for isn't there, JETCARP now looks twice more, a quarter of a second apart, before falling back,
   and says so on the error stream too. ([GPU](../guides/gpu.md),
   [#82](https://github.com/jprodgers/jetcarp/issues/82))
+- **On GNOME (Wayland), the app is drawn right when it opens at its saved size.** It was drawn
+  for the default size inside a window of the saved one: squeezed into part of the window, or
+  scaled up and grainy with clicks landing away from the pointer, until the window was resized by
+  hand. Wayland applies a size at once and says nothing, and the size was set behind egui's back,
+  so its drawing surface kept the old size. Found in 0.4.1 and 0.4.2's testing.
+  ([#140](https://github.com/jprodgers/jetcarp/issues/140))
+- **On Linux, the window keeps answering while a file dialog is open.** Open, save, export and
+  the other file dialogs held up the app's window until they closed, so GNOME briefly said JETCARP
+  might not be responding, and a request to close the window went unanswered. On Linux each
+  dialog now runs beside the window. While one is open the world waits, as before, so what is
+  saved or exported is what was showing when it was asked for. Windows and macOS were not
+  affected. ([#136](https://github.com/jprodgers/jetcarp/issues/136))
 - **The GPU tests fail, rather than pass, when they were meant to run and could not.** A GPU test
   with no adapter it can use (none, or only one the GPU self-test turns down) skips with a note;
   with `JETCARP_REQUIRE_GPU=1` it fails, naming the adapter and why. CI sets it on Linux (Mesa's
