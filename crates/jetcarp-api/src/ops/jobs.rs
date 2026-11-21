@@ -1682,8 +1682,7 @@ mod tests {
     /// moment its lock is free, as a killed process leaves it (#49), and every status says so.
     #[test]
     fn a_running_job_nobody_holds_is_gone_once_its_heartbeat_is_late() {
-        let dir = std::env::temp_dir().join(format!("jetcarp-api-wait-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = jetcarp_core::scratch::ScratchDir::new("api-wait");
         let cx = Ctx::new().with_library(Some(dir.join("lib")));
         let lib = cx.library();
         let js = jobs::JobSpec {
@@ -1753,7 +1752,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(w.ended, "gone", "{w:?}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A stop marks the job paused at once, but `jobs.wait` waits until its run lets go of it
@@ -1761,8 +1759,7 @@ mod tests {
     /// the `jobs resume` after it was refused because the run still held the job).
     #[test]
     fn wait_after_a_stop_waits_until_the_run_lets_go() {
-        let dir = std::env::temp_dir().join(format!("jetcarp-api-stopwait-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = jetcarp_core::scratch::ScratchDir::new("api-stopwait");
         let cx = Ctx::new().with_library(Some(dir.join("lib")));
         let lib = cx.library();
         let js = jobs::JobSpec {
@@ -1796,7 +1793,6 @@ mod tests {
         drop(lease);
         let w = wait(5.0);
         assert_eq!(w.ended, "paused", "let go");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// `jobs.status` with a wait, after a stop, answers once the run has let go, with the
@@ -1804,8 +1800,7 @@ mod tests {
     /// answered then, with the counters of the step before).
     #[test]
     fn a_status_wait_after_a_stop_gives_the_last_counters() {
-        let dir = std::env::temp_dir().join(format!("jetcarp-api-stopstat-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = jetcarp_core::scratch::ScratchDir::new("api-stopstat");
         let cx = Ctx::new().with_library(Some(dir.join("lib")));
         let lib = cx.library();
         let js = jobs::JobSpec {
@@ -1862,6 +1857,5 @@ mod tests {
         let t0 = Instant::now();
         assert_eq!(status(10.0).done, 84_100);
         assert!(t0.elapsed() < Duration::from_secs(2));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
