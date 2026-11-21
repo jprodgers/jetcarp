@@ -283,6 +283,9 @@ const GPU_FILL: f64 = 0.7;
 /// (a first one is small): its 288 runs on 64,000 cells took a minute on a laptop's GPU, and
 /// screening on the GPU waited for them (#83). As long as a run on the processor may take.
 pub const GPU_CONFIRM_S: f64 = CPU_RUN_S;
+/// Elites the GPU confirms every eight of its rounds (in batches of [`GPU_CONFIRM_S`] at most,
+/// every other round until they are done).
+const GPU_CONFIRMS: u64 = 96;
 /// Neighbour reads one Larger than Life batch may do (a few seconds of GPU time).
 const LTL_NEIGHBOUR_UPDATES: f64 = 1.5e12;
 /// Seen identities kept in a hash set before they are merged into the sorted list.
@@ -656,6 +659,8 @@ pub struct Search {
     rng_gpu: Mutex<Rng>,
     rng_cpu: Mutex<Rng>,
     gpu_rounds: AtomicU64,
+    /// Elites the GPU owes a confirmation ([`GPU_CONFIRMS`] every eight rounds).
+    gpu_due: AtomicU64,
     cpu_rounds: AtomicU64,
     panics: AtomicU64,
     gpu_pace: Mutex<GpuPace>,
@@ -739,6 +744,7 @@ impl Search {
             named: Mutex::new(named),
             pending: Mutex::new(Pending::default()),
             gpu_rounds: AtomicU64::new(0),
+            gpu_due: AtomicU64::new(0),
             cpu_rounds: AtomicU64::new(0),
             panics: AtomicU64::new(0),
             gpu_pace: Mutex::new(GpuPace::default()),
@@ -1136,9 +1142,20 @@ impl Search {
                         let keep = |rng: Rng| *self.rng_gpu.lock().unwrap() = rng;
                         while gpu_go() {
                             let round = self.gpu_rounds.fetch_add(1, Ordering::Relaxed) + 1;
+                            // Every eighth round owes GPU_CONFIRMS elites a confirmation, paid in
+                            // batches of a few seconds every other round, between screening
+                            // batches, so the GPU's screening never waits long (#83).
+                            if round.is_multiple_of(8) {
+                                let _ = self.gpu_due.fetch_update(
+                                    Ordering::Relaxed,
+                                    Ordering::Relaxed,
+                                    |d| Some((d + GPU_CONFIRMS).min(2 * GPU_CONFIRMS)),
+                                );
+                            }
+                            let due = self.gpu_due.load(Ordering::Relaxed);
                             let r = catch_unwind(AssertUnwindSafe(|| {
-                                if round.is_multiple_of(8) {
-                                    self.gpu_confirm(be, 96, lim)
+                                if due > 0 && round.is_multiple_of(2) {
+                                    self.gpu_confirm(be, due as usize, lim)
                                 } else {
                                     self.gpu_round(be, &mut rng, &gpu_fams, ltl, lim)
                                 }
@@ -1718,9 +1735,10 @@ impl Search {
         self.gpu_batch(be, &grid, nb, cands, None, reach, lim)
     }
 
-    /// Confirm the best runs of one grid/neighbourhood group on the GPU, as many as end before
-    /// the run's end. False when not even one would, or the batch was given up (its elites stay
-    /// unconfirmed).
+    /// Confirm the best runs of one grid/neighbourhood group on the GPU, up to `limit`, as many
+    /// as end before the run's end and fit in about `gpu_confirm_s` of the GPU's time, and take
+    /// them off what the GPU owes (all of it when none is waiting). False when not even one would
+    /// end in time, or the batch was given up (its elites stay unconfirmed).
     fn gpu_confirm(
         &self,
         be: &mut dyn Backend,
@@ -1755,6 +1773,7 @@ impl Search {
             }
         }
         let Some((key, nb, ltl)) = first else {
+            self.gpu_due.store(0, Ordering::Relaxed);
             return Ok(true);
         };
         let grid = self.confirm_grid(&key)?;
@@ -1778,6 +1797,12 @@ impl Search {
         if picked.is_empty() {
             return Ok(false);
         }
+        let n = picked.len() as u64;
+        let _ = self
+            .gpu_due
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |d| {
+                Some(d.saturating_sub(n))
+            });
         let mut cands = Vec::new();
         for (id, e) in &picked {
             for c in self.confirmations(e, &grid) {

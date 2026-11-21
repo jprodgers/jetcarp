@@ -140,7 +140,8 @@ day later (0.4.2: 17 November here, 18 November there).
   elite of a tiling waiting. A laptop's search screened nothing for a minute. Each CPU round now
   confirms its share of those elites, started first, each elite's seeds side by side, beside the
   round's screening runs, which are counted and stored as they end; a GPU batch of confirmation
-  runs is sized to about 8 seconds of the GPU's time by its pace. A run on the processor's time cap
+  runs is sized to about 8 seconds of the GPU's time by its pace, the GPU confirming as many elites
+  as before in such batches between its screening batches. A run on the processor's time cap
   now counts its own time only, not a run its thread took up while waiting inside it (runs were
   capped at their 8th generation that way). A round's runs reach the archive in the order they were
   made, with their ids, so a search on the processor alone makes the same runs and confirmations

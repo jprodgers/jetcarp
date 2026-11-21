@@ -444,7 +444,8 @@ elite is confirmed beside the screening rather than after it: each CPU round con
 the elites (twice the threads every four rounds), started first, each elite's seeds side by side,
 while the round's screening runs go on beside them, so the runs screened keep coming while elites
 are confirmed. On the GPU a batch of confirmation runs is sized to about 8 seconds of the GPU's time
-by its pace so far, so its screening never waits long either. A round's screened runs reach the
+by its pace so far, and the GPU confirms as many elites as before, 96 every eight of its rounds, in
+such batches between its screening batches, so its screening never waits long either. A round's screened runs reach the
 archive, with their ids, in the order they were made, and its confirmations at its end in the order
 their elites were picked, so on the processor alone a search makes the same runs and confirms the
 same elites whatever the length of its steps and however its threads take up its runs: the same
