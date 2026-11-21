@@ -329,6 +329,14 @@ pub fn grid(
                     let cell = item(k);
                     let (rect, resp) =
                         ui.allocate_exact_size(egui::vec2(cell_w, row_h), Sense::click());
+                    resp.widget_info(|| {
+                        egui::WidgetInfo::selected(
+                            egui::Role::Button,
+                            true,
+                            cell.selected,
+                            &cell.title,
+                        )
+                    });
                     if !ui.is_rect_visible(rect) {
                         continue;
                     }
@@ -497,6 +505,13 @@ pub fn star_button(ui: &mut egui::Ui, on: bool, text: &str) -> egui::Response {
         galley.size().y.max(16.0) + 2.0 * pad.y,
     );
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    // A toggle; with no text of its own, its hover text names it (a rating's "3 of 5").
+    resp.widget_info(|| {
+        let mut w = egui::WidgetInfo::new(egui::Role::Button);
+        w.selected = Some(on);
+        w.label = (!text.is_empty()).then(|| text.to_string());
+        w
+    });
     let v = ui.style().interact(&resp);
     ui.painter()
         .rect_filled(rect, v.corner_radius, v.weak_bg_fill);

@@ -36,6 +36,9 @@ pub(super) struct ShellState {
     /// A message, and when it appeared (the grid shows it a while when the status bar is off).
     seen_message: Option<String>,
     message_at: f64,
+    /// The status bar's height last frame: its space is kept before the panes are drawn, and its
+    /// controls drawn after them, so Tab reaches them last (#219).
+    status_h: f32,
     /// The main window's place (saved), whether the first frame has put it there, and whether
     /// this run places it at all (`window_place.rs`).
     pub window: Option<window_place::WindowPlace>,
@@ -70,6 +73,7 @@ impl ShellState {
             window_placed: false,
             window_placing: false,
             message_at: 0.0,
+            status_h: 18.0,
         }
     }
 }
@@ -106,9 +110,17 @@ impl JetcarpApp {
         // MCP) show without leaving the screen; this checks about once a second.
         self.menu.refresh_if_changed();
         let sim = self.screen == Screen::Sim;
-        if self.shell.status_bar && !saver && (sim || self.message.is_some()) {
-            self.status_bar(ui);
-        }
+        // The status bar's place, kept now; its contents come after the panes (Tab order).
+        let status =
+            (self.shell.status_bar && !saver && (sim || self.message.is_some())).then(|| {
+                let h = self.shell.status_h.max(16.0);
+                egui::Panel::bottom("status")
+                    .show(ui, |ui| {
+                        ui.allocate_exact_size(egui::vec2(ui.available_width(), h), Sense::hover())
+                            .0
+                    })
+                    .inner
+            });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(GRID_BG))
             .show(ui, |ui| {
@@ -120,6 +132,26 @@ impl JetcarpApp {
                     self.docked_ui(ui);
                 }
             });
+        if let Some(rect) = status {
+            let mut bar = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(rect)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            self.status_bar(&mut bar);
+            let h = bar.min_rect().height();
+            if (h - self.shell.status_h).abs() > 0.5 {
+                self.shell.status_h = h;
+                ctx.request_repaint();
+            }
+            crate::a11y::region(
+                &ctx,
+                crate::a11y::STATUS,
+                "Status line",
+                bar.layer_id(),
+                rect,
+            );
+        }
         if sim {
             if !self.windows_hidden() {
                 self.loose_panes(&ctx);
@@ -138,6 +170,13 @@ impl JetcarpApp {
                 });
             });
             self.shell.bar_h = r.response.rect.height();
+            crate::a11y::region(
+                &ctx,
+                crate::a11y::MENU_BAR,
+                "Menu bar",
+                r.response.layer_id,
+                r.response.rect,
+            );
             return;
         }
         // Auto-hide: shown over the grid while the pointer is at the top edge or on the bar,
@@ -148,9 +187,12 @@ impl JetcarpApp {
         } else {
             REVEAL_EDGE
         };
+        // F10, or the keyboard on the bar or in its menus, shows it too (#219).
         let wanted = self.shell.force_reveal
             || pointer.is_some_and(|p| p.y <= zone)
             || alt
+            || self.kb.menu_request
+            || self.kb.on_menus
             || (self.shell.reveal && egui::Popup::is_any_open(&ctx));
         if wanted {
             self.shell.reveal = true;
@@ -176,6 +218,13 @@ impl JetcarpApp {
                 });
             });
         self.shell.bar_h = r.response.rect.height();
+        crate::a11y::region(
+            &ctx,
+            crate::a11y::MENU_BAR,
+            "Menu bar",
+            r.response.layer_id,
+            r.response.rect,
+        );
     }
 
     /// Generation, hash, and speed at the right end of the menu bar.
@@ -227,75 +276,79 @@ impl JetcarpApp {
         });
     }
 
+    /// The status bar's contents, in the place `shell_ui` kept for them.
     fn status_bar(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::bottom("status").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if let Some((m, err)) = self.message.clone() {
-                    ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
-                    if ui.small_button("×").on_hover_text("Dismiss").clicked() {
-                        self.message = None;
-                    }
-                    ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            if let Some((m, err)) = self.message.clone() {
+                ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
+                if ui
+                    .small_button("×")
+                    .on_hover_text("Dismiss")
+                    .accessible_name("Dismiss")
+                    .clicked()
+                {
+                    self.message = None;
                 }
-                if self.screen != Screen::Sim {
-                    return;
-                }
-                // The strobe guard, while it acts.
-                if let Some((note, strong)) = self.guard_status() {
-                    let c = if strong {
-                        Color32::from_rgb(0xff, 0xb0, 0x60)
-                    } else {
-                        Color32::from_rgb(0xff, 0xd8, 0x90)
-                    };
-                    if ui
-                        .add(
-                            egui::Label::new(RichText::new(note).color(crate::theme::ink(ui, c)))
-                                .sense(egui::Sense::click()),
-                        )
-                        .on_hover_text("Settings → Safety")
-                        .clicked()
-                    {
-                        self.strobe.window_open = true;
-                    }
-                    ui.separator();
-                }
-                let (status, pops) = match &self.stats {
-                    Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
-                    None => (String::new(), vec![]),
+                ui.separator();
+            }
+            if self.screen != Screen::Sim {
+                return;
+            }
+            // The strobe guard, while it acts.
+            if let Some((note, strong)) = self.guard_status() {
+                let c = if strong {
+                    Color32::from_rgb(0xff, 0xb0, 0x60)
+                } else {
+                    Color32::from_rgb(0xff, 0xd8, 0x90)
                 };
-                ui.label(status);
-                ui.separator();
-                for (i, f) in self.world.fields.iter().enumerate() {
-                    let what = if f.kind == FieldKind::Height {
-                        "grains"
-                    } else {
-                        "live"
-                    };
-                    let pop = pops.get(i).copied().unwrap_or(0);
-                    ui.label(format!("field {i}: {pop} {what}"));
-                    if f.kind == FieldKind::Height && f.lost > 0 {
-                        ui.label(format!("({} lost)", f.lost));
-                    }
+                if ui
+                    .add(
+                        egui::Label::new(RichText::new(note).color(crate::theme::ink(ui, c)))
+                            .sense(egui::Sense::click()),
+                    )
+                    .on_hover_text("Settings → Safety")
+                    .clicked()
+                {
+                    self.strobe.window_open = true;
                 }
                 ui.separator();
-                ui.label(format!(
-                    "{} cells, {} storage",
-                    self.world.topo.len(),
-                    self.world.topo.storage_name()
-                ));
+            }
+            let (status, pops) = match &self.stats {
+                Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
+                None => (String::new(), vec![]),
+            };
+            ui.label(status);
+            ui.separator();
+            for (i, f) in self.world.fields.iter().enumerate() {
+                let what = if f.kind == FieldKind::Height {
+                    "grains"
+                } else {
+                    "live"
+                };
+                let pop = pops.get(i).copied().unwrap_or(0);
+                ui.label(format!("field {i}: {pop} {what}"));
+                if f.kind == FieldKind::Height && f.lost > 0 {
+                    ui.label(format!("({} lost)", f.lost));
+                }
+            }
+            ui.separator();
+            ui.label(format!(
+                "{} cells, {} storage",
+                self.world.topo.len(),
+                self.world.topo.storage_name()
+            ));
+            ui.separator();
+            if let Some(s) = self.scripts.status() {
+                ui.label(
+                    RichText::new(s)
+                        .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xc0, 0x80))),
+                );
                 ui.separator();
-                if let Some(s) = self.scripts.status() {
-                    ui.label(
-                        RichText::new(s)
-                            .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xc0, 0x80))),
-                    );
-                    ui.separator();
-                }
-                crate::simgpu::status_ui(&self.sim, ui);
-                if !self.gpu {
-                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), "no GPU renderer");
-                }
-            });
+            }
+            crate::simgpu::status_ui(&self.sim, ui);
+            if !self.gpu {
+                ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), "no GPU renderer");
+            }
         });
     }
 
@@ -338,7 +391,12 @@ impl JetcarpApp {
             ui.separator();
             ui.horizontal_wrapped(|ui| {
                 ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
-                if ui.small_button("×").clicked() {
+                if ui
+                    .small_button("×")
+                    .on_hover_text("Dismiss")
+                    .accessible_name("Dismiss the note")
+                    .clicked()
+                {
                     self.message = None;
                 }
             });

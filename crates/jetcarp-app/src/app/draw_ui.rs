@@ -16,7 +16,9 @@ impl JetcarpApp {
                 .small()
                 .weak(),
         );
-        if self.tool != Tool::Pan {
+        // Into and State show whatever the mouse tool: the keyboard's cell cursor draws with them
+        // in Pan too (#219).
+        {
             let name = self
                 .draw_target
                 .and_then(|id| self.world.ca(id))
@@ -41,7 +43,7 @@ impl JetcarpApp {
                         _ => 1,
                     },
                 };
-                if max > 1 && self.tool == Tool::Draw {
+                if max > 1 {
                     ui.horizontal(|ui| {
                         ui.label(if f.kind == FieldKind::Height {
                             "Grains per click"

@@ -30,6 +30,10 @@ mod display_api;
 mod display_ui;
 mod draw_ui;
 mod host_ui;
+mod keyboard;
+pub use keyboard::{Shortcut, ShortcutGroup, table as shortcut_table};
+#[cfg(test)]
+mod keyboard_tests;
 mod menu;
 mod objects_ui;
 mod palette_ui;
@@ -218,6 +222,8 @@ pub struct JetcarpApp {
     pending_launch: Option<crate::cli::LaunchArgs>,
     /// Settings → Accessibility, and the system's settings it follows (`accessibility.rs`).
     a11y: accessibility::A11yRt,
+    /// The keyboard: the grid's cell cursor, F6's parts of the window, the menu bar (`keyboard.rs`).
+    kb: keyboard::KeyboardRt,
 }
 
 /// What the status and menu bars show about the world, kept until its revision changes.
@@ -343,6 +349,7 @@ impl JetcarpApp {
             warning: crate::warning_ui::Warning::for_app(),
             pending_launch: None,
             a11y: Default::default(),
+            kb: Default::default(),
         };
         let settings = app.shell.store.load();
         app.apply_settings(&cc.egui_ctx, settings);
@@ -581,11 +588,14 @@ impl eframe::App for JetcarpApp {
         self.window_place(&ctx, frame);
         // The system's reduced motion and contrast, as Settings → Accessibility follows them.
         self.a11y_frame(&ctx);
+        // F6, F10, announcements, scrolling to what the keyboard reached (`keyboard.rs`).
+        self.keyboard_begin(&ctx);
         // The photosensitive seizure warning, alone, until it has been answered (#96): no outputs,
         // screensaver, tool windows or setup. A screenshot run still ends, picturing it.
         if self.warning.showing {
             self.warning_screen(ui);
             self.autoshot_tick(&ctx);
+            self.keyboard_end(&ctx);
             return;
         }
         self.poll_build(&ctx);
@@ -626,6 +636,8 @@ impl eframe::App for JetcarpApp {
         if self.screen == Screen::Sim && self.playing {
             ctx.request_repaint();
         }
+        // The focus ring, the live status line, the accessibility tree's last tidy.
+        self.keyboard_end(&ctx);
         self.save_settings(&ctx, false);
     }
 }

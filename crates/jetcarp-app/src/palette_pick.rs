@@ -97,6 +97,7 @@ pub fn paint_strip(painter: &egui::Painter, rect: egui::Rect, p: &Palette) {
 /// One selectable row: strip plus name. True when clicked.
 fn row(ui: &mut egui::Ui, p: Option<&Palette>, label: &str, selected: bool) -> bool {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(210.0, 20.0), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, label));
     if ui.is_rect_visible(rect) {
         let painter = ui.painter_at(rect);
         if selected || resp.hovered() {

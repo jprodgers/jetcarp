@@ -71,6 +71,14 @@ impl JetcarpApp {
             ui.add_space(4.0);
             self.menu.guard = self.strobe.on_app;
             open = self.menu.show(ui);
+            // A part of the window F6 moves to (#219).
+            crate::a11y::region(
+                ui.ctx(),
+                crate::a11y::MAIN,
+                "Quick Start",
+                ui.layer_id(),
+                ui.max_rect(),
+            );
         });
         match open {
             Some(start::MenuAction::Open(i)) => {

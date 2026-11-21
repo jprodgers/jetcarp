@@ -552,6 +552,514 @@ impl Stills {
 
 use egui::Color32;
 
+// ---------------------------------------------------------------------------------------------
+// The keyboard and screen readers (#219)
+//
+// What any window needs, kept on the egui context so no window has to be handed the app:
+// announcements for the status line, the regions F6 moves between, where the keyboard was last
+// frame, the mouse-only widgets the keyboard passes over, the focus ring, and a last tidy of the
+// accessibility tree before it goes to the screen reader. `app/keyboard.rs` drives them.
+
+use egui::accesskit;
+use std::collections::HashSet;
+
+/// Name a control for screen readers where nothing beside it does (a list at the start of a
+/// line, a box whose label is above it): egui's `accessible_name` for a response held by
+/// reference, such as a combo box's.
+pub fn name(r: &egui::Response, name: impl Into<String>) {
+    let name = name.into();
+    r.ctx.accesskit_node_builder(r.id, |n| n.set_label(name));
+}
+
+#[derive(Clone, Default)]
+struct Pending(Vec<String>);
+
+fn pending_id() -> egui::Id {
+    egui::Id::unique("jetcarp-a11y-announce")
+}
+
+/// Tell a screen reader something that happened (a finished job, say): the app puts it in the
+/// status line, which screen readers hear as a live region.
+pub fn announce(ctx: &egui::Context, text: impl Into<String>) {
+    let text = text.into();
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<Pending>(pending_id())
+            .0
+            .push(text)
+    });
+}
+
+/// What was announced since the last call.
+pub fn take_announcements(ctx: &egui::Context) -> Vec<String> {
+    ctx.data_mut(|d| std::mem::take(&mut d.get_temp_mut_or_default::<Pending>(pending_id()).0))
+}
+
+/// The status line's words, as a live region: a screen reader reads them out when they change,
+/// at once when `urgent` (an error), else when it has finished what it is saying. The node has no
+/// place on screen of its own, so it is there with the status bar hidden too.
+pub fn live_region(ctx: &egui::Context, text: &str, urgent: bool) {
+    ctx.accesskit_node_builder(egui::Id::unique("jetcarp-status-live"), |n| {
+        n.set_role(accesskit::Role::Status);
+        n.set_label(text.to_string());
+        n.set_live(if urgent {
+            accesskit::Live::Assertive
+        } else {
+            accesskit::Live::Polite
+        });
+    });
+}
+
+/// Where a region is in the order F6 takes: the menu bar, then the window's own parts (the panes
+/// and the grid, or the Quick Start), the status line, then the floating windows.
+pub const MENU_BAR: u8 = 0;
+pub const MAIN: u8 = 1;
+pub const STATUS: u8 = 2;
+pub const WINDOW: u8 = 3;
+
+/// A part of the window that F6 moves to: the keyboard goes to its first control in `land` (a
+/// floating window's below its title bar, whose buttons Shift+Tab reaches from there).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Region {
+    pub name: String,
+    pub rank: u8,
+    pub layer: egui::LayerId,
+    pub rect: egui::Rect,
+    pub land: egui::Rect,
+}
+
+#[derive(Clone, Default)]
+struct Regions {
+    last: Vec<Region>,
+    now: Vec<Region>,
+}
+
+fn regions_id() -> egui::Id {
+    egui::Id::unique("jetcarp-a11y-regions")
+}
+
+/// Note a region drawn this frame.
+pub fn region(ctx: &egui::Context, rank: u8, name: &str, layer: egui::LayerId, rect: egui::Rect) {
+    note_region(ctx, rank, name, layer, rect, rect);
+}
+
+/// Note a floating window drawn this frame: F6 lands below its title bar.
+pub fn window_region(ctx: &egui::Context, name: &str, layer: egui::LayerId, rect: egui::Rect) {
+    let style = ctx.global_style();
+    let title = ctx.fonts_mut(|f| f.row_height(&egui::TextStyle::Heading.resolve(&style)))
+        + style.spacing.window_margin.sum().y;
+    let mut land = rect;
+    land.min.y = (rect.min.y + title).min(rect.max.y);
+    note_region(ctx, WINDOW, name, layer, rect, land);
+}
+
+fn note_region(
+    ctx: &egui::Context,
+    rank: u8,
+    name: &str,
+    layer: egui::LayerId,
+    rect: egui::Rect,
+    land: egui::Rect,
+) {
+    if !rect.is_positive() {
+        return;
+    }
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<Regions>(regions_id())
+            .now
+            .push(Region {
+                name: name.to_string(),
+                rank,
+                layer,
+                rect,
+                land,
+            })
+    });
+}
+
+/// A new frame: last frame's regions are the ones F6 moves between.
+pub fn regions_begin(ctx: &egui::Context) {
+    ctx.data_mut(|d| {
+        let r = d.get_temp_mut_or_default::<Regions>(regions_id());
+        r.last = std::mem::take(&mut r.now);
+    });
+}
+
+/// Last frame's regions, in F6's order.
+pub fn last_regions(ctx: &egui::Context) -> Vec<Region> {
+    let mut v = ctx.data(|d| {
+        d.get_temp::<Regions>(regions_id())
+            .map(|r| r.last)
+            .unwrap_or_default()
+    });
+    v.sort_by_key(|r| r.rank);
+    v
+}
+
+/// Where the keyboard was at the end of last frame.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LastFocus {
+    pub id: Option<egui::Id>,
+    pub layer: Option<egui::LayerId>,
+    /// It was a text field (Esc there only leaves the field).
+    pub text: bool,
+    /// A popup (a menu, a list) was open (Esc closes that first).
+    pub popup: bool,
+}
+
+fn last_focus_id() -> egui::Id {
+    egui::Id::unique("jetcarp-a11y-last-focus")
+}
+
+/// Remember where the keyboard is, at the end of a frame.
+pub fn note_focus(ctx: &egui::Context) {
+    let id = ctx.memory(|m| m.focused());
+    let layer = id.and_then(|id| {
+        ctx.viewport(|v| {
+            v.this_pass
+                .widgets
+                .get(id)
+                .or_else(|| v.prev_pass.widgets.get(id))
+                .map(|w| w.layer_id)
+        })
+    });
+    let f = LastFocus {
+        id,
+        layer,
+        text: ctx.text_edit_focused(),
+        popup: egui::Popup::is_any_open(ctx),
+    };
+    ctx.data_mut(|d| d.insert_temp(last_focus_id(), f));
+}
+
+pub fn last_focus(ctx: &egui::Context) -> LastFocus {
+    ctx.data(|d| d.get_temp(last_focus_id()))
+        .unwrap_or_default()
+}
+
+/// Esc was pressed with the keyboard on a control (not a text field, nor in a popup) in the
+/// window on `layer`: the window should close.
+pub fn escape_closes(ctx: &egui::Context, layer: egui::LayerId) -> bool {
+    let f = last_focus(ctx);
+    f.layer == Some(layer) && !f.text && !f.popup && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+}
+
+/// Esc was pressed with the keyboard in the dialog on `layer`, or nowhere at all (not in a text
+/// field or a popup): the dialog should close.
+pub fn escape_closes_dialog(ctx: &egui::Context, layer: egui::LayerId) -> bool {
+    let f = last_focus(ctx);
+    (f.layer == Some(layer) || f.id.is_none())
+        && !f.text
+        && !f.popup
+        && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+}
+
+#[derive(Clone, Default)]
+struct Chrome {
+    /// Named this frame by the code that drew them.
+    named: HashSet<egui::Id>,
+    /// Found at the end of last frame.
+    found: HashSet<egui::Id>,
+}
+
+/// Each OS window (viewport) has its own: a popped-out window's are found during the main
+/// window's frame.
+fn chrome_id(ctx: &egui::Context) -> egui::Id {
+    egui::Id::unique("jetcarp-a11y-chrome").with(ctx.viewport_id())
+}
+
+/// Mark a widget the mouse uses and the keyboard has no use for (a window's title bar, which
+/// takes double-clicks and drags): Tab and F6 pass over it, and screen readers are not shown it.
+pub fn mouse_only(ctx: &egui::Context, id: egui::Id) {
+    let key = chrome_id(ctx);
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<Chrome>(key).named.insert(id));
+}
+
+/// The mouse-only widgets drawn this frame: those marked so ([`mouse_only`]), and those egui and
+/// its docking draw for dragging, which take the keyboard though they do nothing with it: a
+/// dragged background behind other controls (a tab bar's), and the thin lines between docked
+/// panes that resize them.
+pub fn find_chrome(ctx: &egui::Context) -> HashSet<egui::Id> {
+    let key = chrome_id(ctx);
+    let named =
+        ctx.data_mut(|d| std::mem::take(&mut d.get_temp_mut_or_default::<Chrome>(key).named));
+    let mut found: HashSet<egui::Id> = named;
+    ctx.viewport(|v| {
+        for layer in v.this_pass.widgets.layer_ids() {
+            let ws: Vec<&egui::WidgetRect> = v
+                .this_pass
+                .widgets
+                .get_layer(layer)
+                .filter(|w| w.sense.is_focusable() && w.enabled)
+                .collect();
+            for (i, w) in ws.iter().enumerate() {
+                if !w.sense.senses_drag() {
+                    continue;
+                }
+                let (wd, ht) = (w.rect.width(), w.rect.height());
+                let thin = (wd <= 12.0 && ht >= 40.0) || (ht <= 12.0 && wd >= 40.0);
+                let behind = ws[i + 1..]
+                    .iter()
+                    .any(|o| o.id != w.id && w.rect.contains_rect(o.rect));
+                if thin || behind {
+                    found.insert(w.id);
+                }
+            }
+        }
+    });
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<Chrome>(key).found = found.clone());
+    found
+}
+
+/// Mouse-only widgets found at the end of last frame.
+pub fn chrome(ctx: &egui::Context) -> HashSet<egui::Id> {
+    let key = chrome_id(ctx);
+    ctx.data(|d| {
+        d.get_temp::<Chrome>(key)
+            .map(|c| c.found)
+            .unwrap_or_default()
+    })
+}
+
+/// The widgets in `region` where F6 lands that take the keyboard, in the order they were drawn
+/// last frame, the mouse-only ones left out; else any of the region's.
+pub fn focusable_in(ctx: &egui::Context, region: &Region) -> Vec<egui::Id> {
+    let land = focusable_within(ctx, region, region.land);
+    if land.is_empty() && region.land != region.rect {
+        return focusable_within(ctx, region, region.rect);
+    }
+    land
+}
+
+fn focusable_within(ctx: &egui::Context, region: &Region, rect: egui::Rect) -> Vec<egui::Id> {
+    let skip = chrome(ctx);
+    if !ctx.memory(|m| m.allows_interaction(region.layer)) {
+        return vec![];
+    }
+    ctx.viewport(|v| {
+        let mut seen = HashSet::new();
+        v.prev_pass
+            .widgets
+            .get_layer(region.layer)
+            .filter(|w| {
+                w.sense.is_focusable()
+                    && w.enabled
+                    && w.visible
+                    && !skip.contains(&w.id)
+                    && w.interact_rect.is_positive()
+                    && rect.contains(w.interact_rect.center())
+            })
+            .map(|w| w.id)
+            .filter(|id| seen.insert(*id))
+            .collect()
+    })
+}
+
+/// The region holding widget `id` (last frame's), if any: where the part of it that shows is
+/// (a tab scrolled out of its tab bar is not in the pane beside it).
+pub fn region_of(ctx: &egui::Context, regions: &[Region], id: egui::Id) -> Option<usize> {
+    let w = ctx.viewport(|v| v.prev_pass.widgets.get(id).copied())?;
+    let at = if w.interact_rect.is_positive() {
+        w.interact_rect.center()
+    } else {
+        w.rect.center()
+    };
+    regions
+        .iter()
+        .position(|r| r.layer == w.layer_id && r.rect.contains(at))
+}
+
+/// Scroll widget `id` into view this frame, if last frame showed only part of it: an accessibility
+/// request egui answers inside the scroll area that holds it, when it draws it.
+pub fn scroll_into_view(ctx: &egui::Context, id: egui::Id) {
+    let Some(w) = ctx.viewport(|v| v.prev_pass.widgets.get(id).copied()) else {
+        return;
+    };
+    if w.interact_rect.area() + 1.0 >= w.rect.area() {
+        return;
+    }
+    ctx.input_mut(|i| {
+        i.events.push(egui::Event::AccessKitActionRequest(
+            accesskit::ActionRequest {
+                action: accesskit::Action::ScrollIntoView,
+                target_tree: accesskit::TreeId::ROOT,
+                target_node: id.accesskit_id(),
+                data: None,
+            },
+        ))
+    });
+}
+
+/// The focus ring: the high-contrast theme's own colour and width (3 points of gold, or navy in
+/// the light form), else 2 points of the selection's outline colour, which egui's light and dark
+/// themes draw at 3:1 or more against their panels.
+pub fn ring_stroke(visuals: &egui::Visuals, high: bool) -> egui::Stroke {
+    if high {
+        let s = if visuals.dark_mode {
+            &crate::theme::DARK
+        } else {
+            &crate::theme::LIGHT
+        };
+        egui::Stroke::new(crate::theme::FOCUS_WIDTH, s.focus)
+    } else {
+        egui::Stroke::new(2.0, visuals.selection.stroke.color)
+    }
+}
+
+/// Draw the ring round whatever has the keyboard (in its own layer, over it). egui shows the focus
+/// on buttons by their outline alone, one point wide in its standard themes, and not at all on
+/// many controls; this ring is the same on every control, in every theme.
+pub fn paint_focus_ring(ctx: &egui::Context, skip: &HashSet<egui::Id>) {
+    let Some(id) = ctx.memory(|m| m.focused()) else {
+        return;
+    };
+    if skip.contains(&id) {
+        return;
+    }
+    let Some(w) = ctx.viewport(|v| v.this_pass.widgets.get(id).copied()) else {
+        return;
+    };
+    if !w.interact_rect.is_positive() || !w.visible {
+        return;
+    }
+    let stroke = ring_stroke(&ctx.global_style().visuals, high_contrast(ctx));
+    let big = w.rect.width() > 200.0 && w.rect.height() > 200.0;
+    let (rect, kind) = if big {
+        // A widget as big as the grid: inside its edge, where no neighbour covers the ring.
+        (w.rect.shrink(1.0), egui::StrokeKind::Inside)
+    } else {
+        (w.rect.expand(1.0), egui::StrokeKind::Outside)
+    };
+    let clip = w.interact_rect.expand(stroke.width + 3.0);
+    ctx.layer_painter(w.layer_id)
+        .with_clip_rect(clip)
+        .rect_stroke(rect, 3.0, stroke, kind);
+}
+
+/// A last tidy of this frame's accessibility tree (only while a screen reader, or a test, asks for
+/// it): mouse-only widgets are shown as plain containers, and each control with no name of its own
+/// (or one of symbols alone, such as "%") is named by the words just left of it on the same line,
+/// a label's or a check box's, as a person reading the screen would name it ("Into" for the list
+/// beside it, "Repeating up to" for the number after that box).
+pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
+    struct Seen {
+        /// Controls to name: their layer and place.
+        unnamed: Vec<(egui::Id, Option<egui::LayerId>, egui::Rect)>,
+        /// Words that can name them: a label's or a check box's, and whether they only join
+        /// others ("for", "to").
+        labels: Vec<(egui::Id, Option<egui::LayerId>, egui::Rect, bool)>,
+        chrome: Vec<egui::Id>,
+    }
+    let rect_of = |b: accesskit::Rect| {
+        egui::Rect::from_min_max(
+            egui::pos2(b.x0 as f32, b.y0 as f32),
+            egui::pos2(b.x1 as f32, b.y1 as f32),
+        )
+    };
+    let Some(seen) = ctx.viewport(|v| {
+        let st = v.this_pass.accesskit_state.as_ref()?;
+        let mut s = Seen {
+            unnamed: vec![],
+            labels: vec![],
+            chrome: vec![],
+        };
+        for (id, n) in &st.nodes {
+            if chrome.contains(id) {
+                s.chrome.push(*id);
+                continue;
+            }
+            let Some(b) = n.bounds() else { continue };
+            let r = rect_of(b);
+            let layer = v.this_pass.widgets.get(*id).map(|w| w.layer_id);
+            let role = n.role();
+            let says = |t: &str| t.chars().any(char::is_alphanumeric);
+            let words = match role {
+                accesskit::Role::Label => n.value(),
+                accesskit::Role::CheckBox => n.label(),
+                _ => None,
+            };
+            const JOINING: [&str; 16] = [
+                "for", "to", "from", "on", "at", "of", "by", "and", "or", "in", "into", "with",
+                "than", "px", "gen", "gens",
+            ];
+            let joins = |w: &str| JOINING.contains(&w.trim().to_lowercase().as_str());
+            if let Some(w) = words.filter(|w| says(w)) {
+                s.labels.push((*id, layer, r, joins(w)));
+            }
+            // Named by nothing, or by symbols alone; and a control that holds a value (a list, a
+            // number, a slider, a text box) named by a unit ("%", "px": a number box is named by
+            // its suffix), only by its tooltip (egui names a control by its hover text when it has
+            // no name), or only by the grey hint in its box: the words beside it are the better
+            // name; a tooltip stays its description, a hint its hint. A button keeps its name.
+            let holds_value = matches!(
+                role,
+                accesskit::Role::ComboBox
+                    | accesskit::Role::EditableComboBox
+                    | accesskit::Role::SpinButton
+                    | accesskit::Role::Slider
+                    | accesskit::Role::TextInput
+                    | accesskit::Role::MultilineTextInput
+                    | accesskit::Role::SearchInput
+            );
+            let tooltip_only = n.label().is_some() && n.label() == n.description();
+            let weak_name = n.label().is_none_or(|l| !says(l))
+                || (holds_value && (tooltip_only || n.label().is_some_and(joins)));
+            if egui::accessibility::is_input(role) && n.labelled_by().is_empty() && weak_name {
+                s.unnamed.push((*id, layer, r));
+            }
+        }
+        Some(s)
+    }) else {
+        return;
+    };
+    for id in seen.chrome {
+        ctx.accesskit_node_builder(id, |n| {
+            if n.role() == accesskit::Role::Unknown && n.label().is_none() {
+                n.set_role(accesskit::Role::GenericContainer);
+                n.remove_action(accesskit::Action::Focus);
+                n.remove_action(accesskit::Action::Click);
+            }
+        });
+    }
+    for (id, layer, r) in seen.unnamed {
+        // The words on the same line to its left, in the same window.
+        let row: Vec<&(egui::Id, Option<egui::LayerId>, egui::Rect, bool)> = seen
+            .labels
+            .iter()
+            .filter(|(l_id, l_layer, l, _)| {
+                let overlap = (l.max.y.min(r.max.y) - l.min.y.max(r.min.y)).max(0.0);
+                *l_id != id
+                    && *l_layer == layer
+                    && overlap >= 0.5 * l.height().min(r.height())
+                    && l.max.x <= r.min.x + 2.0
+                    && r.min.x - l.max.x <= 260.0
+            })
+            .collect();
+        let Some(near) = row
+            .iter()
+            .min_by(|a, b| (r.min.x - a.2.max.x).total_cmp(&(r.min.x - b.2.max.x)))
+        else {
+            continue;
+        };
+        // A connecting word ("for", "to", "px") is read after the line's first words: "Activity
+        // below, for".
+        let mut by = vec![near.0];
+        if near.3
+            && let Some(first) = row
+                .iter()
+                .min_by(|a, b| a.2.min.x.total_cmp(&b.2.min.x))
+                .filter(|f| f.0 != near.0)
+        {
+            by.insert(0, first.0);
+        }
+        ctx.accesskit_node_builder(id, |n| {
+            n.clear_label();
+            for l in &by {
+                n.push_labelled_by(l.accesskit_id());
+            }
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -708,5 +1216,84 @@ mod tests {
         assert!(dark_of_gnome("'prefer-dark'"));
         assert!(!dark_of_gnome("'prefer-light'"));
         assert!(!dark_of_gnome("'default'"));
+    }
+
+    /// The tidy pass names a control with no name of its own by the words left of it on its
+    /// line: a list by its label, a number after a joining word by the line's first words and
+    /// that word, a number named only by its unit, a list named only by its tooltip (which stays
+    /// its description); a mouse-only widget is hidden; a named button keeps its name.
+    #[test]
+    fn a_control_with_no_name_takes_the_words_beside_it() {
+        use egui::accesskit::{NodeId, Role};
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut ids = vec![];
+        let (mut a, mut b) = (3.0, 5.0);
+        let mut drag = egui::Id::NULL;
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            ui.horizontal(|ui| {
+                ids.push(ui.label("Into").id);
+                let c = egui::ComboBox::from_id_salt("into")
+                    .selected_text("Life")
+                    .show_ui(ui, |_| {});
+                ids.push(c.response.id);
+                ids.push(ui.label("for").id);
+                ids.push(ui.add(egui::DragValue::new(&mut a).suffix(" gens")).id);
+            });
+            ui.horizontal(|ui| {
+                ids.push(ui.label("Cell size").id);
+                ids.push(ui.add(egui::DragValue::new(&mut b).suffix(" px")).id);
+                let c = egui::ComboBox::from_id_salt("fps")
+                    .selected_text("30")
+                    .show_ui(ui, |_| {});
+                ids.push(c.response.on_hover_text("Frames a second").id);
+                ids.push(ui.button("Seed").id);
+                // A button named as its tooltip says keeps the name.
+                ids.push(
+                    ui.small_button("×")
+                        .on_hover_text("Dismiss")
+                        .accessible_name("Dismiss")
+                        .id,
+                );
+            });
+            drag = ui
+                .interact(
+                    egui::Rect::from_min_size(egui::pos2(0.0, 200.0), egui::vec2(6.0, 120.0)),
+                    egui::Id::unique("splitter"),
+                    egui::Sense::click_and_drag(),
+                )
+                .id;
+            let chrome = find_chrome(ui.ctx());
+            assert!(chrome.contains(&drag), "a thin dragged line is mouse-only");
+            tidy_tree(ui.ctx(), &chrome);
+        });
+        out.textures_delta.clear();
+        let u = out.platform_output.accesskit_update.expect("a tree");
+        let node = |id: egui::Id| {
+            u.nodes
+                .iter()
+                .find(|(n, _)| *n == id.accesskit_id())
+                .map(|(_, n)| n.clone())
+                .expect("a node")
+        };
+        let by = |id: egui::Id| -> Vec<NodeId> { node(id).labelled_by().to_vec() };
+        let [into, list, for_, gens, size, px, fps, seed, dismiss] = ids[..] else {
+            panic!("{ids:?}")
+        };
+        assert_eq!(by(list), vec![into.accesskit_id()]);
+        assert_eq!(by(gens), vec![into.accesskit_id(), for_.accesskit_id()]);
+        assert_eq!(by(px), vec![size.accesskit_id()], "a unit is no name");
+        assert_eq!(node(px).label(), None);
+        assert_eq!(
+            by(fps),
+            vec![size.accesskit_id()],
+            "the line's words over a tooltip"
+        );
+        assert_eq!(node(fps).description(), Some("Frames a second"));
+        assert!(by(seed).is_empty() && node(seed).label() == Some("Seed"));
+        assert!(by(dismiss).is_empty() && node(dismiss).label() == Some("Dismiss"));
+        let d = node(drag);
+        assert_eq!(d.role(), Role::GenericContainer);
+        assert!(!d.supports_action(egui::accesskit::Action::Focus));
     }
 }
