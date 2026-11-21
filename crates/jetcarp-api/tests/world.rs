@@ -339,23 +339,23 @@ fn unknown_palettes_warn_in_scenes_and_are_refused_when_typed() {
             &cx,
             &mut h,
             serde_json::from_value(json!({"tiling": "square", "width": 10, "height": 10,
-                "cas": [{"rule": "Life", "palette": "Dusk"}]}))
+                "cas": [{"rule": "Life", "palette": "Nonesuch"}]}))
             .unwrap(),
             &Quiet,
         ),
         ErrorKind::Invalid,
     );
-    assert!(e.message.contains("no palette named 'Dusk'"), "{e}");
+    assert!(e.message.contains("no palette named 'Nonesuch'"), "{e}");
     // The same CA in a scene file.
     let mut sc = jetcarp_core::Scene::new(TilingSpec::rect("square", 12, 12, Boundary::Wrap));
     let mut ca = CaSpec::new("B3/S23").seed(SeedSpec::Random { density: 0.3 });
-    ca.palette = Some("Dusk".into());
+    ca.palette = Some("Nonesuch".into());
     sc.cas = vec![ca];
     let w = World::from_scene(&sc).unwrap();
     sc.record = Some(w.record());
-    let file = dir.join("dusk.json");
+    let file = dir.join("nonesuch.json");
     std::fs::write(&file, sc.to_json()).unwrap();
-    let warning = "palette 'Dusk' is unknown here; drawn in Ember";
+    let warning = "palette 'Nonesuch' is unknown here; drawn in Ember";
     let open = WorldOpen::run(
         &cx,
         &mut h,
@@ -368,7 +368,7 @@ fn unknown_palettes_warn_in_scenes_and_are_refused_when_typed() {
     .unwrap();
     assert_eq!(open.warnings, [warning]);
     assert!(open.text().contains(&format!("Warning: {warning}.")));
-    assert_eq!(open.status.cas[0].palette, "Dusk");
+    assert_eq!(open.status.cas[0].palette, "Nonesuch");
     let cli = Ctx::new();
     let run: RunIn = serde_json::from_value(json!({"scene": file, "gens": 2})).unwrap();
     let r = SceneRun::run(&cli, run, &Quiet).unwrap();
