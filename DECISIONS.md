@@ -522,6 +522,26 @@ is dated more closely than that.
 - **Stands.** It applies D-26's rule ("Anything that doesn't work as intended doesn't ship") to
   the next release as a whole.
 
+### D-43. 0.4.3 is the accessibility update
+
+- **Decided:** Jimmie, 20 November 2026.
+- **The decision:** 0.4.3 is about accessibility, led by the strobe guard
+  ([#97](https://github.com/jprodgers/jetcarp/issues/97)), with palettes for colour-vision
+  deficiency ([#217](https://github.com/jprodgers/jetcarp/issues/217)), reduced motion
+  ([#218](https://github.com/jprodgers/jetcarp/issues/218)), the keyboard and screen readers
+  ([#219](https://github.com/jprodgers/jetcarp/issues/219)), a high-contrast theme
+  ([#220](https://github.com/jprodgers/jetcarp/issues/220)), and an
+  [accessibility statement](https://jprodgers.github.io/jetcarp/about/accessibility.html) that
+  ships with 0.4.3's release.
+- **Why:** "It was Hodgepodge that got me to determine that we need a flicker detector." Hodgepodge
+  is also the seizure warning's example of a rule that flickers across the whole field. "In the
+  vein of the strobe guard, we should write an accessibility statement."
+- **The statement's promises:** a problem using JETCARP is a bug and is treated as one; the
+  statement is checked again with every release.
+- **Sound:** none at present. Some of the Cellular Automata Puzzles (0.6.0) will be based on sound;
+  those will have a visual indicator, worked out with the puzzles.
+- **Stands.**
+
 ## People
 
 ### D-34. Contributions, AI-written ones included, are welcome and are verified
