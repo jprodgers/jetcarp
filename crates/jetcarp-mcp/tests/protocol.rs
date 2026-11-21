@@ -265,7 +265,7 @@ fn tools_list_is_well_formed_and_from_the_operations() {
 }
 
 /// tools/list goes to the model whole, so it stays small (the stdio test holds the whole list to
-/// 45 KB): the long settings are resources the tools name, and each of those can be read (and
+/// 48,000 bytes, a hard limit): the long settings are resources the tools name, and each of those can be read (and
 /// through help, for clients without resources).
 #[test]
 fn summarised_settings_are_resources() {

@@ -100,8 +100,10 @@ fn a_whole_session_over_stdio() {
     want.extend(["use_app", "host_control", "app_display"].map(String::from));
     assert_eq!(names, want);
     // The whole list goes to the model with every request: the long settings are resources.
+    // 48,000 bytes is a hard limit, the maintainer's (D-44): move text into resources or help
+    // topics rather than raise it.
     let size = tools.to_string().len();
-    assert!(size <= 45_000, "tools/list is {size} bytes");
+    assert!(size <= 48_000, "tools/list is {size} bytes, over its hard limit of 48,000");
 
     let res = c.request("resources/list", json!({}));
     let n = res["result"]["resources"].as_array().unwrap().len();

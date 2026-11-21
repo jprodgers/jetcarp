@@ -194,7 +194,7 @@ text are read as meant. Anything else of the wrong type, and a number under the 
 is refused, naming the argument and what to give: "`width` must be a whole number (got "abc")".
 
 A client hands the whole tool list to the model with every request, so the list stays short
-(about 45 KB): an argument with many settings, such as each of `search_start`'s strategies or
+(48,000 bytes at most, a hard limit): an argument with many settings, such as each of `search_start`'s strategies or
 `pack`'s actions, is listed with a line about what it does and the resource that holds its
 settings in full, `jetcarp://schema/{tool}/{argument}` (for example
 `jetcarp://schema/search_start/hunt`). A client without resources gets the same JSON Schema from
