@@ -170,6 +170,34 @@ day later (0.4.2: 17 November here, 18 November there).
   (show, `set`, `reset`), the hardware in `jetcarp doctor`, and the MCP tools'
   `reference {"what": "machine"}`, which reads the score; no tool runs the benchmark.
   ([This computer](../guides/this-computer.md), [#213](https://github.com/jprodgers/jetcarp/issues/213))
+- **Fit to this computer is back, and takes a few seconds.** Held back from 0.4.2, where a fit
+  showed every scene at every size and took 45 seconds to 12 minutes, it now measures one scene a
+  screen, the rotation's most demanding by its work a cell (its tiling's neighbours, its rules, its
+  speed and its drawing, with the GPU's steps counted at the GPU's speed), at four or five sizes of
+  a second each, found by a binary search from a first guess: the size chosen or recommended last
+  time, or one from the JETCARP Hardware Score. Every screen is measured at once. The size found
+  serves the whole rotation: the other scenes take their sizes from where the measured scene's loads
+  cross the limits, a cheaper scene going finer. On the desktop JETCARP is developed on, a first fit
+  took 2.7 s on one screen and 3.7 s on two, and a repeat 1.5 to 3.8 s. *Fit to this computer…* is
+  in the *Desktop background* pane again, with its limits and cards, and `jetcarp host tune` and the
+  MCP tool's `tune` are back. ([Fit to this computer](../guides/wallpapers.md#fit-to-this-computer),
+  [#113](https://github.com/jprodgers/jetcarp/issues/113))
+  - **The limits are one for the whole desktop,** shared between the screens by their pixel area:
+    a 2560 × 1440 screen beside a 1920 × 1080 one has 6.4% of a 10% processor limit and the other
+    3.6%. Before, each of two screens had half the limit, so on the Mac's two monitors no size fit.
+    The pane and `jetcarp host tune`'s first line say how the limits are shared.
+    ([#107](https://github.com/jprodgers/jetcarp/issues/107))
+  - **A rule series is fitted as one scene,** by its first rule, and every rule shows at its size:
+    the Wolfram series' 40 rules took 12 minutes, rule by rule.
+    ([#109](https://github.com/jprodgers/jetcarp/issues/109))
+  - **`--pick` places the last fit's sizes while they are current** (the same JETCARP, rotations and
+    scenes, monitors, limits and GPU), measuring nothing; `--fresh` measures again. Each `--pick`
+    ran the whole sweep again. ([#77](https://github.com/jprodgers/jetcarp/issues/77))
+  - **A fit repeated with nothing changed recommends the same sizes:** the size recommended last
+    time is kept while it stays within a tenth of the limits, a finer one takes its place only when
+    clearly within them, and a card within a tenth of a limit says *at the limit*. The Mac's
+    recommendation moved between 4 and 6 px from one fit to the next.
+    ([#94](https://github.com/jprodgers/jetcarp/issues/94))
 - **For someone who answered the seizure warning *at risk*, the strobe guard is stricter about
   patterns.** Their guard, which can never be turned off, also veils any pattern of similar parts,
   regular or not, as EA's IRIS counts one (at least six parts alike in shape over a quarter of the
@@ -223,6 +251,29 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **Fit to this computer judges a frame by its work, not by its wait to be shown.** A frame's time
+  is its stepping, its drawing and handing it to the GPU; the wait for the screen to take it, which
+  beside a monitor of another refresh rate can follow that monitor whatever the size, is left out.
+  On the Mac's two monitors every size measured 17 to 20 ms against a 16.7 ms budget, so none fit.
+  ([#106](https://github.com/jprodgers/jetcarp/issues/106))
+- **Fit's cards scroll sideways, and open at the card chosen.** Each row scrolls with a trackpad's
+  sideways swipe or with shift and the wheel, and is first shown at the size the scene shows at (or
+  the recommended one), without moving the pane. On the Mac none of the chosen cards could be seen.
+  ([#108](https://github.com/jprodgers/jetcarp/issues/108))
+- **A fit by itself after a monitor change fits only the screens whose monitor changed** (its size,
+  pixels per point or refresh rate); the others keep their fit. Changing one monitor's resolution
+  had the host sweep every screen, 47 scenes. ([#110](https://github.com/jprodgers/jetcarp/issues/110))
+- **On macOS, Fit can hold the desktop background to the GPU limit too.** It reads the host's GPU
+  time from the system's own count for it (the task's GPU time, as Activity Monitor shows it), and
+  judges the GPU limit by it once a fit has seen it move; where it doesn't move, the GPU share stays
+  unmeasured and says so, as before. Before, only the processor was judged on the Mac, and the host
+  used 30% of the M2 Max's GPU at the recommended size.
+  ([#93](https://github.com/jprodgers/jetcarp/issues/93))
+- **On macOS, the host asks the allocator to give back the memory it freed after each fit,** as it
+  does on Linux: the host grew from 147 to 399 MB over a two-screen fit there. A fit also builds far
+  fewer worlds now. ([#111](https://github.com/jprodgers/jetcarp/issues/111))
+- **The strobe guard no longer stops a debug build** on a picture side of fewer than 16 samples
+  (an overflow in where its windows start); release builds were not affected.
 - **In the *Desktop background* pane, the processor's percentage after *Pause while the processor
   is busier than* goes to the next line in a narrow pane,** where it ran past the pane's edge, out
   of sight and out of reach.

@@ -952,16 +952,19 @@ Example:
 
 ### `host_control`
 
-**JETCARP background host.** Controls the JETCARP background host, which runs live scenes as wallpapers or windows without the app. Returns its status (each screen's scene, cell size and caption, and recent problems). Fails if it is not running (`jetcarp host start` starts it). Refuses scenes until the user accepts the seizure warning.
+**JETCARP background host.** Runs the JETCARP background host (live wallpapers or windows, no app needed); returns its status. Fails if it isn't running (`jetcarp host start`). Refuses scenes until the seizure warning is accepted.
 
 *`jetcarp mcp` (stdio) only.*
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"scene"`, `"quit"` | Default status. wallpaper: every screen on the desktop background (GNOME: with the extension) or in a window; login: start at login or not; open_app opens the app; reload rereads host.json; scene: a screen's scene. |
-| `name` | string | With rotation: the one to run (saved). |
-| `on` | boolean | With wallpaper or login: on or off. Default on. |
-| `screen` | integer | Counted from 0. Default: every screen for next and previous, else the first. |
+| `action` | `"status"`, `"next"`, `"previous"`, `"pause"`, `"resume"`, `"rotation"`, `"wallpaper"`, `"login"`, `"open_app"`, `"reload"`, `"tune"`, `"scene"`, `"quit"` | Default status. wallpaper: on the desktop (GNOME: its extension) or windows; login: at login or not; open_app: the app; reload rereads host.json; tune: fit cell sizes on screen (pick: recommended, finest, own or px); scene: a screen's scene. |
+| `cpu_limit` | number |  |
+| `gpu_limit` | number |  |
+| `name` | string | With rotation: its name (saved). |
+| `on` | boolean | With wallpaper, login or tune: on or off (default on). |
+| `pick` | string or number |  |
+| `screen` | integer | From 0. Default: all for next, previous and tune, else the first. |
 
 Example:
 
