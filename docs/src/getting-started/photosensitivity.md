@@ -3,9 +3,9 @@
 **JETCARP's animations can flash and flicker rapidly, and can trigger seizures in people with
 photosensitive epilepsy.**
 
-Some rules change most of the screen every generation. A rule with B0, for example, turns the whole
-field over at each step. Run fast, full screen or as the desktop background, such a rule can flicker
-many times a second.
+Some rules change most of the screen every generation. Hodgepodge, for example, can flicker across
+the whole field at each step. Run fast, full screen or as the desktop background, such a rule can
+flicker many times a second.
 
 Flashing like this can also trigger a seizure, occasionally, in someone with no history of seizures.
 
@@ -16,12 +16,12 @@ involuntary movement, stop at once, look away from the screen, and see a doctor.
 
 **If you have, or may have, epilepsy or a seizure disorder, don't use JETCARP.**
 
-JETCARP can flash rapidly, and some of its rules flicker the whole screen many times a second. It
-cannot yet detect or limit flashing, so it cannot protect you from it.
+JETCARP can flash rapidly, and some of its rules flicker the whole screen many times a second. Its
+strobe guard softens, slows or pauses scenes that flash more than three times a second, but it can
+only lower the risk, not remove it.
 
-An automatic limiter is planned ([#97](https://github.com/jprodgers/jetcarp/issues/97)). If you
-continue, JETCARP saves your answer, so that the limiter can switch itself on for you when it comes.
-Until then, the safe choice is not to use JETCARP.
+If you continue, JETCARP saves your answer, and the [strobe guard](../guides/strobe-guard.md) stays
+on for you: it can't be turned off. Even so, the safe choice is not to use JETCARP.
 
 ## Where JETCARP asks
 
@@ -53,7 +53,8 @@ answered, nothing else starts anything on screen:
 
 What only reads or writes files is not held back: `jetcarp host status`, `jetcarp doctor`, pictures,
 GIF and WebP animations, videos and scene files. They don't animate anything on your screen, but
-an animation you make can flash like the scene it shows when you play it.
+an animation you make can flash like the scene it shows when you play it, so the strobe guard
+[checks exported animations](../guides/strobe-guard.md#exported-animations) before they are saved.
 
 A macOS screen saver installed before this warning existed keeps running as it was built, since
 macOS gives it no way to read JETCARP's settings; `jetcarp host saver install` builds it again,
@@ -91,21 +92,38 @@ date and the version of JETCARP that saved it:
   "version": 1,
   "answer": "no_disorder",
   "date": "2026-11-16T12:00:00Z",
-  "jetcarp": "0.4.2",
+  "jetcarp": "0.4.3",
   "via": "app"
 }
 ```
 
 `answer` is `no_disorder` or `at_risk`, and `via` is `app` or `setup`. The app, the command line,
 the background host and the MCP server all read this file. Deleting it, or the whole settings
-folder, brings the warning back. The planned limiter will read `at_risk` to switch itself on.
+folder, brings the warning back.
+
+The [strobe guard](../guides/strobe-guard.md)'s switches are kept beside the answer. Both are on
+unless they say otherwise: `guard_off` when the guard was turned off in the app, and
+`desktop_guard_off` when it was turned off for the desktop background and the screen saver, each
+with the date and the version that did it:
+
+```json
+  "guard_off": { "date": "2026-11-20T15:04:00Z", "jetcarp": "0.4.3" }
+```
+
+For `at_risk` the guard is on whatever the file says. A new answer starts with both switches on.
 
 ## Lowering the risk
 
 Fast, large changes of brightness are what can trigger a seizure. Guidance on flashing content, such
 as [WCAG 2.3.1](https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html),
-allows no more than three flashes a second over a large part of the screen. A B0 rule run at 30
-generations a second flips the whole field 30 times a second.
+allows no more than three flashes a second over a large part of the screen. Hodgepodge started from
+random states swings the whole field between healthy and ill every ten generations or so as it
+settles: run at 60 generations a second, it flashes about four times a second.
 
-Slower speeds, smaller windows, low-power pacing (`jetcarp host pacing low-power`) and rules
-without B0 all flash less. None of this makes JETCARP safe for someone with a seizure disorder.
+JETCARP's [strobe guard](../guides/strobe-guard.md) watches every frame it draws, and softens, slows
+or pauses a scene before it flashes more than three times a second over a large part of the
+screen, or shows strong regular stripes. It is on for everyone unless turned off in the app.
+
+Slower speeds, smaller windows, low-power pacing (`jetcarp host pacing low-power`) and calmer
+rules all flash less. None of this, the guard included, makes JETCARP safe for someone with a
+seizure disorder.

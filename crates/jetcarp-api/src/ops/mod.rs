@@ -2,7 +2,7 @@
 //!
 //! | Group | Operations |
 //! | --- | --- |
-//! | [`system`] | `system.paths`, `system.doctor`, `system.uninstall` |
+//! | [`system`] | `system.paths`, `system.doctor`, `system.strobe_guard`, `system.strobe_guard_on`, `system.uninstall` |
 //! | [`reference`] | `reference.rules`, `reference.tilings`, `reference.isohedral`, `reference.palettes`, `reference.seeds` |
 //! | [`files`] | `files.list` |
 //! | [`scene`] | `scene.load`, `scene.save`, `scene.verify`, `scene.run` |
@@ -44,6 +44,8 @@ use crate::op::{DynOp, OnWorld, Plain};
 pub static OPS: &[&dyn DynOp] = &[
     &Plain::<system::SystemPaths>::NEW,
     &Plain::<system::SystemDoctor>::NEW,
+    &Plain::<system::SystemStrobeGuard>::NEW,
+    &Plain::<system::SystemStrobeGuardOn>::NEW,
     &Plain::<system::SystemUninstall>::NEW,
     &Plain::<reference::ReferenceRules>::NEW,
     &Plain::<reference::ReferenceTilings>::NEW,

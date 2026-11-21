@@ -1,10 +1,22 @@
 //! Draws a stage, with its caption, onto a surface: what every place JETCARP shows a scene shares
 //! (the host's windows and wallpapers, and the macOS screen saver bundle).
+//!
+//! A painter for a surface people see draws through the strobe guard ([`Painter::guarded`],
+//! `jetcarp_core::strobe`): each frame is measured on the GPU, and softened there when the guard
+//! says so, before the caption is drawn over it (the caption fades over seconds and is not
+//! measured). Where the surface can be read ([`readable`]) the frame is drawn onto it and read in
+//! place, so an unsoftened frame costs only the measuring; elsewhere it is drawn into a texture
+//! and copied to the surface. The guard's pace cap and pause go to the stage through
+//! [`Stage::set_guard`]. Offscreen painters (the tuner's, sweep cards) have no guard.
 
 use crate::caption::{CaptionPainter, CaptionSettings, Insets};
 use crate::gpu::{TileRenderer, slot_capacity};
 use crate::stage::Stage;
+use crate::strobe_gpu::{GuardedGpu, Shown};
 use crate::view::Views;
+use jetcarp_core::strobe::Viewing;
+use jetcarp_core::strobe::guard::{Pace, Report};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// How often the caption's words are refreshed (its generation count ticks this fast).
 const CAPTION_EVERY: f64 = 0.25;
@@ -57,6 +69,31 @@ pub fn surface_config(
     })
 }
 
+/// Lets the strobe guard read the surface's frames in place, where the surface and the adapter
+/// allow it: adds `TEXTURE_BINDING` to the configuration's usage and the sRGB twin of its format
+/// to its view formats. True when it did (tell the painter with [`Painter::set_readable`]).
+pub fn readable(
+    config: &mut wgpu::SurfaceConfiguration,
+    caps: &wgpu::SurfaceCapabilities,
+    adapter: &wgpu::Adapter,
+) -> bool {
+    let views = crate::strobe_gpu::view_formats(config.format);
+    let twin_ok = views.is_empty()
+        || adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::SURFACE_VIEW_FORMATS);
+    if !caps.usages.contains(wgpu::TextureUsages::TEXTURE_BINDING) || !twin_ok {
+        return false;
+    }
+    config.usage |= wgpu::TextureUsages::TEXTURE_BINDING;
+    config.view_formats = views;
+    true
+}
+
+/// Painters made so far, for [`Painter::id`].
+static PAINTERS: AtomicU64 = AtomicU64::new(1);
+
 /// Everything needed to draw one stage onto one surface.
 pub struct Painter {
     renderer: TileRenderer,
@@ -66,9 +103,17 @@ pub struct Painter {
     words_at: f64,
     /// What the caption keeps clear of (a wallpaper's taskbar, menu bar or Dock).
     pub insets: Insets,
+    /// The strobe guard, on surfaces people see.
+    guard: Option<GuardedGpu>,
+    /// The target can be read in place ([`readable`]).
+    readable: bool,
+    /// The stage's world count when last drawn: a new world is a new scene for the guard.
+    builds: Option<u64>,
+    id: u64,
 }
 
 impl Painter {
+    /// A painter with no strobe guard, for pictures no one watches as they are drawn.
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Painter {
         Painter {
             renderer: TileRenderer::new(device, format),
@@ -77,7 +122,53 @@ impl Painter {
             words: vec![],
             words_at: f64::NEG_INFINITY,
             insets: Insets::default(),
+            guard: None,
+            readable: false,
+            builds: None,
+            id: PAINTERS.fetch_add(1, Ordering::Relaxed),
         }
+    }
+
+    /// A painter for a surface people see: it draws through the strobe guard, on or off as the
+    /// setting for the desktop background and the screen saver says.
+    pub fn guarded(device: &wgpu::Device, format: wgpu::TextureFormat, on: bool) -> Painter {
+        let mut p = Painter::new(device, format);
+        p.guard = Some(GuardedGpu::new(device, Viewing::screen(1.0), None, on));
+        p
+    }
+
+    /// Whether the target was configured to be read in place ([`readable`]).
+    pub fn set_readable(&mut self, readable: bool) {
+        self.readable = readable;
+    }
+
+    /// The setting changed.
+    pub fn set_guard_on(&mut self, on: bool) {
+        if let Some(g) = &mut self.guard {
+            g.guard.set_on(on);
+        }
+    }
+
+    /// What the strobe guard is doing (None: this painter has none).
+    pub fn guard_report(&self) -> Option<Report> {
+        self.guard.as_ref().map(|g| g.guard.report())
+    }
+
+    /// The guard's pace cap and the reason it paused, if it did.
+    pub fn guard_hold(&self) -> (Option<f32>, Option<String>) {
+        self.guard.as_ref().map_or((None, None), |g| {
+            (g.guard.cap(), g.guard.paused().map(str::to_string))
+        })
+    }
+
+    /// What the guard did since the last call, for the log.
+    pub fn take_guard_notes(&mut self) -> Vec<String> {
+        self.guard.as_mut().map_or(vec![], |g| g.guard.take_notes())
+    }
+
+    /// This painter's number, for [`Stage::set_guard`].
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     /// Draws `stage` onto `target`, `size` pixels with `scale` pixels per point, at time `now`.
@@ -86,7 +177,7 @@ impl Painter {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        target: &wgpu::TextureView,
+        target: &wgpu::Texture,
         size: [u32; 2],
         scale: f32,
         stage: &Stage,
@@ -102,7 +193,7 @@ impl Painter {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        target: &wgpu::TextureView,
+        target: &wgpu::Texture,
         size: [u32; 2],
         scale: f32,
         stage: &Stage,
@@ -130,35 +221,110 @@ impl Painter {
             self.insets,
         );
         let [r, g, b] = stage.backdrop();
+        let clear = wgpu::Color {
+            r: r as f64 / 255.0,
+            g: g as f64 / 255.0,
+            b: b as f64 / 255.0,
+            a: 1.0,
+        };
+        let target_view = target.create_view(&Default::default());
         let mut enc = device.create_command_encoder(&Default::default());
-        {
-            let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("stage"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: r as f64 / 255.0,
-                            g: g as f64 / 255.0,
-                            b: b as f64 / 255.0,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: timestamps,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+        let pass_on =
+            |enc: &'_ mut wgpu::CommandEncoder,
+             view: &wgpu::TextureView,
+             load: wgpu::LoadOp<wgpu::Color>,
+             label: &'static str,
+             timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>| {
+                enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some(label),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: timestamps,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                })
+                .forget_lifetime()
+            };
+        let Some(guard) = &mut self.guard else {
+            let mut pass = pass_on(
+                &mut enc,
+                &target_view,
+                wgpu::LoadOp::Clear(clear),
+                "stage",
+                timestamps,
+            );
             if let Some(d) = &draw {
                 self.renderer.paint(&mut pass, d);
             }
             self.caption.paint(&mut pass);
+            drop(pass);
+            queue.submit([enc.finish()]);
+            return;
+        };
+        // The guard: its readings first (a new world is a new scene), then the frame, measured.
+        if self.builds != Some(stage.builds()) {
+            self.builds = Some(stage.builds());
+            guard.guard.new_scene();
+        }
+        guard.guard.set_viewing(Viewing::screen(scale as f64), None);
+        let pace = stage.pace();
+        guard.update(
+            device,
+            Pace {
+                speed: stage.scene_speed(),
+                reached: stage.measured_speed(),
+                frame_rate: pace.fps,
+            },
+        );
+        let readable = self.readable;
+        let scene = if readable {
+            target_view.clone()
+        } else {
+            guard
+                .gpu
+                .scene_target(device, [w.max(1), h.max(1)], target.format())
+        };
+        {
+            let mut pass = pass_on(
+                &mut enc,
+                &scene,
+                wgpu::LoadOp::Clear(clear),
+                "stage",
+                timestamps,
+            );
+            if let Some(d) = &draw {
+                self.renderer.paint(&mut pass, d);
+            }
+        }
+        let source = readable.then_some(target);
+        let shown = guard.frame(device, queue, &mut enc, source, now);
+        let copy = shown == Shown::Softened || !readable;
+        if copy {
+            guard.gpu.prepare_blit(device, target.format(), source);
+        }
+        {
+            let mut pass = pass_on(
+                &mut enc,
+                &target_view,
+                wgpu::LoadOp::Load,
+                "stage caption",
+                None,
+            );
+            if copy {
+                guard.gpu.blit(&mut pass);
+            }
+            self.caption.paint(&mut pass);
         }
         queue.submit([enc.finish()]);
+        guard.gpu.after_submit();
     }
 }
 

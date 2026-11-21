@@ -66,6 +66,11 @@ pub trait Desktop: Send {
     fn available(&self, o: Offer) -> Result<(), String>;
     /// Turn it on.
     fn accept(&mut self, o: Offer) -> Result<String, String>;
+    /// The wallpaper, just turned on, shows only after the user logs out and back in once (GNOME
+    /// loads JETCARP's extension at login).
+    fn wallpaper_waits_for_login(&self) -> bool {
+        false
+    }
 }
 
 /// This computer's desktop ([`crate::desktop_offers`]).
@@ -78,7 +83,23 @@ impl Desktop for RealDesktop {
     fn accept(&mut self, o: Offer) -> Result<String, String> {
         o.accept()
     }
+    fn wallpaper_waits_for_login(&self) -> bool {
+        cfg!(target_os = "linux")
+            && jetcarp_display::gnome::state() == jetcarp_display::gnome::ExtensionState::NeedsLogin
+    }
 }
+
+/// Whether setup ends by saying to log out once: the wallpaper was turned on, and waits for a
+/// login to show (asked only then, since asking runs `gdbus`).
+fn wants_log_out(done: &[(Offer, Result<String, String>)], waits: impl FnOnce() -> bool) -> bool {
+    done.iter()
+        .any(|(o, r)| *o == Offer::Wallpaper && r.is_ok())
+        && waits()
+}
+
+/// Said plainly at the end of setup, when the wallpaper waits for a login (#139).
+pub const LOG_OUT_ONCE: &str = "Log out and back in once to see the live wallpaper on your desktop. \
+     Until then it shows in a window.";
 
 /// How the wizard makes the operations' context (the app's platform, or a test's folders).
 pub type MakeCtx = Arc<dyn Fn() -> Ctx + Send + Sync>;
@@ -110,6 +131,8 @@ pub struct Wizard {
     last_poll: f64,
     /// What the desktop offers did.
     pub desktop_done: Vec<(Offer, Result<String, String>)>,
+    /// The wallpaper was turned on and shows only after a logout (#139).
+    pub log_out_once: bool,
     desktop: Box<dyn Desktop>,
     make_ctx: MakeCtx,
     /// The setup being applied chooses a new data folder.
@@ -151,6 +174,7 @@ impl Wizard {
             polling: None,
             last_poll: 0.0,
             desktop_done: vec![],
+            log_out_once: false,
             desktop,
             make_ctx,
             data_changing: false,
@@ -474,6 +498,9 @@ impl Wizard {
             let r = self.desktop.accept(o);
             self.desktop_done.push((o, r));
         }
+        self.log_out_once = wants_log_out(&self.desktop_done, || {
+            self.desktop.wallpaper_waits_for_login()
+        });
         self.data_changing = input.data_dir.is_some();
         let (tx, rx) = channel();
         let mk = self.make_ctx.clone();
@@ -1236,6 +1263,13 @@ impl Wizard {
                 Err(e) => ui.colored_label(Color32::LIGHT_RED, format!("{}: {e}", o.title())),
             };
         }
+        if self.log_out_once {
+            ui.add_space(6.0);
+            egui::Frame::group(ui.style()).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new(LOG_OUT_ONCE).strong().size(15.0));
+            });
+        }
         let mut resume = None;
         for j in &self.jobs {
             egui::Frame::group(ui.style()).show(ui, |ui| {
@@ -1427,6 +1461,21 @@ mod tests {
         status.folders.data = PathBuf::from("/home/ada/.local/share/jetcarp");
         status.library = "/home/ada/.local/share/jetcarp/library.sqlite".into();
         Some((dir, o, mk, status))
+    }
+
+    /// Setup ends by saying to log out once only when the wallpaper was turned on and waits for
+    /// a login (#139).
+    #[test]
+    fn setup_says_to_log_out_once_when_the_wallpaper_waits() {
+        let ok = |o| (o, Ok::<String, String>("done".into()));
+        assert!(wants_log_out(&[ok(Offer::Wallpaper)], || true));
+        assert!(!wants_log_out(&[ok(Offer::Wallpaper)], || false));
+        assert!(!wants_log_out(&[ok(Offer::Saver)], || true));
+        assert!(!wants_log_out(
+            &[(Offer::Wallpaper, Err("refused".into()))],
+            || true
+        ));
+        assert!(LOG_OUT_ONCE.starts_with("Log out and back in once"));
     }
 
     /// A wizard open at its first page, with this status.

@@ -72,6 +72,7 @@ fn json_of_paths_uninstall_and_calls_by_name() {
     assert_eq!(
         keys(&u),
         [
+            "already_gone",
             "done",
             "installed_with",
             "kept_data",

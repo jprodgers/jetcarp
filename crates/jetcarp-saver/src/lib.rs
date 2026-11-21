@@ -97,6 +97,8 @@ struct Shared {
     fps: f32,
     caption: jetcarp_display::caption::CaptionSettings,
     use_gpu: bool,
+    /// The strobe guard's setting, baked in.
+    strobe_guard: bool,
     stage: Option<Stage>,
     sim: SimBackend,
     started: Instant,
@@ -257,6 +259,7 @@ impl Shared {
             fps: baked.fps.max(1.0),
             caption: baked.caption,
             use_gpu: baked.gpu,
+            strobe_guard: baked.strobe_guard,
             baked: Some(baked),
             stage: None,
             sim: SimBackend::unavailable("no GPU yet".into()),
@@ -651,11 +654,16 @@ impl JetcarpSaverView {
                 .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(ptr))
                 .map_err(|e| format!("no surface: {e}"))?
         };
+        let strobe_guard = sh.strobe_guard;
         let gpu = sh.gpu_for(&surface)?;
         let caps = surface.get_capabilities(&gpu.adapter);
-        let config = painter::surface_config(&caps, size)?;
+        let mut config = painter::surface_config(&caps, size)?;
+        // The strobe guard (#97) reads each frame where it is drawn, if the layer lets it.
+        let readable = painter::readable(&mut config, &caps, &gpu.adapter);
+        let mut painter = Painter::guarded(&gpu.device, config.format, strobe_guard);
+        painter.set_readable(readable);
         let s = Surface {
-            painter: Painter::new(&gpu.device, config.format),
+            painter,
             surface,
             config,
             layer,
@@ -766,13 +774,12 @@ impl JetcarpSaverView {
                     return Ok(());
                 }
             };
-            let view = frame.texture.create_view(&Default::default());
             let now = sh.now();
             if let Some(stage) = &sh.stage {
                 s.painter.paint(
                     &gpu.device,
                     &gpu.queue,
-                    &view,
+                    &frame.texture,
                     [w, h],
                     scale,
                     stage,
@@ -781,6 +788,16 @@ impl JetcarpSaverView {
                 );
             }
             gpu.queue.present(frame);
+            // What the strobe guard asks of the shared stage, and what it did.
+            let (cap, paused) = s.painter.guard_hold();
+            let (id, report) = (s.painter.id(), s.painter.guard_report());
+            if let Some(stage) = &mut sh.stage {
+                stage.set_guard(id, now, cap, paused);
+                stage.set_guard_report(report);
+            }
+            for n in s.painter.take_guard_notes() {
+                log(&format!("strobe guard: {n}"));
+            }
             let drew = Instant::now();
             s.drew = Some(drew);
             if let Some(seen) = sh.views.get_mut(&self.key()) {

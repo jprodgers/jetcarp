@@ -237,6 +237,25 @@ impl JetcarpApp {
                 if self.screen != Screen::Sim {
                     return;
                 }
+                // The strobe guard, while it acts.
+                if let Some((note, strong)) = self.guard_status() {
+                    let c = if strong {
+                        Color32::from_rgb(0xff, 0xb0, 0x60)
+                    } else {
+                        Color32::from_rgb(0xff, 0xd8, 0x90)
+                    };
+                    if ui
+                        .add(
+                            egui::Label::new(RichText::new(note).color(c))
+                                .sense(egui::Sense::click()),
+                        )
+                        .on_hover_text("Settings → Safety")
+                        .clicked()
+                    {
+                        self.strobe.window_open = true;
+                    }
+                    ui.separator();
+                }
                 let (status, pops) = match &self.stats {
                     Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
                     None => (String::new(), vec![]),

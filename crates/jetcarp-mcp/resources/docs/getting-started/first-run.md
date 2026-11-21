@@ -124,7 +124,8 @@ you tick it:
 
 - **Show a live wallpaper on the desktop** turns the wallpaper on and starts the background host,
   as `jetcarp host wallpaper on` and `jetcarp host start` do. On GNOME it installs JETCARP's GNOME
-  Shell extension too; log out and back in once to load it.
+  Shell extension too, which GNOME loads only at login: setup ends by saying so, and until you log
+  out and back in once the scene shows in a window whose title says the same.
 - **Start the live wallpaper when you log in**, as `jetcarp host login on` does.
 - **Use JETCARP as the screen saver** (Windows and macOS), as `jetcarp host saver install` does. It
   opens the system's screen saver settings, where you choose JETCARP.

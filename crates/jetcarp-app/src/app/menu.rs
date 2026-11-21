@@ -22,10 +22,11 @@ pub(super) enum ToolWin {
     Shortcuts,
     About,
     Wallpaper,
+    Safety,
 }
 
 impl ToolWin {
-    pub const ALL: [ToolWin; 15] = [
+    pub const ALL: [ToolWin; 16] = [
         ToolWin::Scripts,
         ToolWin::Results,
         ToolWin::Library,
@@ -41,6 +42,7 @@ impl ToolWin {
         ToolWin::Shortcuts,
         ToolWin::About,
         ToolWin::Wallpaper,
+        ToolWin::Safety,
     ];
 
     /// The window's key in `crate::popout` (and the settings file).
@@ -61,6 +63,7 @@ impl ToolWin {
             ToolWin::Shortcuts => "shortcuts",
             ToolWin::About => "about",
             ToolWin::Wallpaper => super::wallpaper_ui::KEY,
+            ToolWin::Safety => "safety",
         }
     }
 
@@ -85,6 +88,7 @@ impl ToolWin {
             ToolWin::CellEditor => "Unit cell editor…",
             ToolWin::Shortcuts => "Keyboard shortcuts…",
             ToolWin::About => "About JETCARP…",
+            ToolWin::Safety => "Safety…",
             ToolWin::Wallpaper => "Export wallpaper…",
         }
     }
@@ -119,6 +123,7 @@ impl ToolWin {
             }
             ToolWin::Shortcuts => "Every keyboard shortcut",
             ToolWin::About => "Version and where things are",
+            ToolWin::Safety => "The strobe guard: what it does now, and its switches",
             ToolWin::Wallpaper => {
                 "Desktop-sized PNGs: each monitor, the span of all monitors, presets, or any size"
             }
@@ -575,6 +580,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             C(Custom::Displays),
         ],
     ),
+    ("Settings", &[A(A_::Tool(ToolWin::Safety))]),
     (
         "Help",
         &[
@@ -632,6 +638,7 @@ impl JetcarpApp {
             ToolWin::Shortcuts => self.shell.shortcuts_open,
             ToolWin::About => self.shell.about_open,
             ToolWin::Wallpaper => self.wallpaper.open,
+            ToolWin::Safety => self.strobe.window_open,
         }
     }
 
@@ -654,6 +661,7 @@ impl JetcarpApp {
                 ToolWin::Shortcuts => self.shell.shortcuts_open = false,
                 ToolWin::About => self.shell.about_open = false,
                 ToolWin::Wallpaper => self.wallpaper.open = false,
+                ToolWin::Safety => self.strobe.window_open = false,
             }
             return;
         }
@@ -693,6 +701,7 @@ impl JetcarpApp {
             ToolWin::Shortcuts => self.shell.shortcuts_open = true,
             ToolWin::About => self.shell.about_open = true,
             ToolWin::Wallpaper => self.wallpaper.open = true,
+            ToolWin::Safety => self.strobe.window_open = true,
         }
     }
 
