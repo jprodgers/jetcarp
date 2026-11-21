@@ -253,7 +253,8 @@ fn group_note(g: &str) -> &'static str {
         "triangle" => "The triangle grid",
         "pentagon" => "The Cairo pentagonal tiling",
         "archimedean" => {
-            "The other Archimedean tilings: trihexagonal, snub square, truncated hexagonal, ..."
+            "The other Archimedean tilings (trihexagonal, snub square, truncated hexagonal, ...) \
+             and the Pythagorean tiling"
         }
         "k-uniform" => "The catalogue's k-uniform tilings",
         "isohedral" => "The 93 isohedral tiling types",

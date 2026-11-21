@@ -1209,10 +1209,15 @@ mod tests {
             a.get_long_help().or(a.get_help()).unwrap().to_string()
         };
         let families = help("families").replace('\n', " ");
-        for f in jetcarp_search::explore::job::sampled_families() {
-            assert!(families.contains(f.name()), "{}: {families}", f.name());
-        }
-        assert!(!families.contains("von_neumann"), "{families}");
+        let listed = families
+            .split_once("separated: ")
+            .and_then(|(_, rest)| rest.split_once(" (default"))
+            .map(|(list, _)| list.split(", ").collect::<Vec<_>>());
+        let want: Vec<&str> = jetcarp_search::explore::job::sampled_families()
+            .iter()
+            .map(|f| f.name())
+            .collect();
+        assert_eq!(listed, Some(want), "{families}");
         let groups = help("tiling_groups");
         for g in jetcarp_core::explore::space::TILING_GROUPS {
             assert!(groups.contains(g), "{g}: {groups}");

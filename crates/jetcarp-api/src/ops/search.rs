@@ -3247,10 +3247,15 @@ mod tests {
                 .to_string()
         };
         let families = text("families");
-        for f in jetcarp_search::explore::job::sampled_families() {
-            assert!(families.contains(f.name()), "{}: {families}", f.name());
-        }
-        assert!(!families.contains("von_neumann"), "{families}");
+        let listed = families
+            .split_once("families: ")
+            .and_then(|(_, rest)| rest.split_once(';'))
+            .map(|(list, _)| list.split(", ").collect::<Vec<_>>());
+        let want: Vec<&str> = jetcarp_search::explore::job::sampled_families()
+            .iter()
+            .map(|f| f.name())
+            .collect();
+        assert_eq!(listed, Some(want), "{families}");
         let groups = text("tiling_groups");
         for g in jetcarp_core::explore::space::TILING_GROUPS {
             assert!(groups.contains(g), "{g}: {groups}");

@@ -257,7 +257,7 @@ The job keeps the choice in its spec (`jetcarp jobs status JOB --json` shows it)
 title, and keeps to it when it carries on. `jetcarp quickstart build` takes the same flags, and
 scripts and MCP's `search_start` take the same keys in an explore search's settings
 (`tiling_groups`, `skip_families`, ...). A search that chooses nothing, and one made before 0.4.3,
-draws exactly as before.
+draw exactly as before.
 
 A budget ends it on time: the GPU's last batch is sized to end before it (and given up if it runs
 on), and runs still going on the processor then are given up, unrecorded. A run on the processor
