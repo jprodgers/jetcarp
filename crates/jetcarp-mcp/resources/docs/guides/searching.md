@@ -11,7 +11,13 @@ find what they found. How each strategy works, and how its finds are checked, is
 ## Your first hunt
 
 The *soup hunt* drops small random soups on an unbounded plane, runs each until it settles, and
-classes every object left behind. With no options it hunts Conway's Life on squares:
+classes every object left behind. This is the method of Adam P. Goucher's apgsearch and of his
+Catagolue census, which has classed about 7.4 × 10¹⁵ objects from asymmetric soups of Life alone
+([Goucher 2016](../research/bibliography.md#goucher2016apgsearch);
+[Goucher 2015](../research/bibliography.md#goucher2015catagolue)), and the hunt's soups are
+apgsearch's, so a hunt of Life on squares can be compared with Catagolue: it agrees
+within chance (see [Soup hunt](../research/search-methods.md#soup-hunt), which also says how the two
+differ). With no options it hunts Conway's Life on squares:
 
 ```sh
 jetcarp search hunt --soups 20000
@@ -21,9 +27,9 @@ It prints:
 
 ```text
 hunt job 1 in /home/ada/.local/share/jetcarp/library.sqlite
-hunt 1: 20,000/20,000 soups, 5954 soups/s, 430,384 objects (ships 38,188, osc 124,582, still 267,614), 50 distinct, 50 new | newest: still life 12c #bf73c4 (B3/S23)
-  status done, 3 s run, 19892 settled, 52 died, 56 exploded, 0 unsettled
-  B3/S23 on Square: 20000 soups, 430384 objects (oscillator 124582, spaceship 38188, still life 267614), 50 distinct, 50 new
+hunt 1: 20,000/20,000 soups, 5954 soups/s, 433,183 objects (ships 38,381, osc 125,411, still 269,391), 50 distinct, 50 new | newest: still life 12c #bf73c4 (B3/S23)
+  status done, 3 s run, 19946 settled, 52 died, 2 exploded, 0 unsettled
+  B3/S23 on Square: 20000 soups, 433183 objects (oscillator 125411, spaceship 38381, still life 269391), 50 distinct, 50 new
   newest finds:
     bf73c46c186561ca3b75a3884d0b5ab5  still life 12c #bf73c4             B3/S23     Square soup 17973  (new to the catalog)
     …
@@ -32,8 +38,8 @@ hunt 1: 20,000/20,000 soups, 5954 soups/s, 430,384 objects (ships 38,188, osc 12
 The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
 [Folders](../reference/folders.md#the-three-folders)).
 
-Each soup is 16 × 16 cells at half density. Of 20,000 soups, 19,892 settled, 52 died out and 56
-grew past the hunt's limit. The 430,384 objects they left are 50 distinct patterns. Every new one
+Each soup is 16 × 16 cells at half density. Of 20,000 soups, 19,946 settled, 52 died out and 2
+grew past the hunt's limit. The 433,183 objects they left are 50 distinct patterns. Every new one
 is verified exactly before it is stored (run alone, it must come back to itself, moved by its
 displacement, for many periods), and each copy found counts as a sighting.
 
@@ -51,10 +57,10 @@ jetcarp library list --class spaceship
 It prints:
 
 ```text
-5a080db389c0cab3caf884d2596a1e70  glider   B3/S23  Square  p4   5c  seen 38120  score 74.5  new  c/4 diagonal
-6dd55e69689ba784aff448b7dbbc9328  LWSS     B3/S23  Square  p4   9c  seen 51     …
+1376072ec0c084fc67a9b92d361379f3  HWSS     B3/S23  Square  p4  13c  seen 4      score 74.6  new  c/2 orthogonal
+5a080db389c0cab3caf884d2596a1e70  glider   B3/S23  Square  p4   5c  seen 38312  score 74.5  new  c/4 diagonal
 77364004b6d2c23cba74126b8aeb6ca3  MWSS     B3/S23  Square  p4  11c  seen 13     …
-1376072ec0c084fc67a9b92d361379f3  HWSS     B3/S23  Square  p4  13c  seen 4      …
+6dd55e69689ba784aff448b7dbbc9328  LWSS     B3/S23  Square  p4   9c  seen 52     …
 ```
 
 Patterns with a well-known name (the glider, the pulsar, the block) are shown by it; others by
@@ -75,11 +81,11 @@ jetcarp search hunt --tilings trihex --soups 5000 --label kagome
 It ends with:
 
 ```text
-  status done, 27 s run, 31 settled, 14 died, 4954 exploded, 1 unsettled
-  B3/S23 on 3.6.3.6 trihexagonal: 5000 soups, 15192 objects (oscillator 4, spaceship 15140, still life 48), 24 distinct, 17 new
+  status done, 27 s run, 52 settled, 19 died, 4929 exploded, 0 unsettled
+  B3/S23 on 3.6.3.6 trihexagonal: 5000 soups, 22950 objects (oscillator 5, spaceship 22857, still life 88), 32 distinct, 22 new
 ```
 
-Nearly every soup explodes there, yet 15,140 spaceships escape, and all of them are one ship: the
+Nearly every soup explodes there, yet 22,857 spaceships escape, and all of them are one ship: the
 five-cell c/4 glider of the kagome tiling, which
 [Guttesen (2026)](../research/bibliography.md#guttesen2026game) described (see
 [Findings](../research/findings.md)). A find is "new to the catalog" when *your* library had not
@@ -108,8 +114,8 @@ jetcarp jobs list
 It prints:
 
 ```text
-    2  hunt     done     2026-11-12T07:02:17Z  hunt 2: 5,000/5,000 soups, 187 soups/s, 15,192 objects (ships 15,140, osc 4, still 48), 24 distinct, 17 new
-    1  hunt     done     2026-11-12T07:02:04Z  hunt 1: 20,000/20,000 soups, 5954 soups/s, 430,384 objects …
+    2  hunt     done     2026-11-12T07:02:17Z  hunt 2: 5,000/5,000 soups, 187 soups/s, 22,950 objects (ships 22,857, osc 5, still 88), 32 distinct, 22 new
+    1  hunt     done     2026-11-12T07:02:04Z  hunt 1: 20,000/20,000 soups, 5954 soups/s, 433,183 objects …
 ```
 
 - **Progress.** In a terminal, a search's progress line is redrawn in place on standard error, cut

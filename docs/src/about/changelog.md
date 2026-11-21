@@ -223,6 +223,43 @@ day later (0.4.2: 17 November here, 18 November there).
 - **The installers' `--uninstall` names each folder it keeps and what it holds,** instead of "kept
   your settings, data and pictures" when only the pictures were left.
   ([#142](https://github.com/jprodgers/jetcarp/issues/142))
+- **The soup hunt cuts out gliders that fly away together.** A hunt erased an escaping ship only
+  once it lay beyond everything else by a few cells, so two gliders flying the same way on lanes a
+  few cells apart, or several staggered so that each stayed level with another, were never cut. They
+  flew on until the soup passed the hunt's span limit and was dropped as exploded, with no census of
+  what it had left, while the ships cut from it before were still counted. In Life that was about one
+  soup in 370, nearly every "explosion"; on some tilings it was far more, and every one of the 703
+  explosions and 152 unsettled soups of the k2-017 hunt in the
+  [spaceship tutorial](../tutorials/hunting-spaceships.md) was such a soup. Far from the soup, groups
+  that no gap separates are now taken together and cut as the ships they are, and a ship is also cut
+  when every other group it is not clear of is a ship that cannot catch it: one with the same
+  velocity, or one slower along the way it is leaving. A hunt's counts change: in 150,000 soups of
+  Life the exploded soups fall from 405 to 21, most of them past the population cap, and the glider's share,
+  0.7% above Catagolue's census before, is within chance of it. A hunt of Life runs about a tenth
+  slower. ([Soup hunt](../research/search-methods.md#soup-hunt),
+  [#182](https://github.com/jprodgers/jetcarp/issues/182))
+- **The book credits apgsearch and Catagolue, and says how a hunt compares with them.** The soup
+  hunt's defaults are those of Adam P. Goucher's apgsearch and of his Catagolue census, which the
+  book did not mention; *Search methods*, *Searching for patterns* and *What is new in JETCARP* now
+  credit them and set out how JETCARP's hunt differs, what its counts are and are not, and how they
+  compare with Catagolue's. `docs/tools/check-catagolue.py`, run for each release candidate, compares
+  the shares of the twelve commonest objects of a fixed hunt of Life with a pinned copy of the top of
+  Catagolue's census. ([Soup hunt](../research/search-methods.md#soup-hunt),
+  [#182](https://github.com/jprodgers/jetcarp/issues/182))
+- **The research pages add up, and their search log is published.** The count of spaceship records
+  in *Findings* is now a table that can be checked by subtraction (the 72 candidates came from 137
+  records, 103 of CART's and 34 of fresh searches; seven records of two candidate ships flying
+  together had not been said); the k-uniform chapter no longer says that no work had run cellular
+  automata on 2- and 3-uniform tilings; and the research notes that the claims and the
+  bibliography rest on, with every query and page their searches read, are in the repository's
+  `research/` folder. The bibliography marks the 10 entries that rest on a secondary listing (it
+  said every entry had been checked against a primary record), cites every entry it holds, and
+  corrects four: the year of the Smith et al. monotile papers, the pages of Eppstein (2010) and
+  Heudin (1996), and the translators of Kepler's *Harmony of the World*. *What is new in JETCARP*
+  now weighs Marr and Hütt's outer-totalistic rules on graphs and Nochella's network rules against
+  the layered rules and the one engine for every tiling.
+  ([Findings](../research/findings.md#how-the-list-was-cut),
+  [Bibliography](../research/bibliography.md), [#179](https://github.com/jprodgers/jetcarp/issues/179))
 
 ## [0.4.2] – 2026-11-17
 

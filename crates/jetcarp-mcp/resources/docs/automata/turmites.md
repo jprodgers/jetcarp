@@ -88,7 +88,9 @@ hit, a *Lorentz lattice gas*. Bunimovich and Troubetzkoy's recurrence results ar
 cited for the theorem that the ant's path is always unbounded
 ([Bunimovich and Troubetzkoy 1992](../research/bibliography.md#bunimovich1992recurrence)); Kong and
 Cohen studied related lattice gases on the triangular lattice
-([Kong and Cohen 1991](../research/bibliography.md#kong1991diffusion)). Gajardo, Moreira and Goles
+([Kong and Cohen 1991](../research/bibliography.md#kong1991diffusion)), and Wang and Cohen compared the
+honeycomb and quasi-lattices with the square and triangular lattices
+([Wang and Cohen 1995](../research/bibliography.md#wang1995diffusion)). Gajardo, Moreira and Goles
 showed that the ant's path can compute any boolean circuit, so predicting it is P-hard
 ([Gajardo, Moreira and Goles 2002](../research/bibliography.md#gajardo2002complexity)), and Tsukiji and
 Hagiwara extended hardness results to generalised ants on square and hexagonal grids
@@ -172,6 +174,7 @@ family.
   [Stewart 1994](../research/bibliography.md#stewart1994ultimate)
 - [Bunimovich and Troubetzkoy 1992](../research/bibliography.md#bunimovich1992recurrence);
   [Kong and Cohen 1991](../research/bibliography.md#kong1991diffusion);
+  [Wang and Cohen 1995](../research/bibliography.md#wang1995diffusion);
   [Gajardo, Moreira and Goles 2002](../research/bibliography.md#gajardo2002complexity);
   [Tsukiji and Hagiwara 2011](../research/bibliography.md#tsukiji2011recognizing)
 - [Hutton 2015](../research/bibliography.md#hutton2015twodimensional);

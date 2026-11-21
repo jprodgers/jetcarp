@@ -33,7 +33,7 @@ Magnezones	B3/S123678		LW:List_of_Life-like_rules	no author named
 SnowLife	B3/S1237	Joshua Herman (found by accident while working with Louis Kauffman)	LW:List_of_Life-like_rules; LW:OCA:SnowLife	author named by source
 Corrosion of Conformity	B3/S124		LW:List_of_Life-like_rules; LW:OCA:Corrosion_of_Conformity	no author named
 EightFlock	B3/S128		LW:List_of_Life-like_rules; LW:OCA:EightFlock	no author named
-LowLife	B3/S13	Jean-Claude Heudin (subject of Heudin's 1996 Complex Systems paper)	LW:List_of_Life-like_rules; LW:OCA:LowLife	author named by source
+LowLife	B3/S13	Jean-Claude Heudin (subject of Heudin's 1996 Complex Systems paper, [Heudin 1996](../research/bibliography.md#heudin1996new), which calls it Life 1133)	LW:List_of_Life-like_rules; LW:OCA:LowLife	author named by source
 Conway's Life	B3/S23	John Horton Conway (published by Martin Gardner, Oct 1970)	LW:List_of_Life-like_rules; MC	author named by source
 EightLife	B3/S238		LW:List_of_Life-like_rules; LW:OCA:EightLife	no author named
 Shoots and Roots	B3/S245678		LW:List_of_Life-like_rules; LW:OCA:Shoots_and_Roots	no author named
@@ -167,6 +167,6 @@ Rule 73	W73		WP:Elementary_cellular_automaton	no author named
 Rule 105	W105		WP:Elementary_cellular_automaton	no author named
 Rule 126	W126		WP:Elementary_cellular_automaton	no author named
 Rule 150	W150		WP:Elementary_cellular_automaton	no author named
-Rule 184	W184	Earliest studies: Wentian Li (1987) and Krug & Spohn (1988); later used for traffic flow (e.g. Biham, Middleton & Levine 1992)	WP:Elementary_cellular_automaton; WP:Rule_184	author named by source
+Rule 184	W184	Earliest studies: Wentian Li (1987) and Krug & Spohn ([1988](../research/bibliography.md#krug1988universality)); later used for traffic flow (e.g. Biham, Middleton & Levine 1992)	WP:Elementary_cellular_automaton; WP:Rule_184	author named by source
 Layered parity	Layer 2/01	Jimmie Rodgers (JETCARP, 2026)	JETCARP	author named by source
 Layered sum mod 3	Layer 3/012	Jimmie Rodgers (JETCARP, 2026)	JETCARP	author named by source

@@ -75,7 +75,9 @@ work on the hat and spectre runs Generations and priority-table rules on a gener
 ([Edmond 2026](../research/bibliography.md#edmond2026gliders)). In October 2026 Trevorrow's SpectreLife
 did for the spectre what HatLife did for the hat, with Edmond's rules
 ([Trevorrow 2026](../research/bibliography.md#trevorrow2026spectrelife)), and bellissimogiorno's
-aperiodic-life package runs Life on square, hexagonal and aperiodic tilings
+aperiodic-life package runs Life-like and Generations-style rules (presets for Life, HighLife,
+Seeds, Brian's Brain, Star Wars and Life without Death, or any other) and Edmond's priority tables on
+the square and hexagonal grids and on hat and Penrose tilings
 ([bellissimogiorno 2026](../research/bibliography.md#bellissimogiorno2026aperiodic)). JETCARP builds
 on all of this.
 
