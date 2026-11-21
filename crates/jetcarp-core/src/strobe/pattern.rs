@@ -341,7 +341,8 @@ pub struct Found {
 /// bottom edges are seen (and veiled) as well as anywhere else.
 fn origins(n: u32) -> impl Iterator<Item = u32> {
     let whole = n / WINDOW;
-    let edge = (whole > 0 && !n.is_multiple_of(WINDOW)).then_some(n - WINDOW);
+    // `then`, not `then_some`: a side shorter than a window must not compute `n - WINDOW`.
+    let edge = (whole > 0 && !n.is_multiple_of(WINDOW)).then(|| n - WINDOW);
     (0..whole).map(|k| k * WINDOW).chain(edge)
 }
 
