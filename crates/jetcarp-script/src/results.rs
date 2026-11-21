@@ -10,14 +10,13 @@ mod tests {
 
     #[test]
     fn find_promote_favourite_and_sheet() {
-        let root = std::env::temp_dir().join(format!("jetcarp-results-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = jetcarp_core::scratch::ScratchDir::new("results");
         let s = crate::run(
             r#"sweep(#{ rules: "W", from: 28, to: 31, tiling: "square", size: [40, 24],
                         boundary: "dead", seed: "top_center", until: "done",
                         png: #{ size: [80, 48] } });"#,
             crate::RunOptions {
-                out_root: Some(root.clone()),
+                out_root: Some(root.to_path_buf()),
                 ..Default::default()
             },
             |_| {},
@@ -64,6 +63,5 @@ mod tests {
         )
         .unwrap();
         assert!(img.width > 120 && img.height > 36);
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

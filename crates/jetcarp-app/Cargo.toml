@@ -29,7 +29,6 @@ serde.workspace = true
 dirs.workspace = true
 bytemuck.workspace = true
 serde_json.workspace = true
-anyhow.workspace = true
 rfd.workspace = true
 jetcarp-mcp.workspace = true
 jetcarp-script = { workspace = true, features = ["default"] }
