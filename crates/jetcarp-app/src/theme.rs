@@ -514,12 +514,16 @@ mod tests {
         let ctx = egui::Context::default();
         let frame = |ctx: &egui::Context| {
             let mut got = (Color32::TRANSPARENT, Color32::TRANSPARENT);
-            let _ = ctx.run_ui(Default::default(), |ui| {
+            // Nothing draws the fonts' textures here: their changes are let go, or a debug build
+            // panics as the frame's output is dropped.
+            ctx.run_ui(Default::default(), |ui| {
                 got = (
                     ink(ui, Color32::LIGHT_RED),
                     ink(ui, Color32::from_gray(150)),
                 );
-            });
+            })
+            .textures_delta
+            .clear();
             got
         };
         apply(&ctx, false, Brightness::Dark);
