@@ -62,9 +62,11 @@ setting` (with `--json`, each screen's `simulation`: `on`, `adapter` and `why`).
 `JETCARP_GPU` overrides all of it while it is set. It takes `off`, `auto` or `on` (or `0` and `1`),
 or which adapter to use automatically: `integrated`, `discrete`, `software`, or part of a name. On a
 laptop with an Intel UHD and an RTX 3050, `JETCARP_GPU=UHD` uses the Intel one (and leaves on or off
-to the rest). When the adapter asked for isn't there, the best one is used, and wherever the adapter
-is named it says so: `gpu (Intel(R) UHD Graphics …, Dx12; no RTX adapter was found, so the best
-one)`.
+to the rest). When the adapter asked for isn't there, JETCARP looks twice more, a quarter of a
+second apart (a laptop's discrete GPU waking from sleep can be missing from the first look), then
+uses the best one. Wherever the adapter is named it says so, `gpu (Intel(R) UHD Graphics …, Dx12; no
+RTX adapter was found, so the best one)`, and the command line also says it once on the error
+stream: `note: GPU: no RTX adapter was found, so the best one`.
 
 A command's own choice comes next: `--gpu` uses the GPU, `--cpu` only the processor (`jetcarp run`,
 `jetcarp wallpaper`, `jetcarp search hunt|explore`, `jetcarp pile`, `jetcarp jobs resume`, `jetcarp

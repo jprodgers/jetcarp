@@ -32,6 +32,7 @@ pub mod op;
 #[cfg(feature = "ops")]
 pub mod ops;
 pub mod out;
+pub mod rle;
 #[cfg(feature = "ops")]
 pub mod sweeps;
 pub mod world;
