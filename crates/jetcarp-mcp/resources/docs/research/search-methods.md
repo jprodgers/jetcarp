@@ -61,7 +61,11 @@ id `jetcarp library show` takes. For Life-like and Generations rules the
 catalogue also stores the pattern's *rule range*: every transition the pattern asks of the rule over
 one period fixes some birth and survival counts and forbids others, and every rule between the
 smallest and the largest consistent rule runs the pattern through exactly the same phases. That is how
-the findings can say that a ship "runs in the 1,024 rules from `B3/S235` up".
+the findings can say that a ship "runs in the 1,024 rules from `B3/S235` up". On the square grid's
+touching neighbours it also stores the *isotropic rule range*, the same over the 51 arrangements of
+the live neighbours that [isotropic rules](../automata/isotropic.md) tell apart: the isotropic rules
+that run the pattern exactly, of which the B/S rules in its rule range are those that treat every
+arrangement of a count alike.
 
 `jetcarp library verify` checks stored patterns again with the running build, for instance after a
 change of geometry.

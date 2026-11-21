@@ -38,6 +38,22 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   `JETCARP_GOLLY_LIBRARY`). On 21 November 2026, a library of fresh hunts on squares, hexagons and
   the von Neumann neighbourhood held 3,314 finds: 2,024 oscillators, 1,282 still lifes and 8
   spaceships. Every one pasted back as the same cells and ran to the same generation in Golly 5.0.
+  A third test runs isotropic rules in Hensel's notation the same way, in both programs: 73 rules
+  (66 of them random, two-state, B0 and Generations, written in shuffled forms, and two B/S rules
+  with B0), two soups each, every generation up to 100, cell by cell and state by state, with Golly
+  naming every rule as JETCARP does (`golly_agrees_on_isotropic_rules`). Its cases are chosen, and
+  checked, so that any one letter read as another of its count would show at the first generation:
+  with the arrangements of `3r` and `3y` swapped it fails in 120 of its 146 soups, with `4j` and
+  `4r` swapped in 88. A fourth runs Larger than Life in both programs: ten rules on the square
+  grid's box, diamond and cross, among them Bosco's Rule, one with four states, and five two-state
+  rules with birth on 0 (two whose background flashes, three whose background is live for good from
+  the first step), two soups each, every generation up to 40 (20 for Bosco's Rule), after Golly has
+  read each two-state soup copied with *Copy as RLE* as the same rule and cells
+  (`golly_agrees_on_larger_than_life`). With rules with birth on 0 run as written, as JETCARP ran
+  them before 0.4.3, all ten of their soups differ from Golly at the first generation. It needs
+  Golly 4.0 or later, the first to read Larger than Life's `R2,C2,S3-6,B3-4` notation and to
+  emulate birth on 0. CI's Linux job installs Ubuntu's Golly 3.3, so there it runs the other three
+  tests and skips this one, saying so; it was run with Golly 5.0 on the development desktop.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
   on Windows directory junctions and symbolic links too) and its limits, that nothing listens for AI

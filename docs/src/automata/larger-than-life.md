@@ -105,8 +105,10 @@ these definitions give exactly the box and the diamond, and range 1 is checked t
 cross shape has no such reading and stays on the square grid.
 
 Larger than Life runs on the GPU in the app and in the background host, with exactly the CPU's
-result, on lattices and on aperiodic patches. On a patch each tile keeps its own list of the tiles
-in reach; a patch whose lists would pass 67 million entries in all runs on the CPU.
+result, on lattices and on aperiodic patches, two-state rules with birth on 0 included. On a patch
+each tile keeps its own list of the tiles in reach; a patch whose lists would pass 67 million
+entries in all runs on the CPU. The exploratory search's GPU batches leave rules with birth on 0 to
+the processor's batches.
 
 Neighbourhood sizes change with the tiling, so a rule's thresholds usually need adjusting when it
 moves. On the hat, below, Bosco's thresholds are scaled down by a quarter, and bug-like hollow
@@ -134,6 +136,37 @@ tile within five steps of the touch neighbour graph. The middle of a patch of ab
 generations from a random start; watch the soup clump into blobs whose edges shift and smooth
 themselves over the irregular tiles. Scene <code>docs/scenes/automata/ltl-hat.json</code>.</figcaption>
 </figure>
+
+### Rules with birth on 0
+
+Under a rule with birth on 0, every cell with no live cell in reach is born, so the whole field
+turns on at the first step. JETCARP keeps a two-state rule with birth on 0 relative to its
+**background**, as it does [Life-like B0 rules](life-like.md#b0-rules): each cell is lit where its
+real state differs from the rule's run from an empty world, so empty space stays dark, and each step
+works out the real states, applies the rule and keeps the result against the next background. The
+background is one state per tile type on a lattice and is kept for every tile on an aperiodic
+patch. A neighbour past a dead edge counts as background, and past a live edge as live.
+
+A rule that survives on every count its reach holds (24 for range 2 on the square grid's box, as in
+`R2,C2,S6-24,B0-2`) turns the background live for good at the first step, and starts on that live
+background at generation 0: its lit cells are the dead ones in a live plane. This is how Golly reads
+two-state rules with birth on 0, and on the square grid the two agree generation for generation,
+from generation 0, whether the background flashes or is live for good. JETCARP 0.4.3 began keeping these rules against
+their background; before, they ran as written and the field turned on, so **a scene from an earlier
+version with such a rule replays to other states** (see
+[Reproducibility](../research/reproducibility.md#larger-than-life-rules-with-birth-on-0)). A rule with
+more than two states and birth on 0 still runs as written; Golly refuses those.
+
+### Copy as RLE and Golly
+
+*Copy as RLE* writes two-state rules on the square grid in the HROT form, `R2,C2,S3-6,B3-4,NN`,
+which Golly's Larger than Life algorithm reads (it writes two states as `C0`), and their rules
+with birth on 0 where Golly reads them the same: always when the background is live for good, at
+even generations when it flashes. Rules with more states, and other tilings, are refused for now.
+A test (`golly_agrees_on_larger_than_life`) runs soups of rules on the square grid's box, diamond
+and cross, with more states, and with birth on 0 of both kinds, in JETCARP and in Golly, and
+compares every generation from the start, after Golly has read each soup copied with *Copy as RLE*
+as the same rule and cells ([How JETCARP is tested](../about/testing.md#automated-tests)).
 
 ## What is new here
 

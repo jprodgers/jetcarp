@@ -76,6 +76,12 @@ impl Sparse {
             Rule::LifeLike { birth, .. } | Rule::Generations { birth, .. } if birth & 1 == 0 => {}
             Rule::WireWorld => {}
             Rule::Priority(p) if !(0..=24).any(|d| p.ignites(d)) => {}
+            // On the square grid's touching neighbours, one tile type.
+            Rule::Isotropic(r) if !r.b0() => {
+                let offs = g.offsets[nb as usize].first()?;
+                let xy: Vec<(i32, i32)> = offs.iter().map(|o| (o.di, o.dj)).collect();
+                crate::isotropic::slots(&xy).filter(|_| g.ntypes == 1)?;
+            }
             _ => return None,
         }
         let offsets: Vec<Vec<(i32, i32, u32)>> = g.offsets[nb as usize]
@@ -149,6 +155,18 @@ impl Sparse {
         cands.dedup();
         let mut out = CellMap::with_capacity_and_hasher(live.len() * 2, Default::default());
         for (i, j, k) in cands {
+            let own = live.get(&(i, j, k)).copied().unwrap_or(0);
+            if let Rule::Isotropic(r) = &self.rule {
+                let mut x = 0u8;
+                for (b, &(di, dj)) in crate::isotropic::OFFSETS.iter().enumerate() {
+                    x |= ((live.get(&(i + di, j + dj, 0)) == Some(&1)) as u8) << b;
+                }
+                let v = r.next(own, x);
+                if v != 0 {
+                    out.insert((i, j, k), v);
+                }
+                continue;
+            }
             let mut c = [0u16; 8];
             let offs = &self.offsets[k as usize];
             for &(di, dj, k2) in offs {
@@ -156,7 +174,6 @@ impl Sparse {
                     c[s.min(7) as usize] += 1;
                 }
             }
-            let own = live.get(&(i, j, k)).copied().unwrap_or(0);
             let v = self.next(own, &c, offs.len());
             if v != 0 {
                 out.insert((i, j, k), v);

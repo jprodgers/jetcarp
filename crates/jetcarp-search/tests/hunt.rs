@@ -425,6 +425,64 @@ fn bit_engine_matches_sparse_on_every_periodic_tiling() {
     }
 }
 
+/// Isotropic rules (#70): the bit engine's decision diagrams against the sparse stepper, which
+/// reads the rule's letters cell by cell, with two states and Generations.
+#[test]
+fn bit_engine_matches_sparse_for_isotropic_rules() {
+    for (k, rule) in [
+        "B2-a/S12",
+        "B3-cnqy/S23-a",
+        "B3/S2-i34q",
+        "B2n3/S23-q",
+        "B2ci3ai4c8/S02ae3eijkq4iz5ar6i7e",
+        "B2a3-ckn/S1e2-in3/C4",
+        "B1c2-k/S/C3",
+    ]
+    .iter()
+    .enumerate()
+    {
+        compare("square", Nb::Touch, rule, 60, 70 + k as u64);
+    }
+    // Only on the square grid's touching neighbours.
+    let topo = lattice_topo("hex");
+    let rule = Rule::parse("B2-a/S12").unwrap().0;
+    assert!(Plan::new(&rule, topo.lattice().unwrap(), Nb::Touch).is_err());
+}
+
+/// A hunt in an isotropic rule finds and verifies objects, and its catalog does not depend on
+/// the thread count or the batch size.
+#[test]
+fn isotropic_hunts_are_independent_of_threads_and_batches() {
+    let spec = HuntSpec {
+        rules: vec!["B3/S2-i34q".into(), "B2-a/S12".into()],
+        tilings: vec![TilingSpec::new("square")],
+        soups: Some(160),
+        ..Default::default()
+    };
+    let mut snaps = Vec::new();
+    for (name, threads, batch) in [("iso-t1", 1, 9), ("iso-tall", 0, 0)] {
+        let lib = temp_lib(name);
+        let jid = hunt::start(&lib, &spec).unwrap();
+        let p = run_hunt(&lib, jid, threads, batch, None);
+        assert_eq!(p.status, "done");
+        assert_eq!(p.failed, 0, "{:?}", p.groups);
+        assert!(p.objects > 100, "{}", p.line());
+        snaps.push(snapshot(&lib, jid));
+    }
+    assert_eq!(snaps[0], snaps[1]);
+    // Records carry the rule as JETCARP names it.
+    assert!(
+        snaps[0].0.iter().any(|r| r.contains(" B3/S2-i34q ")),
+        "{:?}",
+        snaps[0].0
+    );
+    assert!(
+        snaps[0].0.iter().any(|r| r.contains(" B2-a/S12 ")),
+        "{:?}",
+        snaps[0].0
+    );
+}
+
 #[test]
 fn bit_engine_hash_ignores_the_universe_layout() {
     let topo = lattice_topo("square");

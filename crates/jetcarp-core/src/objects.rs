@@ -1593,16 +1593,18 @@ fn known_names(ctx: &Ctx, key: String) -> NameMap {
 /// WireWorld, priority tables), `Ok(false)` for rule tables (no rotation or reflection), `Err` otherwise.
 pub fn supported(rule: &Rule) -> Result<bool, String> {
     match rule {
-        Rule::LifeLike { birth, .. } | Rule::Generations { birth, .. } if birth & 1 == 1 => {
+        r if r.is_bs_like() && r.is_b0() => {
             Err("B0 rules have no empty background, so objects cannot be isolated".into())
         }
         Rule::Priority(p) if (0..=24).any(|d| p.ignites(d)) => Err(
             "this priority rule turns quiet cells on with no live neighbours, so objects cannot be isolated"
                 .into(),
         ),
-        Rule::LifeLike { .. } | Rule::Generations { .. } | Rule::WireWorld | Rule::Priority(_) => {
-            Ok(true)
-        }
+        Rule::LifeLike { .. }
+        | Rule::Generations { .. }
+        | Rule::Isotropic(_)
+        | Rule::WireWorld
+        | Rule::Priority(_) => Ok(true),
         Rule::Table(_) | Rule::SpectreGlider => Ok(false),
         _ => Err(format!(
             "object detection needs a B/S, Generations, WireWorld, or table rule, not {}",

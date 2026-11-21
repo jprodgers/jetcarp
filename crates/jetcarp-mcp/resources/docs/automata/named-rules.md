@@ -7,17 +7,18 @@
 > (`crates/jetcarp-core/data/rules/named.json`) and the credits file `docs/data/named-rule-credits.tsv`.
 > Edit those files, not this page.
 
-JETCARP knows 166 rules by name, collected from the rule lists that the Life community
+JETCARP knows 173 rules by name, collected from the rule lists that the Life community
 has kept for decades. You can type a name anywhere a rule is expected (`jetcarp rules` lists them, with
-a few more built-in names for families that have no standard list). Every one of them runs on any
-tiling, though most were found on the square grid and behave differently elsewhere; see
-[How JETCARP generalises automata](generalising.md).
+a few more built-in names for families that have no standard list). All but the isotropic rules run
+on any tiling, though most were found on the square grid and behave differently elsewhere (see
+[How JETCARP generalises automata](generalising.md)); the isotropic ones name arrangements of the
+square grid's neighbours, and run there only.
 
 **About the credits.** Most of these rules were named, and often found, by hobbyists: through
 Mirek Wójtowicz's MCell program and its rules lexicon in the late 1990s, the ConwayLife.com forums,
 and LifeWiki's lists. The *Credit* column names a person only when a source does, with the role the
 source gives (found, named, studied). An empty cell means no source we checked names anyone, not
-that nobody did. Where sources disagree, both are shown. 76 of the 166 rules have a named person. The credits were checked in November 2026
+that nobody did. Where sources disagree, both are shown. 77 of the 173 rules have a named person. The credits were checked in November 2026
 against LifeWiki (read through its mirror, since conwaylife.com refuses automated reading), the
 MCell lexicon, Toffoli and Margolus's *Cellular Automata Machines* (1987) and Wikipedia.
 If you know of an earlier or missing credit, please open an issue.
@@ -36,6 +37,7 @@ for each rule are written in our own words.
 | [Elementary](elementary.md) | 10 |
 | [Agents](turmites.md) | 4 |
 | [Layered](layered.md) | 2 |
+| [Isotropic](isotropic.md) | 7 |
 
 
 <figure>
@@ -271,5 +273,19 @@ Family page: [Layered](layered.md).
 | --- | --- | --- | --- |
 | Layered parity | `Layer 2/01` | Jimmie Rodgers (JETCARP, 2026) | [JETCARP](layered.md) |
 | Layered sum mod 3 | `Layer 3/012` | Jimmie Rodgers (JETCARP, 2026) | [JETCARP](layered.md) |
+
+## Isotropic
+
+Family page: [Isotropic](isotropic.md).
+
+| Name | Notation | Credit | Sources |
+| --- | --- | --- | --- |
+| Goat Flock | `B2in3/S123a` |  | [rule list](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules); [LifeWiki: List of isotropic non-totalistic rules](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules) |
+| Just Friends | `B2-a/S12` | David Bell (Golly's help calls it “David Bell's Just Friends rule”; Hensel's notation page names it) | [rule list](http://www.ibiblio.org/lifepatterns/neighbors.html); [Hensel 2001](../research/bibliography.md#hensel2001notation); [Golly: QuickLife](../research/bibliography.md#gollynd_quicklife); [LifeWiki: List of isotropic non-totalistic rules](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules) |
+| LeapLife | `B2n3/S23-q` |  | [rule list](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules); [LifeWiki: List of isotropic non-totalistic rules](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules) |
+| Logic Rule | `B2ae/S` |  | [rule list](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules); [LifeWiki: List of isotropic non-totalistic rules](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules) |
+| qlife | `B3-q/S23` |  | [rule list](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules); [LifeWiki: List of isotropic non-totalistic rules](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules) |
+| Salad | `B2i34c/S2-i3` |  | [rule list](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules); [LifeWiki: List of isotropic non-totalistic rules](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules) |
+| tlife | `B3/S2-i34q` |  | [rule list](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules); [LifeWiki: List of isotropic non-totalistic rules](https://conwaylife.com/wiki/List_of_isotropic_non-totalistic_rules) |
 
 ¹ Listed in the data file but not yet accepted by this version of JETCARP: Coexistence. Coexistence uses a weighted Larger than Life neighbourhood, which JETCARP does not read yet.

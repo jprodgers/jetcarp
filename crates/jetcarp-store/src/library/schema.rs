@@ -1,7 +1,7 @@
-//! The library's schema (version 3), opening a library file, and what is checked on opening.
+//! The library's schema (version 4), opening a library file, and what is checked on opening.
 //!
-//! **Schema.** One script, [`SCHEMA`], makes a new library. `PRAGMA user_version` is the schema
-//! version ([`SCHEMA_VERSION`], 3) and `PRAGMA application_id` marks the file as a JETCARP
+//! **Schema.** One script, [`SCHEMA`] (schema 3's tables), and the migrations after it make a new
+//! library. `PRAGMA user_version` is the schema version ([`SCHEMA_VERSION`], 4) and `PRAGMA application_id` marks the file as a JETCARP
 //! library ([`APPLICATION_ID`], `JETC`), so a library from a newer JETCARP is refused with a
 //! clear message, and so is a catalog from before schema 1 (made by a build before 0.4: no
 //! application id, user versions 1 to 7), which is not migrated: JETCARP 0.4 starts a fresh
@@ -9,7 +9,7 @@
 //!
 //! **Migrations.** A library of an older schema is brought up to date when it is opened, in one
 //! transaction: schema 1 to 2 ([`migrate_1_2`]), 2 to 3 ([`migrate_2_3`]: one Quick Start
-//! table for every source), and a library made before rule-semantics versions gains them
+//! table for every source), 3 to 4 ([`migrate_3_4`]: patterns' isotropic rule ranges), and a library made before rule-semantics versions gains them
 //! ([`add_semantics`]; schema 2 gained them before the 0.4.0 release, so its number stayed 2).
 //! A schema change adds a migration here; never edit [`SCHEMA`] once it has shipped.
 //!
@@ -40,7 +40,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 use std::collections::HashMap;
 
 /// The schema version a library made by this build has (`PRAGMA user_version`).
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 /// `PRAGMA application_id` of a JETCARP library: `JETC` in ASCII.
 pub const APPLICATION_ID: i64 = 0x4A45_5443;
@@ -162,6 +162,29 @@ pub fn migrate_2_3(tx: &Transaction) -> Result<(), String> {
          PRAGMA user_version = 3;",
     )
     .map_err(e)
+}
+
+/// Schema 3 to 4 (0.4.3): `patterns` gains its isotropic rule range
+/// ([`jetcarp_core::pattern::IsoRange`]), the 51-bit class masks `iso_birth_min`,
+/// `iso_birth_max`, `iso_survive_min`, `iso_survive_max` and the state counts `iso_states_min`
+/// and `iso_states_max`, null for a pattern without one. The existing patterns get theirs when
+/// they are next stored or verified again. Each column is added only where it is missing.
+pub fn migrate_3_4(tx: &Transaction) -> Result<(), String> {
+    for col in [
+        "iso_birth_min",
+        "iso_birth_max",
+        "iso_survive_min",
+        "iso_survive_max",
+        "iso_states_min",
+        "iso_states_max",
+    ] {
+        if !has_column(tx, "patterns", col)? {
+            tx.execute_batch(&format!("ALTER TABLE patterns ADD COLUMN {col} INTEGER;"))
+                .map_err(e)?;
+        }
+    }
+    tx.execute_batch("UPDATE meta SET value = '4' WHERE key = 'schema'; PRAGMA user_version = 4;")
+        .map_err(e)
 }
 
 /// Does `table` have the column `col`?
@@ -556,6 +579,9 @@ fn migrate(c: &mut Connection) -> Result<(), String> {
     if version(&tx)? == 2 {
         migrate_2_3(&tx)?;
     }
+    if version(&tx)? == 3 {
+        migrate_3_4(&tx)?;
+    }
     tx.commit().map_err(e)
 }
 
@@ -574,6 +600,7 @@ fn create_or_check(c: &mut Connection) -> Result<(), String> {
         return Ok(());
     }
     tx.execute_batch(SCHEMA).map_err(e)?;
+    migrate_3_4(&tx)?;
     let now = now_utc();
     for (k, v) in [
         ("schema", SCHEMA_VERSION.to_string()),

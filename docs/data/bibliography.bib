@@ -546,6 +546,18 @@
   note          = {Code: https://github.com/jamesedmond/monotile-ca; Zenodo doi:10.5281/zenodo.22836247}
 }
 
+% verified: thread read 2026-11-21 through the mirror https://conwaylife.njohnston.ca/forums/viewtopic.php?p=6822 (conwaylife.com refuses automated reading): EricG, 20 July 2012 ("Confusingly, "r" and "y" are swapped in Life32", for 3, 4 and 5 neighbours), and Paul Tooke, 23 July 2012 (the scheme was modified after Johan Bontes suggested combining some mnemonics; neighbors2.html matches the Life32 help file's table apart from rotations and reflections; "Alan's applet implements the scheme as described without the 'r' & 'y' rule swap")
+@misc{ericg2012nontotalistic,
+  author       = {{EricG} and Tooke, Paul},
+  title        = {Non-totalistic Rules: notations, projects, and discussion},
+  howpublished = {ConwayLife.com forums},
+  year         = {2012},
+  month        = jul,
+  url          = {https://conwaylife.com/forums/viewtopic.php?p=6822},
+  urldate      = {2026-11-21},
+  note         = {Posts of 20 and 23 July 2012 on the two versions of Hensel's table and Life32's swap of r and y}
+}
+
 % verified: arXiv abstract page 0911.2890 (its journal reference gives pp. 71-98); Crossref record for DOI 10.1007/978-1-84996-217-9_6, 2026-11-20, gives pages 71-97, used here
 @incollection{eppstein2010growth,
   author    = {Eppstein, David},
@@ -953,7 +965,7 @@
   doi     = {10.1109/T-C.1969.222756}
 }
 
-% verified: fetched https://golly.sourceforge.io/Help/changes.html (Generations in 2.0, Dec 2008; LtL in 3.0, Aug 2017; HROT in 4.0, Oct 2020; B0 in 0.2, Jul 2005)
+% verified: fetched https://golly.sourceforge.io/Help/changes.html (Generations in 2.0, Dec 2008; LtL in 3.0, Aug 2017; HROT in 4.0, Oct 2020; B0 in 0.2, Jul 2005). Read again 2026-11-21 in Golly 5.0's copy: non-totalistic rules in QuickLife and HashLife in 2.8 (August 2016); with B0, and in the Generations algorithm, in 3.0 (August 2017)
 @misc{gollynd_changes,
   author  = {{Golly developers}},
   title   = {Golly Help: Changes},
@@ -1017,7 +1029,7 @@
   howpublished = {Golly documentation},
   url          = {https://golly.sourceforge.io/Help/Algorithms/QuickLife.html},
   urldate      = {2026-11-10},
-  note         = {Describes emulation of B0 rules: inverted counts when Smax is present, alternating even/odd rules otherwise}
+  note         = {Describes emulation of B0 rules: inverted counts when Smax is present, alternating even/odd rules otherwise; and non-totalistic rules in Hensel's notation, with their canonical form (letters in alphabetical order, the shortest form, the plain form on a tie) and David Bell's Just Friends, B2-a/S12. The non-totalistic part read 2026-11-21 in Golly 5.0's own copy of the page}
 }
 
 % verified: Crossref
@@ -1325,6 +1337,28 @@
   year    = {1993},
   doi     = {10.1103/PhysRevLett.71.2741},
   note    = {Verified via Crossref 2026-11-10}
+}
+
+% verified: fetched 2026-11-21 from ibiblio; the server gives the page's Last-Modified as 15 May 2001 01:35:45 GMT. Text read in full: "I have extended my applet's rule notation to include non-totalistic rules", "focused on symmetrical rules only", 51 neighbourhoods, a letter each ("mnemonic, but many of them are somewhat arbitrary"), a "-" for the inverse, and "12/2-a" (survival first) as the "Just Friends" rule. Its table uses 17 letters (x, L, u and h among them)
+@misc{hensel2001notation,
+  author       = {Hensel, Alan},
+  title        = {Rule Notation},
+  howpublished = {Web page for his Life applet},
+  year         = {2001},
+  url          = {http://www.ibiblio.org/lifepatterns/neighbors.html},
+  urldate      = {2026-11-21},
+  note         = {Copy dated 15 May 2001 on its server. Non-totalistic (symmetrical) rule notation: a letter per arrangement of the live neighbours, and a minus sign for the inverse}
+}
+
+% verified: fetched 2026-11-21 from ibiblio, with its 51 diagrams (PNG files dated 15 May 2001 01:37 GMT by the server), decoded cell by cell: corner neighbours green, edge neighbours yellow, the cell red. Rows c, e, k, a, i, n, y, q, j, r, t, w, z; for each of 1-4 live neighbours every letter is a different class under rotation and reflection and together they are all 31; the diagrams for 5-7 are the complements of 3-1 under the same letter
+@misc{hensel2001table,
+  author       = {Hensel, Alan},
+  title        = {Rule Notation: table of non-totalistic neighborhoods},
+  howpublished = {Web page},
+  year         = {2001},
+  url          = {http://www.ibiblio.org/lifepatterns/neighbors2.html},
+  urldate      = {2026-11-21},
+  note         = {Copy dated 15 May 2001 on its server. The revised table of 13 letters that Golly and JETCARP follow}
 }
 
 % verified: abstract page https://www.complex-systems.com/abstracts/v10_i05_a03 (author, title, vol. 10 no. 5) and the full text it links, https://content.wolfram.com/sites/13/2018/02/10-5-3.pdf, read 2026-11-20: running head "Complex Systems 10 (1996) 367-381"; the rule, Life 1133, is birth on 3 and survival on 1 and 3 (its rules R1-R3), i.e. B3/S13 (LowLife)

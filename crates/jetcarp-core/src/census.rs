@@ -294,7 +294,7 @@ fn ca_spec(spec: &CensusSpec, rule: &str) -> Result<CaSpec, String> {
     }
     let mut ca = CaSpec::new(rule);
     ca.neighborhood = spec.neighborhood;
-    if matches!(r, Rule::LifeLike { .. } | Rule::Generations { .. }) {
+    if r.is_bs_like() {
         ca.seed = Some(SeedSpec::Random {
             density: spec.density,
         });

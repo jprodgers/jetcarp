@@ -62,6 +62,50 @@ fn gpu_prefixes_equal_cpu() {
     check_prefixes(&g, "B2/S34", "trihex", 200);
 }
 
+/// Isotropic rules (#70): the generated shader's decision diagrams against the CPU's. Some of
+/// these rules' soups run longer than the GPU runs any (it hands them to the CPU): those must
+/// equal the CPU's run to the same generation.
+#[test]
+fn gpu_prefixes_equal_cpu_for_isotropic_rules() {
+    let Some(g) = gpu() else { return };
+    for (rule, n) in [
+        ("B2-a/S12", 300),
+        ("B3/S2-i34q", 300),
+        ("B3-cnqy/S23-a", 300),
+        ("B2a3-ckn/S1e2-in3/C4", 200),
+    ] {
+        let t = TilingSpec::new("square");
+        let spec = HuntSpec::default();
+        let c = Census::new(rule, &t, None, spec.max_period).unwrap();
+        let layout = Layout::new(&c.topo, spec.soup, spec.margin()).unwrap();
+        let limits = spec.limits(layout.cells.len());
+        assert!(g.supports(&c, layout.region), "{rule} should fit");
+        let soups: Vec<_> = (0..n).map(|i| layout.soup(soup_state(9, i))).collect();
+        let got = g.prefix(&c, layout.region, limits, &soups).unwrap();
+        let mut handed = 0;
+        for (i, s) in soups.iter().enumerate() {
+            if got[i].end.is_some() {
+                assert_eq!(
+                    got[i],
+                    prefix_cpu(&c, layout.region, limits, s),
+                    "{rule}, soup {i}"
+                );
+                continue;
+            }
+            handed += 1;
+            let mut l = limits;
+            l.max_gens = got[i].generation;
+            let cpu = prefix_cpu(&c, layout.region, l, s);
+            assert_eq!(
+                (&got[i].cells, got[i].generation, &got[i].ring),
+                (&cpu.cells, cpu.generation, &cpu.ring),
+                "{rule}, soup {i}, handed over"
+            );
+        }
+        eprintln!("{rule}: {n} prefixes equal, {handed} handed to the CPU");
+    }
+}
+
 /// Prefix throughput, GPU and CPU (ignored; `W=rule@tiling,... N=...`).
 #[test]
 #[ignore]
@@ -112,15 +156,34 @@ fn gpu_hunt_equals_cpu_hunt() {
         soups: Some(400),
         ..Default::default()
     };
+    hunts_agree(&g, &spec);
+}
+
+/// Isotropic rules (#70), whose long soups the GPU hands to the CPU.
+#[test]
+fn gpu_hunt_equals_cpu_hunt_for_isotropic_rules() {
+    let Some(g) = gpu() else { return };
+    let spec = HuntSpec {
+        rules: vec!["B2-a/S12".into(), "B3/S2-i34q".into()],
+        tilings: vec![TilingSpec::new("square")],
+        soups: Some(300),
+        ..Default::default()
+    };
+    hunts_agree(&g, &spec);
+}
+
+/// A hunt run with the GPU and one without leave the same catalog.
+fn hunts_agree(g: &Arc<GpuHunter>, spec: &HuntSpec) {
     let mut snaps = Vec::new();
     for use_gpu in [false, true] {
         let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
-            "jetcarp-gpu-hunt-test-{use_gpu}-{}",
+            "jetcarp-gpu-hunt-test-{}-{use_gpu}-{}",
+            spec.rules.join("+").replace('/', ""),
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
         let lib = Library::open(dir);
-        let jid = hunt::start(&lib, &spec).unwrap();
+        let jid = hunt::start(&lib, spec).unwrap();
         let o = RunOptions {
             gpu: use_gpu.then(|| g.clone() as Arc<dyn SoupBatcher>),
             ..Default::default()

@@ -1295,9 +1295,8 @@ impl WorldOp for WorldPaste {
             format!(
                 "Note: the pattern runs as stored in {}{}; this CA runs {ca_rule}, so it may behave differently.",
                 rec.rule,
-                rec.range
-                    .as_ref()
-                    .map(|x| format!(" ({})", x.describe()))
+                rec.works_in_text()
+                    .map(|x| format!(" ({x})"))
                     .unwrap_or_default(),
             )
         });

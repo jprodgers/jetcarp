@@ -28,6 +28,9 @@
 //! - Rule tables by name: `Table codd`, `Table <name>` (see `table.rs`).
 //! - JACA (balanced ternary, annihilating): `JACA B3/S23`, `JACA +B3/S23 -B36/S23 blast 2`
 //!   (see `jaca.rs`).
+//! - Isotropic non-totalistic rules on the square grid, in Hensel's notation: `B2-a/S12`,
+//!   `B3-cnqy/S23-a`, Generations `B2a/S/C3` (see `isotropic.rs`). Written with every letter of
+//!   each count or none, such a rule is the B/S rule of those counts.
 
 use crate::topology::Nb;
 
@@ -125,6 +128,10 @@ pub enum Rule {
     /// JACA: cells -1, 0, +1, a B/S rule per sign, and opposite signs that touch annihilate
     /// (see `jaca.rs`).
     Jaca(Box<crate::jaca::JacaRule>),
+    /// An isotropic non-totalistic rule on the square grid's eight touching neighbours, in
+    /// Hensel's notation (`B2-a/S12`), with two states or Generations' (see `isotropic.rs`).
+    /// Never totalistic: those are [`Rule::LifeLike`] and [`Rule::Generations`].
+    Isotropic(Box<crate::isotropic::IsoRule>),
 }
 
 /// How a three-parent hexagon rule number is read.
@@ -211,6 +218,8 @@ impl Rule {
             Rule::VonNeumann => FieldKind::Multi(crate::vonneumann::STATES),
             Rule::Priority(p) => FieldKind::Multi(p.states),
             Rule::Jaca(_) => FieldKind::Multi(3),
+            Rule::Isotropic(r) if r.states <= 2 => FieldKind::Binary,
+            Rule::Isotropic(r) => FieldKind::Multi(r.states),
         }
     }
     pub fn default_nb(&self) -> Nb {
@@ -235,6 +244,7 @@ impl Rule {
                 | Rule::Lenia(_)
                 | Rule::Ltl(_)
                 | Rule::VonNeumann
+                | Rule::Isotropic(_)
         )
     }
     /// Elementary rules write one row per step and need a grid with rows.
@@ -285,6 +295,34 @@ impl Rule {
     }
     pub fn is_agent(&self) -> bool {
         matches!(self, Rule::Turmite(_))
+    }
+    /// Rules that turn dead cells on with no live neighbours (birth on 0): B/S, Generations and
+    /// isotropic rules with B0.
+    pub fn is_b0(&self) -> bool {
+        match self {
+            Rule::LifeLike { birth, .. } | Rule::Generations { birth, .. } => birth & 1 == 1,
+            Rule::Isotropic(r) => r.b0(),
+            _ => false,
+        }
+    }
+    /// A two-state rule with B0, which runs relative to its background ([`crate::b0`]): the
+    /// birth and survival count masks the background is worked out from. A B/S rule's own; an
+    /// isotropic rule's B0 and S8, all that a uniform background sees on the square grid.
+    pub fn b0_masks(&self) -> Option<(u32, u32)> {
+        match self {
+            Rule::LifeLike { birth, survive } if birth & 1 == 1 => Some((*birth, *survive)),
+            Rule::Isotropic(r) if r.b0() && r.states <= 2 => Some(r.background_masks()),
+            _ => None,
+        }
+    }
+    /// Rules of the B/S kind: a dead cell is born, a live one survives or dies (and with
+    /// Generations' states counts down), by its live neighbours. B/S, Generations and isotropic
+    /// rules.
+    pub fn is_bs_like(&self) -> bool {
+        matches!(
+            self,
+            Rule::LifeLike { .. } | Rule::Generations { .. } | Rule::Isotropic(_)
+        )
     }
 
     pub fn parse(text: &str) -> Result<(Rule, Option<Nb>), String> {
@@ -337,12 +375,12 @@ impl Rule {
         }
         // B/S notation. A `V` (edge neighbours) ends the rule, or the B or S part it sits
         // beside: `B3/S23V/C4` and `B3V/S23/C4` are `B3/S23/C4V`.
-        let (body, mut edge) = if let Some(b) = compact.strip_suffix('v') {
-            (b, true)
+        let (body, mut edge, hex) = if let Some(b) = compact.strip_suffix('v') {
+            (b, true, false)
         } else if let Some(b) = compact.strip_suffix('h') {
-            (b, false)
+            (b, false, true)
         } else {
-            (compact.as_str(), false)
+            (compact.as_str(), false, false)
         };
         let mut parts: Vec<&str> = body.split('/').collect();
         if !(2..=3).contains(&parts.len()) {
@@ -363,6 +401,20 @@ impl Rule {
                 e
             }
         })?;
+        if let Rule::Isotropic(_) = rule {
+            if edge {
+                return Err(format!(
+                    "'{t}': Hensel's letters describe arrangements of the square grid's eight \
+                     touching neighbours, so an isotropic rule takes no V"
+                ));
+            }
+            if hex {
+                return Err(format!(
+                    "'{t}': isotropic rules run on the square grid's eight touching neighbours; \
+                     the hexagonal grid's own isotropic notation is not supported yet"
+                ));
+            }
+        }
         Ok((rule, edge.then_some(Nb::Edge)))
     }
 
@@ -421,6 +473,7 @@ impl Rule {
             Rule::VonNeumann => "JvN29".into(),
             Rule::Priority(p) => p.notation(),
             Rule::Jaca(j) => j.notation(),
+            Rule::Isotropic(r) => r.notation(),
         }
     }
 
@@ -677,23 +730,31 @@ fn bs_parts(parts: &[&str]) -> Result<Rule, String> {
     let s = parts[1]
         .strip_prefix('s')
         .ok_or("the second part starts with S, like B3/S23")?;
-    let birth = mask(b)?;
-    let survive = mask(s)?;
+    let mut states = 2u8;
     if parts.len() == 3 {
         let c = parts[2].trim_start_matches(['c', 'g']);
-        let states: u32 = c
+        let n: u32 = c
             .parse()
             .map_err(|_| "Generations need a state count, like B2/S/C3")?;
-        if !(2..=255).contains(&states) {
+        if !(2..=255).contains(&n) {
             return Err("Generations state count must be 2 to 255".into());
         }
-        if states > 2 {
-            return Ok(Rule::Generations {
-                birth,
-                survive,
-                states: states as u8,
-            });
+        states = n as u8;
+    }
+    let (birth, survive) = if crate::isotropic::has_letters(b) || crate::isotropic::has_letters(s) {
+        match crate::isotropic::parse(b, s, states)? {
+            crate::isotropic::Parsed::Isotropic(r) => return Ok(Rule::Isotropic(Box::new(r))),
+            crate::isotropic::Parsed::Totalistic { birth, survive } => (birth, survive),
         }
+    } else {
+        (mask(b)?, mask(s)?)
+    };
+    if states > 2 {
+        return Ok(Rule::Generations {
+            birth,
+            survive,
+            states,
+        });
     }
     Ok(Rule::LifeLike { birth, survive })
 }

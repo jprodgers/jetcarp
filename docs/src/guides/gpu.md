@@ -8,8 +8,8 @@ the processor. Only the speed differs.
 
 - **Worlds** of Life-like (B0 rules too), Generations, WireWorld, cyclic, rock-paper-scissors,
   Greenberg–Hastings, hodgepodge, JACA, Larger than Life, forest fire, sandpile, Spectre-glider and
-  priority rules, on lattices and on aperiodic patches, and Margolus block rules on a tiling with
-  rows. Other rules step on the processor, and a world that mixes them moves between the two as it
+  priority rules, on lattices and on aperiodic patches, and Margolus block rules and isotropic rules
+  on the square grid. Other rules step on the processor, and a world that mixes them moves between the two as it
   needs.
 - **Explore searches**: the rules a GPU can run go there in batches.
 - **Hunts**: the start of each soup.
