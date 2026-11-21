@@ -69,6 +69,7 @@ impl JetcarpApp {
                 );
             }
             ui.add_space(4.0);
+            self.menu.guard = self.strobe.on_app;
             open = self.menu.show(ui);
         });
         match open {

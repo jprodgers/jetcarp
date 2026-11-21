@@ -53,7 +53,8 @@ answered, nothing else starts anything on screen:
 
 What only reads or writes files is not held back: `jetcarp host status`, `jetcarp doctor`, pictures,
 GIF and WebP animations, videos and scene files. They don't animate anything on your screen, but
-an animation you make can flash like the scene it shows when you play it.
+an animation you make can flash like the scene it shows when you play it, so the strobe guard
+[checks exported animations](../guides/strobe-guard.md#exported-animations) before they are saved.
 
 A macOS screen saver installed before this warning existed keeps running as it was built, since
 macOS gives it no way to read JETCARP's settings; `jetcarp host saver install` builds it again,

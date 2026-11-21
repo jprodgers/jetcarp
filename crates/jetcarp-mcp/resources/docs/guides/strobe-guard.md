@@ -16,9 +16,9 @@ deliberate confirmation ([Turning it off](#turning-it-off)).
 
 ## What it measures
 
-The guard measures what reaches the screen, never what a rule "should" do. A rule with B0 run at
-twice the frame rate shows the same phase in every frame and does not flash at all; a slow rule with
-a bright palette can. Each frame is reduced to tiles of 16 by 16 pixels, each with its mean
+The guard measures what reaches the screen, never what a rule "should" do. A field that flips every
+generation (a Margolus Tron background, say), run at twice the frame rate, shows the same phase in
+every frame and does not flash at all; a slow rule with a bright palette can. Each frame is reduced to tiles of 16 by 16 pixels, each with its mean
 brightness and its mean "redness", worked out on the GPU where the frame is drawn there and on the
 processor otherwise.
 
@@ -44,7 +44,8 @@ closer view, or larger pixels, would make the field smaller; few people watch fr
 field slides over the screen a tile at a time. Alongside, the mean brightness of the whole screen
 is tracked the way IRIS tracks a recording's frame, so anything IRIS would count on a recording of
 the screen is counted too. A view smaller than the field (the grid in a small window, a preview)
-counts against the whole field, so it can flash all over and pass.
+counts against the whole field, so a small enough view can flash all over and pass, as the area rule
+allows.
 
 A tile counts what changes its mean, so a checkerboard of squares smaller than a tile reversing in
 step keeps every tile's mean: it is not a flash. It is caught as a stripe pattern instead.
@@ -97,11 +98,19 @@ generations whatever the guard does, and a scene's hash is the same.
 | The app's screensaver mode | The desktop's |
 | The desktop background on Linux (the GNOME extension included), Windows and macOS | The desktop's |
 | The screen savers: Windows' `.scr`, and macOS's `JETCARP.saver` | The desktop's |
+| The Quick Start's live cards, and the animations the *Hunts* window and the ants window play | The app's |
+| [Exported animations](#exported-animations): *File → Export animation…*, `jetcarp media render`, an explore search's atlas clips | The app's |
+| Animations the MCP tool `media_render` saves | Always on |
 
 The desktop background and the screen saver are drawn by the background host, which reads the
-switch again every couple of seconds. macOS runs its screen saver in a sandbox that cannot read
-JETCARP's settings, so `jetcarp host saver install` bakes the switch into the bundle as it is then;
-install it again after changing the switch.
+switch again every couple of seconds. A Quick Start card is one among many on the screen, so its
+own picture is its field: a quarter of a card flashing counts, since a screenful of such cards could
+flash together. The sandpile preview changes at most four times a second, and the HashLife view
+only when a jump is asked for, so neither can flash more than twice a second.
+
+macOS runs its screen saver in a sandbox that cannot read JETCARP's settings, so `jetcarp host
+saver install` bakes the switch into the bundle as it is then; install it again after changing the
+switch.
 
 ## Turning it off
 
@@ -154,6 +163,40 @@ the readings behind it, and what it did lately. With the guard off, the status b
 flashes. The background host logs what the guard does (`jetcarp host status`), and each screen's
 `stage.strobe_guard` says what it is doing there; the MCP tool `app_display` and `jetcarp host
 status` report the switch as `strobe_guard`.
+
+## Exported animations
+
+An animation posted online flashes for whoever opens it. Exported GIF and WebP animations are
+measured frame by frame, at their own frame rate, looping as a player would (at least twice and for
+at least six seconds, so the seam where the end meets the start is measured too), as shown at its
+own size on the screen the guard assumes (above): the 10° field is 265 of its pixels across, a
+little smaller than WCAG's own estimate for a 1024 × 768 screen. The whole frame's mean is tracked
+as IRIS tracks a recording, so a small animation that flashes all over is caught too. An animation
+that flashes more than three times a second, or two or three times a second for four seconds out of
+five, or shows strong stripes for half a second, is caught before it is saved.
+
+- **In the app** (*File → Export animation…*), such an animation is held before it is saved, with
+  what was found and a choice: **Save the softened version** (the default), or **Cancel**. With the
+  app's guard turned off, **Save it as it is** is offered too.
+- **The command line** (`jetcarp media render`) saves the softened version, and says so on a line
+  of its own; it saves the animation as it is only when the app's guard is off, and says that too.
+  **The MCP tool** `media_render`, and a script run through it, always save the softened version.
+  The media's metadata records what was found and what was saved (`strobe_guard` in each file's
+  `render` record).
+- **The atlas clips** of an explore search are checked the same way, following the app's switch.
+
+The softened version is, when showing each frame up to four times longer brings the animation to
+one flash a second and it has no strong stripes, the animation slowed: every frame stays as drawn,
+so an oscillator's few phases do not blur into one (the pulsar's catalog GIF is saved this way).
+Otherwise it is the guard's softening carried out on the frames: every tile that flashes anywhere in
+the loop is softened throughout, and stripes are veiled where they were found; the softener goes
+round the loop twice and keeps the second time, so the end flows into the start. What is saved is
+what is checked: a GIF has at most 256 colours, and squeezing a fade into them could turn it back
+into a flip, so the saved file is read back and checked again. If it still fails, each frame is
+shown longer as well, until it passes.
+
+Since 0.4.3 the strobe guard is part of every animation's render key, so `jetcarp media render
+--missing` renders again, through the guard, every animation made before it.
 
 ## What it costs
 

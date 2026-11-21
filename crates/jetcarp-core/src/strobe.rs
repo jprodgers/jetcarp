@@ -48,6 +48,7 @@
 //! The guard reduces the risk; it does not make JETCARP safe for someone with photosensitive
 //! epilepsy, and the photosensitive seizure warning ([`crate::photosensitivity`]) still stands.
 
+pub mod export;
 pub mod flash;
 pub mod frame;
 pub mod guard;
@@ -187,17 +188,13 @@ impl Viewing {
         }
     }
 
-    /// An animation of `width` by `height` pixels, which may be shown at any size: the smaller of
-    /// a screen at a scale of 1 and WCAG's own estimate for content of unknown size, a field a
-    /// third of its width by a third of its height (341 by 256 at 1024 by 768).
-    pub fn animation(width: u32, height: u32) -> Viewing {
-        let screen = Viewing::screen(1.0);
-        let third = (width as f64 / 3.0) * (height as f64 / 3.0);
-        // A circle of the same area as that rectangle.
-        let d = (third * 4.0 / std::f64::consts::PI).sqrt();
-        Viewing {
-            field_px: screen.field_px.min(d).max(TILE as f64),
-        }
+    /// An exported animation of `width` by `height` pixels: shown at its own size on a screen as
+    /// JETCARP assumes one ([`Viewing::screen`] at a scale of 1). That is stricter than WCAG's
+    /// estimate for a screen of 1024 by 768 (a field of 341 by 256 of its pixels). An animation
+    /// smaller than the field that flashes all over is caught by the frame's mean, which the
+    /// flash meter tracks as IRIS tracks a recording.
+    pub fn animation(_width: u32, _height: u32) -> Viewing {
+        Viewing::screen(1.0)
     }
 
     /// The field's area in pixels (a circle `field_px` across).
@@ -272,14 +269,9 @@ mod tests {
         assert_eq!(Viewing::screen(0.5), v);
         assert_eq!(Viewing::screen(f64::NAN), v);
         // WCAG's estimate at 1024 x 768 is a 341 x 256 field: the screen's is smaller.
+        assert!(v.field_area() < 341.0 * 256.0);
+        // An animation is shown at its own size on such a screen.
         assert_eq!(Viewing::animation(1024, 768), v);
-        // A small animation might be shown large: a third of it each way.
-        let a = Viewing::animation(300, 300);
-        assert!(
-            (a.field_area() - 100.0 * 100.0).abs() < 1.0,
-            "{}",
-            a.field_area()
-        );
-        assert!(Viewing::animation(1, 1).field_px >= TILE as f64);
+        assert_eq!(Viewing::animation(48, 48), v);
     }
 }

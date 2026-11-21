@@ -27,6 +27,17 @@ that will declare them stable.
   `jetcarp guard` shows them and `jetcarp guard --on` turns them back on, and no command, script or
   MCP tool turns them off. Measuring a 1080p frame takes 0.02 ms on a Radeon 8060S.
   ([The strobe guard](../guides/strobe-guard.md), [#97](https://github.com/jprodgers/jetcarp/issues/97))
+- **Exported animations are checked for flashing and strong stripes before they are saved.** A GIF
+  or WebP is measured at its own frame rate, looping as a player would. *File → Export animation…*
+  holds one that flashes and offers a softened version (or, with the app's guard off, the
+  animation as it is); `jetcarp media render` saves the softened version and says so, and the MCP
+  tool `media_render` always does. The softened version is the animation shown more slowly when up
+  to four times slower is enough (so an oscillator's GIF keeps its frames: the pulsar's is saved
+  slower), and otherwise its flashing softened and strong stripes veiled. The saved file is read
+  back and checked again. The Quick Start's live cards, the *Hunts* window's animations, the ants
+  window's and an explore search's atlas clips are guarded too. Every animation's render key now
+  includes the guard, so `jetcarp media render --missing` renders the old ones again.
+  ([Exported animations](../guides/strobe-guard.md#exported-animations))
 - **Importing a pack says who signed it, and says plainly when their key is new.** The setup
   window shows, under each pack before it is imported and under each import afterwards, the
   publisher's name and the start of their key, marked *New key: never seen in this library* when
