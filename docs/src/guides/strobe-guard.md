@@ -192,7 +192,7 @@ five, or shows strong stripes for half a second, is caught before it is saved.
 
 The softened version is, when showing each frame up to four times longer brings the animation to
 one flash a second and it has no strong stripes, the animation slowed: every frame stays as drawn,
-so an oscillator's few phases do not blur into one (the pulsar's catalog GIF is saved this way).
+so an oscillator's few phases do not blur into one.
 Otherwise it is the guard's softening carried out on the frames: every tile that flashes anywhere in
 the loop is softened throughout, and stripes are veiled where they were found; the softener goes
 round the loop twice and keeps the second time, so the end flows into the start. What is saved is

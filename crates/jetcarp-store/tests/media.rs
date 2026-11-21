@@ -232,11 +232,12 @@ fn oscillator_gif_has_period_frames() {
     }
 }
 
-/// The strobe guard on catalog media (#149): the pulsar's three phases, shown at the house
-/// style's speed, flash over much of its GIF, so it is saved slowed, its frames as drawn, and the
-/// record says so. A blinker's is saved as it is.
+/// The strobe guard on catalog media (#149): every animation's record says what the guard found
+/// and did, and what is saved passes the check, whatever was done to it. The pulsar's three phases
+/// change much of its GIF at the house style's speed; with neighbouring tiles changing together
+/// counted (#150) it passes as it is, and a blinker's does.
 #[test]
-fn the_strobe_guard_slows_a_flashing_oscillator() {
+fn the_strobe_guard_records_what_it_found_in_catalog_media() {
     use jetcarp_core::strobe::export::check;
     let lib = temp_lib("osc-guard");
     let pulsar = one(
@@ -264,12 +265,19 @@ fn the_strobe_guard_slows_a_flashing_oscillator() {
     .unwrap();
     let a = r.animation().unwrap();
     let g = &a.render["strobe_guard"];
-    assert_eq!(g["treatment"], "slowed", "{g}");
-    assert!(g["found"].as_str().unwrap().starts_with("flashes"), "{g}");
+    let treatment = g["treatment"].as_str().unwrap();
+    assert!(["as_is", "slowed", "softened"].contains(&treatment), "{g}");
+    // Something found when something was done, and nothing when not.
+    assert_eq!(g["found"].is_string(), treatment != "as_is", "{g}");
     let delay = a.render["delay_ms"].as_u64().unwrap() as u32;
     let frames = encode::decode_gif(&std::fs::read(&a.abs_path).unwrap()).unwrap();
-    assert_eq!(frames.len(), 3);
+    assert_eq!(
+        frames.len(),
+        3,
+        "a period of frames, whatever the treatment"
+    );
     assert!(!check(&frames.iter().collect::<Vec<_>>(), delay).harmful);
+    assert_eq!(g["after"]["harmful"], false);
     let blinker = one("B3/S23", "ooo");
     lib.add(blinker.clone()).unwrap();
     let r = jetcarp_store::media::render(

@@ -299,10 +299,11 @@ impl Stage {
     /// What the strobe guard of the surface `key` asks: a pace cap, and a pause with its reason.
     /// The strictest of the surfaces that said so lately holds.
     pub fn set_guard(&mut self, key: u64, now: f64, cap: Option<f32>, paused: Option<String>) {
+        let was_paused = self.guard_paused().is_some();
         self.guard.retain(|g| g.0 != key && now - g.1 < GUARD_FRESH);
         if cap.is_some() || paused.is_some() {
             if let Some(p) = &paused
-                && self.guard_paused().is_none()
+                && !was_paused
             {
                 self.notes.push(format!("strobe guard: paused: {p}"));
             }

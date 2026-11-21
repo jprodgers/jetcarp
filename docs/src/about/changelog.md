@@ -32,8 +32,8 @@ that will declare them stable.
   holds one that flashes and offers a softened version (or, with the app's guard off, the
   animation as it is); `jetcarp media render` saves the softened version and says so, and the MCP
   tool `media_render` always does. The softened version is the animation shown more slowly when up
-  to four times slower is enough (so an oscillator's GIF keeps its frames: the pulsar's is saved
-  slower), and otherwise its flashing softened and strong stripes veiled. The saved file is read
+  to four times slower is enough (so an oscillator's GIF keeps its frames), and otherwise its
+  flashing softened and strong stripes veiled. The saved file is read
   back and checked again. The Quick Start's live cards, the *Hunts* window's animations, the ants
   window's and an explore search's atlas clips are guarded too. Every animation's render key now
   includes the guard, so `jetcarp media render --missing` renders the old ones again.
