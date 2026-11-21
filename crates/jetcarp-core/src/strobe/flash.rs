@@ -21,6 +21,12 @@
 //!
 //! The larger of the two is the reading's transition count ([`FlashReading`]); more than
 //! [`MAX_TRANSITIONS`] fails.
+//!
+//! **Coherence.** A flash is an area changing together, so a tile's transition counts only when at
+//! least [`COHERENT`] tiles of the 3 by 3 around it (itself included) made the same transition
+//! within a few frames. Small cells flickering at random (a soup of 4-pixel cells) change
+//! neighbouring tiles independently, and are not a flash; a field, a large square or a band
+//! flipping is. Areas are still counted a tile at a time.
 
 use super::frame::TileMap;
 use super::{
@@ -43,6 +49,15 @@ const RING: usize = 8;
 /// Counts are kept up to this (one more than a failure needs).
 pub const COUNT_CAP: u32 = RING as u32;
 
+/// A tile's transition counts only when at least this many tiles of the 3 by 3 around it, itself
+/// included, made the same transition within [`COHERENT_SECONDS`]: a flash is an area changing
+/// together. Small cells flickering at random (a Life soup) change neighbouring tiles' means
+/// independently, and do not count.
+pub const COHERENT: u32 = 3;
+
+/// How close together the agreeing transitions must be.
+pub const COHERENT_SECONDS: f64 = 0.05;
+
 /// One value's transitions.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Tracker {
@@ -60,10 +75,21 @@ pub struct Tracker {
 }
 
 impl Tracker {
-    /// Takes the value at time `t` (seconds, never decreasing). `delta` is the change a
-    /// transition needs, `eps` the change that counts at all, and `dark` the limit the darker end
-    /// must be below (None for the red measure). True when this made a transition.
+    /// Takes the value at time `t` (seconds, never decreasing) and counts the transition it makes,
+    /// if it makes one. `delta` is the change a transition needs, `eps` the change that counts at
+    /// all, and `dark` the limit the darker end must be below (None for the red measure). True
+    /// when this made a transition.
     pub fn update(&mut self, v: f32, t: f64, delta: f32, eps: f32, dark: Option<f32>) -> bool {
+        let dir = self.observe(v, delta, eps, dark);
+        if dir != 0 {
+            self.commit(t);
+        }
+        dir != 0
+    }
+
+    /// The same, without counting the transition: its direction (1 up, -1 down), or 0 for none.
+    /// [`commit`](Self::commit) counts it.
+    pub fn observe(&mut self, v: f32, delta: f32, eps: f32, dark: Option<f32>) -> i8 {
         if !self.primed {
             *self = Tracker {
                 primed: true,
@@ -71,7 +97,7 @@ impl Tracker {
                 start: v,
                 ..Default::default()
             };
-            return false;
+            return 0;
         }
         let d = v - self.last;
         self.last = v;
@@ -85,7 +111,7 @@ impl Tracker {
             // Small steps since the first value have added up to a direction.
             sign(v - self.start)
         } else {
-            return false;
+            return 0;
         };
         if dir != self.dir {
             // The first run starts at the first value; a reversal, where the last run ended.
@@ -96,19 +122,19 @@ impl Tracker {
             self.counted = false;
         }
         if self.counted {
-            return false;
+            return 0;
         }
         let darker = self.start.min(v);
         // A hair under the threshold counts, so rounding never hides a transition.
         if (v - self.start).abs() >= delta - 1e-5 && dark.is_none_or(|l| darker < l) {
             self.counted = true;
-            self.push(t);
-            return true;
+            return dir;
         }
-        false
+        0
     }
 
-    fn push(&mut self, t: f64) {
+    /// Counts a transition made at `t`.
+    pub fn commit(&mut self, t: f64) {
         if (self.n as usize) < RING {
             self.times[self.n as usize] = t;
             self.n += 1;
@@ -243,6 +269,9 @@ pub struct FlashMeter {
     /// Each tile's count of luminance and red transitions in the last second.
     counts: Vec<u8>,
     red_counts: Vec<u8>,
+    /// Each tile's latest transition, counted or not (time, direction), for coherence.
+    raw: Vec<(f64, i8)>,
+    red_raw: Vec<(f64, i8)>,
     last: FlashReading,
 }
 
@@ -264,6 +293,8 @@ impl FlashMeter {
             last_t: None,
             counts: vec![],
             red_counts: vec![],
+            raw: vec![],
+            red_raw: vec![],
             last: FlashReading::default(),
         }
     }
@@ -315,13 +346,53 @@ impl FlashMeter {
             self.red = vec![Tracker::default(); n];
             self.counts = vec![0; n];
             self.red_counts = vec![0; n];
+            self.raw = vec![(f64::NEG_INFINITY, 0); n];
+            self.red_raw = vec![(f64::NEG_INFINITY, 0); n];
         }
         let dt = self.last_t.map_or(0.0, |l| (t - l).clamp(0.0, 1.0));
         self.last_t = Some(t);
+        let n = map.len();
+        let mut now = vec![0i8; n];
+        let mut now_red = vec![0i8; n];
+        for i in 0..n {
+            now[i] = self.lum[i].observe(map.lum[i], FLASH_DELTA, EPSILON, Some(DARK_LIMIT));
+            now_red[i] = self.red[i].observe(map.red[i], RED_DELTA, RED_EPSILON, None);
+            if now[i] != 0 {
+                self.raw[i] = (t, now[i]);
+            }
+            if now_red[i] != 0 {
+                self.red_raw[i] = (t, now_red[i]);
+            }
+        }
+        // A transition counts when the area changes together: at least COHERENT tiles of the 3 by
+        // 3 around it (itself included) made the same one within the last few frames.
+        let (cols, rows) = (map.cols as i64, map.rows as i64);
+        let agree = |raw: &[(f64, i8)], i: usize, dir: i8| {
+            let (c, r) = (i as i64 % cols, i as i64 / cols);
+            let mut k = 0;
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let (x, y) = (c + dx, r + dy);
+                    if x >= 0 && y >= 0 && x < cols && y < rows {
+                        let (tt, d) = raw[(y * cols + x) as usize];
+                        if d == dir && t - tt <= COHERENT_SECONDS + 1e-9 {
+                            k += 1;
+                        }
+                    }
+                }
+            }
+            k
+        };
+        for i in 0..n {
+            if now[i] != 0 && agree(&self.raw, i, now[i]) >= COHERENT {
+                self.lum[i].commit(t);
+            }
+            if now_red[i] != 0 && agree(&self.red_raw, i, now_red[i]) >= COHERENT {
+                self.red[i].commit(t);
+            }
+        }
         let (mut any, mut any_red) = (false, false);
-        for i in 0..map.len() {
-            self.lum[i].update(map.lum[i], t, FLASH_DELTA, EPSILON, Some(DARK_LIMIT));
-            self.red[i].update(map.red[i], t, RED_DELTA, RED_EPSILON, None);
+        for i in 0..n {
             let c = self.lum[i].count(t) as u8;
             let r = self.red[i].count(t) as u8;
             self.counts[i] = c;
@@ -819,6 +890,49 @@ mod tests {
             assert_eq!(r.level.fails(), fails, "{sq}-pixel squares: {r:?}");
             assert_eq!(r.screen_transitions, 0, "the mean never changes");
         }
+    }
+
+    /// Tiles flickering each on its own (a soup of small cells) are not a flash, though each tile
+    /// makes transitions; the same tiles flipping together are.
+    #[test]
+    fn only_areas_changing_together_flash() {
+        let mut rng = crate::rng::Rng::new(9);
+        let base = TileMap::uniform(W, H, [30; 3]);
+        let mut lit = vec![false; base.len()];
+        let mut m = meter();
+        let mut r = FlashReading::default();
+        let mut worst = 0;
+        for f in 0..120 {
+            // Each tile, independently, switches between dark and bright now and then, as tiles of
+            // a soup of small cells do.
+            for l in lit.iter_mut() {
+                if rng.below(20) == 0 {
+                    *l = !*l;
+                }
+            }
+            let mut map = base.clone();
+            for (l, on) in map.lum.iter_mut().zip(&lit) {
+                *l += if *on { 0.3 } else { 0.0 };
+            }
+            r = m.update(&map, f as f64 / 60.0);
+            worst = worst.max(r.area_transitions);
+        }
+        assert!(worst <= 2, "independent flicker: {worst} ({r:?})");
+        // The same quarter of the tiles, a block of them, flipping together.
+        let mut m = meter();
+        for f in 0..60 {
+            let mut map = base.clone();
+            if f % 2 == 1 {
+                for (i, l) in map.lum.iter_mut().enumerate() {
+                    let (c, rr) = (i as u32 % map.cols, i as u32 / map.cols);
+                    if c < 20 && rr < 15 {
+                        *l += 0.3;
+                    }
+                }
+            }
+            r = m.update(&map, f as f64 / 60.0);
+        }
+        assert_eq!(r.level, Level::Fail, "{r:?}");
     }
 
     #[test]

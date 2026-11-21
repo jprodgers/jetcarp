@@ -1,0 +1,22 @@
+{
+  "name": "Tron field in red",
+  "description": "The Tron field in a palette whose live colour is a saturated red: it flashes red as well as in brightness. Made to flash.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 80,
+        "h": 60
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 1,
+  "cas": [
+    {
+      "rule": "Margolus Tron",
+      "seed": "empty",
+      "palette": "Autumn"
+    }
+  ]
+}

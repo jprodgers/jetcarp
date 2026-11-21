@@ -24,7 +24,7 @@
 use super::Viewing;
 use super::flash::{FlashMeter, FlashReading, Level};
 use super::frame::reduce_both;
-use super::guard::{PATTERN_EVERY, VEIL_CONTRAST};
+use super::guard::{PATTERN_EVERY, veil_for};
 use super::pattern::{PatternLevel, PatternMeter, PatternReading};
 use super::soften::{Plan, Softener};
 use crate::render::Image;
@@ -236,9 +236,9 @@ pub fn soften(frames: &[Image], delay_ms: u32) -> Vec<Image> {
             if stripes.update(&half, t).level >= PatternLevel::Harmful {
                 for (j, f) in stripes.found().tiles.iter().enumerate() {
                     if let Some((contrast, mean)) = f {
-                        let amount = 1.0 - (VEIL_CONTRAST / contrast.max(1e-6)).min(1.0);
-                        if amount > plan.veil[j][0] {
-                            plan.veil[j] = [amount, *mean];
+                        let v = veil_for(*contrast, *mean);
+                        if v[0] > plan.veil[j][0] {
+                            plan.veil[j] = v;
                         }
                     }
                 }

@@ -1,0 +1,26 @@
+{
+  "name": "Brian's Brain",
+  "description": "Brian's Brain (B2/S/3) from a random soup: gliders and a busy, flickering field.",
+  "tiling": {
+    "family": "square",
+    "size": {
+      "rect": {
+        "w": 80,
+        "h": 60
+      }
+    },
+    "boundary": "wrap"
+  },
+  "rng_state": 11,
+  "cas": [
+    {
+      "rule": "B2/S/3",
+      "seed": {
+        "random": {
+          "density": 0.2
+        }
+      },
+      "palette": "Tide"
+    }
+  ]
+}

@@ -47,8 +47,12 @@ the screen is counted too. A view smaller than the field (the grid in a small wi
 counts against the whole field, so a small enough view can flash all over and pass, as the area rule
 allows.
 
-A tile counts what changes its mean, so a checkerboard of squares smaller than a tile reversing in
-step keeps every tile's mean: it is not a flash. It is caught as a stripe pattern instead.
+A flash is an area changing together, so a tile's transition counts only when at least two of the
+eight tiles around it made the same transition within the same few frames. A field, a large square
+or a band flipping counts; a soup of small cells flickering at random changes neighbouring tiles
+independently, and does not. A tile counts what changes its mean, so a checkerboard of squares
+smaller than a tile reversing in step keeps every tile's mean: it is not a flash either, and is
+caught as a stripe pattern instead.
 
 **Stripes.** Regular high-contrast stripes can trigger seizures as flashes can
 ([ITU-R BT.1702](https://www.itu.int/rec/R-REC-BT.1702), the Harding guidance). The guard looks
@@ -82,9 +86,10 @@ It acts in order, as far as it has to:
    flashing does not come from its generations), or more than three flashes a second reached the
    screen, the scene is paused, with a note saying why.
 
-Strong stripes are **veiled** where they are found: blended towards their own mean brightness
-until their contrast is 0.04, below what counts. The veil comes on and goes over about a second,
-so it never flashes itself.
+Strong stripes are **veiled** where they are found: blended towards a dim grey (no brighter than
+0.18) until their contrast is 0.04, below what counts. The veil comes on over an eighth of a
+second, well within the half second stripes are allowed, and stays for a second and a half after
+they go, so it never flashes itself.
 
 The guard changes only what is shown and how fast generations are shown. A world computes the same
 generations whatever the guard does, and a scene's hash is the same.

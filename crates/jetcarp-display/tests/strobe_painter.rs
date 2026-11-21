@@ -44,6 +44,11 @@ fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
 fn tron(speed: f32) -> Stage {
     let mut sc = Scene::new(TilingSpec::rect("square", 80, 60, Boundary::Wrap));
     sc.cas = vec![CaSpec::new("Margolus Tron").seed(SeedSpec::Empty)];
+    stage_of(sc, speed)
+}
+
+/// A stage showing `sc` at `speed` generations a second, at 4 pixels a cell.
+fn stage_of(sc: Scene, speed: f32) -> Stage {
     let profile = Profile {
         name: "tron".into(),
         show: Show::Scene {
@@ -155,6 +160,108 @@ fn run(
         }
     }
     (worst, stage)
+}
+
+/// Every scene of the corpus (`docs/scenes/strobe/`), with the speed it is recorded at.
+const CORPUS: &[(&str, f32)] = &[
+    ("tron-field", 60.0),
+    ("tron-red", 30.0),
+    ("tron-blob", 30.0),
+    ("seeds-soup", 30.0),
+    ("stripes-still", 10.0),
+    ("tron-checkerboard", 30.0),
+    ("life-soup", 30.0),
+    ("brians-brain", 30.0),
+    ("maze", 30.0),
+    ("cyclic-waves", 15.0),
+];
+
+/// Recordings for the IRIS comparison (#150; ignored, and needs `JETCARP_STROBE_RECORD=DIR`):
+/// every scene of the corpus drawn as the desktop background and the screen savers draw it (the
+/// shared painter, on the GPU), with the guard off (what the scene draws) and on (what the guard
+/// shows), 6 seconds at 60 frames a second, 320 by 240. Each recording is a folder of PNGs,
+/// `DIR/desktop-off/<scene>/00000.png` and `DIR/desktop-on/<scene>/...`, and `DIR/verdicts.json`
+/// holds JETCARP's verdict on each, from the processor's meters on the frames recorded.
+#[test]
+#[ignore]
+fn record_the_corpus_for_iris() {
+    use jetcarp_core::strobe::frame::reduce_both;
+    use jetcarp_core::strobe::pattern::PatternMeter;
+    let Some(dir) = std::env::var_os("JETCARP_STROBE_RECORD").map(std::path::PathBuf::from) else {
+        eprintln!("skipped: set JETCARP_STROBE_RECORD to a folder");
+        return;
+    };
+    let Some((device, queue)) = gpu() else {
+        return;
+    };
+    let corpus = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/scenes/strobe");
+    let caption = CaptionSettings {
+        show: false,
+        ..CaptionSettings::default()
+    };
+    let mut verdicts = serde_json::Map::new();
+    for &(name, speed) in CORPUS {
+        let text = std::fs::read_to_string(corpus.join(format!("{name}.json"))).unwrap();
+        let sc: Scene = serde_json::from_str(&text).unwrap();
+        for on in [false, true] {
+            let mut stage = stage_of(sc.clone(), speed);
+            let tex = target(&device, true);
+            let mut painter = Painter::guarded(&device, FORMAT, on);
+            painter.set_readable(true);
+            let mut sim = SimBackend::unavailable("a test".into());
+            let mut meter = FlashMeter::new(Viewing::screen(1.0), None);
+            let mut stripes = PatternMeter::new(None);
+            let sub = dir
+                .join(if on { "desktop-on" } else { "desktop-off" })
+                .join(name);
+            std::fs::create_dir_all(&sub).unwrap();
+            let (mut worst, mut worst_red, mut worst_stripes) = (
+                jetcarp_core::strobe::flash::FlashReading::default(),
+                0,
+                jetcarp_core::strobe::pattern::PatternLevel::Pass,
+            );
+            for k in 0..360u32 {
+                let t = 1.0 + k as f64 / 60.0;
+                stage.tick(t, &mut sim, Duration::from_millis(20));
+                painter.paint(&device, &queue, &tex, [W, H], 1.0, &stage, &caption, t);
+                let img =
+                    jetcarp_display::crop::read(&device, &queue, &tex, [0, 0], [W, H]).unwrap();
+                let (map, half) = reduce_both(&img.rgba, W, H);
+                let r = meter.update(&map, t);
+                if (r.level, r.transitions) > (worst.level, worst.transitions) {
+                    worst = r;
+                }
+                worst_red = worst_red.max(r.red_transitions);
+                if k % 15 == 0 {
+                    worst_stripes = worst_stripes.max(stripes.update(&half, t).level);
+                }
+                let (cap, paused) = painter.guard_hold();
+                stage.set_guard(painter.id(), t, cap, paused);
+                jetcarp_core::render::write_png(&sub.join(format!("{k:05}.png")), &img, &[])
+                    .unwrap();
+            }
+            verdicts.insert(
+                format!("desktop-{}/{name}", if on { "on" } else { "off" }),
+                serde_json::json!({
+                    "frames": 360,
+                    "fps": 60,
+                    "size": [W, H],
+                    "speed": speed,
+                    "flash": worst.level.name(),
+                    "transitions": worst.transitions,
+                    "red_transitions": worst_red,
+                    "stripes": worst_stripes.name(),
+                }),
+            );
+        }
+    }
+    let out = dir.join("verdicts.json");
+    std::fs::write(
+        &out,
+        serde_json::to_string_pretty(&verdicts).unwrap() + "\n",
+    )
+    .unwrap();
+    eprintln!("wrote {}", out.display());
 }
 
 #[test]

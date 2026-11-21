@@ -18,8 +18,8 @@
 //!    than three flashes a second reached the screen.
 //!
 //! **Stripes.** A harmful pattern ([`super::pattern`]) in the frames as drawn is veiled where it
-//! was found: blended towards its own mean luminance until its contrast is [`VEIL_CONTRAST`]. The
-//! veil comes on and goes at [`VEIL_RATE`] and stays [`HOLD`] after the pattern has gone, so it
+//! was found: blended towards a dim grey ([`veil_for`]) until its contrast is [`VEIL_CONTRAST`].
+//! The veil comes on and goes at [`VEIL_RATE`] and stays [`HOLD`] after the pattern has gone, so it
 //! never flashes itself. The stripe check runs every [`PATTERN_EVERY`].
 //!
 //! The guard changes only what is shown and how fast generations are shown; a world computes the
@@ -58,9 +58,24 @@ pub const PAUSE_AFTER: f64 = 2.0;
 /// The contrast a veil leaves strong stripes with: under the stripe check's threshold.
 pub const VEIL_CONTRAST: f32 = 0.04;
 
-/// How fast a veil comes on and goes, in its amount a second: over about a second, so that the
-/// small change it makes to a tile's mean is never a flash.
-pub const VEIL_RATE: f32 = 1.0;
+/// How fast a veil comes on and goes, in its amount a second: over an eighth of a second, so that
+/// stripes are veiled well within the half second they are allowed, and the change it makes to a
+/// tile's mean is one transition, never a flash (the veil holds for [`HOLD`] after the stripes go).
+pub const VEIL_RATE: f32 = 8.0;
+
+/// A veil blends towards a grey no brighter than this: veiled stripes are dim as well as low in
+/// contrast, so that a tool that stretches contrast before it looks (as IRIS does, counting a
+/// pattern only when its light parts are at least 0.25) sees none either.
+pub const VEIL_GREY_MAX: f32 = 0.18;
+
+/// The veil for stripes of `contrast` around a mean luminance of `mean`: how far towards grey, and
+/// the grey, so that what is left of them has [`VEIL_CONTRAST`] at most.
+pub fn veil_for(contrast: f32, mean: f32) -> [f32; 2] {
+    [
+        1.0 - (VEIL_CONTRAST / contrast.max(1e-6)).min(1.0),
+        mean.min(VEIL_GREY_MAX),
+    ]
+}
 
 /// Seconds between stripe checks.
 pub const PATTERN_EVERY: f64 = 0.25;
@@ -368,8 +383,7 @@ impl Guard {
         if f.half.is_some() && harmful {
             for (i, vt) in self.veil_target.iter_mut().enumerate() {
                 if let Some((contrast, mean)) = found.tiles.get(i).copied().flatten() {
-                    let amount = 1.0 - (VEIL_CONTRAST / contrast.max(1e-6)).min(1.0);
-                    *vt = ([amount, mean], t + HOLD);
+                    *vt = (veil_for(contrast, mean), t + HOLD);
                 }
             }
         }
@@ -796,8 +810,8 @@ mod tests {
             .collect();
         assert!(veiled.len() * 2 > sim.guard.plan().veil.len());
         for v in veiled {
-            // Black and white stripes, contrast about 1: veiled to 0.04 of it, towards their mean.
-            assert!(v[0] > 0.9 && (v[1] - 0.5).abs() < 0.1, "{v:?}");
+            // Black and white stripes, contrast about 1: veiled to 0.04 of it, towards a dim grey.
+            assert!(v[0] > 0.9 && v[1] <= VEIL_GREY_MAX, "{v:?}");
         }
         // The softened frames' stripes no longer reach the threshold.
         let plan = sim.guard.plan().clone();
