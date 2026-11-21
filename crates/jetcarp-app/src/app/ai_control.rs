@@ -6,6 +6,13 @@
 //! dropped: nothing accepts on its port and its endpoint file is gone ([`AiControl::switch_off`]). Requests are answered here, on
 //! the UI thread, by the same `jetcarp_mcp::Server` the CLI uses; every world change goes through
 //! `JetcarpApp::try_exec`, the path behind all of the app's buttons.
+//!
+//! While AI control is on, the window also offers MCP over HTTP (`jetcarp_mcp::http`), for clients
+//! that connect to a URL: off until ticked, on 127.0.0.1 only, with a token of its own. Its
+//! requests are answered here too, on the same world, with the same tools as the link's; switching
+//! AI control off closes it as well. Two choices are saved with the app's settings
+//! ([`AiHttpSettings`]), both off until made: keeping the token for the next time, and the exact
+//! origins whose web pages may connect.
 
 use super::JetcarpApp;
 use eframe::egui::{self, Color32, RichText};
@@ -16,10 +23,48 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// MCP over HTTP's choices, saved with the app's settings (`ai_http`): whether the token is kept
+/// for the next time it is served, and the other origins whose web pages may connect. Both off
+/// until chosen.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Debug)]
+#[serde(default)]
+pub(super) struct AiHttpSettings {
+    pub keep_token: bool,
+    pub allow_origins: Vec<String>,
+}
+
+impl AiHttpSettings {
+    /// As read from a file someone may have edited: what is not an exact origin is dropped, and
+    /// the rest put in the form browsers send, each once.
+    pub fn sanitize(mut self) -> AiHttpSettings {
+        let mut out: Vec<String> = vec![];
+        for o in &self.allow_origins {
+            if let Ok(o) = jetcarp_mcp::http::parse_origin(o)
+                && !out.contains(&o)
+            {
+                out.push(o);
+            }
+        }
+        self.allow_origins = out;
+        self
+    }
+}
+
 #[derive(Default)]
 pub struct AiControl {
     listener: Option<Listener>,
     server: jetcarp_mcp::Server,
+    /// MCP over HTTP, while ticked (only while AI control is on).
+    http: Option<jetcarp_mcp::http::Listener>,
+    http_server: jetcarp_mcp::Server,
+    http_error: Option<String>,
+    /// Saved with the app's settings.
+    pub(super) http_settings: AiHttpSettings,
+    /// Where the token is kept, when it is (the settings folder's `http-tokens/app-http.json`).
+    http_kept: Option<PathBuf>,
+    /// The origin being typed into the window, and why the last one was refused.
+    origin_text: String,
+    origin_error: Option<String>,
     pub window_open: bool,
     /// `jetcarp --control`: switch on at launch (not saved).
     pub start_at_launch: bool,
@@ -51,9 +96,109 @@ impl AiControl {
 
     /// Switch AI control off. Dropping the listener stops it accepting connections and removes
     /// its endpoint file, so the app takes no commands until it is switched on again
-    /// (SECURITY.md).
+    /// (SECURITY.md). The HTTP endpoint closes with it.
     fn switch_off(&mut self) {
         self.listener = None;
+        self.http_off();
+    }
+
+    /// Serve MCP over HTTP: on 127.0.0.1, on `port` or else any free port, recording the URL and
+    /// token in `endpoint`, with the saved choices: the token kept in `kept` (the settings
+    /// folder's), the allowed origins. Only while AI control is on.
+    fn http_on(
+        &mut self,
+        port: u16,
+        endpoint: Option<PathBuf>,
+        kept: Option<PathBuf>,
+        wake: Arc<dyn Fn() + Send + Sync>,
+    ) {
+        if self.listener.is_none() {
+            return;
+        }
+        self.http_kept = kept.clone();
+        let opts = jetcarp_mcp::http::Options {
+            keep_token: self.http_settings.keep_token,
+            kept_file: kept,
+            allow_origins: self.http_settings.allow_origins.clone(),
+            ..Default::default()
+        };
+        let start = |port: u16| {
+            jetcarp_mcp::http::Listener::start_with(
+                port,
+                endpoint.clone(),
+                opts.clone(),
+                wake.clone(),
+                None,
+            )
+        };
+        let r = start(port).or_else(|_| start(0));
+        match r {
+            Ok(l) => {
+                self.http = Some(l);
+                self.http_error = None;
+            }
+            Err(e) => self.http_error = Some(format!("Could not listen on 127.0.0.1: {e}")),
+        }
+    }
+
+    /// Stop serving MCP over HTTP: nothing accepts on its port, and its endpoint file is gone
+    /// (or keeps the token alone, when it is kept).
+    fn http_off(&mut self) {
+        self.http = None;
+        self.http_server = jetcarp_mcp::Server::default();
+    }
+
+    /// Keep the token for the next time, or not (saved). Not keeping deletes the kept token.
+    fn set_http_keep(&mut self, keep: bool) {
+        self.http_settings.keep_token = keep;
+        if let Some(h) = &mut self.http {
+            h.set_keep(keep);
+        } else if !keep && let Some(p) = &self.http_kept {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+
+    /// What the window says under *Keep this token for next time* while it is ticked.
+    pub(super) fn http_keep_warning(&self) -> Option<&'static str> {
+        self.http_settings.keep_token.then_some(
+            "The token is stored in JETCARP's settings folder, survives restarts and reboots, and \
+             stays valid until you press New token.",
+        )
+    }
+
+    /// A new token: the old one stops working at once, and its sessions end.
+    fn renew_http_token(&mut self) {
+        if let Some(h) = &mut self.http {
+            match h.renew_token() {
+                Ok(()) => {
+                    self.http_server = jetcarp_mcp::Server::default();
+                    self.http_error = None;
+                }
+                Err(e) => self.http_error = Some(format!("No new token: {e}")),
+            }
+        }
+    }
+
+    /// Let web pages from the origin `text` connect (saved), if it is an exact one.
+    pub(super) fn allow_http_origin(&mut self, text: &str) -> Result<(), String> {
+        let o = jetcarp_mcp::http::parse_origin(text)?;
+        if !self.http_settings.allow_origins.contains(&o) {
+            self.http_settings.allow_origins.push(o);
+        }
+        self.apply_http_origins();
+        Ok(())
+    }
+
+    /// No longer let web pages from the origin `o` connect (saved).
+    fn remove_http_origin(&mut self, o: &str) {
+        self.http_settings.allow_origins.retain(|x| x != o);
+        self.apply_http_origins();
+    }
+
+    fn apply_http_origins(&self) {
+        if let Some(h) = &self.http {
+            h.set_origins(self.http_settings.allow_origins.clone());
+        }
     }
 }
 
@@ -108,6 +253,17 @@ impl JetcarpApp {
             .switch_on(DEFAULT_PORT, jetcarp_mcp::link::endpoint_file(), wake);
     }
 
+    fn ai_http_start(&mut self, ctx: &egui::Context) {
+        let c = ctx.clone();
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(move || c.request_repaint());
+        self.ai.http_on(
+            jetcarp_mcp::http::DEFAULT_PORT,
+            jetcarp_mcp::link::runtime_file(jetcarp_mcp::http::APP_ENDPOINT),
+            jetcarp_mcp::http::kept_file(jetcarp_mcp::http::APP_KEPT),
+            wake,
+        );
+    }
+
     /// Answer queued requests. Called once per frame on the UI thread.
     /// `JETCARP_AI_CONTROL=1` (or the settings' `ai_control_at_launch`) switches AI control on at
     /// startup.
@@ -123,7 +279,8 @@ impl JetcarpApp {
         }
         let Some(l) = &self.ai.listener else { return };
         let pending = l.poll();
-        if pending.is_empty() {
+        let over_http = self.ai.http.as_ref().map(|h| h.poll()).unwrap_or_default();
+        if pending.is_empty() && over_http.is_empty() {
             return;
         }
         let mut server = std::mem::take(&mut self.ai.server);
@@ -133,21 +290,106 @@ impl JetcarpApp {
         for p in pending {
             let msg = p.message.clone();
             server.notifier = Some(p.notifier());
-            if msg["method"] == "tools/call" {
-                self.ai.served += 1;
-                self.ai.last = msg["params"]["name"].as_str().unwrap_or("?").to_string();
-            }
+            self.ai_count(&msg);
             let reply = server.handle(self, &msg);
             server.notifier = None;
             p.reply(reply);
         }
         self.ai.server = server;
+        // MCP over HTTP: the same tools on the same world. Each session's cancellations reach its
+        // own flags; progress goes back on the request's event stream.
+        let mut server = std::mem::take(&mut self.ai.http_server);
+        for p in over_http {
+            let msg = p.message.clone();
+            server.cancels = p.cancels();
+            server.notifier = Some(p.notifier());
+            self.ai_count(&msg);
+            let reply = server.handle(self, &msg);
+            server.notifier = None;
+            p.reply(reply);
+        }
+        self.ai.http_server = server;
         self.colors_dirty = true;
+    }
+
+    /// Counts a tool call for the window.
+    fn ai_count(&mut self, msg: &Value) {
+        if msg["method"] == "tools/call" {
+            self.ai.served += 1;
+            self.ai.last = msg["params"]["name"].as_str().unwrap_or("?").to_string();
+        }
     }
 
     /// The port AI control listens on, when on.
     pub(super) fn ai_port(&self) -> Option<u16> {
         self.ai.listener.as_ref().map(|l| l.port)
+    }
+
+    /// The port MCP over HTTP listens on, when on.
+    #[cfg(test)]
+    pub(super) fn ai_http_port(&self) -> Option<u16> {
+        self.ai.http.as_ref().map(|l| l.port)
+    }
+
+    /// MCP over HTTP's two choices, under its URL and token: keeping the token for the next time
+    /// (and making a new one), and the web pages' origins that may connect. Both saved.
+    fn ai_http_choices(&mut self, ui: &mut egui::Ui) {
+        let mut keep = self.ai.http_settings.keep_token;
+        if ui
+            .checkbox(&mut keep, "Keep this token for next time")
+            .on_hover_text(
+                "The client need not be given a new token each time; but whoever has this one \
+                 keeps their access until you make a new one",
+            )
+            .changed()
+        {
+            self.ai.set_http_keep(keep);
+        }
+        if let Some(w) = self.ai.http_keep_warning() {
+            ui.label(RichText::new(w).small());
+        }
+        if ui
+            .button("New token")
+            .on_hover_text("The old token stops working at once, and its clients must reconnect")
+            .clicked()
+        {
+            self.ai.renew_http_token();
+        }
+        ui.add_space(4.0);
+        ui.label("Web pages that may connect (exact origins; they need the token too):");
+        let mut remove = None;
+        for o in &self.ai.http_settings.allow_origins {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(o).monospace());
+                if ui.small_button("Remove").clicked() {
+                    remove = Some(o.clone());
+                }
+            });
+        }
+        if let Some(o) = remove {
+            self.ai.remove_http_origin(&o);
+        }
+        ui.horizontal(|ui| {
+            let field = ui.add(
+                egui::TextEdit::singleline(&mut self.ai.origin_text)
+                    .hint_text("https://client.example")
+                    .desired_width(220.0),
+            );
+            let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if ui.button("Allow").clicked() || enter {
+                let text = std::mem::take(&mut self.ai.origin_text);
+                match self.ai.allow_http_origin(&text) {
+                    Ok(()) => self.ai.origin_error = None,
+                    Err(e) => {
+                        self.ai.origin_error = Some(e);
+                        self.ai.origin_text = text;
+                    }
+                }
+            }
+        });
+        if let Some(e) = &self.ai.origin_error {
+            ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
+        }
     }
 
     pub(super) fn ai_window(&mut self, ctx: &egui::Context) {
@@ -156,7 +398,7 @@ impl JetcarpApp {
         }
         let mut open = true;
         let spec = crate::popout::Spec::new(super::menu::ToolWin::AiControl.key(), "AI control")
-            .size(400.0, 260.0)
+            .size(420.0, 420.0)
             .configure(|w| w.resizable(false));
         crate::popout::tool_window(ctx, spec, &mut open, |ui| {
             ui.label(
@@ -217,8 +459,69 @@ impl JetcarpApp {
                         "The address is the private link that command uses to reach this window, \
                          not an MCP endpoint for HTTP clients: it speaks JETCARP's own protocol. The \
                          server finds the port and token by itself (they are stored in a file only you \
-                         can read). Switching off closes it.",
+                         can read). Switching off closes it. For a client that connects to a URL, \
+                         serve MCP over HTTP below.",
                     ).small());
+            }
+            if self.ai.listener.is_some() {
+                ui.add_space(4.0);
+                ui.separator();
+                let mut http_on = self.ai.http.is_some();
+                if ui
+                    .checkbox(&mut http_on, "Also serve MCP over HTTP (127.0.0.1 only)")
+                    .on_hover_text(
+                        "For MCP clients that connect to a URL (Postman, web tools) instead of \
+                         starting jetcarp mcp",
+                    )
+                    .changed()
+                {
+                    if http_on {
+                        self.ai_http_start(ctx);
+                    } else {
+                        self.ai.http_off();
+                    }
+                }
+                if let Some(e) = &self.ai.http_error {
+                    ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), e);
+                }
+                if let Some(h) = &self.ai.http {
+                    let (url, token, header) = (h.url(), h.token.clone(), h.header());
+                    egui::Grid::new("ai_http_grid")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            for (name, shown, copied) in [
+                                ("URL", url.clone(), url),
+                                ("Token", token.clone(), token),
+                                ("Header", "Authorization: Bearer …".to_string(), header),
+                            ] {
+                                ui.label(name);
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(shown).monospace());
+                                    if ui.small_button("Copy").clicked() {
+                                        ui.ctx().copy_text(copied);
+                                    }
+                                });
+                                ui.end_row();
+                            }
+                            ui.label("Open connections");
+                            ui.label(h.connection_count().to_string());
+                            ui.end_row();
+                            ui.label("Sessions");
+                            ui.label(h.session_ids().len().to_string());
+                            ui.end_row();
+                        });
+                    ui.label(
+                        RichText::new(
+                            "Give the client the URL and the header (or the token, where it asks \
+                             for a bearer token). It reaches this window's world with the same \
+                             tools as above. Only programs on this computer can connect.",
+                        )
+                        .small(),
+                    );
+                }
+                if self.ai.http.is_some() {
+                    self.ai_http_choices(ui);
+                }
             }
         });
         if !open {
@@ -302,6 +605,190 @@ mod tests {
         assert!(lets_in(l.port, &l.token), "on again: let in");
         ai.switch_off();
         assert!(!file.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The status of a `GET /mcp` to the HTTP endpoint on `port`, with `token` if given: it
+    /// needs no answer from the UI thread (401 without the token, 405 with it).
+    fn http_status(port: u16, token: Option<&str>) -> Option<u16> {
+        http_get(port, token, None)?.split(' ').nth(1)?.parse().ok()
+    }
+
+    /// The whole answer to a `GET /mcp`, with `token` and `origin` if given.
+    fn http_get(port: u16, token: Option<&str>, origin: Option<&str>) -> Option<String> {
+        use std::io::Read;
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).ok()?;
+        s.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
+        let auth = token
+            .map(|t| format!("Authorization: Bearer {t}\r\n"))
+            .unwrap_or_default();
+        let origin = origin
+            .map(|o| format!("Origin: {o}\r\n"))
+            .unwrap_or_default();
+        write!(
+            s,
+            "GET /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{auth}{origin}Connection: close\r\n\r\n"
+        )
+        .ok()?;
+        let mut answer = String::new();
+        let _ = s.read_to_string(&mut answer);
+        Some(answer)
+    }
+
+    /// The app's two HTTP choices (saved with its settings): kept, the token comes back when
+    /// HTTP is unticked and ticked again, until *New token* replaces it (the old one is refused
+    /// at once); unkept, the file goes. Origins the user allows reach the endpoint, with CORS
+    /// headers, as soon as they are added, and are refused again once removed; a wildcard is
+    /// never added, and a saved file's wildcards are dropped.
+    #[test]
+    fn http_keeps_its_token_when_asked_and_lets_listed_pages_in() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-ai-keep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let run = dir.join("runtime");
+        let (link, file) = (
+            run.join("app-endpoint.json"),
+            run.join("app-http-endpoint.json"),
+        );
+        let kept = dir
+            .join("settings")
+            .join("http-tokens")
+            .join("app-http.json");
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
+        let mut ai = AiControl::default();
+        ai.switch_on(0, Some(link.clone()), wake.clone());
+        assert!(ai.http_keep_warning().is_none());
+        ai.set_http_keep(true);
+        let w = ai.http_keep_warning().expect("a warning while kept");
+        for want in ["settings folder", "restarts and reboots", "New token"] {
+            assert!(w.contains(want), "{want} in {w}");
+        }
+        ai.http_on(0, Some(file.clone()), Some(kept.clone()), wake.clone());
+        let t1 = ai.http.as_ref().unwrap().token.clone();
+        ai.http_off();
+        ai.switch_off();
+        assert!(!file.exists(), "the runtime file goes");
+        assert!(kept.exists(), "kept: the settings folder keeps the token");
+        // A logout or reboot: the runtime folder is emptied.
+        let _ = std::fs::remove_dir_all(&run);
+        ai.switch_on(0, Some(link), wake.clone());
+        ai.http_on(0, Some(file.clone()), Some(kept.clone()), wake.clone());
+        let (t, port) = {
+            let h = ai.http.as_ref().unwrap();
+            (h.token.clone(), h.port)
+        };
+        assert_eq!(t, t1, "the kept token comes back");
+        ai.renew_http_token();
+        let t2 = ai.http.as_ref().unwrap().token.clone();
+        assert_ne!(t2, t1);
+        assert!(
+            !std::fs::read_to_string(&kept).unwrap().contains(&t1),
+            "the old one is gone from the file"
+        );
+        assert_eq!(
+            http_status(port, Some(&t1)),
+            Some(401),
+            "the old one is refused"
+        );
+        assert_eq!(http_status(port, Some(&t2)), Some(405));
+
+        // Origins.
+        let o = "https://client.example";
+        let from = |o: &str| http_get(port, Some(&t2), Some(o)).unwrap_or_default();
+        assert!(from(o).starts_with("HTTP/1.1 403"), "not listed yet");
+        assert!(ai.allow_http_origin("*").is_err());
+        assert!(ai.allow_http_origin("https://*.example").is_err());
+        ai.allow_http_origin("HTTPS://Client.Example:443").unwrap();
+        assert_eq!(ai.http_settings.allow_origins, vec![o.to_string()]);
+        let a = from(o);
+        assert!(a.starts_with("HTTP/1.1 405"), "{a}");
+        assert!(
+            a.contains(&format!("Access-Control-Allow-Origin: {o}\r\n")),
+            "{a}"
+        );
+        assert!(from("https://other.example").starts_with("HTTP/1.1 403"));
+        ai.remove_http_origin(o);
+        assert!(from(o).starts_with("HTTP/1.1 403"), "removed");
+        let saved = AiHttpSettings {
+            keep_token: true,
+            allow_origins: vec![
+                "*".into(),
+                o.into(),
+                "https://client.example/".into(),
+                o.into(),
+            ],
+        };
+        assert_eq!(saved.sanitize().allow_origins, vec![o.to_string()]);
+
+        // Unkept: the kept token is deleted at once, and the warning goes.
+        ai.set_http_keep(false);
+        assert!(!kept.exists(), "keeping off deletes the kept token");
+        assert!(ai.http_keep_warning().is_none());
+        ai.http_off();
+        assert!(!file.exists());
+        ai.switch_off();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// SECURITY.md: MCP over HTTP is off until it is ticked, only while AI control is on, and
+    /// closes when it is unticked or AI control is switched off; switched on again, AI control
+    /// does not bring it back.
+    #[test]
+    fn http_listens_only_when_asked_and_closes_with_ai_control() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-ai-http-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (link, file) = (
+            dir.join("app-endpoint.json"),
+            dir.join("app-http-endpoint.json"),
+        );
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
+        let mut ai = AiControl::default();
+        ai.http_on(0, Some(file.clone()), None, wake.clone());
+        assert!(ai.http.is_none(), "not while AI control is off");
+        assert!(!file.exists());
+
+        ai.switch_on(0, Some(link.clone()), wake.clone());
+        assert!(ai.http.is_none(), "AI control alone does not serve HTTP");
+        assert!(!file.exists());
+
+        ai.http_on(0, Some(file.clone()), None, wake.clone());
+        let (port, token) = {
+            let h = ai.http.as_ref().expect("ticked");
+            assert_eq!(h.url(), format!("http://127.0.0.1:{}/mcp", h.port));
+            (h.port, h.token.clone())
+        };
+        assert!(file.exists(), "the URL and token are recorded");
+        assert_eq!(http_status(port, None), Some(401), "the token is needed");
+        assert_eq!(http_status(port, Some(&token)), Some(405), "and enough");
+
+        ai.http_off();
+        assert!(!file.exists(), "unticked: the file is removed");
+        assert!(
+            closed_soon(port),
+            "unticked: nothing accepts on port {port}"
+        );
+        assert!(ai.listener.is_some(), "AI control stays on");
+
+        ai.http_on(0, Some(file.clone()), None, wake.clone());
+        let port = {
+            let h = ai.http.as_ref().expect("ticked again");
+            assert_ne!(h.token, token, "a new token each time it is ticked");
+            assert_eq!(
+                http_status(h.port, Some(&token)),
+                Some(401),
+                "the old one fails"
+            );
+            h.port
+        };
+        ai.switch_off();
+        assert!(
+            ai.http.is_none() && !file.exists(),
+            "closed with AI control"
+        );
+        assert!(closed_soon(port), "off: nothing accepts on port {port}");
+        ai.switch_on(0, Some(link), wake);
+        assert!(ai.http.is_none(), "AI control on again: HTTP stays off");
+        ai.switch_off();
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

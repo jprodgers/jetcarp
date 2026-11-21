@@ -978,3 +978,184 @@ fn a_program_leaves_no_memory_record_behind() {
     assert_eq!(records(), Vec::<std::ffi::OsString>::new());
     let _ = std::fs::remove_dir_all(&runtime);
 }
+
+/// `jetcarp mcp --http 0` says where it listens, on 127.0.0.1 only, with the whole URL and the
+/// header to send (#114, #115): as one line of JSON with `--json`, else as text. Over HTTP it
+/// offers the tools it offers over standard input and output.
+#[test]
+fn mcp_over_http_says_where_it_listens() {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::process::Stdio;
+    let start = |json: bool| {
+        let mut args = vec!["mcp", "--http", "0"];
+        if json {
+            args.insert(0, "--json");
+        }
+        let mut child = Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+            .args(&args)
+            .env("JETCARP_OUT", out_root())
+            .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+            .env(
+                "JETCARP_CONFIG_DIR",
+                test_dir("JETCARP_CONFIG_DIR", "config"),
+            )
+            .env(
+                "JETCARP_RUNTIME_DIR",
+                test_dir("JETCARP_RUNTIME_DIR", "runtime").join(format!("http-{json}")),
+            )
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("jetcarp mcp --http starts");
+        let out = BufReader::new(child.stdout.take().unwrap());
+        (child, out)
+    };
+    let (mut child, mut out) = start(true);
+    let mut line = String::new();
+    out.read_line(&mut line).unwrap();
+    let v: Value = serde_json::from_str(&line).expect("one line of JSON");
+    let port = v["port"].as_u64().unwrap() as u16;
+    let token = v["token"].as_str().unwrap().to_string();
+    assert_eq!(v["url"], format!("http://127.0.0.1:{port}/mcp"));
+    assert_eq!(v["bound"], "127.0.0.1");
+    assert_eq!(v["header"], format!("Authorization: Bearer {token}"));
+    let post = |body: Value, session: Option<&str>| -> (String, Value) {
+        let body = body.to_string();
+        let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let sid = session
+            .map(|s| format!("Mcp-Session-Id: {s}\r\n"))
+            .unwrap_or_default();
+        write!(
+            s,
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\
+             {sid}Content-Type: application/json\r\nContent-Length: {}\r\n\
+             Connection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .unwrap();
+        let mut answer = String::new();
+        s.read_to_string(&mut answer).unwrap();
+        let (head, body) = answer.split_once("\r\n\r\n").unwrap();
+        (head.to_string(), serde_json::from_str(body).unwrap())
+    };
+    let (head, init) = post(
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+               "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                          "clientInfo": {"name": "cli-test", "version": "1"}}}),
+        None,
+    );
+    assert_eq!(init["result"]["serverInfo"]["name"], "jetcarp");
+    let sid = head
+        .lines()
+        .find_map(|l| l.strip_prefix("Mcp-Session-Id: "))
+        .expect("a session")
+        .to_string();
+    let (_, tools) = post(
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+        Some(&sid),
+    );
+    let names: Vec<&str> = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    for t in [
+        "world_new",
+        "run_script",
+        "use_app",
+        "host_control",
+        "app_display",
+    ] {
+        assert!(names.contains(&t), "{t} in {names:?}");
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+
+    // As text, the startup lines say the same.
+    let (mut child, mut out) = start(false);
+    let mut text = String::new();
+    for _ in 0..4 {
+        out.read_line(&mut text).unwrap();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(text.contains("  URL:    http://127.0.0.1:"), "{text}");
+    assert!(text.contains("/mcp\n"), "{text}");
+    assert!(text.contains("  Header: Authorization: Bearer "), "{text}");
+    assert!(
+        text.contains("It listens on 127.0.0.1, which other computers cannot reach."),
+        "{text}"
+    );
+}
+
+/// `jetcarp mcp --http --keep-token --allow-origin URL` keeps its token in the settings folder,
+/// across a restart and a fresh runtime folder, warns that it does, and says which origins may
+/// connect; `--new-token` replaces the token; a wildcard origin is refused before anything
+/// listens; and the three go with `--http` only.
+#[test]
+fn mcp_over_http_keeps_its_token_and_allows_exact_origins() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    let runtime = test_dir("JETCARP_RUNTIME_DIR", "runtime").join("http-kept");
+    // A settings folder of its own: the kept token goes there.
+    let settings = test_dir("JETCARP_CONFIG_DIR", "config").join("http-kept");
+    let start = |extra: &[&str]| -> (Option<Value>, std::process::Output) {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+            .args(["--json", "mcp", "--http", "0"])
+            .args(extra)
+            .env("JETCARP_OUT", out_root())
+            .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+            .env("JETCARP_CONFIG_DIR", &settings)
+            .env("JETCARP_RUNTIME_DIR", &runtime)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut line = String::new();
+        BufReader::new(child.stdout.take().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let v = serde_json::from_str(&line).ok();
+        let _ = child.kill();
+        (v, child.wait_with_output().unwrap())
+    };
+    let o = "https://client.example";
+    let (a, out) = start(&["--keep-token", "--allow-origin", o]);
+    let a = a.expect("it starts");
+    assert_eq!(a["kept"], true);
+    let kept = settings.join("http-tokens").join("mcp-http.json");
+    assert_eq!(a["kept_file"], kept.display().to_string());
+    assert!(kept.exists());
+    let err = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(err.contains("survives restarts and reboots"), "{err}");
+    assert!(!err.contains(a["token"].as_str().unwrap()), "{err}");
+    assert_eq!(a["allow_origins"], json!([o]));
+    let _ = std::fs::remove_dir_all(&runtime);
+    let (b, _) = start(&["--keep-token"]);
+    let b = b.unwrap();
+    assert_eq!(b["token"], a["token"], "kept across a restart");
+    assert_eq!(b["allow_origins"], json!([]));
+    let (c, _) = start(&["--new-token"]);
+    assert_ne!(c.unwrap()["token"], a["token"]);
+    let (d, out) = start(&["--allow-origin", "*"]);
+    assert!(d.is_none(), "a wildcard is refused");
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("wildcards are not allowed"));
+    for flag in [
+        vec!["--keep-token"],
+        vec!["--new-token"],
+        vec!["--allow-origin", o],
+    ] {
+        let mut args = vec!["mcp"];
+        args.extend(&flag);
+        let out = jetcarp(&args);
+        assert_eq!(out.status.code(), Some(2), "{flag:?}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("--http"),
+            "{flag:?}"
+        );
+    }
+}

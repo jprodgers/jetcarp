@@ -22,6 +22,12 @@ serde.workspace = true
 serde_json.workspace = true
 # The local link's token: 128 bits from the operating system's random source (pure Rust).
 getrandom = "0.3.4"
+# The HTTP endpoint (`jetcarp mcp --http`, #115): parses request heads only. The server around it
+# (sockets, limits, timeouts, sessions) is JETCARP's own, in src/http.rs. Pure Rust, no
+# dependencies of its own.
+httparse = "1.10.1"
+# Ctrl-C stops `jetcarp-mcp --http` as it stops `jetcarp mcp --http`: its jobs at their next checkpoint.
+ctrlc = "3.5.2"
 
 [[bin]]
 name = "jetcarp-mcp"
