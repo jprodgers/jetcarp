@@ -30,8 +30,8 @@ mod display_api;
 mod display_ui;
 mod draw_ui;
 mod host_ui;
-mod machine_ui;
 mod keyboard;
+mod machine_ui;
 pub use keyboard::{Shortcut, ShortcutGroup, table as shortcut_table};
 #[cfg(test)]
 mod keyboard_tests;
