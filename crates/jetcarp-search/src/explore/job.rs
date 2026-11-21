@@ -1145,11 +1145,12 @@ impl Search {
                             // Every eighth round owes GPU_CONFIRMS elites a confirmation, paid in
                             // batches of a few seconds every other round, between screening
                             // batches, so the GPU's screening never waits long (#83).
+                            // (Only the GPU's thread reads or writes it.)
                             if round.is_multiple_of(8) {
-                                let _ = self.gpu_due.fetch_update(
+                                let d = self.gpu_due.load(Ordering::Relaxed);
+                                self.gpu_due.store(
+                                    (d + GPU_CONFIRMS).min(2 * GPU_CONFIRMS),
                                     Ordering::Relaxed,
-                                    Ordering::Relaxed,
-                                    |d| Some((d + GPU_CONFIRMS).min(2 * GPU_CONFIRMS)),
                                 );
                             }
                             let due = self.gpu_due.load(Ordering::Relaxed);
@@ -1803,11 +1804,8 @@ impl Search {
             return Ok(false);
         }
         let n = picked.len() as u64;
-        let _ = self
-            .gpu_due
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |d| {
-                Some(d.saturating_sub(n))
-            });
+        let d = self.gpu_due.load(Ordering::Relaxed);
+        self.gpu_due.store(d.saturating_sub(n), Ordering::Relaxed);
         let mut cands = Vec::new();
         for (id, e) in &picked {
             for c in self.confirmations(e, &grid) {
