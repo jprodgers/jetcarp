@@ -329,7 +329,10 @@ screen, a span of monitors), the screensaver and its profiles, the cell size and
 
 The [background host](../guides/wallpapers.md), which keeps scenes running as wallpapers without
 the app, has a tool of its own, `host_control`: its status, the next or previous item, pause and
-resume, which rotation runs, and whether the scenes are the desktop background. The host must be
+resume, which rotation runs, whether the scenes are the desktop background, and
+[fitting it to this computer](../guides/wallpapers.md#fit-to-this-computer). Its actions and
+options are told in the help topic `host` (`help {"topic": "host"}`), so the tool's own description,
+which goes to the assistant with every request, stays short. The host must be
 running already (`jetcarp host start`); the tool does not start it. Until you have answered the
 [photosensitive seizure warning](../getting-started/photosensitivity.md), in the app or with
 `jetcarp setup`, it refuses to start or show scenes, with the warning; an assistant cannot answer

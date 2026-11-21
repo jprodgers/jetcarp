@@ -76,6 +76,21 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   table the limits use must never be below it. A grid of exactly the largest number of cells the
   code can number (4,294,967,295) is built and its last cells' neighbours checked, without making
   any field.
+- **Fit to this computer.** On made-up machines from one with room for a cell per pixel to one
+  where nothing fits, the binary search must find what trying every size finds, in five sizes at
+  most; a good first guess must settle it in two; a size measured either side of a limit from one
+  fit to the next must keep the same recommendation; a rule series must be one scene; and the
+  limits must be shared by pixel area. The other scenes must be held to twice the measured scene's
+  cells, and say so, unless a size is chosen or picked, and a fit's first round must warm up half a
+  second longer than the rest. The host must time a frame by its work, not its wait to present, and
+  a fit by itself must sweep only the screens whose monitor changed. End to end, with no host and
+  with a headless one: a fit of three scenes measures one in at most six sizes, a rotation mixing
+  scenes on the GPU and on the processor has one measured on each, a series of 41 rules is one scene
+  and the host shows its seventh rule at the size found, `--pick` measures nothing while the last
+  fit is current, and two screens are fitted at once with their shares saved. The cards' row must
+  open at the chosen card and scroll sideways with shift and the wheel and with a sideways swipe,
+  the pane above it staying where it was. The MCP tool `host_control` must stay short, with its
+  text in the help topic `host`.
 - **The front ends.** The command line's JSON output, the operations the front ends share, the MCP
   server's protocol, its folder rules (paths outside its folders, symbolic links, read-only folders;
   on Windows directory junctions and symbolic links too) and its limits, that nothing listens for AI
@@ -351,6 +366,53 @@ Life soup rates, in soups a second.
 The desktop is measured at two or three firmware splits of its memory between the system and the
 GPU, since its limits follow the split.
 
+## How long Fit to this computer takes
+
+A fit must take about 10 seconds, 30 at most, on one monitor or several
+([#113](https://github.com/jprodgers/jetcarp/issues/113)). In 0.4.2's release candidates, which
+showed every scene at every size for about 2 seconds each, a fit took 45 seconds to 12 minutes. The
+times below are the host's own (`seconds` in the fit's last line), with the time of the whole
+`jetcarp host tune` command, its start and its following of the host included, in brackets. The
+default limits (processor 10%, GPU 25%) and one second a size, on the desktop of the table above
+(an AMD Radeon 8060S, Linux), during development on 21 November 2026, in a private headless GNOME
+Shell with virtual monitors, so nothing showed on a real screen:
+
+| Screens | Rotations | First fit | The same fit again | `--pick` |
+| --- | --- | --- | --- | --- |
+| One, 2560 × 1440 at 60 Hz | *Classics, hourly* (7 scenes, all on the GPU) | 3.2 s, 2 sizes (3.5 s) | 2.0 s, 1 size (2.3 s), the same sizes | none measured (0.6 to 0.7 s) |
+| Two at once: 2560 × 1440 at 60 Hz, and 1920 × 1080 at 120 Hz | *Classics, hourly*, and *Until it settles* (3 scenes) | 5.4 s, 6 sizes (5.9 s) | 3.1 s, 3 sizes (3.5 s), the same sizes | none measured (0.6 s) |
+| One, 2560 × 1440 at 60 Hz | Life and B36/S23 on the GPU, Wolfram's rule 30 on the processor: one scene measured on each | 9.6 s, 8 sizes, 4 for each (10.0 s) | 2.8 s, 2 sizes (3.0 to 3.1 s), the same sizes | none measured (0.6 to 0.7 s) |
+| Two at once, as above | that rotation, and *Until it settles* | 9.4 s, 12 sizes (10.0 s) | 3.8 to 5.0 s, 5 or 6 sizes (4.3 to 5.5 s) | none measured (0.6 to 0.7 s) |
+| One, off screen (no host), 2560 × 1440 | *Classics, hourly* | 3.1 s, 2 sizes | 2.0 s, 1 size | |
+| One, off screen (no host), 2560 × 1440 | the rotation mixing devices | 8.7 s, 8 sizes | 2.6 s, 2 sizes | |
+
+A fit's first size warms up half a second longer than the rest (so a fit just after the host
+started measures as later ones do), which is the half second each fit gained over the first
+measurements, made without it: 2.7 s and 1.5 s on one screen, 3.7 s and 2.6 to 3.8 s on two. A
+rotation mixing devices has two scenes to measure on its screen, one after the other, so its first
+fit takes about twice as long; with no earlier fit or score to guess from, each search here started
+at 6 px and went to 1 or 2 px, four sizes each.
+
+With two screens, the limits were shared by area as they should be: 64% and 36%, so 6.4% and 3.6%
+of the processor, and 16% and 9% of the GPU. A fit repeated with nothing changed kept every
+scene's size, on one screen and on two, the first fit included: the second screen's 2 px, which a
+first fit without the longer warm-up had once judged just over its GPU share, was within it on the
+first fit and *at the limit* (kept) on every fit after. Beside the second screen, the rotation
+mixing devices kept W30's 2 px and the second screen's 2 px on every fit, but Life went from 2 px
+on the first fit to 1 px after: 1 px measured 6.2% of the processor against its 5.1% line the first
+time, then 3.5%, then 5.3% and 5.4% (*at the limit*, so kept). The host's memory stayed between 208 and
+226 MB over six fits on one screen and between 263 and 312 MB on two.
+
+These were measured with nothing else busy on the machine (a load average under 3 at the start of
+each run). With other work compiling at the same time, the frame times went up to 25 ms and more,
+and the same fits tried up to six sizes and settled on coarser ones.
+
+The same measurements are wanted on the Windows laptop and the Mac at the 0.4.3 sittings, with one
+monitor and with two, including the Mac's two monitors of different refresh rates
+([#106](https://github.com/jprodgers/jetcarp/issues/106)), its GPU share now from the Mac's own
+count of JETCARP's GPU time ([#93](https://github.com/jprodgers/jetcarp/issues/93)), and its memory
+over two-screen fits ([#111](https://github.com/jprodgers/jetcarp/issues/111)).
+
 ## Continuous integration
 
 GitHub Actions runs on every push to `main` and every pull request. A release is prepared on a
@@ -439,7 +501,7 @@ what to run, and what counts as a pass. It is carried out in three parts.
   rating clips on the rating page in two browsers, fitting a score to the ratings, packs.
 - **The app:** every menu item, pane and tool window, popped out and back, AI control from an MCP
   client, light and dark, the scripting examples, exports, and big worlds on each GPU.
-- **The desktop background:** rotations, cell sizes, pauses for full-screen windows,
+- **The desktop background:** rotations, *Fit to this computer* on one monitor and two, pauses for full-screen windows,
   battery and busy processors, sleep, lock and login, and the background host killed and restarted.
 - **MCP and robustness:** every tool, bad input of every kind (124 malformed calls in one sitting),
   paths outside the allowed folders, read-only folders, damaged and tampered packs, two programs

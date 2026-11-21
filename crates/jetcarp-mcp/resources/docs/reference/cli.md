@@ -2449,6 +2449,7 @@ Commands:
   lock       What a wallpaper does on the GNOME lock screen (saved)
   gnome      The GNOME Shell extension behind wallpapers and the top-bar menu
   saver      The screen saver (Windows and macOS)
+  tune       Fit the desktop background to this computer, in a few seconds: measure each screen's most demanding scene on the GPU and on the processor at a few sizes, every screen at once, and keep the finest that stays within the processor and GPU limits at a smooth frame rate; the rest of the rotation takes its size from the one on its device, a cheaper scene finer, at most twice its cells unless you choose (saved). The limits are for the whole desktop, shared between the screens by their pixel area. The rules and colours stay as they are. A running host measures on its screens, then shows the sizes found.
   scene      The scene a screen shows now, its grid's size included, as a scene file that replays it
   help       Print this message or the help of the given subcommand(s)
 
@@ -2836,6 +2837,29 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+```
+
+#### `jetcarp host tune`
+
+```text
+Fit the desktop background to this computer, in a few seconds: measure each screen's most demanding scene on the GPU and on the processor at a few sizes, every screen at once, and keep the finest that stays within the processor and GPU limits at a smooth frame rate; the rest of the rotation takes its size from the one on its device, a cheaper scene finer, at most twice its cells unless you choose (saved). The limits are for the whole desktop, shared between the screens by their pixel area. The rules and colours stay as they are. A running host measures on its screens, then shows the sizes found.
+
+Usage: jetcarp host tune [OPTIONS]
+
+Options:
+      --cpu-limit <PERCENT>            JETCARP's processor time, in percent of the whole machine, every core counted, for the whole desktop: shared between the screens by their pixel area (saved; default 10)
+      --gpu-limit <PERCENT>            JETCARP's share of the GPU's time, in percent, for the whole desktop, shared the same way (saved; default 25)
+      --fps <FPS>                      Frames per second it must keep (saved; default: the monitor's refresh rate, or 60, at most the rate each scene draws at)
+      --screen <SCREEN>                Only this screen (counted from 0); it keeps its share of the limits. Default: every screen on the desktop
+      --pick <WHICH>                   Which size each scene is left at: recommended (the finest within the limits; the default), finest (the finest tried), own (the scene's own), or a cell size in pixels. Recommended gives the rest of a rotation at most twice the measured scene's cells; the others are choices, and go past that. Without it, a size chosen before is kept while it is still within the limits. With it, the last fit's sizes are used while they are current; nothing is measured
+      --fresh                          With --pick: measure again, even though the last fit is still current
+      --crops <DIR>                    Save each size's picture here as a PNG (they are kept beside the host's settings too)
+      --canvas <CANVAS>                The screen's size in pixels, as WxH, when no host is running to say (default: the size it was fitted for before, else its monitor's)
+      --trial-seconds <TRIAL_SECONDS>  Seconds each size shows for (the last three quarters are measured; a fit's first sizes warm up half a second longer) [default: 1]
+      --dry-run                        Measure and report, but save nothing
+      --stop                           Stop the fit a running host is making (nothing it found is saved)
+      --json                           Print the host's reply as JSON
+  -h, --help                           Print help
 ```
 
 #### `jetcarp host scene`

@@ -67,7 +67,10 @@ ONLY = {
                    "`jetcarp mcp`, which passes it to the app once attached (`use_app`); an error "
                    "otherwise.",
     "use_app": "`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint.",
-    "host_control": "`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint.",
+    "host_control": "`jetcarp mcp` only, over stdio or HTTP; not the app's own HTTP endpoint. Its "
+                    "actions and options are told in the help topic `host` "
+                    "(`help {\"topic\": \"host\"}`), to keep the tool list short; the command "
+                    "line's are in [Wallpapers](../guides/wallpapers.md#the-background-host).",
 }
 
 

@@ -91,10 +91,13 @@ pub enum SaverAction {
 }
 
 /// `jetcarp host tune`'s help while Fit is in the release.
-const TUNE_ABOUT: &str = "Fit the desktop background to this computer: run each scene of the \
-    wallpaper's rotation at its screen's size and keep, for each, the most cells that stay within \
-    the processor and GPU limits at a smooth frame rate (saved). The rules and colours stay as \
-    they are. A running host pauses while it runs, then shows the sizes found.";
+const TUNE_ABOUT: &str = "Fit the desktop background to this computer, in a few seconds: \
+    measure each screen's most demanding scene on the GPU and on the processor at a few sizes, \
+    every screen at once, and keep the finest that stays within the processor and GPU limits at a \
+    smooth frame rate; the rest of the rotation takes its size from the one on its device, a \
+    cheaper scene finer, at most twice its cells unless you choose (saved). The limits are for the whole \
+    desktop, shared between the screens by their pixel area. The rules and colours stay as they \
+    are. A running host measures on its screens, then shows the sizes found.";
 /// clap's own help layout, for `host tune` while Fit is in the release.
 const TUNE_HELP: &str =
     "{before-help}{about-with-newline}\n{usage-heading} {usage}\n\n{all-args}{after-help}";
@@ -457,16 +460,24 @@ fn status_lines(v: &Value) -> Vec<String> {
     let t = &v["tuning"];
     if t["running"] == true {
         out.push(match t["progress"].as_str() {
-            Some(p) => format!("tuning: {p}"),
-            None => "tuning: a tune is running".into(),
+            Some(p) => format!("fitting: {p}"),
+            None => "fitting: a fit is running".into(),
         });
     } else if let Some(o) = t["last"]["outcome"].as_str() {
+        let last = &t["last"];
         out.push(match o {
-            "failed" => format!(
-                "last tune: failed: {}",
-                t["last"]["error"].as_str().unwrap_or("?")
+            "failed" | "stopped" => {
+                format!("last fit: {o}: {}", last["error"].as_str().unwrap_or("?"))
+            }
+            "done" if last["reused"] == true => {
+                "last fit: done, the sizes placed from the fit before".into()
+            }
+            "done" if last["seconds"].is_number() => format!(
+                "last fit: done in {} s, {} size(s) tried",
+                last["seconds"],
+                last["trials"].as_u64().unwrap_or(0)
             ),
-            other => format!("last tune: {other}"),
+            other => format!("last fit: {other}"),
         });
     }
     for line in v["log"].as_array().into_iter().flatten() {
@@ -1183,22 +1194,31 @@ mod tests {
             "{lines:?}"
         );
         assert!(!lines.iter().any(|l| l.starts_with("paused:")));
-        // Tuning: under way, then how it ended.
+        // A fit: under way, then how it ended.
         let mut tuning = v.clone();
         tuning["tuning"] =
-            json!({"running": true, "progress": "screen 0, scene 2 of 7: Life at 4 px"});
+            json!({"running": true, "progress": "screen 0: Life at 4 px (size 2 of up to 6)"});
         let lines = status_lines(&tuning);
         assert!(
             lines
                 .iter()
-                .any(|l| l == "tuning: screen 0, scene 2 of 7: Life at 4 px"),
+                .any(|l| l == "fitting: screen 0: Life at 4 px (size 2 of up to 6)"),
             "{lines:?}"
         );
         tuning["tuning"] =
             json!({"running": false, "last": {"outcome": "failed", "error": "no GPU"}});
         let lines = status_lines(&tuning);
         assert!(
-            lines.iter().any(|l| l == "last tune: failed: no GPU"),
+            lines.iter().any(|l| l == "last fit: failed: no GPU"),
+            "{lines:?}"
+        );
+        tuning["tuning"] = json!({"running": false,
+            "last": {"outcome": "done", "seconds": 3.7, "trials": 5}});
+        let lines = status_lines(&tuning);
+        assert!(
+            lines
+                .iter()
+                .any(|l| l == "last fit: done in 3.7 s, 5 size(s) tried"),
             "{lines:?}"
         );
     }
