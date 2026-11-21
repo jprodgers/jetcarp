@@ -35,6 +35,9 @@ jobs:
       # Linux), which JETCARP uses only when asked for. Windows' WARP is never used, so the GPU
       # tests skip there; macOS uses the runner's own GPU.
       JETCARP_GPU: software
+      # Where a GPU is expected (Linux's lavapipe, macOS's own GPU), a GPU test that finds no
+      # adapter it can use, or one the self-test turns down, fails rather than skipping.
+      JETCARP_REQUIRE_GPU: ${{ matrix.require_gpu }}
       # The folder rules' tests make links: on Windows directory junctions and symbolic links
       # (the runner may make both). A link that cannot be made fails the test here, rather than
       # skipping it as on a machine without the rights.
@@ -43,9 +46,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: Linux x86_64, os: ubuntu-24.04, features: "" }
-          - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher" }
-          - { name: macOS arm64, os: macos-latest, features: "" }
+          - { name: Linux x86_64, os: ubuntu-24.04, features: "", require_gpu: "1" }
+          - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher", require_gpu: "" }
+          - { name: macOS arm64, os: macos-latest, features: "", require_gpu: "1" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15

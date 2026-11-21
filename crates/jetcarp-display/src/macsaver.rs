@@ -52,6 +52,14 @@ pub struct Baked {
     pub caption: CaptionSettings,
     pub max_cells: u64,
     pub gpu: bool,
+    /// The strobe guard (#97), as the setting for the desktop background and the screen saver
+    /// was when the bundle was built: the sandboxed saver cannot read it. On when missing.
+    #[serde(default = "guard_default")]
+    pub strobe_guard: bool,
+}
+
+fn guard_default() -> bool {
+    true
 }
 
 /// The rotation a screen saver runs: its own choice, else the first screen's, else the default
@@ -96,6 +104,9 @@ pub fn bake(
         max_cells: settings.max_cells,
         // The sandboxed saver cannot read the GPU settings: the desktop background's choice now.
         gpu: settings.gpu_policy().mode != jetcarp_gpu::select::Mode::Off,
+        strobe_guard: jetcarp_core::photosensitivity::guard_on(
+            jetcarp_core::photosensitivity::GuardPlace::Desktop,
+        ),
     };
     Ok((baked, warnings))
 }

@@ -414,7 +414,7 @@ impl JetcarpApp {
     }
 
     /// The main window should be full screen now (and on which monitor).
-    fn want_fullscreen(&self) -> Option<Option<usize>> {
+    pub(super) fn want_fullscreen(&self) -> Option<Option<usize>> {
         let d = &self.shell.display;
         let saver_fs = self.display.saver.is_some() && !self.outputs_active();
         (d.mode == OutputMode::FullScreen || saver_fs).then_some(d.fullscreen_monitor)

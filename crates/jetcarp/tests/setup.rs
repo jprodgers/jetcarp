@@ -158,8 +158,8 @@ fn setup_explorer_yes_end_to_end() {
     assert_eq!(st["record"]["profile"], "blank-slate");
 }
 
-/// `--seizure-warning at-risk` goes on, after the advice not to use JETCARP, and saves the answer
-/// for the strobe limiter to come (#96).
+/// `--seizure-warning at-risk` goes on, after the advice not to use JETCARP, and saves the answer,
+/// which keeps the strobe guard on for good (#96, #97).
 #[test]
 fn setup_with_the_at_risk_answer_goes_on_and_saves_it() {
     let s = Scratch::new("setup-at-risk");

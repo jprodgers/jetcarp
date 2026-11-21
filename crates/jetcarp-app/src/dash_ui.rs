@@ -661,11 +661,17 @@ fn make_anim(
         (0..ANIM_FRAMES).map(|k| k * n / ANIM_FRAMES).collect()
     };
     let step = (n as f64 / pick.len().max(1) as f64).max(1.0);
+    let delay = (anim.delay_ms as f64 * step).round() as u32;
+    let picked: Vec<jetcarp_core::render::Image> =
+        pick.into_iter().map(|k| anim.frames[k].clone()).collect();
+    // The strobe guard (#149): frames that flash play softened.
+    let (frames, delay) = crate::strobe_cpu::guard_frames(picked, delay);
     Ok((
-        pick.into_iter()
-            .map(|k| thumbs::color_image(&anim.frames[k], ANIM_SIDE))
+        frames
+            .iter()
+            .map(|f| thumbs::color_image(f, ANIM_SIDE))
             .collect(),
-        (anim.delay_ms as f64 * step).round() as u32,
+        delay,
     ))
 }
 

@@ -34,6 +34,7 @@ pub mod setup_ui;
 mod simgpu;
 mod span;
 mod start;
+mod strobe_cpu;
 mod sweep_form;
 mod thumbs;
 mod warning_ui;

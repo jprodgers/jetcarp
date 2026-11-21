@@ -580,7 +580,9 @@ fn demo_growing_channels() {
     let gens = 6 + 6 * 20;
     w.apply(Command::Step { gens }).unwrap();
     j.steps(gens);
-    assert_eq!(w.state_hash(), j.w.state_hash());
+    // The scene and the builder make their worlds differently (their random-number generators
+    // and seeds differ, which version 2 of the hash covers): the same cells and bookkeeping.
+    assert_eq!(w.state_hash_v1(), j.w.state_hash_v1());
     for x in 4..=24 {
         assert!(j.tok(x, 1).starts_with("o>"), "top channel at {x}");
     }
@@ -623,7 +625,7 @@ fn same_hash_any_thread_count() {
         pool.install(|| {
             let mut w = World::from_scene(&scene).unwrap();
             w.apply(Command::Step { gens: 30 }).unwrap();
-            w.state_hash()
+            w.state_hash_v2()
         })
     };
     assert_eq!(run(1), run(4));

@@ -1416,6 +1416,7 @@ pub fn png_metadata(world: &World) -> Vec<(&'static str, String)> {
         ("jetcarp:version", r.jetcarp_version.clone()),
         ("jetcarp:generation", r.generation.to_string()),
         ("jetcarp:hash", r.hash.clone()),
+        ("jetcarp:hash_version", r.hash_version.to_string()),
         ("jetcarp:dead_boundary", r.dead_boundary.to_string()),
         ("jetcarp:scene", world.to_scene().to_json()),
     ]

@@ -59,7 +59,9 @@ one it reseeds every running automaton). There are two triggers:
 
 The **cooldown** is the number of generations after a policy fires (or is installed, or a reseed by
 hand) during which it cannot fire, so that a new seed has time to develop; a settled policy starts
-counting quiet generations only once it is over.
+counting quiet generations only once it is over. It measures each generation from then on itself,
+and its checks look at those generations only, so it fires at the same generation whether or not
+anything else counts changes meanwhile (the app's activity graph, the desktop host, the GPU).
 
 Policies run independently of each other, and that can surprise you: a frequent `every` policy keeps
 the world busy, so a `settled` policy beside it may never see it settle. Here Life ran for 3,000

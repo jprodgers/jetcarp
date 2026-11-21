@@ -1,6 +1,7 @@
 //! The GPU batch stepper must reproduce `run_cpu` exactly: population, changes, hash and frames,
 //! for several worlds with different rules in one batch, on lattice and aperiodic topologies and
-//! dead, wrap and live edges. Skipped (with a note) when no GPU adapter is available.
+//! dead, wrap and live edges. Skipped (with a note) when no GPU adapter is available, failed under
+//! `JETCARP_REQUIRE_GPU=1`.
 
 use jetcarp_core::explore::batch::{BatchJob, BatchWorld, WorldTrace, run_cpu};
 use jetcarp_core::rules::Rule;
@@ -18,7 +19,7 @@ fn gpu() -> Option<MutexGuard<'static, BatchSim>> {
             Some(Mutex::new(s))
         }
         Err(e) => {
-            eprintln!("note: skipping GPU batch tests: {e}");
+            jetcarp_gpu::no_gpu("GPU batch tests", &e);
             None
         }
     });

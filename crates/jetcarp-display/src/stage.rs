@@ -111,6 +111,9 @@ pub struct StageStatus {
     pub measured_speed: Option<f32>,
     pub seconds_left: Option<f64>,
     pub caption: Vec<String>,
+    /// What the strobe guard is doing on its surface (#97).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strobe_guard: Option<jetcarp_core::strobe::guard::Report>,
 }
 
 /// Fit to this computer is switched off ([`jetcarp_core::fit::FIT`]): reports say nothing of it.
@@ -151,7 +154,16 @@ pub struct Stage {
     rate_mark: Option<(f64, u64)>,
     /// The speed it reached, generations a second.
     measured: Option<f32>,
+    /// What the strobe guard of each surface showing it asks (`jetcarp_core::strobe::guard`): by
+    /// the painter's number, when it last said, its pace cap and why it paused, if it did.
+    guard: Vec<(u64, f64, Option<f32>, Option<String>)>,
+    /// What the strobe guard last reported doing here, for status.
+    guard_report: Option<jetcarp_core::strobe::guard::Report>,
 }
+
+/// A surface's word on the guard counts for this long: one that stopped drawing no longer holds
+/// the stage back.
+const GUARD_FRESH: f64 = 2.0;
 
 /// Seconds of running a measured speed covers.
 const RATE_EVERY: f64 = 2.0;
@@ -218,6 +230,8 @@ impl Stage {
             builds: 0,
             rate_mark: None,
             measured: None,
+            guard: vec![],
+            guard_report: None,
         })
     }
 
@@ -260,10 +274,63 @@ impl Stage {
         self.pacer = pacer;
     }
 
-    /// How fast it draws and its world runs: the world on show's speed under its pacer (before one
-    /// is on show, the frame rate).
+    /// How fast it draws and its world runs: the world on show's speed, under the strobe guard's
+    /// cap, under its pacer (before one is on show, the frame rate).
     pub fn pace(&self) -> Pace {
-        self.pacer.pace(self.show.as_ref().map_or(0.0, |s| s.speed))
+        let speed = self.scene_speed();
+        let speed = match self.guard_cap() {
+            // As fast as it can (0) or faster than the cap: the cap.
+            Some(c) if speed <= 0.0 || speed > c => c,
+            _ => speed,
+        };
+        self.pacer.pace(speed)
+    }
+
+    /// The speed the world on show asks for, generations a second (0: as fast as it can).
+    pub fn scene_speed(&self) -> f32 {
+        self.show.as_ref().map_or(0.0, |s| s.speed)
+    }
+
+    /// The speed it reached lately, generations a second.
+    pub fn measured_speed(&self) -> Option<f32> {
+        self.measured
+    }
+
+    /// What the strobe guard of the surface `key` asks: a pace cap, and a pause with its reason.
+    /// The strictest of the surfaces that said so lately holds.
+    pub fn set_guard(&mut self, key: u64, now: f64, cap: Option<f32>, paused: Option<String>) {
+        let was_paused = self.guard_paused().is_some();
+        self.guard.retain(|g| g.0 != key && now - g.1 < GUARD_FRESH);
+        if cap.is_some() || paused.is_some() {
+            if let Some(p) = &paused
+                && !was_paused
+            {
+                self.notes.push(format!("strobe guard: paused: {p}"));
+            }
+            self.guard.push((key, now, cap, paused));
+        }
+    }
+
+    fn guard_fresh(&self) -> impl Iterator<Item = &(u64, f64, Option<f32>, Option<String>)> {
+        let now = self.last_now.unwrap_or(0.0);
+        self.guard.iter().filter(move |g| now - g.1 < GUARD_FRESH)
+    }
+
+    /// What the strobe guard is doing on a surface showing it, for status.
+    pub fn set_guard_report(&mut self, report: Option<jetcarp_core::strobe::guard::Report>) {
+        self.guard_report = report;
+    }
+
+    /// The strobe guard's pace cap, generations a second.
+    pub fn guard_cap(&self) -> Option<f32> {
+        self.guard_fresh()
+            .filter_map(|g| g.2)
+            .min_by(f32::total_cmp)
+    }
+
+    /// Why the strobe guard paused it, if it did.
+    pub fn guard_paused(&self) -> Option<&str> {
+        self.guard_fresh().find_map(|g| g.3.as_deref())
     }
 
     /// Every item of its rotation.
@@ -629,7 +696,9 @@ impl Stage {
         }
         let deadline = Instant::now() + budget;
         self.rotate(self.play_time, now, Clock::local());
-        if !self.load_pending {
+        // Paused by the strobe guard: the rotation goes on, so the item ends in its time, but no
+        // generation is shown.
+        if !self.load_pending && self.guard_paused().is_none() {
             self.step(dt, sim, deadline);
         }
         self.measure(now);
@@ -760,6 +829,7 @@ impl Stage {
             caption: w
                 .map(|w| caption::lines(w, Some(self.place()), true))
                 .unwrap_or_default(),
+            strobe_guard: self.guard_report.clone(),
         }
     }
 }

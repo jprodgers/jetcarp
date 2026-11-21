@@ -32,6 +32,7 @@
 - [The pattern library](guides/pattern-library.md)
 - [Packs: importing, exporting, verifying](guides/packs.md)
 - [Pictures and animations](guides/pictures.md)
+- [The strobe guard](guides/strobe-guard.md)
 - [Large sandpiles](guides/large-sandpiles.md)
 - [HashLife and very long runs](guides/hashlife.md)
 - [Aperiodic patches and following movers](guides/aperiodic-patches.md)
