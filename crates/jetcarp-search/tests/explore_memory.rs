@@ -79,15 +79,22 @@ fn a_long_step_reads_its_memory_and_stops_when_it_stays_over_the_cap() {
     // The memory the job's status shows while it runs, as another process reads it.
     let other = Library::open(lib.path());
     let mut shown: f64 = 0.0;
+    // When the status first showed the memory over the cap.
+    let mut over_at: Option<Instant> = None;
     while !h.is_finished() {
         let row = other.job(job).unwrap();
         if row.status == JobStatus::Running {
-            shown = shown.max(progress(&row.progress).rss_gb);
+            let rss = progress(&row.progress).rss_gb;
+            shown = shown.max(rss);
+            if rss > cap && over_at.is_none() {
+                over_at = Some(Instant::now());
+            }
         }
         std::thread::sleep(Duration::from_millis(100));
     }
     let out = h.wait().unwrap();
     let took = t0.elapsed().as_secs_f64();
+    let after = over_at.map(|t| t.elapsed().as_secs_f64());
     HOLD_MB.store(0, Ordering::Relaxed);
     SLOW_GENERATION_MS.store(0, Ordering::Relaxed);
     let p = progress(&out.progress);
@@ -103,9 +110,14 @@ fn a_long_step_reads_its_memory_and_stops_when_it_stays_over_the_cap() {
     );
     let note = p.note.clone().unwrap_or_default();
     assert!(note.contains("over the cap"), "{note:?}");
+    // Timed from when the memory went over the cap, not from the start: a busy CI runner can take
+    // many seconds to get the runs going (the start-to-stop time was once 30 s). The status shows
+    // the memory a moment after it rises, hence the 3 s below the hold; a stop at the step's end
+    // would come a minute after the runs began.
+    let after = after.expect("the status showed the memory over the cap");
     assert!(
-        (CAP_HOLD_S..CAP_HOLD_S + 20.0).contains(&took),
-        "stopped after {took:.1} s"
+        (CAP_HOLD_S - 3.0..CAP_HOLD_S + 15.0).contains(&after),
+        "stopped {after:.1} s after the memory went over the cap ({took:.1} s after the start)"
     );
     assert!(p.rss_peak_gb > cap, "{p:?}");
 }
