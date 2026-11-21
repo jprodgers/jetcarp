@@ -42,7 +42,7 @@ fn fail(e: &ApiError) -> ! {
         "{}",
         serde_json::to_string_pretty(&json!({"error": e})).unwrap_or_default()
     );
-    std::process::exit(1)
+    jetcarp_core::machine::pool::exit(1)
 }
 
 pub fn run(cx: &Ctx, a: ApiArgs, _json: bool) -> Result<()> {

@@ -392,8 +392,7 @@ fn new_world(ctx: &Ctx, v: &Value) -> R<Shared> {
     let tiling = args::tiling_spec(v, &screen).or_err()?;
     ctx.check_tiling(&tiling).or_err()?;
     let rng = args::get_u64(v, "rng_seed").or_err()?.unwrap_or(1);
-    let mut w = World::new(tiling, rng).or_err()?;
-    ctx.check_cells(w.topo.len()).or_err()?;
+    let mut specs = vec![];
     if let Some(cas) = args::get(v, "cas") {
         for c in cas
             .as_array()
@@ -414,8 +413,14 @@ fn new_world(ctx: &Ctx, v: &Value) -> R<Shared> {
                 x => Err(format!("bad CA {x}")),
             }
             .or_err()?;
-            w.apply(Command::AddCa { ca: spec }).or_err()?;
+            specs.push(spec);
         }
+    }
+    ctx.check_world_memory(&tiling, &specs).or_err()?;
+    let mut w = World::new(tiling, rng).or_err()?;
+    ctx.check_cells(w.topo.len()).or_err()?;
+    for spec in specs {
+        w.apply(Command::AddCa { ca: spec }).or_err()?;
     }
     Ok(Shared::new(w, screen))
 }
@@ -512,6 +517,7 @@ fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
         let p = c.readable(path).or_err()?;
         let text = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?;
         let sc = Scene::from_json(&text).or_err()?;
+        c.check_world_memory(&sc.tiling, &sc.cas).or_err()?;
         let w = World::from_scene(&sc).or_err()?;
         c.check_cells(w.topo.len()).or_err()?;
         Ok(Shared::new(w, c.opts.screen))
@@ -519,6 +525,7 @@ fn register_globals(e: &mut Engine, ctx: &Arc<Ctx>) {
     let c = ctx.clone();
     e.register_fn("scene_world", move |json_text: &str| -> R<Shared> {
         let sc = Scene::from_json(json_text).or_err()?;
+        c.check_world_memory(&sc.tiling, &sc.cas).or_err()?;
         let w = World::from_scene(&sc).or_err()?;
         c.check_cells(w.topo.len()).or_err()?;
         Ok(Shared::new(w, c.opts.screen))
@@ -837,15 +844,20 @@ fn register_world(e: &mut Engine, ctx: &Arc<Ctx>) {
     });
 
     // CAs.
-    let add = |s: &mut Shared, rule: &str, opts: &Value| -> R<INT> {
+    let c = ctx.clone();
+    let add = move |s: &mut Shared, rule: &str, opts: &Value| -> R<INT> {
         args::check_keys(opts, args::CA_KEYS, "add_ca").or_err()?;
         let spec = args::ca_spec(rule, opts).or_err()?;
         let mut g = s.lock();
+        let mut cas: Vec<_> = g.world.cas.iter().map(|c| c.spec()).collect();
+        cas.push(spec.clone());
+        c.check_world_memory(&g.world.topo.spec, &cas).or_err()?;
         let a = g.world.apply(Command::AddCa { ca: spec }).or_err()?;
         Ok(a.new_id.unwrap_or(0) as INT)
     };
+    let add2 = add.clone();
     e.register_fn("add_ca", move |s: &mut Shared, rule: &str| {
-        add(s, rule, &Value::Null)
+        add2(s, rule, &Value::Null)
     });
     e.register_fn("add_ca", move |s: &mut Shared, rule: &str, m: Map| {
         add(s, rule, &map_json(&m)?)

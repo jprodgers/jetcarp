@@ -26,7 +26,8 @@ reads and never writes; it says `(no packs came with the program)` when there is
 folder for the running app's and host's control files ([Runtime](#runtime-folder) below).
 
 `jetcarp paths --json` prints the same as JSON (`bundled_packs` and `runtime` are `null` when there
-is none). `jetcarp doctor` adds the catalog file, how much data is in use, the starter pack's size (or
+is none). `jetcarp doctor` adds what JETCARP read of the computer, with its score and limits, the
+catalog file, how much data is in use, the starter pack's size (or
 where it looked for one), and every `JETCARP_…` variable that is set, with wgpu's `WGPU_…` ones
 (such as `WGPU_BACKEND`), which change the graphics adapters it finds. That makes it the thing to
 paste into a bug report.
@@ -35,7 +36,7 @@ paste into a bug report.
 
 | Folder | Holds | Override | Linux | macOS | Windows |
 | --- | --- | --- | --- | --- | --- |
-| Settings | App and background-host settings, screensaver profiles, rotations | `JETCARP_CONFIG_DIR` | `~/.config/jetcarp` | `~/Library/Application Support/jetcarp` | `%APPDATA%\jetcarp` |
+| Settings | App and background-host settings, screensaver profiles, rotations, this computer's limits and score | `JETCARP_CONFIG_DIR` | `~/.config/jetcarp` | `~/Library/Application Support/jetcarp` | `%APPDATA%\jetcarp` |
 | Data | The pattern catalog with its media and Quick Start entries, search databases | `JETCARP_DATA_DIR`, or a folder chosen in setup (`paths.json`) | `~/.local/share/jetcarp` | `~/Library/Application Support/jetcarp/data` | `%LOCALAPPDATA%\jetcarp` |
 | Output | Pictures, script runs, sweeps, sandpiles, wallpapers | `JETCARP_OUT` | `~/Pictures/JETCARP` | `~/Pictures/JETCARP` | your Pictures folder, `\JETCARP` |
 
@@ -49,6 +50,12 @@ On Windows the output folder follows the Pictures folder wherever Windows keeps 
 backs up Pictures it moves that folder into OneDrive, so the output goes to
 `%USERPROFILE%\OneDrive\Pictures\JETCARP` and OneDrive syncs it (large sandpiles and long sweeps
 included). `jetcarp paths` shows where it is; set `JETCARP_OUT` to keep the output out of OneDrive.
+
+**This computer's limits and score** are in the settings folder too: `limits.json` holds only
+the limits you set yourself (`jetcarp limits set`, or Tools → This computer…), and `machine.json`
+the last [JETCARP Hardware Score](../guides/this-computer.md) with its parts and the hardware it was
+measured on. Deleting `limits.json` puts every limit back to the machine's suggestion; deleting
+`machine.json` forgets the score.
 
 **A data folder of your own.** A large library can live on another disk: the
 [first-run setup](../getting-started/first-run.md) (its data folder page, or
@@ -137,13 +144,17 @@ names you type (only the last one of a full path). A folder JETCARP names after 
 (`media/<name>`) gets a `_` after such a name, so a scene called "Con" goes to `media/Con_`.
 
 <a id="runtime-folder"></a>**Runtime.** One more, small folder holds the files through which the running app and the background
-host accept local control (their port and access token): `$XDG_RUNTIME_DIR/jetcarp`, else
+host accept local control (their port and access token), and `memory/`, where each running
+JETCARP program records the memory it holds so the others see what is left of the pool reserved
+for JETCARP ([This computer](../guides/this-computer.md#sharing-the-pool)): `$XDG_RUNTIME_DIR/jetcarp`, else
 `~/.cache/jetcarp`, on Linux and macOS, and `%LOCALAPPDATA%\jetcarp` on Windows. On Linux and macOS
 the folder is kept readable by you only (mode 0700) and the files too (0600). It is the same for
 every copy of JETCARP you run, whatever folders the others point at, so there is one background
 host per user (the host's `host.lock` is here) and `jetcarp host` and `jetcarp mcp --app` reach the
 one running; `JETCARP_RUNTIME_DIR` gives a copy a runtime folder of its own. `jetcarp paths` and
-`jetcarp doctor` show the one in use.
+`jetcarp doctor` show the one in use. On Windows it is also the default data folder, so the
+data folder holds these files beside the library; setup still takes it as a new data folder when
+they are all it holds, and `jetcarp uninstall --data` counts them as JETCARP's.
 
 To remove what JETCARP set up outside these folders, and optionally the folders themselves, see
 [Uninstalling](../guides/uninstalling.md).
@@ -163,7 +174,7 @@ To remove what JETCARP set up outside these folders, and optionally the folders 
 | `JETCARP_BUNDLED_PACKS` | The folder of packs that came with the program, instead of `share/jetcarp/packs` beside the program's folder (when that folder is a `bin` folder, as in Homebrew and Python installs) or `packs` in it (see [The starter pack](../getting-started/installing.md#the-starter-pack)) |
 | `JETCARP_GPU` | The GPU setting, over `gpu.json`: `off`, `auto` or `on` (`0` and `1` too), or which adapter to use automatically: `integrated`, `discrete`, `software`, or part of an adapter's name, such as `UHD` (see [The GPU](../guides/gpu.md)) |
 | `JETCARP_AI_CONTROL` | `1` or `on`: the app switches AI control on at launch, as its setting of the same name does |
-| `JETCARP_HUNT_CACHE_MB` | Memory that a soup hunt's object caches may use together, in megabytes (default 1,536) |
+| `JETCARP_HUNT_CACHE_MB` | Memory that a soup hunt's object caches may use together, in megabytes (default: this computer's `hunt-cache` limit, 1,536 on a 16 GB computer; see [This computer](../guides/this-computer.md)) |
 | `JETCARP_QS_SEED` | A number: the seed of the Quick Start menu's *Featured* shuffle, so the menu comes up the same each time (default: from the clock) |
 | `JETCARP_WINDOW` | The app's starting window size, such as `1920x1080` |
 

@@ -53,9 +53,11 @@ pub struct HashlifeArgs {
     /// Save the result as a scene (plane mode: the region as a new world).
     #[arg(long)]
     save: Option<PathBuf>,
-    /// Live nodes before a garbage collection (each node is about 40 bytes with its table slot).
-    #[arg(long, default_value_t = hashlife::DEFAULT_NODE_CAP)]
-    node_cap: usize,
+    /// Live nodes before a garbage collection (each node is about 45 bytes with its table slot).
+    /// Default: this machine's `hashlife-nodes` limit (`jetcarp limits`; 48 million on a 16 GB
+    /// machine). Results never depend on it.
+    #[arg(long)]
+    node_cap: Option<usize>,
     /// Largest node level stepped by the bit-parallel leaf (B/S and Generations rules without
     /// B0; at most 6, 0 = off). Results never depend on it.
     #[arg(long, default_value_t = hashlife::DEFAULT_LEAF_LEVEL)]
@@ -111,7 +113,7 @@ pub fn run(a: HashlifeArgs) -> Result<()> {
         .transpose()
         .map_err(anyhow::Error::msg)?;
     let opts = Options {
-        node_cap: a.node_cap,
+        node_cap: a.node_cap.unwrap_or_else(hashlife::default_node_cap),
         leaf_level: a.leaf_level,
     };
     let text = std::fs::read_to_string(&a.input)

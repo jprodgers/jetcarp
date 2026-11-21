@@ -9,7 +9,7 @@
 
 use crate::Ctx;
 use crate::api::{LibHandle, from_json, to_json};
-use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64, nb_word};
+use jetcarp_api::args::{check_keys, get_bool, get_f64, get_str, get_u64, nb_word, to_u32};
 use jetcarp_api::op::{Op, Progress, Quiet};
 use jetcarp_api::ops::jobs::{JobIn, JobsList, JobsStatus, JobsStop, ListIn, StatusIn, StatusOut};
 use jetcarp_api::ops::search::{SearchStart, SearchStartIn, SearchStarted};
@@ -526,12 +526,14 @@ fn track_mover(c: &Ctx, v: &Value) -> Result<Value, String> {
                 .as_array()
                 .filter(|p| p.len() == 2)
                 .ok_or("cells: [[cell, state], ...]")?;
+            let i = p[0].as_u64().ok_or("cells: [[cell, state], ...]")?;
+            let s = p[1].as_u64().ok_or("cells: [[cell, state], ...]")?;
             Ok((
-                p[0].as_u64().ok_or("cells: [[cell, state], ...]")? as u32,
-                p[1].as_u64().ok_or("cells: [[cell, state], ...]")? as u8,
+                to_u32(i, "a cell index")?,
+                u8::try_from(s).map_err(|_| format!("a cell's state is {s}, more than 255"))?,
             ))
         })
-        .collect::<Result<_, &str>>()?;
+        .collect::<Result<_, String>>()?;
     let nb = match get_str(v, "nb")? {
         None => Nb::Touch,
         Some(o) => nb_word(o).ok_or_else(|| format!("nb '{o}' is not touch or edge"))?,
