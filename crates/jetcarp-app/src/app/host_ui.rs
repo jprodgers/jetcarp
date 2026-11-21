@@ -841,12 +841,14 @@ impl JetcarpApp {
         let mut changed = false;
         let mut install_saver = false;
         ui.horizontal_wrapped(|ui| {
-            ui.label("System screen saver runs");
+            let label = ui.label("System screen saver runs");
             let shown = settings
                 .saver_rotation
                 .clone()
                 .unwrap_or_else(|| "the desktop background's rotation".into());
-            egui::ComboBox::from_id_salt("host-saver")
+            // Named by its label for screen readers, even when a narrow pane wraps it onto a line
+            // of its own (#219).
+            let combo = egui::ComboBox::from_id_salt("host-saver")
                 .selected_text(shown)
                 .show_ui(ui, |ui| {
                     changed |= ui
@@ -862,6 +864,7 @@ impl JetcarpApp {
                             .changed();
                     }
                 });
+            combo.response.labelled_by(label.id);
             let tip = if jetcarp_display::saver::BAKED {
                 "Add JETCARP to macOS's screen savers. The rotation is copied in, so install again after changing it"
             } else {
