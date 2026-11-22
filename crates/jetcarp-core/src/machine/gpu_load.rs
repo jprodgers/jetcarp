@@ -22,7 +22,8 @@
 //! (a second login's game) are not seen, nor, inside a sandbox such as Flatpak's, programs
 //! outside it. The i915 and xe drivers' own counters (their PMU, through `perf_event_open`) would
 //! see every program, but need privileges a desktop program does not have. NVIDIA's figure needs
-//! its management library, which its driver installs; without it the reading says so.
+//! its management library, which comes with its driver (some distributions package it on its
+//! own); without it the reading says so.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
