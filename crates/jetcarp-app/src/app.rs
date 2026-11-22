@@ -136,6 +136,9 @@ pub struct JetcarpApp {
     zoom: f64,
     fit_pending: bool,
     view_size: egui::Vec2,
+    /// The grid view could not draw every cell in view last frame (too many, under a pixel):
+    /// how it thinned them, said in the status line (#300).
+    thinned: Option<jetcarp_display::view::Thinned>,
     // Tools
     tool: Tool,
     draw_target: Option<u32>,
@@ -290,6 +293,7 @@ impl JetcarpApp {
             zoom: 8.0,
             fit_pending: true,
             view_size: egui::vec2(1000.0, 800.0),
+            thinned: None,
             tool: Tool::Pan,
             draw_target: None,
             draw_value: 1,

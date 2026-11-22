@@ -195,7 +195,7 @@ struct ShapeDraw {
 const SAMPLE_MIN: usize = 1 << 18;
 /// One instance in `SAMPLE` (in bin order) is drawn, `SAMPLE` times larger, when tiles are under
 /// half a pixel: millions of sub-pixel tiles cost a sixteenth of the vertices and colours.
-const SAMPLE: usize = 16;
+pub const SAMPLE: usize = 16;
 
 /// Explicit patches: instances sorted by a grid of bins over their positions, row by row, so the
 /// bins in view are a few contiguous instance ranges.
