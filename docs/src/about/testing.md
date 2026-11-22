@@ -217,10 +217,18 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   (`crates/jetcarp-app/src/quit_signal.rs`, Linux and macOS). The background host, headless, and
   `jetcarp mcp --http`, each in scratch folders, must stop on SIGTERM as their own stop does: a
   clean exit, their endpoint file and memory record gone, and the HTTP server's hunt paused at its
-  checkpoint; a second SIGTERM, while the host waits for a caller to hang up or the server for a
-  call to return, must end either at once with 143 (`crates/jetcarp/tests/quit_signal.rs`). The
-  handling the three share must run a program's own stop on the first signal, end it on the second,
-  and leave a signal ignored at start (SIGHUP under `nohup`) ignored
+  checkpoint; a second SIGTERM, while either waits for a caller to hang up, must end it at once
+  with 143. A `job_status` waiting up to two minutes for a hunt must not hold up the HTTP server's
+  stop: the call must be told the server is stopping, and the server must end within 3 seconds,
+  with 0, its files gone. A call that ignores its cancel (`use_app` reaching for an "app" that never
+  answers) must be left after the 2-second grace, the server still ending within 3 seconds with
+  its files gone. `jetcarp mcp` over stdio must stop as stdin closing stops it, its waiting call
+  told and its hunt paused; a foreground `jetcarp search` must stop at its checkpoint, paused, and
+  `--resume` must carry it on from there; `jetcarp script` must stop at its next step and end with
+  143; each with its memory record gone (`crates/jetcarp/tests/quit_signal.rs`). How a cut-short
+  answer reads and when the grace ends are checked in `crates/jetcarp-mcp/src/stopping.rs`. The
+  handling they all share must run a program's own stop on the first signal, end it on the
+  second, and leave a signal ignored at start (SIGHUP under `nohup`) ignored
   (`crates/jetcarp-core/src/quit_signal.rs`). A headless host leaves no still picture, so the
   still a host showing the desktop leaves as it stops is checked by hand, at a logout.
 - **The book.** The command-line and MCP reference pages and the keyboard page's table of keys are
