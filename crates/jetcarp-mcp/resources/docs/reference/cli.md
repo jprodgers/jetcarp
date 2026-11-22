@@ -277,7 +277,7 @@ Commands:
   pile     Large sandpile: N grains on one spot of an unbounded grid, built by doubling, with a cropped PNG, a preview, metadata, and a resumable pile file per step
   collide  Collide pattern B into pattern A at every offset and phase in a range
   evolve   Evolutionary glider search (Edmond's method) on any tiling; verified movers go to the library
-  explore  The broad search over tilings, rule families, rules, and seeds (MAP-Elites): runs until stopped or out of budget, every run kept in the job's own folder (`searches/<uuid>/` beside the library: Parquet segments of a million runs, and a working database). Not deterministic: a stopped search continues from its archive. `jetcarp jobs runs|sheet|scene|review|clips|rescore|seal` read it
+  explore  The broad search over tilings, rule families, rules, and seeds (MAP-Elites): runs until stopped or out of budget, every run kept in the job's own folder (`searches/<uuid>/` beside the library: Parquet segments of a million runs, and a working database). Not reproducible: what it finds depends on the computer (its speed, threads and GPU), though each run it finds replays exactly; a stopped search continues from its archive. `jetcarp jobs runs|sheet|scene|review|clips|rescore|seal` read it
   try      Run one configuration now on the CPU, measured as the explore search measures its runs: fate, measures, score, and a picture (not a job)
   help     Print this message or the help of the given subcommand(s)
 
@@ -625,7 +625,7 @@ Options:
 #### `jetcarp search explore`
 
 ```text
-The broad search over tilings, rule families, rules, and seeds (MAP-Elites): runs until stopped or out of budget, every run kept in the job's own folder (`searches/<uuid>/` beside the library: Parquet segments of a million runs, and a working database). Not deterministic: a stopped search continues from its archive. `jetcarp jobs runs|sheet|scene|review|clips|rescore|seal` read it
+The broad search over tilings, rule families, rules, and seeds (MAP-Elites): runs until stopped or out of budget, every run kept in the job's own folder (`searches/<uuid>/` beside the library: Parquet segments of a million runs, and a working database). Not reproducible: what it finds depends on the computer (its speed, threads and GPU), though each run it finds replays exactly; a stopped search continues from its archive. `jetcarp jobs runs|sheet|scene|review|clips|rescore|seal` read it
 
 Usage: jetcarp search explore [OPTIONS]
 

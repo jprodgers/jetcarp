@@ -224,6 +224,12 @@ search on the processor and `--gpu` on the GPU whatever the setting, in this and
 jetcarp search explore --minutes 60 --label first-look
 ```
 
+**It isn't reproducible**, unlike every other search, and it says so as it starts (on the command
+line, in the *Hunts* window and to an MCP client): what it finds depends on the computer, on its
+speed, its threads and its GPU, so the same settings find different things on another computer or
+another day. Each run it finds replays exactly, anywhere; it's which runs it tries that differs.
+The end of this section says why.
+
 ### Choosing what to search
 
 By itself an explore search draws from every tiling it knows and every rule family but isotropic

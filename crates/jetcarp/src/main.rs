@@ -727,6 +727,12 @@ fn run() -> Result<()> {
                 detach,
                 ..Default::default()
             };
+            if !quiet {
+                eprintln!(
+                    "jetcarp: {}",
+                    jetcarp_api::ops::search::EXPLORE_NOT_REPRODUCIBLE
+                );
+            }
             let p = search_cmd::CliProgress::new(quiet || json);
             let r = quickstart::QuickstartBuild::run(&cx, a, &p);
             p.finish();
