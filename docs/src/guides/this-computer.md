@@ -287,7 +287,7 @@ with no escape codes.
 
 ## Tools → This computer…
 
-<img src="../images/guides/this-computer-window.webp" alt="The This computer window: an example 8-core, 32 GB machine with a 12 GB GPU, not measured yet, what JETCARP's programs hold of its pool now, and its limits, with 12 GB reserved for the system as the person's own value" width="800">
+<img src="../images/guides/this-computer-window.webp" alt="The This computer window: an example 8-core, 32 GB machine with a 12 GB GPU, not measured yet, the request to close other heavy programs above Measure this computer, what JETCARP's programs hold of its pool now, and its limits, with 12 GB reserved for the system as the person's own value" width="800">
 
 The window shows the hardware, the score with its parts, the date of the last run and how it was
 taken, **Measure this computer** (then **Run again**) with the request to close other heavy programs

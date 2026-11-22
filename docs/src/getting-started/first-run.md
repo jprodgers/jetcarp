@@ -111,7 +111,7 @@ processor or GPU busy with something else), the progress page says so and waits 
 come from the computer's memory alone, and **Tools → This computer…** measures it whenever you
 like.
 
-<img src="../images/getting-started/setup-5b-measure.webp" alt="The This computer page: Measure this computer first, ticked, and what the limits are without measuring: 8 GB reserved for JETCARP, worlds of up to 4 GB" width="600">
+<img src="../images/getting-started/setup-5b-measure.webp" alt="The This computer page: Measure this computer first, ticked, the request to close other heavy programs first, and what the limits are without measuring: 8 GB reserved for JETCARP, worlds of up to 4 GB" width="600">
 
 **Summary.** What setup will do: the data folder, the packs, whether it measures the computer first,
 and the Quick Start build, which you can switch off (Explorer) or lengthen and shorten, from 1
