@@ -833,6 +833,12 @@ pub(super) mod tests {
         assert!(json.contains(r#""family": "Hack""#), "{json}");
         let back = AppSettings::from_json(&json);
         assert_eq!(back.accessibility.font, hack_font.choice());
+        // Where the desktop background's caption reads it.
+        std::fs::write(dir.join("app.json"), &json).unwrap();
+        assert_eq!(
+            jetcarp_display::fonts::saved_in(&dir),
+            (hack_font.choice(), hack_font.choice())
+        );
         let mut next = headless(&Fixed::new(reduce(Some(false))));
         let next_ctx = next.ctx.clone().unwrap();
         next.apply_settings(&next_ctx, back);

@@ -293,8 +293,24 @@ impl CaptionFont {
     /// chosen font with egui's Ubuntu Light behind it. A font file that can't be used is an error
     /// that names the file.
     pub fn for_choice(choice: &FontChoice) -> Result<CaptionFont, String> {
-        let _ = choice;
-        Ok(CaptionFont::default())
+        let ubuntu = builtin(epaint_default_fonts::UBUNTU_LIGHT);
+        match choice {
+            FontChoice::Atkinson => Ok(CaptionFont::default()),
+            FontChoice::Egui => Ok(CaptionFont {
+                fonts: vec![ubuntu],
+            }),
+            FontChoice::File { path, index, .. } => {
+                let file = crate::fonts::load(path, Some(*index))?;
+                let font = ab_glyph::FontVec::try_from_vec_and_index(file.bytes, file.index)
+                    .map_err(|_| {
+                        let name = path.file_name().unwrap_or_default().to_string_lossy();
+                        format!("{name} isn't a font JETCARP can read.")
+                    })?;
+                Ok(CaptionFont {
+                    fonts: vec![FontArc::new(font), ubuntu],
+                })
+            }
+        }
     }
 
     /// The font that draws `c` (the first, for a character none has), and its glyph there.
@@ -442,18 +458,65 @@ impl FontWatch {
     /// The fonts the setting in `settings` names now (none: JETCARP's), and a note when the chosen
     /// font can't be used (the caption is then in Atkinson Hyperlegible Next).
     pub fn new(settings: Option<PathBuf>) -> (FontWatch, Option<String>) {
-        let w = FontWatch {
+        let mut w = FontWatch {
             settings,
             choice: FontChoice::Atkinson,
             font: Arc::new(CaptionFont::default()),
         };
-        (w, None)
+        let choice = w.saved();
+        let note = if choice == FontChoice::Atkinson {
+            None
+        } else {
+            w.apply(choice).err()
+        };
+        (w, note)
     }
 
     /// Read the setting again. A note when the caption's font changed, or the newly chosen one
     /// can't be used.
     pub fn check(&mut self) -> Option<String> {
-        None
+        let choice = self.saved();
+        if choice == self.choice {
+            return None;
+        }
+        let label = choice.label(false);
+        match self.apply(choice) {
+            Ok(()) => Some(format!(
+                "the caption is in {label} now, the font chosen in the app"
+            )),
+            Err(note) => Some(note),
+        }
+    }
+
+    /// The text font the app's setting names now.
+    fn saved(&self) -> FontChoice {
+        self.settings
+            .as_deref()
+            .map(|d| crate::fonts::saved_in(d).0)
+            .unwrap_or_default()
+    }
+
+    /// Draw in `choice` from now on: Atkinson Hyperlegible Next, and a note, when it can't be
+    /// used. The choice is kept either way, so a font that can't be used is tried again only
+    /// when the setting changes.
+    fn apply(&mut self, choice: FontChoice) -> Result<(), String> {
+        let font = CaptionFont::for_choice(&choice);
+        let label = choice.label(false);
+        self.choice = choice;
+        match font {
+            Ok(f) => {
+                self.font = Arc::new(f);
+                Ok(())
+            }
+            Err(e) => {
+                self.font = Arc::new(CaptionFont::default());
+                Err(format!(
+                    "the caption can't be drawn in {label}, the font chosen in the app ({}); it \
+                     is in Atkinson Hyperlegible Next",
+                    e.trim_end_matches('.')
+                ))
+            }
+        }
     }
 
     /// The fonts to draw the caption in.

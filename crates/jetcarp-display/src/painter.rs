@@ -137,6 +137,11 @@ impl Painter {
         p
     }
 
+    /// Draw the caption in `font` (the app's font setting, [`crate::caption::FontWatch`]).
+    pub fn set_caption_font(&mut self, font: &std::sync::Arc<crate::caption::CaptionFont>) {
+        self.caption.set_font(font);
+    }
+
     /// Whether the target was configured to be read in place ([`readable`]).
     pub fn set_readable(&mut self, readable: bool) {
         self.readable = readable;

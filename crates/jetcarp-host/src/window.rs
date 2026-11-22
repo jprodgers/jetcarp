@@ -786,6 +786,7 @@ impl App {
         o.painter.set_guard_on(self.core.desktop_guard_on());
         o.painter
             .set_guard_at_risk(self.core.desktop_guard_at_risk());
+        o.painter.set_caption_font(self.core.caption_font());
         o.painter.paint(
             &gpu.device,
             &gpu.queue,
