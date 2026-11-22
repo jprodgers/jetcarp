@@ -635,6 +635,10 @@ struct Row {
     softened: f32,
     action: &'static str,
     cap: Option<f32>,
+    /// Frames of what the guard showed in which the reference failed: by the strictest reading
+    /// (each pixel's own transitions in the last second), and concurrently (#289).
+    shown_fail_frames: u32,
+    shown_concurrent_frames: u32,
 }
 
 impl Row {
@@ -651,6 +655,24 @@ fn worse(a: &FlashReading, b: &FlashReading) -> bool {
 
 /// Runs a case for `secs` seconds at 60 frames a second, unguarded and through the guard.
 fn run(c: &Case, secs: f64) -> Row {
+    run_recorded(c, secs, None)
+}
+
+/// The same, saving the frames as drawn to `rec/off` and as the guard showed them to `rec/on`, as
+/// PNGs (`00000.png` on), for IRIS (#289). Nothing is shown on a screen.
+fn run_recorded(c: &Case, secs: f64, rec: Option<&std::path::Path>) -> Row {
+    let save = |sub: &str, k: u32, px: &[u8]| {
+        if let Some(dir) = rec {
+            let d = dir.join(sub);
+            std::fs::create_dir_all(&d).unwrap();
+            let img = jetcarp_core::render::Image {
+                width: VW,
+                height: VH,
+                rgba: px.to_vec(),
+            };
+            jetcarp_core::render::write_png(&d.join(format!("{k:05}.png")), &img, &[]).unwrap();
+        }
+    };
     let frames = (secs * FPS) as u32;
     // Unguarded: the reference and the guard's meter on the frames as drawn.
     let mut world = c.world.clone();
@@ -665,6 +687,7 @@ fn run(c: &Case, secs: f64) -> Row {
             world.step();
         }
         let px = draw(&world, c);
+        save("off", k, &px);
         letter = letter.worse(wcag.update(&px, t));
         let r = meter.update(&reduce(&px, VW, VH), t);
         if worse(&drawn, &r) {
@@ -682,6 +705,7 @@ fn run(c: &Case, secs: f64) -> Row {
     let mut queue = VecDeque::new();
     let (mut due, mut shown_letter, mut shown, mut veiled, mut softened) =
         (0.0f64, Letter::default(), 0u32, 0f32, 0f32);
+    let (mut shown_fail_frames, mut shown_concurrent_frames) = (0u32, 0u32);
     for k in 0..frames {
         let t = k as f64 / FPS;
         let pace = guard.cap().map_or(c.speed, |cap| (cap as f64).min(c.speed));
@@ -694,7 +718,12 @@ fn run(c: &Case, secs: f64) -> Row {
         let px = draw(&world, c);
         let plan = guard.plan().clone();
         let s = soft.apply(&px, VW, VH, &plan, (1.0 / FPS) as f32);
-        shown_letter = shown_letter.worse(wcag.update(s.shown.as_deref().unwrap_or(&px), t));
+        let out = s.shown.as_deref().unwrap_or(&px);
+        save("on", k, out);
+        let now = wcag.update(out, t);
+        shown_fail_frames += now.fails() as u32;
+        shown_concurrent_frames += (now.concurrent > 6) as u32;
+        shown_letter = shown_letter.worse(now);
         let n = plan.veil.len().max(1) as f32;
         veiled = veiled.max(plan.veil.iter().filter(|v| v[0] > 0.0).count() as f32 / n);
         softened = softened.max(plan.soften.iter().filter(|s| **s).count() as f32 / n);
@@ -737,6 +766,8 @@ fn run(c: &Case, secs: f64) -> Row {
         softened,
         action: report.action.name(),
         cap: report.cap,
+        shown_fail_frames,
+        shown_concurrent_frames,
     }
 }
 
@@ -1277,5 +1308,376 @@ fn windows_against_pixels() {
             100.0 * est[1] / f,
             100.0 * most_est[1]
         );
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Restless ash (#289): change that does not come back.
+// ---------------------------------------------------------------------------------------------
+
+/// The share of a world's cells that change in the next generation, and of those not back in the
+/// one after: change that does not come back within two generations.
+fn change_shares(w: &World) -> (f64, f64) {
+    let mut a = w.clone();
+    let s0 = a.fields[0].state.clone();
+    a.step();
+    let s1 = a.fields[0].state.clone();
+    a.step();
+    let s2 = &a.fields[0].state;
+    let n = s0.len() as f64;
+    let changed = s0.iter().zip(&s1).filter(|(x, y)| x != y).count() as f64;
+    let restless = s0
+        .iter()
+        .zip(&s1)
+        .zip(s2)
+        .filter(|((x, y), z)| x != y && x != z)
+        .count() as f64;
+    (changed / n, restless / n)
+}
+
+/// Every named two-state Life-like rule and Generations rule of the Moore neighbourhood.
+fn life_like_and_generations() -> Vec<(&'static str, &'static str)> {
+    jetcarp_core::rules::CATALOG
+        .iter()
+        .filter(|e| e.notation.starts_with('B') && e.notation.contains("/S"))
+        .filter(|e| !e.notation.ends_with('V'))
+        .map(|e| (e.notation, e.name))
+        .collect()
+}
+
+/// A soup of `rule` (density 0.35) left to settle `gens` generations, drawn `px` pixels a cell at
+/// 30 generations a second.
+fn ash_case(rule: &str, name: &str, px: f64, palette: &'static str, screen: Option<f64>) -> Case {
+    let (world, p2) = ash(rule, px, palette, 1000, 7);
+    Case {
+        name: name.to_string(),
+        world,
+        cell_px: px,
+        palette,
+        speed: 30.0,
+        offset: 0.0,
+        screen,
+        p2,
+    }
+}
+
+fn print_restless(r: &Row, changed: f64, restless: f64) {
+    println!(
+        "| {} | {} | {} | {} | {:.0}% | {:.0}% | {:.0}% | {}, {} ({:.0}%) | {} ({}: area {}, fine {}, partial {}, screen {}) | {}, {} ({} / {} frames) | {:.0}% | {:.0}% | {}{} |",
+        r.name,
+        if r.window { "window" } else { "screen" },
+        r.cell_px,
+        r.palette,
+        changed * 100.0,
+        restless * 100.0,
+        r.p2 * 100.0,
+        r.letter.most(),
+        r.letter.concurrent,
+        r.letter.fail_share * 100.0,
+        level_name(r.drawn.worst()),
+        r.drawn.most(),
+        r.drawn.area_transitions.max(r.drawn.red_transitions),
+        r.drawn.fine_transitions,
+        r.drawn.partial_transitions,
+        r.drawn.screen_transitions,
+        r.shown_letter.most(),
+        r.shown_letter.concurrent,
+        r.shown_fail_frames,
+        r.shown_concurrent_frames,
+        r.veiled * 100.0,
+        r.softened * 100.0,
+        r.action,
+        r.cap.map_or(String::new(), |c| format!(", cap {c}"))
+    );
+}
+
+const RESTLESS_HEADER: &str = "| Ash | View | Cell px | Palette | Cells changing | Not back in 2 | Period 2 | Reference: strict, concurrent (area failing) | Guard as drawn | Reference on screen: strict, concurrent (frames failing) | Veiled | Softened | Guard action |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|";
+
+/// Dense restless ash (#289): the settled soups of Walled Cities, 34 Life and Long Life, whose
+/// cells keep changing without coming back, at cell sizes over 0.1°, in a window (where the stripe
+/// check cannot act on them).
+fn restless_cases() -> Vec<Case> {
+    [
+        ("B45678/S2345", "Walled Cities", 4.0, "Ember"),
+        ("B45678/S2345", "Walled Cities", 4.0, "Paper"),
+        ("B45678/S2345", "Walled Cities", 8.0, "Thermal"),
+        ("B34/S34", "34 Life", 4.0, "Ember"),
+        ("B34/S34", "34 Life", 8.0, "Paper"),
+        ("B345/S5", "Long Life", 4.0, "Thermal"),
+        ("B345/S5", "Long Life", 4.0, "Paper"),
+    ]
+    .into_iter()
+    .map(|(rule, name, px, pal)| ash_case(rule, name, px, pal, SCREEN))
+    .collect()
+}
+
+/// WCAG counted pixel by pixel says dense restless ash flashes, by the strictest reading and
+/// concurrently (the pixels that make a transition in one frame, over a quarter of a field, each
+/// made more than six in the last second), and the guard's meter counts it as flashing as drawn
+/// (#289).
+#[test]
+fn restless_ash_flashes_by_the_reference_and_the_guard() {
+    let rows: Vec<Row> = restless_cases().par_iter().map(|c| run(c, 1.5)).collect();
+    let wrong: Vec<String> = rows
+        .iter()
+        .filter(|r| !(r.letter.fails() && r.letter.concurrent > 6 && r.drawn.worst().fails()))
+        .map(|r| {
+            format!(
+                "{} ash, {} px a cell, {}: reference {} (concurrently {}), guard {:?} ({})",
+                r.name,
+                r.cell_px,
+                r.palette,
+                r.letter.most(),
+                r.letter.concurrent,
+                r.drawn.worst(),
+                r.drawn.most()
+            )
+        })
+        .collect();
+    assert!(wrong.is_empty(), "not counted:\n{}", wrong.join("\n"));
+}
+
+/// Through the guard, as a screen shows it, dense restless ash never flashes, measured pixel by
+/// pixel by the reference by its strictest reading: two flashes a second at most, from the start,
+/// before the pace cap holds as after (#289). In a window, and over the whole screen; and a Seeds
+/// soup, which is restless too.
+#[test]
+fn through_the_guard_restless_ash_stays_under_the_limit() {
+    let mut cases = restless_cases();
+    for (rule, name) in [("B45678/S2345", "Walled Cities"), ("B34/S34", "34 Life")] {
+        cases.push(ash_case(rule, name, 4.0, "Ember", None));
+    }
+    cases.push(ash_case("B2/S", "Seeds", 4.0, "Ember", SCREEN));
+    let rows: Vec<Row> = cases.par_iter().map(|c| run(c, 4.0)).collect();
+    let through: Vec<String> = rows
+        .iter()
+        .filter(|r| r.shown_letter.most() > 4)
+        .map(|r| {
+            format!(
+                "{} ash, {} px a cell, {}, {}: {} transitions a second shown, pixel by pixel \
+                 (concurrently {}; {} frames failing; {:?}, {:.0}% veiled, cap {:?})",
+                r.name,
+                r.cell_px,
+                r.palette,
+                if r.window { "window" } else { "whole screen" },
+                r.shown_letter.most(),
+                r.shown_letter.concurrent,
+                r.shown_fail_frames,
+                r.action,
+                r.veiled * 100.0,
+                r.cap
+            )
+        })
+        .collect();
+    assert!(
+        through.is_empty(),
+        "the guard let through:\n{}",
+        through.join("\n")
+    );
+}
+
+/// Busy scenes that WCAG counted pixel by pixel does not count as flashing concurrently are not
+/// veiled (#289): Brian's Brain, Lava and a Life soup at 30 generations a second. Their cells
+/// change all over the field, but a pixel seldom flashes more than three times a second while
+/// those around it do.
+#[test]
+fn busy_scenes_that_do_not_flash_concurrently_are_not_veiled() {
+    let mut cases = vec![];
+    for (px, pal) in [(4.0, "Ember"), (8.0, "Paper"), (16.0, "Thermal")] {
+        cases.push(ash_case("B2/S/C3", "Brian's Brain", px, pal, SCREEN));
+        cases.push(ash_case("B2/S/C3", "Brian's Brain", px, pal, None));
+    }
+    for (px, pal) in [(4.0, "Ember"), (8.0, "Paper")] {
+        cases.push(ash_case("B45678/S12345/C8", "Lava", px, pal, SCREEN));
+    }
+    cases.extend(
+        ordinary(4.0, "Ember")
+            .into_iter()
+            .filter(|c| c.name == "Life soup"),
+    );
+    let rows: Vec<Row> = cases.par_iter().map(|c| run(c, 3.0)).collect();
+    let wrong: Vec<String> = rows
+        .iter()
+        .filter(|r| r.letter.concurrent > 6 || r.veiled > 0.0)
+        .map(|r| {
+            format!(
+                "{}, {} px a cell, {}, {}: reference concurrently {} (strictly {}), veiled {:.0}%",
+                r.name,
+                r.cell_px,
+                r.palette,
+                if r.window { "window" } else { "whole screen" },
+                r.letter.concurrent,
+                r.letter.most(),
+                r.veiled * 100.0
+            )
+        })
+        .collect();
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Every named Life-like and Generations rule's soup left to settle 1,000 generations, drawn 4
+/// pixels a cell in Ember in a window at 30 generations a second (ignored; `--ignored
+/// --nocapture`): how much of it changes, and what the reference (strictly and concurrently) and
+/// the guard read, as drawn and as shown.
+#[test]
+#[ignore]
+fn restless_ash_of_the_named_rules() {
+    let px: f64 = std::env::var("JETCARP_RESTLESS_PX")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(4.0);
+    let rows: Vec<(Row, f64, f64)> = life_like_and_generations()
+        .par_iter()
+        .map(|&(rule, name)| {
+            let c = ash_case(rule, &format!("{name} ({rule})"), px, "Ember", SCREEN);
+            let (changed, restless) = change_shares(&c.world);
+            (run(&c, 3.0), changed, restless)
+        })
+        .collect();
+    println!("{RESTLESS_HEADER}");
+    for (r, changed, restless) in &rows {
+        print_restless(r, *changed, *restless);
+    }
+}
+
+/// The restless ash studied (#289): the Life-like rules that settle with the most change that does
+/// not come back, and the Generations rules, Brian's Brain among them.
+const RESTLESS: &[(&str, &str)] = &[
+    // Settled, with change that does not come back.
+    ("B45678/S2345", "Walled Cities"),
+    ("B34/S34", "34 Life"),
+    ("B345/S5", "Long Life"),
+    ("B3/S023", "DotLife"),
+    // Still chaotic after 1,000 generations.
+    ("B234/S", "Serviettes"),
+    ("B2/S", "Seeds"),
+    ("B1/S1", "Gnarl"),
+    ("B1357/S1357", "Replicator"),
+    ("B1357/S02468", "Fredkin"),
+    // Generations rules: those whose soups change most, and Brian's Brain.
+    ("B2/S/C3", "Brian's Brain"),
+    ("B45678/S12345/C8", "Lava"),
+    ("B23/S2/C8", "RainZha"),
+    ("B23/S23/C8", "BelZhab"),
+    ("B2/S23/C8", "Cooties"),
+    ("B2356/S1456/C16", "Xtasy"),
+];
+
+/// The study's table (ignored; `--ignored --nocapture`, rules by name in `JETCARP_RESTLESS_RULES`,
+/// split by commas): each restless ash at 1 to 16 pixels a cell, in a dark palette, the strongest
+/// and a light one, in a window and over the whole screen, 30 generations a second for 3 seconds.
+/// With `JETCARP_STROBE_RECORD=DIR`, the whole-screen cases at 2, 4, 8 and 16 pixels in Ember and
+/// Paper are saved as drawn and as the guard showed them, `DIR/<case>/<off|on>/00000.png`, for
+/// IRIS (and with `JETCARP_RESTLESS_RECORD_ONLY=1` only those cases are run).
+#[test]
+#[ignore]
+fn restless_table() {
+    let only = std::env::var("JETCARP_RESTLESS_RULES").ok();
+    let rec = std::env::var_os("JETCARP_STROBE_RECORD").map(std::path::PathBuf::from);
+    let rec_only = std::env::var_os("JETCARP_RESTLESS_RECORD_ONLY").is_some();
+    let recorded = |c: &Case| {
+        c.screen.is_none() && [2.0, 4.0, 8.0, 16.0].contains(&c.cell_px) && c.palette != "Thermal"
+    };
+    let mut cases = vec![];
+    for &(rule, name) in RESTLESS {
+        if only
+            .as_deref()
+            .is_some_and(|o| !o.split(',').any(|n| n == name))
+        {
+            continue;
+        }
+        for &px in &[1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0] {
+            for &pal in &["Ember", "Thermal", "Paper"] {
+                for screen in [SCREEN, None] {
+                    let c = ash_case(rule, name, px, pal, screen);
+                    if !rec_only || recorded(&c) {
+                        cases.push(c);
+                    }
+                }
+            }
+        }
+    }
+    let rows: Vec<(Row, f64, f64)> = cases
+        .par_iter()
+        .map(|c| {
+            let dir = rec.as_ref().filter(|_| recorded(c)).map(|d| {
+                d.join(format!(
+                    "{}-{}px-{}",
+                    c.name.replace([' ', '\''], "-"),
+                    c.cell_px,
+                    c.palette
+                ))
+            });
+            let (changed, restless) = change_shares(&c.world);
+            (run_recorded(c, 3.0, dir.as_deref()), changed, restless)
+        })
+        .collect();
+    println!("{RESTLESS_HEADER}");
+    for (r, changed, restless) in &rows {
+        print_restless(r, *changed, *restless);
+    }
+    let gaps = rows
+        .iter()
+        .filter(|(r, _, _)| r.cell_px >= 3.0 && r.letter.fails() && r.shown_letter.fails())
+        .count();
+    let conc = rows
+        .iter()
+        .filter(|(r, _, _)| {
+            r.cell_px >= 3.0 && r.letter.concurrent > 6 && r.shown_letter.concurrent > 6
+        })
+        .count();
+    println!(
+        "\nOf {} cases, at 3 pixels a cell and more: {gaps} fail on screen by the strictest reading \
+         where the reference fails what is drawn; {conc} concurrently",
+        rows.len()
+    );
+}
+
+/// The reference on recordings (ignored; `JETCARP_WCAG_DIRS=DIR,DIR --ignored --nocapture`): each
+/// a folder of PNGs at 60 frames a second, such as the IRIS comparison's: the most transitions in
+/// a second over a quarter of a field, strictly and concurrently, the share failing, and how many
+/// frames fail.
+#[test]
+#[ignore]
+fn the_reference_on_recordings() {
+    let Some(dirs) = std::env::var("JETCARP_WCAG_DIRS").ok() else {
+        eprintln!("skipped: set JETCARP_WCAG_DIRS");
+        return;
+    };
+    let dirs: Vec<&str> = dirs.split(',').collect();
+    let out: Vec<String> = dirs
+        .par_iter()
+        .map(|dir| {
+            let mut files: Vec<_> = std::fs::read_dir(dir)
+                .unwrap()
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().is_some_and(|x| x == "png"))
+                .collect();
+            files.sort();
+            let mut wcag: Option<Wcag> = None;
+            let (mut worst, mut fail, mut conc) = (Letter::default(), 0, 0);
+            for (k, f) in files.iter().enumerate() {
+                let img =
+                    jetcarp_core::media::encode::decode_png(&std::fs::read(f).unwrap()).unwrap();
+                let w = wcag.get_or_insert_with(|| Wcag::new(img.width, img.height));
+                let now = w.update(&img.rgba, k as f64 / FPS);
+                fail += now.fails() as u32;
+                conc += (now.concurrent > 6) as u32;
+                worst = worst.worse(now);
+            }
+            format!(
+                "{dir}: {} frames; strict {} (general {}, red {}; {:.0}% of a field failing), \
+                 concurrent {}; frames failing {fail}, concurrently {conc}",
+                files.len(),
+                worst.most(),
+                worst.general,
+                worst.red,
+                worst.fail_share * 100.0,
+                worst.concurrent
+            )
+        })
+        .collect();
+    for l in out {
+        println!("{l}");
     }
 }
