@@ -280,7 +280,11 @@ pub fn close_button(ctx: &egui::Context, win: &egui::Response, title: &str) -> b
     );
     let r = ui
         .interact(at, win.id.with("close"), egui::Sense::click())
-        .on_hover_text("Close (Esc, or Ctrl+W)");
+        .on_hover_text(if cfg!(target_os = "macos") {
+            "Close (Esc, or ⌘W)"
+        } else {
+            "Close (Esc, or Ctrl+W)"
+        });
     let name = format!("Close {title}");
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
     let visuals = ui.style().interact(&r);
