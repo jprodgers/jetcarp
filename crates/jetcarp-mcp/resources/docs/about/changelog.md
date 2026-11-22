@@ -145,17 +145,26 @@ day later (0.4.2: 17 November here, 18 November there).
 - **A font whose letters are easier to tell apart, and any font you like.** The app's words are
   now in Atkinson Hyperlegible Next, its monospaced text in Atkinson Hyperlegible Mono, and its
   headings and window titles in Atkinson Hyperlegible Next Bold: fonts whose letters are easier to
-  tell apart, designed by the Braille Institute for low-vision readers. The caption on the desktop
-  background and the screen savers is drawn in it, and the book is set in it, from font files that
-  come with the book. *Settings → Accessibility* has a *Font* and a *Monospace font*: Atkinson (the
-  default), egui's original fonts, every font installed on the computer, or a font file. The
-  choice applies at once and is saved; egui's fonts stay behind whichever is chosen, for any
-  character it lacks; and a file that isn't a font, or a font without basic Latin letters and
-  digits, is refused with a sentence saying so. The fonts ship unmodified under the SIL Open Font
-  License 1.1. Tests check the default fonts, that every symbol the interface uses is still drawn,
-  that an installed font chosen is used, saved and put back at the next start, that a bad file is
-  refused, and that screen readers are told the same names in every font. Every picture of the app
-  in the book is drawn again. ([Accessibility settings](../guides/accessibility-settings.md#font))
+  tell apart, designed by the Braille Institute for low-vision readers. The book is set in it, from
+  font files that come with the book, and so are the clip-rating page and the website export's
+  page, which carry the fonts inside them and still work offline as one file. *Settings →
+  Accessibility* has a *Font* and a *Monospace font*: Atkinson (the default), egui's original
+  fonts, every font installed on the computer, or a font file. The choice applies at once and is
+  saved, and the caption on the desktop background and the Windows screen saver follows it: the
+  desktop background reads the setting every couple of seconds, so a font chosen in the app shows
+  there without a restart (Atkinson when the chosen font can't be loaded). egui's fonts stay
+  behind whichever font is chosen, for any character it lacks; a character none of them has, such
+  as the macOS key symbols (⌘, ⌥) or Chinese, Japanese and Korean, is drawn in an installed font
+  that has it, found when the app starts without holding it up; and a file that isn't a font, or a
+  font without basic Latin letters and digits, is refused with a sentence saying so. A preset of
+  your own in the Reseed pane is marked with `*`, which every font has, rather than a star. The
+  fonts ship unmodified under the SIL Open Font License 1.1. Tests check the default fonts, that
+  every symbol the interface uses is still drawn, and with an installed font that has them the key
+  symbols too, that an installed font chosen is used, saved and put back at the next start, that
+  the desktop background's caption follows the setting and goes back to Atkinson when the chosen
+  font file is gone, that a bad file is refused, and that screen readers are told the same names
+  in every font. Every picture of the app in the book is drawn again.
+  ([Accessibility settings](../guides/accessibility-settings.md#font))
 - **Copy as RLE.** *Edit → Copy as RLE* copies the world's pattern, and *Copy as RLE* on a library
   pattern copies that one, as the run-length text Golly and LifeViewer read, ready to post on the
   ConwayLife forums: two-state B/S rules on the square grid (Moore or von Neumann) and the hexagon

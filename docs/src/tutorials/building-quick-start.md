@@ -148,8 +148,8 @@ rating page: /home/ada/clips/index.html
 ```
 
 With `--page`, the folder also gets `index.html`, a page for rating the clips. Open it in a web
-browser: it needs no network, so it works from the folder, and it follows your system's light or
-dark setting. Each clip has *Keep*, *Maybe* and *Drop* buttons and a *★* for one you would show
+browser: it needs no network, so it works from the folder (its fonts, Atkinson Hyperlegible Next
+and Mono as in the app, are inside it), and it follows your system's light or dark setting. Each clip has *Keep*, *Maybe* and *Drop* buttons and a *★* for one you would show
 someone. The keyboard works too: ← and → move between clips, K, M and D rate the current one and
 move on, and S stars it. The browser keeps your ratings as you go, so you can close the page and
 come back. When you are done, *Save ratings* downloads them as one file, and `jobs review --from`

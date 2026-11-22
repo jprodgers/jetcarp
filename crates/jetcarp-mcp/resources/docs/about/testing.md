@@ -135,16 +135,31 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   behind them in egui's order; egui's original choice must give exactly the fonts the app had
   before. Every non-ASCII character in the app's and the display crate's strings, read from their
   source, must be drawn in each family wherever egui's own fonts drew it, and Greek and accented
-  Latin must be drawn; six symbols that no built-in font has (the macOS key symbols and the Reseed
-  pane's star) are listed, and CJK is drawn as before, by none. Installed fonts must be found by
+  Latin must be drawn; the five macOS key symbols, which no built-in font has, are listed, and CJK
+  is drawn by none of them. With a stand-in installed font that has the key symbols, an arrow and
+  two CJK characters (a font file the test builds, as no machine's fonts can be counted on), every
+  one of those characters must be drawn in each family, in Atkinson and in egui's original fonts:
+  the key symbols and CJK from the installed font, the arrow still from egui's; and the installed
+  fonts' character maps must be read on a thread of their own, starting it taking under 50 ms, and
+  put in place when read. The index of installed fonts by character must give the upright regular
+  face in the smallest file, and leave out LastResort, hidden fonts and files that aren't fonts
+  (`crates/jetcarp-display/src/fonts.rs`); an ignored test times it on a machine's own fonts
+  (`time_the_fallback_scan`: 0.03 to 0.09 ms to start the thread, 9 to 94 ms for the reading on the
+  test machine's 299 font files). Installed fonts must be found by
   family in nested folders of a scratch font folder, the upright regular face of each, with a file
   that isn't a font, one without basic Latin and one of another type left out; a font chosen from
   them must be in place at once, saved in `app.json` and put back by the next start; and a file
   that isn't a font, one without basic Latin, and one that has gone must each be refused with a
   sentence that names the file and no folder, the setting going back to Atkinson
   (`crates/jetcarp-app/src/fonts.rs`, `app/accessibility.rs`). The caption on surfaces with no egui
-  must draw in Atkinson Hyperlegible Next, with Ubuntu Light for the Greek it lacks
-  (`jetcarp-display/src/caption.rs`).
+  must draw in Atkinson Hyperlegible Next, with Ubuntu Light for the Greek it lacks, and follow
+  the app's font setting in `app.json`: a font file chosen there from the next check without a
+  restart and at the next start, egui's original, then Atkinson again; and with the chosen file
+  removed, Atkinson, with a note that names the file and no folder
+  (`jetcarp-display/src/caption.rs`). The clip-rating page and the website export's page must
+  carry Atkinson Hyperlegible Next (and the rating page Mono) inside them, the files those the
+  fonts' README names by SHA-256, and fetch nothing from elsewhere
+  (`jetcarp-core/src/web_fonts.rs`, `jetcarp-api/tests/explore.rs`, `jetcarp-store/tests/website.rs`).
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the

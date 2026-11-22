@@ -106,8 +106,8 @@ app takes it as light; a desktop it can't read at all leaves the app dark.
 The app's words are in **Atkinson Hyperlegible Next**, and its monospaced text (rules, scripts,
 numbers in tables) in **Atkinson Hyperlegible Mono**: fonts whose letters are easier to tell
 apart, designed by the Braille Institute for low-vision readers. Headings and window titles are
-in its bold. The caption on the desktop background and the screen savers is drawn in it too, and
-so is this book.
+in its bold. So is this book, and so are the pages JETCARP writes for a browser (the clip-rating
+page and the website export's page), which carry the fonts inside them.
 
 Two lists choose the fonts, **Font** for the app's words and **Monospace font** for its
 monospaced text. Each offers:
@@ -119,17 +119,33 @@ monospaced text. Each offers:
   `~/.local/share/fonts` and `~/.fonts` on Linux; `C:\Windows\Fonts` and
   `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows; `/System/Library/Fonts`, `/Library/Fonts`
   and `~/Library/Fonts` on macOS. It lists the fonts that draw basic Latin letters and digits, and
-  draws each family in its upright face nearest regular weight. Someone who prefers another font,
-  OpenDyslexic for instance, chooses it here once it is installed;
+  draws each family in its upright face nearest regular weight. Someone who reads more easily in
+  another font chooses it here once it is installed;
 - **Choose a font file…**, for a TrueType or OpenType file (`.ttf`, `.otf`, `.ttc`) that isn't
   installed.
 
 The choice applies at once, and is saved with the other settings (`font` and `mono_font` in the
 `accessibility` section of `app.json`, the file's path among them). Whatever font is chosen,
 egui's own fonts stay behind it: a character the font lacks is drawn in Ubuntu Light (Greek,
-Cyrillic and more Latin letters), then egui's icons, then Hack (arrows, boxes and dots). None of
-the fonts that come with the app draws Chinese, Japanese or Korean; choose an installed font that
-does to see names written in them.
+Cyrillic and more Latin letters), then egui's icons, then Hack (arrows, boxes and dots).
+
+A character that none of those has is drawn, as a last resort, in a font installed on the computer
+that has it: the macOS key symbols (⌘, ⌥, ⌃, ⌫, ⌦) in the keyboard window's macOS column and the
+macOS menus, which macOS's own fonts have, and Chinese, Japanese and Korean, wherever a font for
+them is installed. The app reads which characters each installed font has (from the folders
+above) when it starts, on a thread of its own so starting isn't held up; until it has, which takes
+a fraction of a second, such a character is a box. Of the fonts that have a character, it uses
+the upright regular face in the smallest file, so the same fonts give the same answer every time.
+Without a font that has it, a character is still drawn as a box.
+
+**The caption on the desktop background follows the Font setting** (its first list): the desktop
+background reads it from `app.json` when it starts and again every couple of seconds, so a font
+chosen in the app shows on the desktop without a restart. Behind the chosen font, the caption
+has Ubuntu Light, as the app has; with egui's original choice it is drawn in Ubuntu Light alone.
+If the chosen font can't be loaded there (a file since removed), the caption is drawn in
+Atkinson Hyperlegible Next and the desktop background's log says why. The Windows screen saver
+reads the setting when it starts. The macOS screen saver, which runs apart from the rest of
+JETCARP, keeps Atkinson Hyperlegible Next.
 
 A file that isn't a font JETCARP can read, or a font with no basic Latin letters and digits, is
 refused with a sentence saying so, and the setting stays as it was. If a font chosen earlier has
