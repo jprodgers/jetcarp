@@ -1817,6 +1817,30 @@ fn child_each_tool_window_and_dialog_closes_from_the_keyboard() {
         }
         k.frames(2);
     }
+    // Every tool window, opened as its menu item (or its key) opens it: Esc closes it at once.
+    for t in menu::ToolWin::ALL {
+        if !k.app.action_enabled(menu::Action::Tool(t)) {
+            continue;
+        }
+        k.app.run_action(&k.ctx.clone(), menu::Action::Tool(t));
+        k.frames(4);
+        let on = k.focused_name();
+        let typing = k.ctx.text_edit_focused();
+        k.key(Key::Escape);
+        k.frames(1);
+        if typing && k.app.tool_open(t) {
+            k.key(Key::Escape);
+            k.frames(1);
+        }
+        if k.app.tool_open(t) {
+            failures.push(format!(
+                "{}, opened from its menu item: Esc left it open (the keyboard was on {on:?})",
+                t.label()
+            ));
+            k.app.set_tool_open(t, false);
+        }
+        k.frames(2);
+    }
     // Esc on a control of a docked pane: the keyboard goes back to the grid, the pane stays.
     let grid = k.grid_widget();
     let (pane, control) = crate::a11y::last_regions(&k.ctx)
