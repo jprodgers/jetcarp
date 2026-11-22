@@ -200,8 +200,8 @@ day later (0.4.2: 17 November here, 18 November there).
   ([Scripting](../reference/scripting.md))
 - **The strobe guard: JETCARP watches what it draws, and softens, slows or pauses a scene before
   it flashes more than three times a second or shows strong regular stripes.** Every frame is
-  measured as WCAG 2.3.1 defines flashes and red flashes (the red measure as WCAG 2.0 gives it,
-  which PEAT and IRIS use), with its area rule (a quarter of a 10° field, for a screen watched from
+  measured as WCAG 2.3.1 defines flashes and red flashes (a red flash by either WCAG 2.0's red
+  measure, which PEAT and IRIS use, or WCAG 2.2's change of chromaticity), with its area rule (a quarter of a 10° field, for a screen watched from
   40 cm at 96 pixels an inch for each step of its scale factor), and the screen's mean as IRIS
   measures it; regular high-contrast stripes over a quarter of the screen are measured as ITU-R
   BT.1702 describes them. The guard first softens the tiles that flash
@@ -215,7 +215,7 @@ day later (0.4.2: 17 November here, 18 November there).
   screen saver keep their own switch, on until turned off with the same confirmation, since people
   in the room never answered the warning. The switches are saved with the warning's answer;
   `jetcarp guard` shows them and `jetcarp guard --on` turns them back on, and no command, script or
-  MCP tool turns them off. Measuring a 1080p frame takes 0.02 ms on a Radeon 8060S.
+  MCP tool turns them off. Measuring a 1080p frame takes 0.07 ms on a Radeon 8060S.
   ([The strobe guard](../guides/strobe-guard.md), [#97](https://github.com/jprodgers/jetcarp/issues/97))
 - **Exported animations are checked for flashing and strong stripes before they are saved.** A GIF
   or WebP is measured at its own frame rate, looping as a player would. *File → Export animation…*
@@ -338,6 +338,16 @@ day later (0.4.2: 17 November here, 18 November there).
   (its speed, threads and GPU); each run it finds replays exactly. Every other search is
   reproducible (D-45 in `DECISIONS.md`). ([The exploratory search](../guides/searching.md#the-exploratory-search))
 
+- **The strobe guard counts a red flash by either WCAG definition.** WCAG 2.0's working
+  definition, which PEAT and IRIS use, is a change of at least 20 in `(R - G - B) × 320`; WCAG
+  2.2's is a change of more than 0.2 in CIE 1976 UCS chromaticity to or from a saturated red (red
+  to a green or a grey of its brightness, say). The guard used 2.0's alone; it now counts a red
+  flash when either says so, measured on each tile's mean colour by the same area rule, on the GPU
+  and on the processor alike. None of the strobe test corpus's verdicts changed; Hodgepodge in the
+  Prism palette at 30 generations a second, whose waves sweep through its red, goes from a red
+  warning to a red failure. Measuring a frame on a Radeon 8060S takes 0.07 ms at 1080p and 0.29 ms
+  at 3840 × 2160. ([The strobe guard](../guides/strobe-guard.md#what-it-measures),
+  [#270](https://github.com/jprodgers/jetcarp/issues/270))
 - **Tab moves the keyboard; F9 hides the panes.** Tab and Shift+Tab move between controls, as in
   other apps, so *View → Hide all panes* moves from Tab to F9, and *View → Auto-hide menu bar* from
   F10 to Ctrl+F10 (⌘F10 on macOS): F10 now opens the menus. The single-key shortcuts (R, F, S, + and
@@ -403,6 +413,23 @@ day later (0.4.2: 17 November here, 18 November there).
   [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
 ### Fixed
+
+- **The strobe guard counts a reversing checkerboard of squares smaller than its tiles as
+  flashing, as WCAG does.** A board of squares smaller than the guard's 16-pixel tiles keeps every
+  tile's mean brightness when it reverses, though every pixel of it changes, so the guard did not
+  count it; WCAG 2.3.1 does, unless the squares are under 0.1° (under 3 pixels at the distance the
+  guard assumes). Larger squares half a tile off the tiles' grid were missed the same way. Each
+  tile now also keeps its fine pattern (which of its windows of 4 by 4 pixels are clearly lighter
+  or darker than the tile), and a pattern that turns into its own negative is a transition of every
+  pixel in it, counted by the same area rule; squares of 1 and 2 pixels stay exempt, as WCAG says,
+  and ordinary scenes (Life soups, still lifes, gliders, blinkers) are read as before. Since
+  softening a tile's mean cannot calm such a pattern, the guard veils it where it flashes, at once,
+  and slows the scene as it slows any flashing scene; exported animations are veiled the same way.
+  The GPU works out the same patterns as the processor in the same pass: measuring a frame on a
+  Radeon 8060S took 0.07 ms at 1080p and 0.26 ms at 3840 × 2160 (1.5% of a 60 Hz frame) with them.
+  Code comments that cited "the Harding guidance" now cite Ofcom's guidance and ITU-R BT.1702-3.
+  ([Fine patterns](../guides/strobe-guard.md#fine-patterns),
+  [#269](https://github.com/jprodgers/jetcarp/issues/269))
 
 - **The Windows installer's `-Uninstall` leaves the user PATH alone when JETCARP's folder isn't on
   it.** It wrote the PATH back whatever it held, tidied (empty entries dropped), so a PATH could
@@ -708,10 +735,12 @@ day later (0.4.2: 17 November here, 18 November there).
   was cited; *The strobe guard*, *Accessibility* and *How JETCARP is tested* cite them. What the
   book called "the Harding guidance" is now cited as what it rests on, Ofcom's guidance and
   BT.1702, the source of the 40% allowed for still stripes. The page now says that the red measure
-  is WCAG 2.0's, not WCAG 2.2's newer one; that IRIS's rule for similar parts asks nothing of their
-  contrast, which JETCARP adds; and that a checkerboard reversing in squares smaller than a tile,
-  which WCAG counts as flashing unless its squares are under 0.1°, is caught only as stripes, over a
-  quarter of the screen.
+  was WCAG 2.0's, not WCAG 2.2's newer one (it now counts both,
+  [#270](https://github.com/jprodgers/jetcarp/issues/270)); that IRIS's rule for similar parts asks
+  nothing of their contrast, which JETCARP adds; and it found that a checkerboard reversing in
+  squares smaller than a
+  tile, which WCAG counts as flashing unless its squares are under 0.1°, was caught only as stripes,
+  over a quarter of the screen (now fixed, [#269](https://github.com/jprodgers/jetcarp/issues/269)).
   ([The strobe guard](../guides/strobe-guard.md), [Bibliography](../research/bibliography.md))
 
 ## [0.4.2] – 2026-11-17
