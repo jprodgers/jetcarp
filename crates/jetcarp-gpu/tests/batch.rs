@@ -406,7 +406,7 @@ fn near_life(s: &mut u64, states: u8) -> IsoRule {
         let (mut birth, mut survive) = IsoRule::from_masks(b, sv, states).class_masks();
         for _ in 0..1 + rng_next(s) % 6 {
             let k = rng_next(s) % CLASSES;
-            if rng_next(s) % 2 == 0 {
+            if rng_next(s).is_multiple_of(2) {
                 birth ^= 1 << k.max(1);
             } else {
                 survive ^= 1 << k;
@@ -513,7 +513,7 @@ fn iso_job(topo: &Arc<Topology>, nb: Nb, rules: &[Rule], gens: u32, seed: u64) -
             let k = seed + k as u64;
             BatchWorld {
                 rule: r.clone(),
-                init: if k % 3 == 0 {
+                init: if k.is_multiple_of(3) {
                     dense_init(n, states, k)
                 } else {
                     random_init(n, states, k)

@@ -1865,8 +1865,9 @@ impl Search {
         ltl_ok: bool,
     ) -> (bool, usize, Vec<(Fam, f64)>) {
         let ltl_round = ltl_ok && (fams.is_empty() || rng.below(8) == 0);
-        let (tied, rest): (Vec<(Fam, f64)>, Vec<(Fam, f64)>) = fams
+        let (tied, rest): (Vec<_>, Vec<_>) = fams
             .iter()
+            .copied()
             .partition(|(f, _)| f.only_on().is_some_and(|k| self.tiling_index(k).is_some()));
         if !ltl_round && !tied.is_empty() {
             let weight = |v: &[(Fam, f64)]| v.iter().map(|x| x.1).sum::<f64>();
