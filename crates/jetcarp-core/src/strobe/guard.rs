@@ -37,6 +37,14 @@
 //! mean changes with its pattern does not flip the veil's grey with it. Veiling counts as softening
 //! for the pace cap: a scene still flashing after [`SLOW_AFTER`] is slowed.
 //!
+//! **Restless change** (#289), dense ash that keeps changing in part of each tile without coming
+//! back (Walled Cities, 34 Life), is veiled the same way once it flashes by the area rule on its
+//! own at [`RESTLESS_ACT`] transitions a second
+//! ([`super::flash::FlashReading::restless_transitions`]): softening its tiles' means leaves its
+//! pixels flashing until the pace cap holds, a second later. Busy scenes whose change is not a
+//! flash by WCAG counted pixel by pixel (a Life soup, Brian's Brain) read under that, and are left
+//! to the softening.
+//!
 //! The guard changes only what is shown and how fast generations are shown; a world computes the
 //! same generations either way. Switched off, it still measures, so the status can say a scene
 //! flashes, but it does nothing.
@@ -69,6 +77,12 @@ pub const RECAP_AFTER: f64 = 1.5;
 
 /// Seconds a scene may go on flashing at [`MIN_PACE`] before it is paused.
 pub const PAUSE_AFTER: f64 = 2.0;
+
+/// Transitions a second, by the area rule over restless change in part of tiles alone (#289),
+/// that veil it: two flashes, the warning level, well before the seven that fail. A Life soup and
+/// Brian's Brain at 30 generations a second read 2 at most this way (and 1 to 2 by WCAG counted
+/// pixel by pixel, concurrently), so they are left to the softening; dense restless ash reads 8.
+pub const RESTLESS_ACT: u32 = WARN_TRANSITIONS;
 
 /// The contrast a veil leaves strong stripes with: under the stripe check's threshold.
 pub const VEIL_CONTRAST: f32 = 0.04;
@@ -408,7 +422,9 @@ impl Guard {
         // Windows changing where their tile's mean moves much less (#275): a field of blinkers,
         // toads or clocks.
         let partial_flashing = drawn.partial_transitions >= threshold;
-        if (fine_flashing || partial_flashing) && self.can_soften {
+        // Restless change in part of tiles (#289): dense ash that does not come back.
+        let restless_flashing = drawn.restless_transitions >= RESTLESS_ACT.max(threshold);
+        if (fine_flashing || partial_flashing || restless_flashing) && self.can_soften {
             self.fine_until = t + HOLD;
         }
         let mut any = self.fine_until >= t;
@@ -420,9 +436,10 @@ impl Guard {
             (true, None) => {
                 self.softening_since = Some(t);
                 // The tiles softened, or about to be veiled for their fine patterns.
-                let (fine, partial) = (
+                let (fine, partial, restless) = (
                     self.input.tile_fine_counts(),
                     self.input.tile_partial_counts(),
+                    self.input.tile_restless_counts(),
                 );
                 let n = self.plan.soften.len();
                 let share = (0..n)
@@ -430,6 +447,7 @@ impl Guard {
                         self.plan.soften[i]
                             || (fine_flashing && fine.get(i).is_some_and(|c| *c > 0))
                             || (partial_flashing && partial.get(i).is_some_and(|c| *c > 0))
+                            || (restless_flashing && restless.get(i).is_some_and(|c| *c >= 2))
                     })
                     .count() as f32
                     / n.max(1) as f32;
@@ -460,13 +478,16 @@ impl Guard {
         // to the softening.) The veil comes on at once (the change it makes is one transition of
         // each pixel, as the next reversal would be) and goes as any veil does.
         let mut at_once = vec![false; self.veil_target.len()];
-        if (fine_flashing || partial_flashing) && self.can_soften {
+        if (fine_flashing || partial_flashing || restless_flashing) && self.can_soften {
             let n = self.veil_target.len();
             let fine = self.input.tile_fine_counts();
             let partial = self.input.tile_partial_counts();
-            for i in (0..n)
-                .filter(|&i| (fine_flashing && fine[i] > 0) || (partial_flashing && partial[i] > 0))
-            {
+            let restless = self.input.tile_restless_counts();
+            for i in (0..n).filter(|&i| {
+                (fine_flashing && fine[i] > 0)
+                    || (partial_flashing && partial[i] > 0)
+                    || (restless_flashing && restless[i] >= 2)
+            }) {
                 let v = fine_veil(f.input, i);
                 let (c, r) = ((i as u32 % cols) as i64, (i as u32 / cols) as i64);
                 for dy in -1..=1 {
@@ -531,7 +552,8 @@ impl Guard {
         let shown_most = shown.transitions.max(shown.red_transitions);
         let shown_bad =
             shown_most > MAX_TRANSITIONS || (softened_long && shown_most >= WARN_TRANSITIONS);
-        let needs_slowing = (flashing && (softened_long || !self.can_soften)) || shown_bad;
+        let needs_slowing =
+            ((flashing || restless_flashing) && (softened_long || !self.can_soften)) || shown_bad;
         if self.paused.is_none() && needs_slowing && t - self.cap_at >= RECAP_AFTER - 1e-9 {
             let reached = pace
                 .reached

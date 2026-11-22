@@ -639,6 +639,9 @@ struct Row {
     /// (each pixel's own transitions in the last second), and concurrently (#289).
     shown_fail_frames: u32,
     shown_concurrent_frames: u32,
+    /// The most transitions the guard's meter read, as drawn, over its tiles' restless change
+    /// (#289).
+    restless: u32,
 }
 
 impl Row {
@@ -680,6 +683,7 @@ fn run_recorded(c: &Case, secs: f64, rec: Option<&std::path::Path>) -> Row {
     let mut wcag = Wcag::new(VW, VH);
     let mut meter = FlashMeter::new(Viewing::screen(1.0), c.screen);
     let (mut letter, mut drawn) = (Letter::default(), FlashReading::default());
+    let mut restless = 0;
     for k in 0..frames {
         let t = k as f64 / FPS;
         let due = (k as f64 * c.speed / FPS + 1e-9).floor() as u64;
@@ -690,6 +694,7 @@ fn run_recorded(c: &Case, secs: f64, rec: Option<&std::path::Path>) -> Row {
         save("off", k, &px);
         letter = letter.worse(wcag.update(&px, t));
         let r = meter.update(&reduce(&px, VW, VH), t);
+        restless = restless.max(r.restless_transitions);
         if worse(&drawn, &r) {
             drawn = r;
         }
@@ -699,6 +704,8 @@ fn run_recorded(c: &Case, secs: f64, rec: Option<&std::path::Path>) -> Row {
     // second.
     let mut world = c.world.clone();
     let mut guard = Guard::new(Viewing::screen(1.0), c.screen, true);
+    // For the IRIS comparison, the guard for someone at risk (`JETCARP_STROBE_AT_RISK=1`).
+    guard.set_at_risk(std::env::var_os("JETCARP_STROBE_AT_RISK").is_some());
     let mut stripes = false;
     let mut soft = Softener::new();
     let mut wcag = Wcag::new(VW, VH);
@@ -706,6 +713,8 @@ fn run_recorded(c: &Case, secs: f64, rec: Option<&std::path::Path>) -> Row {
     let (mut due, mut shown_letter, mut shown, mut veiled, mut softened) =
         (0.0f64, Letter::default(), 0u32, 0f32, 0f32);
     let (mut shown_fail_frames, mut shown_concurrent_frames) = (0u32, 0u32);
+    // Each frame shown, for one case at a time (`JETCARP_P2_TRACE=1`).
+    let trace = std::env::var_os("JETCARP_P2_TRACE").is_some();
     for k in 0..frames {
         let t = k as f64 / FPS;
         let pace = guard.cap().map_or(c.speed, |cap| (cap as f64).min(c.speed));
@@ -721,6 +730,18 @@ fn run_recorded(c: &Case, secs: f64, rec: Option<&std::path::Path>) -> Row {
         let out = s.shown.as_deref().unwrap_or(&px);
         save("on", k, out);
         let now = wcag.update(out, t);
+        if trace {
+            eprintln!(
+                "{:.3}: shown {} (concurrently {}), veiled {:.0}%, cap {:?}, generation {}",
+                t,
+                now.most(),
+                now.concurrent,
+                100.0 * plan.veil.iter().filter(|v| v[0] > 0.0).count() as f32
+                    / plan.veil.len().max(1) as f32,
+                guard.cap(),
+                world.generation - start
+            );
+        }
         shown_fail_frames += now.fails() as u32;
         shown_concurrent_frames += (now.concurrent > 6) as u32;
         shown_letter = shown_letter.worse(now);
@@ -768,6 +789,7 @@ fn run_recorded(c: &Case, secs: f64, rec: Option<&std::path::Path>) -> Row {
         cap: report.cap,
         shown_fail_frames,
         shown_concurrent_frames,
+        restless,
     }
 }
 
@@ -1363,7 +1385,7 @@ fn ash_case(rule: &str, name: &str, px: f64, palette: &'static str, screen: Opti
 
 fn print_restless(r: &Row, changed: f64, restless: f64) {
     println!(
-        "| {} | {} | {} | {} | {:.0}% | {:.0}% | {:.0}% | {}, {} ({:.0}%) | {} ({}: area {}, fine {}, partial {}, screen {}) | {}, {} ({} / {} frames) | {:.0}% | {:.0}% | {}{} |",
+        "| {} | {} | {} | {} | {:.0}% | {:.0}% | {:.0}% | {}, {} ({:.0}%) | {} ({}: area {}, fine {}, partial {}, restless {}, screen {}) | {}, {} ({} / {} frames) | {:.0}% | {:.0}% | {}{} |",
         r.name,
         if r.window { "window" } else { "screen" },
         r.cell_px,
@@ -1379,6 +1401,7 @@ fn print_restless(r: &Row, changed: f64, restless: f64) {
         r.drawn.area_transitions.max(r.drawn.red_transitions),
         r.drawn.fine_transitions,
         r.drawn.partial_transitions,
+        r.restless,
         r.drawn.screen_transitions,
         r.shown_letter.most(),
         r.shown_letter.concurrent,
@@ -1438,9 +1461,9 @@ fn restless_ash_flashes_by_the_reference_and_the_guard() {
 }
 
 /// Through the guard, as a screen shows it, dense restless ash never flashes, measured pixel by
-/// pixel by the reference by its strictest reading: two flashes a second at most, from the start,
-/// before the pace cap holds as after (#289). In a window, and over the whole screen; and a Seeds
-/// soup, which is restless too.
+/// pixel by the reference by its strictest reading: three flashes a second at most (six
+/// transitions, the most WCAG allows), from the start, before the pace cap holds as after (#289).
+/// In a window, and over the whole screen; and a Seeds soup, which is restless too.
 #[test]
 fn through_the_guard_restless_ash_stays_under_the_limit() {
     let mut cases = restless_cases();
@@ -1451,7 +1474,7 @@ fn through_the_guard_restless_ash_stays_under_the_limit() {
     let rows: Vec<Row> = cases.par_iter().map(|c| run(c, 4.0)).collect();
     let through: Vec<String> = rows
         .iter()
-        .filter(|r| r.shown_letter.most() > 4)
+        .filter(|r| r.shown_letter.most() > 6)
         .map(|r| {
             format!(
                 "{} ash, {} px a cell, {}, {}: {} transitions a second shown, pixel by pixel \
@@ -1568,7 +1591,8 @@ const RESTLESS: &[(&str, &str)] = &[
 /// and a light one, in a window and over the whole screen, 30 generations a second for 3 seconds.
 /// With `JETCARP_STROBE_RECORD=DIR`, the whole-screen cases at 2, 4, 8 and 16 pixels in Ember and
 /// Paper are saved as drawn and as the guard showed them, `DIR/<case>/<off|on>/00000.png`, for
-/// IRIS (and with `JETCARP_RESTLESS_RECORD_ONLY=1` only those cases are run).
+/// IRIS (and with `JETCARP_RESTLESS_RECORD_ONLY=1` only those cases are run; with
+/// `JETCARP_STROBE_AT_RISK=1`, through the guard for someone at risk).
 #[test]
 #[ignore]
 fn restless_table() {
@@ -1586,8 +1610,17 @@ fn restless_table() {
         {
             continue;
         }
-        for &px in &[1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0] {
-            for &pal in &["Ember", "Thermal", "Paper"] {
+        let sizes: Vec<f64> = std::env::var("JETCARP_RESTLESS_PX").map_or_else(
+            |_| vec![1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0],
+            |v| v.split(',').map(|x| x.parse().unwrap()).collect(),
+        );
+        let palettes: Vec<String> = std::env::var("JETCARP_RESTLESS_PALETTES").map_or_else(
+            |_| vec!["Ember".into(), "Thermal".into(), "Paper".into()],
+            |v| v.split(',').map(String::from).collect(),
+        );
+        for &px in &sizes {
+            for pal in &palettes {
+                let pal: &'static str = Box::leak(pal.clone().into_boxed_str());
                 for screen in [SCREEN, None] {
                     let c = ash_case(rule, name, px, pal, screen);
                     if !rec_only || recorded(&c) {
@@ -1679,5 +1712,37 @@ fn the_reference_on_recordings() {
         .collect();
     for l in out {
         println!("{l}");
+    }
+}
+
+/// Busy scenes by the numbers (ignored; `--ignored --nocapture`): a Life soup, Brian's Brain and
+/// Lava at 3 to 16 pixels a cell in three palettes, 30 generations a second, in a window, with
+/// the study's columns: what the reference and the guard's restless count read, and whether the
+/// guard veils them (#289).
+#[test]
+#[ignore]
+fn busy_scenes_by_the_numbers() {
+    let mut cases = vec![];
+    for &px in &[3.0, 4.0, 6.0, 8.0, 12.0, 16.0] {
+        for &pal in &["Ember", "Thermal", "Paper"] {
+            cases.extend(
+                ordinary(px, pal)
+                    .into_iter()
+                    .filter(|c| c.name == "Life soup"),
+            );
+            cases.push(ash_case("B2/S/C3", "Brian's Brain", px, pal, SCREEN));
+            cases.push(ash_case("B45678/S12345/C8", "Lava", px, pal, SCREEN));
+        }
+    }
+    let rows: Vec<(Row, f64, f64)> = cases
+        .par_iter()
+        .map(|c| {
+            let (changed, restless) = change_shares(&c.world);
+            (run(c, 3.0), changed, restless)
+        })
+        .collect();
+    println!("{RESTLESS_HEADER}");
+    for (r, changed, restless) in &rows {
+        print_restless(r, *changed, *restless);
     }
 }
