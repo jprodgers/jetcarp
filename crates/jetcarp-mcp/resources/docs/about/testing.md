@@ -658,10 +658,10 @@ issues.
 
 [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says what JETCARP does
 and does not do. Each of its promises is held up by automated tests, by a check in CI, by the
-hands-on rows of each release candidate's plan (its part S, from 0.4.3), or by how the code is
+hands-on rows of each release candidate's plan (its security rows, from 0.4.3), or by how the code is
 built. The next audit checks this table against the code.
 
-| # | Promise | Automated tests and CI checks | Hands-on (part S) |
+| # | Promise | Automated tests and CI checks | Hands-on (the plan's security rows) |
 |---|---|---|---|
 | 1 | It makes no network connections; the only network sockets it opens are local, on `127.0.0.1` | The Dependencies workflow (`deny.toml`): no HTTP, TLS, DNS, WebSocket or peer-to-peer crate, and no HTTP parser, in the dependency tree that `deny.toml` does not allow, so networking comes only on purpose; the one allowed, `httparse`, which reads the MCP server's HTTP requests, is allowed for `jetcarp-mcp` only. `the_listener_is_on_loopback_only` (`jetcarp-mcp/tests/link.rs`) and `the_endpoint_is_on_loopback_only` (`jetcarp-mcp/tests/http.rs`): no other address of the machine reaches them, and on Linux the HTTP server's one listening socket is `127.0.0.1`. By construction: the workspace's two listening sockets, the link's and the MCP server's HTTP endpoint's, are bound to `127.0.0.1` (`Listener` in `jetcarp-mcp/src/link.rs` and in `jetcarp-mcp/src/http.rs`), and the only connections it makes are to them | |
 | 2 | Nothing in a pack is run; every hash and signature is checked before anything is stored | `jetcarp-pack/tests/hostile.rs`: oversized and deep documents, unknown versions and features, altered objects, names that would leave the store, too many parts, decompression and decoding bombs, records that do not hash to their ids, unsigned and badly signed versions, links out of an export or a store | S-P1 (the same tests on each machine), S-P2 (a pack signed by a key the machine has not seen) |
