@@ -74,7 +74,8 @@ system asks for reduced motion it opens paused, with a note saying so, and Space
 - **The menu bar's right end** shows the scene's name, whether it is running, the generation, the
   first digits of the [state hash](../guides/scenes.md#the-state-hash) (click it to copy all of it)
   and the frame rate. **The status bar** says whether the world is still changing, and counts its
-  live cells and its tiles.
+  live cells and its tiles; when the world is too big for the view to draw every cell at once, it
+  says so (see [Bigger than the view can draw](../guides/this-computer.md#bigger-than-the-view-can-draw)).
 - **More room:** F9 hides the panes and brings them back, F11 (⌃⌘F on macOS) fills the screen, and
   F12 starts screensaver mode (Esc leaves it). On macOS, ⌘M minimises the window, and the world
   and [AI control](../tutorials/mcp.md) keep running while it is minimised or covered.

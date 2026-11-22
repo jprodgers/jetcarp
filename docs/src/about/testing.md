@@ -88,7 +88,14 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   speed: no test depends on how fast the machine is.
 - **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
   person's own values, the two linked memory values and the ceilings; a world over the limit is
-  refused before anything is built, naming the limit and where it came from. The memory each kind
+  refused before anything is built, naming the limit and where it came from, and never made
+  smaller (#300): in the whole app with no window, 100,000 × 100,000 squares typed into the
+  *Tiling* pane's *Width × height* fields, on a machine whose largest world is lowered to 1 GB, must
+  keep the sides typed, get the over-limit question and build nothing, as must the same size from a
+  tile's JSON; 20,000 × 1,000 squares must be built at that size, with the status line saying the
+  view cannot draw every cell, until it is zoomed in. The command line, `world.new` and
+  `set_tiling` must refuse 100,000 × 100,000 with the reason, an AI's sides, cells and level saying
+  they are its share. The memory each kind
   of world takes is measured by counting every allocation while one is built and stepped, and the
   table the limits use must never be below it. A grid of exactly the largest number of cells the
   code can number (4,294,967,295) is built and its last cells' neighbours checked, without making

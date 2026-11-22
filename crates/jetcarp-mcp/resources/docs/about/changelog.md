@@ -444,6 +444,16 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **A world over the limit is asked about, never made smaller to fit.** The *Tiling* pane's
+  *Width × height* fields stopped each side at 16,384, so 100,000 × 100,000 squares (about 75 GB)
+  became 16,384 × 16,384 (about 2 GB) and were built with nothing said; the fields take any size
+  now, and the over-limit question decides, as it does for a tile's JSON, the tile editor, the
+  catalog and the isohedral shapes, which had built at once without asking. A world within the
+  limit but too big for the view to draw every cell is built at the size asked, and the status line
+  says the view shows one cell in every few until zoomed in. An AI's sizes past its share are
+  refused naming the share, and `world.new`'s `cells` past 4,294,967,295 is refused, not cut down.
+  ([Over a limit](../guides/this-computer.md#over-a-limit),
+  [#300](https://github.com/jprodgers/jetcarp/issues/300))
 - **The strobe guard counts a reversing checkerboard of squares smaller than its tiles as
   flashing, as WCAG does.** A board of squares smaller than the guard's 16-pixel tiles keeps every
   tile's mean brightness when it reverses, though every pixel of it changes, so the guard did not
