@@ -180,3 +180,37 @@ fn child_a_world_too_big_to_draw_whole_is_built_as_asked_and_the_view_says_so() 
     assert!(wrong.is_empty(), "{wrong:#?}");
     done();
 }
+
+#[test]
+fn a_tiling_from_elsewhere_over_the_limit_is_asked_about_too() {
+    in_scratch("app::size_tests::child_a_tiling_from_elsewhere_over_the_limit_is_asked_about_too");
+}
+
+/// A tiling that does not come from the size fields, a tile's JSON loaded in the Tiling pane, at
+/// 100,000 × 100,000 squares: asked about first, as the fields' sizes are, never built unasked.
+#[test]
+#[ignore]
+fn child_a_tiling_from_elsewhere_over_the_limit_is_asked_about_too() {
+    if !child() {
+        return;
+    }
+    largest_world(1 << 30);
+    let mut k = sides_shown();
+    k.app.tile_json =
+        r#"{"family": "square", "size": {"rect": {"w": 100000, "h": 100000}}}"#.into();
+    k.focus_named("Paste tile JSON from the prototype");
+    k.key(Key::Enter);
+    k.frames(2);
+    k.focus_named("Load tile");
+    k.key(Key::Enter);
+    k.frames(2);
+    let ask = k.app.machine.ask.as_ref().expect("the over-limit question");
+    assert!(
+        ask.message.starts_with("this world needs 74.5 GB"),
+        "{}",
+        ask.message
+    );
+    assert!(k.app.building.is_none());
+    assert_eq!(sides(&k), (40, 30), "nothing built");
+    done();
+}
