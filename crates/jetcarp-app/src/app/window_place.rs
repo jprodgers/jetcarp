@@ -4,8 +4,13 @@
 //!
 //! eframe shows the window only after the first frame has been drawn, so placing it in the first
 //! frame means it never shows anywhere else. The first time (on the Acer it opened at (189, 182),
-//! 1402x932, its bottom under the taskbar), and when the monitor it was on has gone, it is moved
-//! into the work area of the monitor it is on (or the nearest one, or the primary).
+//! 1402x932, its bottom under the taskbar), and whenever the saved place would leave part of it
+//! off every monitor (a monitor unplugged, a resolution lowered, a place saved partly off screen:
+//! #306), it is moved whole onto the nearest monitor's work area, or the main monitor's.
+//!
+//! Under Wayland the compositor places windows (GNOME's Mutter, KDE's KWin): an app can neither
+//! learn its window's place nor choose it, so none is saved or asked, and only the size comes
+//! back.
 
 use super::*;
 use jetcarp_display::workarea::{self, Rect};
@@ -47,25 +52,62 @@ impl JetcarpApp {
     }
 }
 
-/// Restores `saved`, then fits the window into its monitor's work area.
+/// Restores `saved`, kept on the monitors' work areas ([`restore`]).
 fn place(ctx: &egui::Context, w: &winit::window::Window, saved: Option<WindowPlace>) {
-    let mut size = None;
-    if let Some(p) = saved {
-        if let Some([x, y]) = p.pos {
-            w.set_outer_position(PhysicalPosition::new(x, y));
-        }
-        if p.size[0] > 0 && p.size[1] > 0 {
-            size = Some((p.size[0], p.size[1]));
-        }
+    let handles: Vec<winit::monitor::MonitorHandle> = w.available_monitors().collect();
+    let primary = w.primary_monitor();
+    let current = w.current_monitor();
+    let monitors: Vec<Monitor> = handles
+        .iter()
+        .map(|m| {
+            let (p, s) = (m.position(), m.size());
+            Monitor {
+                area: workarea::work_area(Rect::new(p.x, p.y, s.width, s.height)),
+                primary: primary.as_ref() == Some(m),
+            }
+        })
+        .collect();
+    let (inner, outer) = (w.inner_size(), w.outer_size());
+    let now = w.outer_position().ok().map(|p| (p.x, p.y));
+    let win = Opening {
+        pos: now,
+        inner: (inner.width, inner.height),
+        frame: (
+            outer.width.saturating_sub(inner.width),
+            outer.height.saturating_sub(inner.height),
+        ),
+        on: current.and_then(|c| handles.iter().position(|m| *m == c)),
+    };
+    let r = restore(saved, win, &monitors, wayland(w));
+    if let Some((x, y)) = r.pos
+        && r.pos != now
+    {
+        w.set_outer_position(PhysicalPosition::new(x, y));
     }
-    let now = w.inner_size();
-    let size = fit(w, size).filter(|&s| s != (now.width, now.height));
-    if let Some(size) = size {
+    if r.inner != win.inner {
         let ppp = ctx.zoom_factor() * w.scale_factor() as f32;
-        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(in_points(size, ppp)));
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(in_points(r.inner, ppp)));
     }
     if saved.is_some_and(|p| p.maximized) {
         w.set_maximized(true);
+    }
+}
+
+/// Whether the window is a Wayland one: there the compositor places windows, and an app's request
+/// for a place is not honoured (winit's is a no-op), so none is made.
+fn wayland(w: &winit::window::Window) -> bool {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(h) = w.window_handle() {
+            return matches!(h.as_raw(), RawWindowHandle::Wayland(_));
+        }
+        w.outer_position().is_err()
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        let _ = w;
+        false
     }
 }
 
@@ -81,32 +123,6 @@ fn in_points(size: (u32, u32), pixels_per_point: f32) -> egui::Vec2 {
         size.0 as f32 / pixels_per_point,
         size.1 as f32 / pixels_per_point,
     )
-}
-
-/// The inner size to give the window: `want` (or its size now), moved (and if need be shrunk)
-/// into the work area of the monitor it is on. Moves it there itself.
-fn fit(w: &winit::window::Window, want: Option<(u32, u32)>) -> Option<(u32, u32)> {
-    // Wayland's compositors place windows themselves, and say neither where nor on which monitor.
-    let Some(m) = w.current_monitor().or_else(|| w.primary_monitor()) else {
-        return want;
-    };
-    let Ok(pos) = w.outer_position() else {
-        return want;
-    };
-    let (mp, ms) = (m.position(), m.size());
-    let area = workarea::work_area(Rect::new(mp.x, mp.y, ms.width, ms.height));
-    let (outer_now, inner_now) = (w.outer_size(), w.inner_size());
-    let inner = want.unwrap_or((inner_now.width, inner_now.height));
-    // The frame around the inside stays the same when the inside changes size.
-    let outer = (
-        outer_now.width.saturating_sub(inner_now.width) + inner.0,
-        outer_now.height.saturating_sub(inner_now.height) + inner.1,
-    );
-    let (to, size) = workarea::fit_window(area, (pos.x, pos.y), outer, inner);
-    if to != (pos.x, pos.y) {
-        w.set_outer_position(PhysicalPosition::new(to.0, to.1));
-    }
-    Some(size)
 }
 
 /// Where the window is now, keeping the last size it had when not maximised (what it goes back
@@ -131,9 +147,344 @@ fn note(w: &winit::window::Window, last: Option<WindowPlace>) -> Option<WindowPl
     Some(p)
 }
 
+/// A monitor, for placing the window: its work area, in physical pixels of the desktop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Monitor {
+    area: Rect,
+    /// The main monitor (Windows' primary; macOS's, with the menu bar).
+    primary: bool,
+}
+
+/// The window as it opens, before it is placed.
+#[derive(Clone, Copy, Debug)]
+struct Opening {
+    /// Its outer top-left corner (None where the system does not say, as on Wayland).
+    pos: Option<(i32, i32)>,
+    /// Its inside's size.
+    inner: (u32, u32),
+    /// The frame around the inside: the outer size less the inner one.
+    frame: (u32, u32),
+    /// Which of the monitors it is on, where the system says.
+    on: Option<usize>,
+}
+
+/// What to ask of the window as it opens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Restore {
+    /// Its outer top-left corner (None: no place is asked).
+    pos: Option<(i32, i32)>,
+    /// Its inside's size.
+    inner: (u32, u32),
+}
+
+/// Where the window goes and how large: what was `saved` (or, the first time, where the system
+/// opened it), kept on `monitors` (#306).
+///
+/// A place that would leave any part of the window off every monitor's work area is moved so the
+/// whole window is on the nearest monitor: the one it overlaps most, or the main monitor when it
+/// overlaps none (the monitor it was on is gone). Its size shrinks only when it cannot fit there
+/// at all. Under Wayland the compositor places windows and an app cannot, so no place is asked:
+/// only the size, shrunk to the monitor it is on when that is too small for it.
+fn restore(
+    saved: Option<WindowPlace>,
+    win: Opening,
+    monitors: &[Monitor],
+    wayland: bool,
+) -> Restore {
+    let inner = saved
+        .map(|p| (p.size[0], p.size[1]))
+        .filter(|s| s.0 > 0 && s.1 > 0)
+        .unwrap_or(win.inner);
+    let outer = (inner.0 + win.frame.0, inner.1 + win.frame.1);
+    let pos = if wayland {
+        None
+    } else {
+        saved.and_then(|p| p.pos).map(|[x, y]| (x, y)).or(win.pos)
+    };
+    let Some(pos) = pos else {
+        // No place to keep on screen: the size alone, fitted to the monitor it is on.
+        let inner = match win.on.and_then(|i| monitors.get(i)) {
+            Some(m) => workarea::fit_window(m.area, (m.area.x, m.area.y), outer, inner).1,
+            None => inner,
+        };
+        return Restore { pos: None, inner };
+    };
+    let rect = Rect::new(pos.0, pos.1, outer.0, outer.1);
+    if on_screen(&rect, monitors) {
+        return Restore {
+            pos: Some(pos),
+            inner,
+        };
+    }
+    let nearest = monitors
+        .iter()
+        .map(|m| (m.area.overlap(&rect), m))
+        .filter(|(o, _)| *o > 0)
+        .max_by_key(|(o, _)| *o)
+        .map(|(_, m)| m)
+        .or_else(|| monitors.iter().find(|m| m.primary))
+        .or(monitors.first());
+    let Some(m) = nearest else {
+        return Restore {
+            pos: Some(pos),
+            inner,
+        };
+    };
+    let (to, inner) = workarea::fit_window(m.area, pos, outer, inner);
+    Restore {
+        pos: Some(to),
+        inner,
+    }
+}
+
+/// Whether every part of `rect` is on some monitor's work area (a window across two monitors
+/// side by side is).
+fn on_screen(rect: &Rect, monitors: &[Monitor]) -> bool {
+    let mut areas: Vec<Rect> = monitors.iter().map(|m| m.area).collect();
+    // Mirrored monitors show the same place once.
+    areas.sort_by_key(|a| (a.x, a.y, a.w, a.h));
+    areas.dedup();
+    let covered: u64 = areas.iter().map(|a| a.overlap(rect)).sum();
+    covered >= rect.w as u64 * rect.h as u64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn saved(pos: Option<(i32, i32)>, size: (u32, u32)) -> Option<WindowPlace> {
+        Some(WindowPlace {
+            pos: pos.map(|(x, y)| [x, y]),
+            size: [size.0, size.1],
+            maximized: false,
+        })
+    }
+
+    /// A window as winit opens it: at (100, 100), 1400 x 900 inside, a frame of 2 by 32 pixels.
+    fn opening(on: Option<usize>) -> Opening {
+        Opening {
+            pos: Some((100, 100)),
+            inner: (1400, 900),
+            frame: (2, 32),
+            on,
+        }
+    }
+
+    fn monitor(x: i32, y: i32, w: u32, h: u32, primary: bool) -> Monitor {
+        Monitor {
+            area: Rect::new(x, y, w, h),
+            primary,
+        }
+    }
+
+    /// One monitor, as on the Framework (2880 x 1920 in pixels).
+    fn one() -> Vec<Monitor> {
+        vec![monitor(0, 0, 2880, 1920, true)]
+    }
+
+    /// The window outer rectangle a restore gives.
+    fn outer(r: Restore) -> Rect {
+        let (x, y) = r.pos.expect("a place");
+        Rect::new(x, y, r.inner.0 + 2, r.inner.1 + 32)
+    }
+
+    fn inside(area: Rect, r: Rect) -> bool {
+        r.x >= area.x && r.y >= area.y && r.right() <= area.right() && r.bottom() <= area.bottom()
+    }
+
+    /// #306: saved partly off the screen to the left, it comes back whole on it, its size kept.
+    #[test]
+    fn a_saved_place_off_to_the_left_comes_back_fully_on_screen() {
+        let m = one();
+        let r = restore(
+            saved(Some((-600, 300)), (1600, 1000)),
+            opening(Some(0)),
+            &m,
+            false,
+        );
+        assert_eq!(r.inner, (1600, 1000), "the size is kept: it fits");
+        assert_eq!(r.pos, Some((0, 300)), "moved in from the left edge only");
+        assert!(inside(m[0].area, outer(r)), "{r:?}");
+        // Off the top, the right and the bottom too.
+        for at in [(500, -200), (2000, 300), (500, 1500), (-5000, -5000)] {
+            let r = restore(saved(Some(at), (1600, 1000)), opening(Some(0)), &m, false);
+            assert!(inside(m[0].area, outer(r)), "{at:?}: {r:?}");
+            assert_eq!(r.inner, (1600, 1000));
+        }
+    }
+
+    /// A place that fits already is left as it is.
+    #[test]
+    fn a_saved_place_on_screen_is_kept() {
+        let m = one();
+        let r = restore(
+            saved(Some((300, 200)), (1600, 1000)),
+            opening(Some(0)),
+            &m,
+            false,
+        );
+        assert_eq!(
+            r,
+            Restore {
+                pos: Some((300, 200)),
+                inner: (1600, 1000)
+            }
+        );
+        // Across two monitors side by side, every part on one of them: kept too.
+        let two = vec![
+            monitor(0, 0, 1920, 1080, true),
+            monitor(1920, 0, 1920, 1080, false),
+        ];
+        let r = restore(
+            saved(Some((1500, 100)), (1200, 800)),
+            opening(Some(0)),
+            &two,
+            false,
+        );
+        assert_eq!(
+            r,
+            Restore {
+                pos: Some((1500, 100)),
+                inner: (1200, 800)
+            }
+        );
+    }
+
+    /// A monitor unplugged since (Windows, macOS, X11): the window comes back on the main one.
+    #[test]
+    fn a_saved_place_on_a_monitor_that_is_gone_comes_back_on_the_main_monitor() {
+        // It was on a second monitor to the right; only the laptop's own (a taskbar at the
+        // bottom) is left. The main monitor is listed second, as winit may.
+        let m = vec![
+            monitor(-1920, 0, 1920, 1080, false),
+            monitor(0, 0, 1920, 1032, true),
+        ];
+        let r = restore(
+            saved(Some((2400, 200)), (1400, 900)),
+            opening(None),
+            &m,
+            false,
+        );
+        assert!(inside(m[1].area, outer(r)), "on the main monitor: {r:?}");
+        assert_eq!(r.inner, (1400, 900), "the size is kept: it fits");
+        // A monitor gone above, where nothing overlaps either.
+        let r = restore(
+            saved(Some((100, -1500)), (1400, 900)),
+            opening(None),
+            &m,
+            false,
+        );
+        assert!(inside(m[1].area, outer(r)), "{r:?}");
+    }
+
+    /// Partly on a second monitor: whole on that one, the nearest.
+    #[test]
+    fn a_window_partly_on_a_monitor_goes_whole_onto_it() {
+        let m = vec![
+            monitor(0, 0, 1920, 1080, true),
+            monitor(1920, 0, 2560, 1440, false),
+        ];
+        let r = restore(
+            saved(Some((3800, 600)), (1400, 900)),
+            opening(Some(0)),
+            &m,
+            false,
+        );
+        assert!(inside(m[1].area, outer(r)), "{r:?}");
+        assert_eq!(r.inner, (1400, 900));
+    }
+
+    /// A resolution lowered since: the size shrinks only as far as it must, and it is on screen.
+    #[test]
+    fn a_window_too_large_for_its_monitor_now_is_shrunk_to_fit() {
+        let m = vec![monitor(0, 0, 1366, 728, true)];
+        let r = restore(
+            saved(Some((200, 100)), (1600, 1000)),
+            opening(Some(0)),
+            &m,
+            false,
+        );
+        assert_eq!(
+            r,
+            Restore {
+                pos: Some((0, 0)),
+                inner: (1364, 696)
+            }
+        );
+        // Too wide only: the height is kept.
+        let r = restore(
+            saved(Some((200, 100)), (1600, 600)),
+            opening(Some(0)),
+            &m,
+            false,
+        );
+        assert_eq!(r.inner, (1364, 600));
+        assert!(inside(m[0].area, outer(r)), "{r:?}");
+    }
+
+    /// On Wayland the compositor places windows: no place is asked, whatever was saved; the size
+    /// comes back.
+    #[test]
+    fn under_wayland_no_place_is_asked() {
+        let m = one();
+        let way = Opening {
+            pos: None,
+            ..opening(Some(0))
+        };
+        for at in [Some((-600, 300)), Some((300, 200)), None] {
+            let r = restore(saved(at, (1600, 1000)), way, &m, true);
+            assert_eq!(
+                r,
+                Restore {
+                    pos: None,
+                    inner: (1600, 1000)
+                },
+                "{at:?}"
+            );
+        }
+        // Before the compositor says which monitor it is on, too.
+        let r = restore(
+            saved(Some((-600, 300)), (1600, 1000)),
+            Opening { on: None, ..way },
+            &m,
+            true,
+        );
+        assert_eq!(
+            r,
+            Restore {
+                pos: None,
+                inner: (1600, 1000)
+            }
+        );
+        // Larger than the monitor it is on: shrunk to fit.
+        let r = restore(saved(None, (4000, 3000)), way, &m, true);
+        assert_eq!(
+            r,
+            Restore {
+                pos: None,
+                inner: (2878, 1888)
+            }
+        );
+    }
+
+    /// The first time, nothing saved: where the system opened it, kept in the work area (the
+    /// Acer opened it with its bottom under the taskbar).
+    #[test]
+    fn the_first_time_the_window_is_kept_in_the_work_area() {
+        let m = vec![monitor(0, 0, 1920, 1032, true)];
+        let win = Opening {
+            pos: Some((189, 182)),
+            ..opening(Some(0))
+        };
+        let r = restore(None, win, &m, false);
+        assert_eq!(
+            r,
+            Restore {
+                pos: Some((189, 100)),
+                inner: (1400, 900)
+            }
+        );
+    }
 
     /// egui-winit turns the points back into pixels (times the same scale) and winit rounds them:
     /// every saved size must come back to the pixel.
