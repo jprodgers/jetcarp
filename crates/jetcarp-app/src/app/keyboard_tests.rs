@@ -1364,5 +1364,45 @@ fn child_screen_reader_names_are_the_same_in_every_font() {
     }
     assert!(differ.is_empty(), "{}", differ.join("\n"));
     assert!(atkinson.iter().all(|(_, v)| !v.is_empty()));
+/// The status line keeps one line's height whatever it holds (#291): a message too long for the
+/// window is cut short, not wrapped onto a second line, so nothing above the bar moves as its
+/// contents come and go. (Brian's Brain on Penrose made it grow and shrink in a loop, moving the
+/// whole window.)
+#[test]
+fn the_status_line_stays_one_line() {
+    in_scratch("app::keyboard_tests::child_the_status_line_stays_one_line");
+}
+
+#[test]
+#[ignore = "started by the_status_line_stays_one_line, in a scratch process"]
+fn child_the_status_line_stays_one_line() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
+    k.size = egui::vec2(640.0, 480.0);
+    k.frames(3);
+    let long = "A message long enough to run past the edge of a narrow window, and on. ".repeat(4);
+    let mut grids = vec![];
+    for i in 0..12 {
+        let text = if i % 2 == 0 {
+            long.clone()
+        } else {
+            "Short".into()
+        };
+        k.app.message = Some((text, false));
+        k.frames(2);
+        grids.push(
+            k.focusable()
+                .into_iter()
+                .map(|w| w.2)
+                .max_by(|a, b| a.area().total_cmp(&b.area()))
+                .unwrap(),
+        );
+    }
+    assert!(
+        grids.windows(2).all(|w| w[0] == w[1]),
+        "the grid moved as the status line's message changed: {grids:?}"
+    );
     done();
 }

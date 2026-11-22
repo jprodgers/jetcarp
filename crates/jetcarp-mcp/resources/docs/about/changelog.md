@@ -444,6 +444,10 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The status line stays one line high** (#291). It wrapped onto a second line when its row grew too
+  wide and fell back when it shrank, so on a busy scene (Brian's Brain on Penrose, in a small window)
+  it grew and shrank in a loop and moved the whole window. Text too long for it is now cut short
+  with "…" (the whole of it on hover), and its counts keep their widest width while a world is open.
 - **The strobe guard counts a reversing checkerboard of squares smaller than its tiles as
   flashing, as WCAG does.** A board of squares smaller than the guard's 16-pixel tiles keeps every
   tile's mean brightness when it reverses, though every pixel of it changes, so the guard did not

@@ -36,9 +36,10 @@ pub(super) struct ShellState {
     /// A message, and when it appeared (the grid shows it a while when the status bar is off).
     seen_message: Option<String>,
     message_at: f64,
-    /// The status bar's height last frame: its space is kept before the panes are drawn, and its
-    /// controls drawn after them, so Tab reaches them last (#219).
-    status_h: f32,
+    /// The widths the status bar's items have reached in this world (and the world they were
+    /// reached in), so a count that loses a digit keeps its space and the items after it stay put.
+    status_w: Vec<f32>,
+    status_w_world: (usize, usize),
     /// The main window's place (saved), whether the first frame has put it there, and whether
     /// this run places it at all (`window_place.rs`).
     pub window: Option<window_place::WindowPlace>,
@@ -73,7 +74,8 @@ impl ShellState {
             window_placed: false,
             window_placing: false,
             message_at: 0.0,
-            status_h: 18.0,
+            status_w: vec![],
+            status_w_world: (0, 0),
         }
     }
 }
@@ -110,10 +112,16 @@ impl JetcarpApp {
         // MCP) show without leaving the screen; this checks about once a second.
         self.menu.refresh_if_changed();
         let sim = self.screen == Screen::Sim;
-        // The status bar's place, kept now; its contents come after the panes (Tab order).
+        // The status bar's place, kept now; its contents come after the panes (Tab order, #219).
+        // One line high, always (#291): its height never follows what it holds, so nothing above
+        // it moves as its contents change.
         let status =
             (self.shell.status_bar && !saver && (sim || self.message.is_some())).then(|| {
-                let h = self.shell.status_h.max(16.0);
+                let h = ui
+                    .spacing()
+                    .interact_size
+                    .y
+                    .max(ui.text_style_height(&egui::TextStyle::Body));
                 egui::Panel::bottom("status")
                     .show(ui, |ui| {
                         ui.allocate_exact_size(egui::vec2(ui.available_width(), h), Sense::hover())
@@ -138,12 +146,8 @@ impl JetcarpApp {
                     .max_rect(rect)
                     .layout(egui::Layout::left_to_right(egui::Align::Center)),
             );
+            bar.set_clip_rect(rect.intersect(bar.clip_rect()));
             self.status_bar(&mut bar);
-            let h = bar.min_rect().height();
-            if (h - self.shell.status_h).abs() > 0.5 {
-                self.shell.status_h = h;
-                ctx.request_repaint();
-            }
             crate::a11y::region(
                 &ctx,
                 crate::a11y::STATUS,
@@ -278,7 +282,31 @@ impl JetcarpApp {
 
     /// The status bar's contents, in the place `shell_ui` kept for them.
     fn status_bar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
+        // The items' widths so far, kept while the same world is open.
+        let world = (self.world.fields.len(), self.world.topo.len());
+        if self.shell.status_w_world != world {
+            self.shell.status_w_world = world;
+            self.shell.status_w.clear();
+        }
+        let mut widths = std::mem::take(&mut self.shell.status_w);
+        let mut slot = 0;
+        // A label that never narrows while this world is open.
+        let mut steady = |ui: &mut egui::Ui, label: egui::Label| {
+            let min = widths.get(slot).copied().unwrap_or(0.0);
+            let r = ui.scope(|ui| {
+                ui.set_min_width(min);
+                ui.add(label)
+            });
+            if widths.len() <= slot {
+                widths.resize(slot + 1, 0.0);
+            }
+            widths[slot] = widths[slot].max(r.response.rect.width());
+            slot += 1;
+        };
+        // One line (#291): text too long for it is cut short with "…" (the whole of it on hover),
+        // never wrapped onto a second line.
+        ui.horizontal(|ui| {
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
             if let Some((m, err)) = self.message.clone() {
                 ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
                 if ui
@@ -317,7 +345,7 @@ impl JetcarpApp {
                 Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
                 None => (String::new(), vec![]),
             };
-            ui.label(status);
+            steady(ui, egui::Label::new(status));
             ui.separator();
             for (i, f) in self.world.fields.iter().enumerate() {
                 let what = if f.kind == FieldKind::Height {
@@ -326,17 +354,20 @@ impl JetcarpApp {
                     "live"
                 };
                 let pop = pops.get(i).copied().unwrap_or(0);
-                ui.label(format!("field {i}: {pop} {what}"));
+                steady(ui, egui::Label::new(format!("field {i}: {pop} {what}")));
                 if f.kind == FieldKind::Height && f.lost > 0 {
                     ui.label(format!("({} lost)", f.lost));
                 }
             }
             ui.separator();
-            ui.label(format!(
-                "{} cells, {} storage",
-                self.world.topo.len(),
-                self.world.topo.storage_name()
-            ));
+            steady(
+                ui,
+                egui::Label::new(format!(
+                    "{} cells, {} storage",
+                    self.world.topo.len(),
+                    self.world.topo.storage_name()
+                )),
+            );
             ui.separator();
             if let Some(s) = self.scripts.status() {
                 ui.label(
@@ -350,6 +381,7 @@ impl JetcarpApp {
                 ui.colored_label(crate::theme::ink(ui, Color32::LIGHT_RED), "no GPU renderer");
             }
         });
+        self.shell.status_w = widths;
     }
 
     /// With the status bar off, the grid shows a new message for a few seconds.
