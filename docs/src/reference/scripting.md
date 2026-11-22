@@ -44,7 +44,7 @@ It prints:
 generation 200: 197 live, hash 69ca682254af7c1e2170a5c15550e1ef5e7a74a5d76cde0d3d2bb6ad4c88415c
 generation 400: 209 live, hash bfbbd9590bbe1c25e9b981d53d8a135abd4b7b49508a83600525c6778f7629d8
 generation 600: 197 live, hash fdd563766cb2f371decb974db7f49be022bb8167de164bbdb3c8a26b654229cd
-30 palettes, the first Ember
+75 palettes, the first Ember
 output: /home/ada/Pictures/JETCARP/2026-11-10_18-36-13_hex-life
 time:   0.12s
 ```
