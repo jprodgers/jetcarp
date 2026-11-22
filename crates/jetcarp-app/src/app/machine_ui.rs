@@ -40,6 +40,8 @@ pub(super) struct MachineWin {
     pub ask: Option<OverLimitAsk>,
     /// *Build anyway* was pressed: the next build is not asked about again.
     pub anyway: bool,
+    /// Measure with the short run (the tests).
+    quick: bool,
 }
 
 /// The benchmark running.
@@ -137,8 +139,15 @@ impl MachineWin {
         &mut self.typed.iter_mut().find(|t| t.0 == id).unwrap().1
     }
 
-    fn running(&self) -> bool {
+    pub(super) fn running(&self) -> bool {
         self.run.is_some()
+    }
+
+    /// The short run, each workload once (the tests).
+    #[cfg(test)]
+    pub(super) fn start_quick(&mut self) {
+        self.quick = true;
+        self.start();
     }
 
     /// Start the benchmark (about a minute).
@@ -146,6 +155,7 @@ impl MachineWin {
         let progress = Arc::new(Mutex::new((0.0, "Starting".to_string())));
         let stop = Arc::new(AtomicBool::new(false));
         let (tx, rx) = channel();
+        let quick = self.quick;
         let p = RunProgress {
             progress: progress.clone(),
             stop: stop.clone(),
@@ -153,7 +163,11 @@ impl MachineWin {
         std::thread::Builder::new()
             .name("jetcarp-score".into())
             .spawn(move || {
-                let r = MachineScore::run(&op_ctx(), ScoreIn::default(), &p).map_err(|e| e.message);
+                let i = ScoreIn {
+                    quick,
+                    ..Default::default()
+                };
+                let r = MachineScore::run(&op_ctx(), i, &p).map_err(|e| e.message);
                 let _ = tx.send(r);
             })
             .ok();

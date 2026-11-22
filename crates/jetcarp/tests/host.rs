@@ -1356,3 +1356,52 @@ fn the_host_fits_its_own_screen_and_shows_the_recommended_size() {
         .unwrap_err();
     assert!(e.contains("--pick is"), "{e}");
 }
+
+/// While `jetcarp score` measures this computer, the desktop background holds its screens still
+/// (its own load would lower the score, #301), and runs them again once the measuring has ended.
+#[test]
+fn the_desktop_background_holds_still_while_jetcarp_measures() {
+    let h = Host::start("measuring", Some("Wolfram series"));
+    h.wait(
+        |v| Host::stage(v)["generation"].as_u64() > Some(2),
+        "generations",
+    );
+    let mut c = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+    c.args(["score", "--quick", "--no-gpu", "--no-save"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    with_env(&mut c, &h.home);
+    c.env("JETCARP_DATA_DIR", h.home.join("data"))
+        .env("JETCARP_OUT", h.home.join("out"));
+    let mut score = c.spawn().expect("jetcarp score starts");
+    let measuring = |v: &Value| {
+        v["held"]
+            .as_array()
+            .is_some_and(|a| a.iter().any(|x| x == "measuring"))
+    };
+    let mut held = vec![];
+    while score.try_wait().unwrap().is_none() {
+        if let Ok(v) = h.call(json!({"action": "status"}))
+            && measuring(&v)
+        {
+            held.push(Host::stage(&v)["generation"].as_u64());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(score.wait().unwrap().success());
+    assert!(
+        !held.is_empty(),
+        "the desktop background was never held while JETCARP measured"
+    );
+    let v = h.wait(|v| !measuring(v), "the hold to end");
+    assert!(
+        v["held_why"].as_array().is_some_and(|a| a.is_empty()),
+        "{v}"
+    );
+    let last = held.last().copied().flatten().unwrap_or(0);
+    h.wait(
+        |v| Host::stage(v)["generation"].as_u64() > Some(last),
+        "generations after the measuring",
+    );
+}
