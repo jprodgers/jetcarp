@@ -686,6 +686,54 @@ fn the_gpu_guard_keeps_a_small_reversing_checkerboard_under_the_limit() {
     }
 }
 
+/// Red flashes by either definition (#270): one only WCAG 2.0's working definition catches (two
+/// reds of one chromaticity), one only WCAG 2.2's (a dark red and a dark green, more than 0.2
+/// apart in CIE 1976 UCS chromaticity, under 20 apart in the 2.0 measure), and one both. Each,
+/// over the whole frame ten times a second, fails on the GPU's measure as on the processor's.
+/// Drawn and measured offscreen only.
+#[test]
+fn the_gpu_measure_counts_red_flashes_by_either_definition() {
+    use jetcarp_core::strobe::Viewing;
+    use jetcarp_core::strobe::flash::{FlashMeter, Level};
+    let Some(g) = gpu() else { return };
+    let (w, h) = (320u32, 240u32);
+    let solid = |c: [u8; 3]| {
+        let mut v = Vec::with_capacity((w * h * 4) as usize);
+        for _ in 0..w * h {
+            v.extend_from_slice(&[c[0], c[1], c[2], 255]);
+        }
+        v
+    };
+    let mut s = StrobeGpu::new(&g.device);
+    let mut wrong = vec![];
+    for (name, a, b) in [
+        ("only WCAG 2.0's", [255u8, 0, 0], [200u8, 0, 0]),
+        ("only WCAG 2.2's", [60, 0, 0], [0, 40, 0]),
+        ("both", [255, 0, 0], [128, 128, 128]),
+    ] {
+        let maps: Vec<_> = [a, b]
+            .iter()
+            .enumerate()
+            .map(|(p, c)| {
+                let tex = g.texture(&solid(*c), w, h);
+                let plan = Plan::none_for(w, h);
+                g.frame(&mut s, &tex, &plan, 0.016, p as f64, false).1.input
+            })
+            .collect();
+        let mut m = FlashMeter::new(Viewing::screen(1.0), None);
+        let (mut red, mut general) = (Level::Pass, Level::Pass);
+        for f in 0..120u32 {
+            let r = m.update(&maps[((f / 6) % 2) as usize], f as f64 / 60.0);
+            red = red.max(r.red_level);
+            general = general.max(r.level);
+        }
+        if red != Level::Fail || general != Level::Pass {
+            wrong.push(format!("{name}: red {red:?}, general {general:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// Write-only features are missing on some adapters: the pass itself must build on whatever runs
 /// the tests (a software renderer in CI).
 #[test]
