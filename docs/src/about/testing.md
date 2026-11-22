@@ -198,6 +198,22 @@ with the guard already on.
   and the guard keeps each to at most three red transitions a second on screen; WCAG 2.2's red
   flashes keep the area rule, a square just under a quarter of the 10° field passing and one just
   over failing. These were written first too, and the one only 2.2 counts failed before the fix.
+  **Change in part of a tile** (#275, `crates/jetcarp-core/tests/strobe_period2.rs`): fields of
+  period-2 oscillators whose two phases are not each other's negative, stepped and drawn by
+  JETCARP, are measured against a reference that applies WCAG 2.x's general and red flash to each
+  pixel, with WCAG's own field (341 by 256 pixels at 1024 by 768) scaled to the 10° the guard
+  assumes. The densest lattices of blinkers, toads and clocks, and the densest period-2 agars a
+  search of every pattern on tori of up to 24 cells found (half to three quarters of the area
+  flipping), at 3 to 16 pixels a cell in the default palette and the strongest dark, light and red
+  ones, must be counted where the reference counts them, and through the guard, in a window and
+  over the whole screen, show at most 4 transitions in any second; sparser fields (a blinker every
+  5 cells, beacons) and ordinary scenes (a Life soup, still lifes, gliders, Life's ash) must not be
+  veiled where the reference counts no flash. These were written first, and failed: the guard
+  passed every dense field, and 8 transitions a second reached the screen. The GPU's reading of
+  such a field counts it too, and its guard keeps it under the limit
+  (`the_gpu_measure_counts_a_dense_period_2_field`,
+  `the_gpu_guard_keeps_a_dense_period_2_field_under_the_limit`). The study's full table is an
+  ignored test (`study_table`).
 - **The stripe check** is tested on stripes of every orientation from 4 to 128 pixels a pair,
   checkerboards and rows of dots, which it must find; and on noise, random cells of 2 to 16 pixels,
   faint cell outlines, low contrast and bright stripes, which it must not.
