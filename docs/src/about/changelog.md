@@ -414,6 +414,11 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The strobe guard holds steps as it holds a run** (#293). Holding down **S** stepped a scene at
+  the keyboard's repeat rate, past the guard's cap and its pause, which acted only on a running
+  scene, and now and then a flash reached the screen. Steps by hand and from AI control now count
+  as the scene's pace, the cap drops a step that comes too soon, and while the guard holds a pause,
+  steps come no faster than one every two seconds.
 - **The strobe guard counts a reversing checkerboard of squares smaller than its tiles as
   flashing, as WCAG does.** A board of squares smaller than the guard's 16-pixel tiles keeps every
   tile's mean brightness when it reverses, though every pixel of it changes, so the guard did not
