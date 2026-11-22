@@ -1851,7 +1851,7 @@ mod tests {
             conditions: Some(Conditions::of(
                 Load {
                     cpu: Some(0.02),
-                    gpu: None,
+                    ..Default::default()
                 },
                 vec!["the app".into()],
                 vec![],
@@ -1863,7 +1863,7 @@ mod tests {
             conditions: Some(Conditions::of(
                 Load {
                     cpu: Some(0.6),
-                    gpu: None,
+                    ..Default::default()
                 },
                 vec![],
                 vec![],

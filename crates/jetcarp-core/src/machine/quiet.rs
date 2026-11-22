@@ -24,6 +24,7 @@
 //! (`gpu_busy_percent`: AMD's). Over [`CPU_BUSY`] or [`GPU_BUSY`], or with a JETCARP program
 //! that could not pause, the score is taken under load ([`Conditions`], kept beside it).
 
+use super::gpu_load::GpuSource;
 use super::pool;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -258,8 +259,12 @@ pub fn others_in(records: &[pool::Use]) -> (Vec<String>, Vec<String>) {
 pub struct Load {
     /// Other programs' share of the processor, 0 to 1 (none: not known on this system).
     pub cpu: Option<f64>,
-    /// The GPU's busy figure, 0 to 1 (none: this system doesn't say).
+    /// The GPU's busy figure, 0 to 1 (none: not read).
     pub gpu: Option<f64>,
+    /// Where the GPU's figure was read from.
+    pub gpu_source: Option<GpuSource>,
+    /// Why a GPU's load was not read, in words.
+    pub gpu_not_read: Option<&'static str>,
 }
 
 /// A way to measure the load over so many seconds.
@@ -302,6 +307,7 @@ impl Load {
         Load {
             cpu,
             gpu: (!gpu.is_empty()).then(|| gpu.iter().sum::<f64>() / gpu.len() as f64),
+            ..Load::default()
         }
     }
 
@@ -335,9 +341,16 @@ pub struct Conditions {
     /// on this system).
     #[serde(default)]
     pub cpu: Option<f64>,
-    /// The GPU's busy figure then, 0 to 1 (none: this system doesn't say).
+    /// The GPU's busy figure then, 0 to 1 (none: not read).
     #[serde(default)]
     pub gpu: Option<f64>,
+    /// Where the GPU's figure was read from: `pdh` (Windows), `iokit` (macOS), `amdgpu`, `nvml`
+    /// or `fdinfo` (Linux).
+    #[serde(default)]
+    pub gpu_load_source: Option<GpuSource>,
+    /// Why a GPU's load was not read (none: it was, or the score is older than this).
+    #[serde(default)]
+    pub gpu_not_read: Option<String>,
     /// The JETCARP programs that held still while it measured: `the desktop background`,
     /// `a search job`.
     #[serde(default)]
@@ -357,6 +370,8 @@ impl Conditions {
             under_load: !load.busy().is_empty() || !not_paused.is_empty(),
             cpu: load.cpu,
             gpu: load.gpu,
+            gpu_load_source: None,
+            gpu_not_read: None,
             paused,
             not_paused,
         }
@@ -368,6 +383,7 @@ impl Conditions {
         let load = Load {
             cpu: self.cpu,
             gpu: self.gpu,
+            ..Load::default()
         };
         if self.under_load {
             let mut why: Vec<String> = load
@@ -633,6 +649,7 @@ mod tests {
         let quiet = Load {
             cpu: Some(0.03),
             gpu: Some(0.10),
+            ..Load::default()
         };
         assert!(quiet.busy().is_empty());
         let c = Conditions::of(quiet, vec!["the desktop background".into()], vec![]);
@@ -644,6 +661,7 @@ mod tests {
         let busy = Load {
             cpu: Some(0.42),
             gpu: Some(0.80),
+            ..Load::default()
         };
         assert_eq!(
             busy.busy(),
@@ -663,7 +681,7 @@ mod tests {
         let c = Conditions::of(
             Load {
                 cpu: Some(CPU_BUSY - 0.01),
-                gpu: None,
+                ..Load::default()
             },
             vec![],
             vec!["jetcarp script".into(), "jetcarp media".into()],
@@ -677,6 +695,81 @@ mod tests {
         );
         // Unknown figures: not under load by themselves.
         assert!(!Conditions::of(Load::default(), vec![], vec![]).under_load);
+    }
+
+    /// Where the GPU's figure came from is kept, and a figure not read is said plainly.
+    #[test]
+    fn the_gpu_figure_s_source_is_kept_and_one_not_read_is_said() {
+        let c = Conditions::of(
+            Load {
+                cpu: Some(0.03),
+                gpu: Some(0.40),
+                gpu_source: Some(GpuSource::Pdh),
+                gpu_not_read: None,
+            },
+            vec![],
+            vec![],
+        );
+        assert!(c.under_load);
+        assert_eq!(
+            c.text(),
+            "taken under load: the GPU was 40% busy, from Windows' GPU engine counters"
+        );
+        let j = serde_json::to_value(&c).unwrap();
+        assert_eq!(j["gpu_load_source"], "pdh");
+        let quiet = Conditions::of(
+            Load {
+                cpu: Some(0.03),
+                gpu: Some(0.05),
+                gpu_source: Some(GpuSource::Iokit),
+                gpu_not_read: None,
+            },
+            vec![],
+            vec![],
+        );
+        assert_eq!(
+            quiet.text(),
+            "taken with the computer quiet (other programs 3% of the processor, the GPU 5% busy, \
+             from macOS's IOAccelerator statistics)"
+        );
+        let why = "NVIDIA's management library, libnvidia-ml.so.1, isn't installed";
+        let unread = Conditions::of(
+            Load {
+                cpu: Some(0.03),
+                gpu_not_read: Some(why),
+                ..Load::default()
+            },
+            vec![],
+            vec![],
+        );
+        assert!(
+            !unread.under_load,
+            "a GPU not read doesn't make it under load"
+        );
+        assert_eq!(
+            unread.text(),
+            format!(
+                "taken with the computer quiet (other programs 3% of the processor; GPU load not read: {why})"
+            )
+        );
+        assert_eq!(serde_json::to_value(&unread).unwrap()["gpu_not_read"], why);
+        // Under load for another reason, the GPU not read is said too.
+        let loaded = Conditions::of(
+            Load {
+                cpu: Some(0.5),
+                ..Load::default()
+            },
+            vec![],
+            vec![],
+        );
+        assert_eq!(
+            loaded.text(),
+            "taken under load: the processor was 50% busy with other programs (GPU load not read)"
+        );
+        // A score kept before the source was: read back without one.
+        let old: Conditions =
+            serde_json::from_str(r#"{"cpu":0.02,"gpu":0.1,"under_load":false}"#).unwrap();
+        assert_eq!((old.gpu_load_source, old.gpu_not_read), (None, None));
     }
 
     #[cfg(any(target_os = "linux", windows, target_os = "macos"))]

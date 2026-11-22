@@ -350,7 +350,7 @@ mod tests {
         s.conditions = Some(Conditions::of(
             Load {
                 cpu: Some(0.5),
-                gpu: None,
+                ..Default::default()
             },
             vec!["the desktop background".into()],
             vec![],

@@ -1384,7 +1384,7 @@ fn child_measuring_pauses_the_world_and_resumes_it_after() {
     // measures at once rather than waiting for the processor to go quiet.
     jetcarp_core::machine::quiet::sample_with(|_| jetcarp_core::machine::quiet::Load {
         cpu: Some(0.0),
-        gpu: None,
+        ..Default::default()
     });
     let mut k = Kb::with_life();
     k.app.set_tool_open(menu::ToolWin::Machine, true);
