@@ -19,6 +19,7 @@
 
 pub mod bench;
 pub mod cost;
+pub mod gpu_load;
 pub mod hardware;
 pub mod limits;
 pub mod pool;
