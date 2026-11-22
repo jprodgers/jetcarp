@@ -28,5 +28,8 @@ image-webp.workspace = true
 windows-sys = { version = "0.61.2", features = ["Win32_System_Registry", "Win32_System_SystemInformation"] }
 windows = { version = "0.62.2", features = ["Win32_Graphics_Dxgi"] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
+# The Mac's memory figures (`src/machine/hardware.rs`), and on Linux and macOS the signals that stop
+# a program as its own stop does (`src/quit_signal.rs`, #278): bindings only, already in the
+# dependency tree.
+[target.'cfg(unix)'.dependencies]
 libc = "0.2.191"

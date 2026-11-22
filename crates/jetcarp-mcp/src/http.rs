@@ -1680,20 +1680,47 @@ pub struct Serve {
     pub allow_origins: Vec<String>,
 }
 
-/// Set (by the first Ctrl-C) when `jetcarp mcp --http` should stop; a second Ctrl-C quits at
-/// once.
-pub fn stop_on_ctrl_c() -> Arc<AtomicBool> {
+/// Set when `jetcarp mcp --http` should stop: by the first Ctrl-C, and on Linux and macOS by the
+/// first SIGTERM or SIGHUP too (what `kill` sends, and a session as it ends, #278), so the server
+/// stops as Ctrl-C stops it, its jobs at their next checkpoint and its endpoint file and memory
+/// record removed. A second quits at once.
+pub fn stop_on_signal() -> Arc<AtomicBool> {
     let stop = Arc::new(AtomicBool::new(false));
     let s = stop.clone();
-    let presses = AtomicUsize::new(0);
-    let _ = ctrlc::set_handler(move || {
-        if presses.fetch_add(1, Ordering::SeqCst) == 0 {
-            s.store(true, Ordering::SeqCst);
-            eprintln!("\njetcarp mcp: stopping (press Ctrl-C again to quit now)");
+    let stopping = move |sig: &str| {
+        s.store(true, Ordering::SeqCst);
+        // Never `eprintln!`, which panics when standard error has gone (the terminal closed).
+        let _ = if sig == "SIGINT" || sig == "Ctrl-C" {
+            // On a line of its own, after the terminal's `^C`.
+            writeln!(
+                std::io::stderr(),
+                "\njetcarp mcp: stopping (press Ctrl-C again to quit now)"
+            )
         } else {
-            std::process::exit(130);
-        }
-    });
+            writeln!(
+                std::io::stderr(),
+                "jetcarp mcp: {sig}: stopping (a second signal quits now)"
+            )
+        };
+    };
+    // Linux and macOS: the program's shared handling of the signals that stop it
+    // (`jetcarp_core::quit_signal`, as the app and the host stop). A second ends it at once with
+    // 128 + its number (130 for Ctrl-C).
+    #[cfg(unix)]
+    jetcarp_core::quit_signal::on_signal(stopping);
+    #[cfg(windows)]
+    {
+        let presses = AtomicUsize::new(0);
+        let _ = ctrlc::set_handler(move || {
+            if presses.fetch_add(1, Ordering::SeqCst) == 0 {
+                stopping("Ctrl-C");
+            } else {
+                std::process::exit(130);
+            }
+        });
+    }
+    #[cfg(not(any(unix, windows)))]
+    let _ = stopping;
     stop
 }
 

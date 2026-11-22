@@ -816,7 +816,7 @@ fn run() -> Result<()> {
                         new_token,
                         allow_origins: allow_origin,
                     },
-                    jetcarp_mcp::http::stop_on_ctrl_c(),
+                    jetcarp_mcp::http::stop_on_signal(),
                 ),
             }
             .map_err(anyhow::Error::msg)?

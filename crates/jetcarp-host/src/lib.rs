@@ -31,7 +31,21 @@ mod window;
 
 pub use tune::TuneArgs;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+
+/// Set when a signal asks the host to stop: on Linux and macOS SIGTERM (what `kill` sends,
+/// launchd at logout on the Mac, and a Linux session as it ends), SIGHUP and SIGINT (#278). The
+/// host's next frame then stops it as `jetcarp host stop` does (`Core::tick`): its link
+/// closes, so its endpoint file goes, a host showing the desktop leaves its still picture there
+/// when one is asked for, and its record in the memory pool goes as it ends. A second signal ends
+/// it at once (`jetcarp_core::quit_signal`).
+static SIGNALLED: AtomicBool = AtomicBool::new(false);
+
+/// Whether a signal has asked the host to stop ([`SIGNALLED`]).
+fn signalled() -> bool {
+    SIGNALLED.load(Ordering::SeqCst)
+}
 
 /// `jetcarp host serve` options.
 #[derive(clap::Args, Debug, Clone)]
@@ -204,6 +218,14 @@ pub fn run(args: HostArgs) -> ! {
             jetcarp_core::machine::pool::exit(3);
         }
     };
+    // From here on, before its link is open and its endpoint file written, a signal stops the
+    // host as `jetcarp host stop` does ([`SIGNALLED`]).
+    jetcarp_core::quit_signal::on_signal(|sig| {
+        say!(
+            "jetcarp-host: {sig}: stopping, as `jetcarp host stop` does (a second signal ends it at once)"
+        );
+        SIGNALLED.store(true, Ordering::SeqCst);
+    });
     if let Ok(cmd) = jetcarp_display::autostart::host_command() {
         // The GNOME menu and the screen saver start the host with this command.
         let _ = jetcarp_display::autostart::record_host_program(&cmd);
