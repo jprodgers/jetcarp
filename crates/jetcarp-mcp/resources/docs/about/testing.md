@@ -201,21 +201,22 @@ with the guard already on.
   savers, both ways it can draw, and the app's whole window (ignored test, on the GPU), with the
   flipping field: what they show, read back and measured on the processor, never fails. An exported
   animation of it is caught, and its softened version, read back from the file, passes.
-- **The outside check** compares JETCARP's verdicts with those of EA's
-  [IRIS](https://github.com/electronicarts/IRIS) on recordings of what each output path drew
-  ([Comparing with IRIS](#comparing-with-iris)). For flashes it misses nothing IRIS flags, and with
-  the guard on IRIS passes every recording for flashing. For patterns, the guard for someone at
-  risk misses nothing IRIS's pattern check flags, and with it on IRIS passes every recording; the
-  usual guard counts regular stripes only, and its disagreements with IRIS are listed. IRIS, like
-  the guard, is a tool, not a certificate.
+- **The outside check** compares JETCARP's verdicts with those of EA's IRIS
+  ([Electronic Arts 2023](../research/bibliography.md#ea2023iris)) on recordings of what each
+  output path drew ([Comparing with IRIS](#comparing-with-iris)). For flashes it misses nothing
+  IRIS flags, and with the guard on IRIS passes every recording for flashing. For patterns, the
+  guard for someone at risk misses nothing IRIS's pattern check flags, and with it on IRIS passes
+  every recording; the usual guard counts regular stripes only, and its disagreements with IRIS are
+  listed. IRIS, like the guard, is a tool, not a certificate.
 
 ### Comparing with IRIS
 
 JETCARP neither ships nor builds IRIS; this is how the comparison was run, and what it found.
 
-1. **IRIS** at commit `d96978ac1107f3463b77f69a9c1b1ec5d45291a0` (14 January 2025), unchanged,
-   built as its README says: CMake with vcpkg at IRIS's own baseline (`0affe8710a4a`, which brings
-   OpenCV 4.8 with FFmpeg), its example program, release only. It was built on Fedora 45 without
+1. **IRIS** ([Electronic Arts 2023](../research/bibliography.md#ea2023iris)) at commit
+   `d96978ac1107f3463b77f69a9c1b1ec5d45291a0` (14 January 2025), unchanged, built as its README
+   says: CMake with vcpkg at IRIS's own baseline (`0affe8710a4a`, which brings OpenCV 4.8 with
+   FFmpeg), its example program, release only. It was built on Fedora 45 without
    administrator rights: the build tools vcpkg does not fetch on Linux (m4, bison, autoconf,
    automake, libtool, gperf and NASM, a few pure-Perl modules Fedora packages apart, and Jinja2)
    were built or fetched into the build's own folder. The host's compiler and headers are newer
@@ -456,6 +457,9 @@ job that hangs is stopped rather than left running for hours.
   cannot pass without having run. On Linux the tests run once more with the default
   folders, failing if any test writes to them. On Windows each of the folder rules' link cases must
   make its junction or symbolic link and run; the log names each one.
+- **A debug build** of the whole workspace runs every test again on Linux, GPU tests on lavapipe:
+  release builds check neither arithmetic for overflow nor debug assertions, and a bug in the
+  animated WebP encoder hid from them that way until 0.4.3.
 - **The installers** are each given a release folder of the test's own: an intact archive installs;
   an archive with one byte changed, and one that `SHA256SUMS` does not list, are refused with
   nothing installed (the shell installer on Linux, the PowerShell one on Windows). The intact install
@@ -480,7 +484,9 @@ job that hangs is stopped rather than left running for hours.
   is no longer maintained is shown as a warning, and never fails it.
 - **The book** builds, its internal links all resolve, and its scripting reference matches the
   program.
-- **Golly:** the Linux job installs Ubuntu's Golly and runs the Golly test above.
+- **Golly:** the Linux job builds Golly's `bgolly` 4.0 and 5.0 from their source (Ubuntu packages
+  only Golly 3.3, which can't read every rule JETCARP writes) and runs every Golly test above with
+  each, but the one that needs a library of finds.
 - **A release** is built only from a tag whose version agrees with the program and the changelog,
   and only after the tests pass.
 
@@ -504,8 +510,8 @@ what to run, and what counts as a pass. It is carried out in three parts.
 
 **Phase 1, unattended**, on each machine:
 
-- **Parity on every GPU.** 371 scenes (every built-in Quick Start scene, 364, and 7 sandpiles that
-  drop grains) run for 300 generations on the CPU and on each adapter and graphics API the machine
+- **Parity on every GPU.** 378 scenes (every built-in Quick Start scene, 371 since 0.4.3's
+  isotropic entries, 364 for 0.4.2, and 7 sandpiles that drop grains) run for 300 generations on the CPU and on each adapter and graphics API the machine
   has: seven in all, from the Radeon and llvmpipe to the RTX and the UHD on both Vulkan and
   DirectX 12, to the M2 Max on Metal. Every final hash must match the one recorded on the Framework's CPU. Then 40 scenes chosen
   across every family and kind of tiling run for 5,000 generations each, so that slow drift shows.
@@ -579,9 +585,9 @@ fixes them. The plans, logs and results are published in
 - **Triage.** A fix that fits goes into the next candidate; anything that would change stored data,
   or is too large to test properly in time, goes to the next version. GitHub milestones track which.
   A feature that misses what it is for is held back: in `rc.3`'s testing, Fit to this computer took
-  from 45 seconds to 12 minutes to size the desktop background for a machine, against Jimmie's target
-  of 10 to 30 seconds, so 0.4.2 ships without it and a faster design is planned for 0.4.3 (#112,
-  #113).
+  from 45 seconds to 12 minutes to size the desktop background for a machine, against a target of
+  10 to 30 seconds, so 0.4.2 shipped without it; 0.4.3 brings it back, redesigned to take a few
+  seconds (#112, #113; see [How long Fit to this computer takes](#how-long-fit-to-this-computer-takes)).
 - **Fixes come with tests.** Where a test can be written, it is. Some fixes can only be checked on a
   particular system (how macOS treats a hidden window, for example); those are checked by hand
   there, in the next candidate's R. In the 0.4.2 cycle, 74 of the 102 closed issues have a test
@@ -653,10 +659,10 @@ issues.
 
 [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says what JETCARP does
 and does not do. Each of its promises is held up by automated tests, by a check in CI, by the
-hands-on rows of each release candidate's plan (its part S, from 0.4.3), or by how the code is
+hands-on rows of each release candidate's plan (its security rows, from 0.4.3), or by how the code is
 built. The next audit checks this table against the code.
 
-| # | Promise | Automated tests and CI checks | Hands-on (part S) |
+| # | Promise | Automated tests and CI checks | Hands-on (the plan's security rows) |
 |---|---|---|---|
 | 1 | It makes no network connections; the only network sockets it opens are local, on `127.0.0.1` | The Dependencies workflow (`deny.toml`): no HTTP, TLS, DNS, WebSocket or peer-to-peer crate, and no HTTP parser, in the dependency tree that `deny.toml` does not allow, so networking comes only on purpose; the one allowed, `httparse`, which reads the MCP server's HTTP requests, is allowed for `jetcarp-mcp` only. `the_listener_is_on_loopback_only` (`jetcarp-mcp/tests/link.rs`) and `the_endpoint_is_on_loopback_only` (`jetcarp-mcp/tests/http.rs`): no other address of the machine reaches them, and on Linux the HTTP server's one listening socket is `127.0.0.1`. By construction: the workspace's two listening sockets, the link's and the MCP server's HTTP endpoint's, are bound to `127.0.0.1` (`Listener` in `jetcarp-mcp/src/link.rs` and in `jetcarp-mcp/src/http.rs`), and the only connections it makes are to them | |
 | 2 | Nothing in a pack is run; every hash and signature is checked before anything is stored | `jetcarp-pack/tests/hostile.rs`: oversized and deep documents, unknown versions and features, altered objects, names that would leave the store, too many parts, decompression and decoding bombs, records that do not hash to their ids, unsigned and badly signed versions, links out of an export or a store | S-P1 (the same tests on each machine), S-P2 (a pack signed by a key the machine has not seen) |

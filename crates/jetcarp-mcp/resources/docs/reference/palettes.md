@@ -13,7 +13,8 @@ and editing palettes in the app, see [Palettes and colouring](../guides/palettes
 stops, on the palette's own background. The last column is the program's own
 <a href="#colour-vision-deficiency">check for colour-vision deficiency</a>.</p>
 
-Candy, Glacier, Desert, Paper and Riso have light backgrounds; the rest are dark. Stained Glass and Opal
+Candy, Glacier, Desert, Paper, Riso, Vellum, Linen, Ink Wash, Bluebell, Fern, Brick, Mulberry and
+Driftwood have light backgrounds; the rest are dark. Stained Glass, Opal, Tidewheel and Compass Rose
 are closed colour wheels whose last stop repeats the first, so the cyclic automaton and
 rock-paper-scissors, which colour states around the whole palette, show no seam. Some palettes, such
 as Verdigris, end on a bright stop, so a pattern that has settled stays vivid under age colouring.
@@ -206,7 +207,7 @@ row. With `auto`, each family is coloured like this:
 
 | Family | Colours |
 | --- | --- |
-| Life-like, Generations, Larger than Life, priority tables, Margolus, and the two-state row and layered rules | By age. Row and layered rules write each cell once, so their cells keep the first stop |
+| Life-like, isotropic, Generations, Larger than Life, priority tables, Margolus, and the two-state row and layered rules | By age. Row and layered rules write each cell once, so their cells keep the first stop |
 | JACA | +1 cells by age from `palette`, −1 cells by age from `palette_neg`; destroyed cells glow pale yellow over the background and fade (`glow`, on by default; drawing only, not part of the state) |
 | Generations' dying states, and states above 1 of other multi-state rules coloured by age | By state, between 45% and 95% of the way along the palette |
 | Cyclic automaton, rock-paper-scissors | Every state, 0 included, at an even step around the palette |

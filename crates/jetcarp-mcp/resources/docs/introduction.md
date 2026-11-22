@@ -3,8 +3,8 @@
 **JETCARP**, Jimmie's Euclidean Tilings and Cellular Automata Research Program, runs cellular
 automata on almost any tiling of the plane: squares and hexagons, all eleven Archimedean tilings, the
 1,248 k-uniform tilings up to k = 6, 81 isohedral tile types, tiles you draw yourself, and the
-aperiodic Penrose, hat and spectre tilings. It runs Life and the Life-like rules, Generations, Larger
-than Life, Langton's ant and the turmites, WireWorld, the cyclic and excitable rules, sandpiles,
+aperiodic Penrose, hat and spectre tilings. It runs Life and the Life-like rules, isotropic rules, Generations,
+Larger than Life, Langton's ant and the turmites, WireWorld, the cyclic and excitable rules, sandpiles,
 Lenia and more, several at once if you like, on shared or separate fields. It is one program, with a
 graphical app, a command line, a scripting language and a Model Context Protocol (MCP) server for AI
 assistants, and it comes with tools that search for spaceships, oscillators and other patterns and
@@ -21,7 +21,7 @@ release does, and [How JETCARP was made](about/how-made.md) tells where it came 
 ## Who it is for
 
 - **Desktop art.** JETCARP can run a scene as a live wallpaper behind your windows, as a screensaver,
-  or as still wallpapers cut to your monitors, in thirty-three built-in palettes or your own. Start with
+  or as still wallpapers cut to your monitors, in 75 built-in palettes or your own. Start with
   [Your first live wallpaper](tutorials/first-wallpaper.md).
 - **Hobby exploration.** Pick an entry from Quick Start, move it to another tiling, change the rule,
   draw your own tile, and see what happens. Searching for your own spaceships takes one command.

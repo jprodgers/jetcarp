@@ -22,7 +22,8 @@ are cream and orange. Right: coloured by state, so every live cell looks the sam
   palettes and any the scene has of its own. A [JACA](../automata/jaca.md) automaton has two, *+1
   palette* and *−1 palette*, each with a colour button beside it that sets a single colour instead.
 - **The Palettes window** (*CA → Palettes…*) shows every palette as a swatch on its own background, so
-  the light ones (Candy, Glacier, Desert, Paper and Riso) look right. Choose what to colour under *Apply to*,
+  the light ones (Candy, Paper, Vellum, Linen and the others the
+  [reference](../reference/palettes.md#the-built-in-palettes) marks *light*) look right. Choose what to colour under *Apply to*,
   every automaton or one, then click a swatch to apply it. Hovering over a swatch, or moving between
   swatches with the arrow keys after a click, previews it on the grid; Enter applies it.
 

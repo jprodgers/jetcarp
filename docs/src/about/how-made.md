@@ -17,7 +17,7 @@ this book were made with CART, and every one was run again on JETCARP 0.4.0 befo
 
 ## Rust, with an AI coding assistant
 
-JETCARP is written in Rust: about 258,000 lines in thirteen crates, of which about 211,000 are
+JETCARP is written in Rust: about 306,000 lines in thirteen crates, of which about 248,000 are
 outside the tests and examples (November 2026), with a small GNOME Shell extension in JavaScript.
 The simulation engine is `jetcarp-core`; the others are the store (the pattern library, Quick Start
 and media), the searches and the job runner they share, the GPU stepper, the operations shared by

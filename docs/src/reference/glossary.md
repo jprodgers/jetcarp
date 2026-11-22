@@ -165,6 +165,10 @@ tiling, class, period, displacement and canonical evolution, as lines of text in
 Grünbaum and Shephard sorted them into 93 types, IH1 to IH93; JETCARP has the 81 that can be told
 apart by the tile's shape alone. See [Isohedral tilings](../tilings/isohedral.md).
 
+**Isotropic rule.** A rule on the square grid's eight touching neighbours that looks at how the live
+neighbours are arranged as well as how many there are, alike under turns and reflections, written
+in Hensel's notation (`B2-a/S12`). See [Isotropic rules](../automata/isotropic.md).
+
 ## J
 
 **JACA.** Jimmie's Annihilating Cellular Automata: cells of sign +1 and −1, each following its own B/S
@@ -302,7 +306,8 @@ Start entries, each with the conditions that end it. See [Rotations](../guides/r
 **Rule.** How a cell's next state follows from its own state and its neighbours'.
 
 **Rule range.** Every Life-like or Generations rule in which a pattern runs through exactly the same
-phases, stored with each catalogued pattern. See [Search methods](../research/search-methods.md#how-finds-are-verified).
+phases, stored with each catalogued pattern; on the square grid's touching neighbours, the
+isotropic rules it runs in too. See [Search methods](../research/search-methods.md#how-finds-are-verified).
 
 **Rule-semantics version.** The version of what a rule family's rules mean, raised whenever that
 meaning changes; every family is at 1 in JETCARP 0.4.0. Every pattern stores its family's version,
@@ -368,6 +373,10 @@ future. Equal hashes mean equal states. Scenes saved before 0.4.3 carry an older
 **Strategy.** A kind of search run as a job (`hunt`, `bounded`, `census`, `ants`, `mover`, `pile`,
 `collide`, `evolve`, `explore`, `reverify`, which checks library records again, and `compounds`,
 which splits stored compounds into their parts).
+
+**Strobe guard.** JETCARP's watch over what it draws: it softens, slows or pauses a scene before
+it flashes more than three times a second over a large part of the screen, and veils strong
+regular stripes. See [The strobe guard](../guides/strobe-guard.md).
 
 **Supertile.** A cluster of tiles that the substitution rules of an aperiodic tiling treat as one
 larger tile.
