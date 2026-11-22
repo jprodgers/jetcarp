@@ -223,18 +223,19 @@ pub fn soften(frames: &[Image], delay_ms: u32, at_risk: bool) -> Vec<Image> {
         let t = k as f64 * dt;
         let (map, half) = reduce_both(&frames[i].rgba, w, h);
         // Fine patterns that flash by the area rule themselves are veiled as well, as the guard
-        // veils them: softening a tile's mean cannot calm them.
-        let fine_flashing = flash.update(&map, t).fine_transitions >= 2;
+        // veils them: softening a tile's mean cannot calm them; so are windows changing where
+        // their tile's mean moves much less (#275: a field of blinkers, say).
+        let reading = flash.update(&map, t);
+        let fine_flashing = reading.fine_transitions >= 2;
+        let partial_flashing = reading.partial_transitions >= 2;
         let (cols, rows) = flash.tiles();
-        for (j, ((&c, &r), &fine)) in flash
-            .tile_counts()
-            .iter()
-            .zip(flash.tile_red_counts())
-            .zip(flash.tile_fine_counts())
-            .enumerate()
-        {
-            if c >= 2 || r >= 2 {
-                let veil = (fine_flashing && fine > 0).then(|| fine_veil(&map, j));
+        for j in 0..flash.tile_counts().len() {
+            let (c, r) = (flash.tile_counts()[j], flash.tile_red_counts()[j]);
+            let (fine, partial) = (flash.tile_fine_counts()[j], flash.tile_partial_counts()[j]);
+            let change = flash.tile_change_counts()[j];
+            if c >= 2 || r >= 2 || change >= 2 {
+                let veil = ((fine_flashing && fine > 0) || (partial_flashing && partial > 0))
+                    .then(|| fine_veil(&map, j));
                 let (x, y) = ((j as u32 % cols) as i64, (j as u32 / cols) as i64);
                 for dy in -1..=1 {
                     for dx in -1..=1 {

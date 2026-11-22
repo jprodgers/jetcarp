@@ -30,6 +30,13 @@
 //! next reversal would have. It goes, and holds, as a veil for stripes does. A few tiles reversing
 //! now and then (moving waves, Hodgepodge's swings) are left to the softening and the pace cap.
 //!
+//! **Change in part of a tile** (#275), a field of blinkers or toads flipping part of each tile, is
+//! veiled the same way where it flashes by the area rule on its own
+//! ([`super::flash::FlashReading::partial_transitions`]): softening holds a tile's mean, which such
+//! change barely moves, and not its pixels. A veil that holds keeps its grey, so that a tile whose
+//! mean changes with its pattern does not flip the veil's grey with it. Veiling counts as softening
+//! for the pace cap: a scene still flashing after [`SLOW_AFTER`] is slowed.
+//!
 //! The guard changes only what is shown and how fast generations are shown; a world computes the
 //! same generations either way. Switched off, it still measures, so the status can say a scene
 //! flashes, but it does nothing.
@@ -186,6 +193,8 @@ pub struct Guard {
     hold: Vec<f64>,
     /// Each tile's veil target (amount, grey), and until when it holds.
     veil_target: Vec<([f32; 2], f64)>,
+    /// Until when fine patterns flashing are veiled: softening as far as slowing is concerned.
+    fine_until: f64,
     last_t: Option<f64>,
     softening_since: Option<f64>,
     cap: Option<f32>,
@@ -234,6 +243,7 @@ impl Guard {
             plan: Plan::default(),
             hold: vec![],
             veil_target: vec![],
+            fine_until: f64::NEG_INFINITY,
             last_t: None,
             softening_since: None,
             cap: None,
@@ -258,6 +268,7 @@ impl Guard {
                 self.lift();
                 self.plan = Plan::none(self.plan.cols, self.plan.rows);
                 self.hold.fill(f64::NEG_INFINITY);
+                self.fine_until = f64::NEG_INFINITY;
                 self.softening_since = None;
             }
         }
@@ -375,8 +386,9 @@ impl Guard {
             let spread_thin = drawn.area_transitions.max(drawn.red_transitions) < threshold;
             let counts = self.input.tile_counts();
             let reds = self.input.tile_red_counts();
+            let changes = self.input.tile_change_counts();
             for i in 0..n {
-                if spread_thin || counts[i] > 0 || reds[i] > 0 {
+                if spread_thin || counts[i] > 0 || reds[i] > 0 || changes[i] > 0 {
                     let (c, r) = ((i as u32 % cols) as i64, (i as u32 / cols) as i64);
                     for dy in -1..=1 {
                         for dx in -1..=1 {
@@ -389,7 +401,17 @@ impl Guard {
                 }
             }
         }
-        let mut any = false;
+        // Fine patterns flashing (a reversing checkerboard, a field of blinkers) are veiled (2b,
+        // below), which counts as softening them: still flashing after a second, the scene is
+        // slowed.
+        let fine_flashing = drawn.fine_transitions >= threshold;
+        // Windows changing where their tile's mean moves much less (#275): a field of blinkers,
+        // toads or clocks.
+        let partial_flashing = drawn.partial_transitions >= threshold;
+        if (fine_flashing || partial_flashing) && self.can_soften {
+            self.fine_until = t + HOLD;
+        }
+        let mut any = self.fine_until >= t;
         for (s, h) in self.plan.soften.iter_mut().zip(&self.hold) {
             *s = *h >= t;
             any |= *s;
@@ -397,8 +419,20 @@ impl Guard {
         match (any, self.softening_since) {
             (true, None) => {
                 self.softening_since = Some(t);
-                let share = self.plan.soften.iter().filter(|s| **s).count() as f32
-                    / self.plan.soften.len().max(1) as f32;
+                // The tiles softened, or about to be veiled for their fine patterns.
+                let (fine, partial) = (
+                    self.input.tile_fine_counts(),
+                    self.input.tile_partial_counts(),
+                );
+                let n = self.plan.soften.len();
+                let share = (0..n)
+                    .filter(|&i| {
+                        self.plan.soften[i]
+                            || (fine_flashing && fine.get(i).is_some_and(|c| *c > 0))
+                            || (partial_flashing && partial.get(i).is_some_and(|c| *c > 0))
+                    })
+                    .count() as f32
+                    / n.max(1) as f32;
                 self.note(format!(
                     "softening: the scene flashed {} over {:.0}% of the view",
                     flashes(most),
@@ -426,14 +460,12 @@ impl Guard {
         // to the softening.) The veil comes on at once (the change it makes is one transition of
         // each pixel, as the next reversal would be) and goes as any veil does.
         let mut at_once = vec![false; self.veil_target.len()];
-        let fine_flashing = drawn.fine_transitions >= threshold;
-        if fine_flashing && self.can_soften {
+        if (fine_flashing || partial_flashing) && self.can_soften {
             let n = self.veil_target.len();
-            for (i, _) in self.input.tile_fine_counts()[..]
-                .iter()
-                .enumerate()
-                .take(n)
-                .filter(|(_, c)| **c > 0)
+            let fine = self.input.tile_fine_counts();
+            let partial = self.input.tile_partial_counts();
+            for i in (0..n)
+                .filter(|&i| (fine_flashing && fine[i] > 0) || (partial_flashing && partial[i] > 0))
             {
                 let v = fine_veil(f.input, i);
                 let (c, r) = ((i as u32 % cols) as i64, (i as u32 / cols) as i64);
@@ -443,9 +475,13 @@ impl Guard {
                         if x >= 0 && y >= 0 && (x as u32) < cols && (y as u32) < rows {
                             let j = (y as u32 * cols + x as u32) as usize;
                             let vt = &mut self.veil_target[j];
-                            if vt.1 < t || vt.0[0] <= v[0] {
+                            if vt.1 < t {
                                 *vt = (v, t + HOLD);
                             } else {
+                                // A veil that holds keeps its grey, and only grows: a tile whose
+                                // mean changes with its pattern (cells larger than a tile
+                                // flipping, #275) would otherwise flip the veil's grey with it.
+                                vt.0[0] = vt.0[0].max(v[0]);
                                 vt.1 = t + HOLD;
                             }
                             at_once[j] = true;
