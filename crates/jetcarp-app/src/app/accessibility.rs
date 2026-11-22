@@ -449,14 +449,22 @@ fn settings_ui(
     ui.add_space(8.0);
     ui.separator();
     ui.heading("Font");
+    // On macOS the screen saver has its own copy, as it has of its rotation (the Screensaver
+    // pane's Install says so too).
+    let saver = if jetcarp_display::saver::BAKED {
+        " The macOS screen saver has the font copied in when it's installed, so install it again \
+         after changing the font."
+    } else {
+        ""
+    };
     ui.label(
-        RichText::new(
+        RichText::new(format!(
             "JETCARP's words are in Atkinson Hyperlegible Next, a font whose letters are easier to \
              tell apart, designed by the Braille Institute for low-vision readers. You can choose \
              any font installed on this computer instead, or a font file. A character the font \
              lacks is drawn in egui's own fonts, or else in an installed font that has it. The \
-             caption on the desktop background follows the Font setting.",
-        )
+             caption on the desktop background follows the Font setting.{saver}",
+        ))
         .small(),
     );
     let installed = fonts.scanner.poll();
