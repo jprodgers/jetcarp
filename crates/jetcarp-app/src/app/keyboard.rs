@@ -61,7 +61,13 @@ pub(crate) const MOVING: &[KeyLine] = &[
         keys: "Esc",
         mac: "Esc",
         what: "Leave a text box; close a menu, a list, a dialog, or the tool window that has \
-               the keyboard",
+               the keyboard (from a text box, Esc twice); in a docked pane, back to the grid",
+    },
+    KeyLine {
+        keys: "Ctrl+W",
+        mac: "⌘W",
+        what: "Close the tool window or dialog that has the keyboard (a popped-out one goes \
+               back to the main window)",
     },
     KeyLine {
         keys: "Shift+F10",
@@ -179,6 +185,7 @@ impl JetcarpApp {
         } else if self.kb.pointer_at == now || ctx.memory(|m| m.focused().is_some()) {
             self.kb.escaped_from = None;
         }
+        self.escape_from_pane(ctx);
         // F6: the next part of the window; Shift+F6 the one before.
         for (m, back) in [(Modifiers::NONE, false), (Modifiers::SHIFT, true)] {
             if take_key(ctx, Key::F6, m) {
@@ -226,6 +233,33 @@ impl JetcarpApp {
             || (egui::Popup::is_any_open(ctx) && self.kb.on_menus);
         self.kb.last_focus = focused;
         a11y::note_focus(ctx);
+    }
+
+    /// Esc on a control of a docked pane (not a text box, nor in a list): the keyboard back to the
+    /// grid, as a tool window's Esc closes it (#308). Pasting, Esc stops the paste instead.
+    fn escape_from_pane(&mut self, ctx: &egui::Context) {
+        let f = a11y::last_focus(ctx);
+        let (Some(id), Some(grid)) = (f.id, self.kb.grid_id) else {
+            return;
+        };
+        if f.text
+            || f.popup
+            || id == grid
+            || self.paste.is_some()
+            || !ctx.input(|i| i.key_pressed(Key::Escape))
+            || ctx.viewport(|v| v.prev_pass.widgets.get(grid).is_none())
+        {
+            return;
+        }
+        let regions = a11y::last_regions(ctx);
+        let in_pane = a11y::region_of(ctx, &regions, id).is_some_and(|i| {
+            let r = &regions[i];
+            r.layer == egui::LayerId::background() && panes::PANES.iter().any(|p| p.title == r.name)
+        });
+        if in_pane {
+            ctx.memory_mut(|m| m.request_focus(grid));
+            ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
+        }
     }
 
     /// F6 (or Shift+F6 with `back`): the keyboard to the first control of the next part of the

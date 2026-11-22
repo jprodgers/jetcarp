@@ -704,6 +704,9 @@ pub struct LastFocus {
     pub text: bool,
     /// A popup (a menu, a list) was open (Esc closes that first).
     pub popup: bool,
+    /// With nothing holding the keyboard: the layer of the text box Esc left it from, so a second
+    /// Esc closes that box's window (#308).
+    pub left: Option<egui::LayerId>,
 }
 
 fn last_focus_id() -> egui::Id {
@@ -722,11 +725,20 @@ pub fn note_focus(ctx: &egui::Context) {
                 .map(|w| w.layer_id)
         })
     });
+    let was = last_focus(ctx);
+    let (esc, pointer) = ctx.input(|i| (i.key_pressed(egui::Key::Escape), i.pointer.any_pressed()));
+    let left = match id {
+        Some(_) => None,
+        None if was.text && esc => was.layer,
+        None if pointer => None,
+        None => was.left,
+    };
     let f = LastFocus {
         id,
         layer,
         text: ctx.text_edit_focused(),
         popup: egui::Popup::is_any_open(ctx),
+        left,
     };
     ctx.data_mut(|d| d.insert_temp(last_focus_id(), f));
 }
@@ -737,10 +749,31 @@ pub fn last_focus(ctx: &egui::Context) -> LastFocus {
 }
 
 /// Esc was pressed with the keyboard on a control (not a text field, nor in a popup) in the
-/// window on `layer`: the window should close.
+/// window on `layer`, or with nothing holding it just after Esc left a text box there: the window
+/// should close.
 pub fn escape_closes(ctx: &egui::Context, layer: egui::LayerId) -> bool {
     let f = last_focus(ctx);
-    f.layer == Some(layer) && !f.text && !f.popup && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+    let here = (f.layer == Some(layer) && !f.text) || (f.id.is_none() && f.left == Some(layer));
+    here && !f.popup && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+}
+
+/// The shortcut that closes the tool window with the keyboard: Ctrl+W (⌘W on macOS).
+pub const CLOSE_WINDOW: egui::KeyboardShortcut =
+    egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::W);
+
+/// Ctrl+W (⌘W) was pressed with the keyboard in the window on `layer`, on any of its controls (a
+/// text box's too), or just after Esc left one of its text boxes: the window should close. The
+/// key is taken, so no other window closes with it.
+pub fn close_key(ctx: &egui::Context, layer: egui::LayerId) -> bool {
+    let f = last_focus(ctx);
+    let here = f.layer == Some(layer) || (f.id.is_none() && f.left == Some(layer));
+    here && ctx.input_mut(|i| i.consume_shortcut(&CLOSE_WINDOW))
+}
+
+/// The keyboard asks to close the tool window on `layer`: Esc ([`escape_closes`]) or Ctrl+W
+/// ([`close_key`]).
+pub fn closes_window(ctx: &egui::Context, layer: egui::LayerId) -> bool {
+    escape_closes(ctx, layer) || close_key(ctx, layer)
 }
 
 /// Esc was pressed with the keyboard in the dialog on `layer`, or nowhere at all (not in a text
