@@ -1,5 +1,5 @@
-//! The app ended by a signal (#135): SIGTERM (how `kill`, a logout or a system shutting down
-//! ends a program), SIGHUP (the terminal it was started from closing) and SIGINT (Ctrl-C there)
+//! The app ended by a signal (#135): SIGTERM (what `kill` sends, and a system as it shuts down),
+//! SIGHUP (the terminal it was started from closing) and SIGINT (Ctrl-C there)
 //! close the app as its window's close button and *Quit* do, so it ends through `on_exit`: its
 //! layout and settings saved, its jobs stopped at a checkpoint, and AI control's endpoint file
 //! (`app-endpoint.json` in the runtime folder) removed. Before, each ended the process at once,

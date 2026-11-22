@@ -159,10 +159,10 @@ every copy of JETCARP you run, whatever folders the others point at, so there is
 host per user (the host's `host.lock` is here) and `jetcarp host` and `jetcarp mcp --app` reach the
 one running; `JETCARP_RUNTIME_DIR` gives a copy a runtime folder of its own. `jetcarp paths` and
 `jetcarp doctor` show the one in use. Each program removes its port and token file and its memory
-record as it quits; on Linux and macOS the app does so when it is ended with SIGTERM (as `kill`, a
-logout or a shutdown ends it), SIGHUP or Ctrl-C in the terminal it was started from, too, closing
-as its window's close button does (a second one ends it at once). `jetcarp uninstall` removes
-whatever is left once no program uses it, then the folder (see
+record as it quits. On Linux and macOS the app does so too when it is sent SIGTERM (what `kill`
+sends, and the system as it shuts down), SIGHUP, or Ctrl-C in the terminal it was started from:
+it closes as its window's close button closes it, and a second signal ends it at once.
+`jetcarp uninstall` removes whatever is left once no program uses it, then the folder (see
 [Uninstalling](../guides/uninstalling.md)). On Windows it is also the default data folder, so the
 data folder holds these files beside the library; setup still takes it as a new data folder when
 they are all it holds, `jetcarp uninstall` removes them and keeps the library, and
