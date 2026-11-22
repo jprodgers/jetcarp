@@ -247,12 +247,15 @@ mod tests {
                 time: Some(time),
                 ..Default::default()
             };
-            let out = ctx.run_pass(input, |ctx| {
+            let mut out = ctx.run_pass(input, |ctx| {
                 ctx.root_ui(|ui| {
                     eframe::App::logic(&mut app, ui.ctx(), &mut frame);
                     eframe::App::ui(&mut app, ui, &mut frame);
                 });
             });
+            // No painter takes the frame's textures here; a debug build refuses to drop them
+            // unhandled (as the keyboard tests do).
+            out.textures_delta.clear();
             if !said && endpoint.exists() {
                 println!("{READY}");
                 said = true;
