@@ -1344,8 +1344,9 @@ pub struct ApplyIn {
     #[serde(default)]
     pub dry_run: bool,
     /// Measure this computer first (`machine.score`: about a minute of JETCARP's own work, for
-    /// the JETCARP Hardware Score and limits that fit it), before the jobs start so they do not
-    /// slow it. Default: no; the app's setup and `jetcarp setup` ask, ticked by default.
+    /// its JETCARP Hardware Score, which compares it with other computers and gives Fit to this
+    /// computer its first guess; the limits come from the hardware and your own values either
+    /// way), before the jobs start so they do not slow it. Default: no; the app's setup and `jetcarp setup` ask, ticked by default.
     #[serde(default)]
     pub measure: Option<bool>,
     /// With `measure`: the short run, each workload once for its answers (the tests).
@@ -1620,7 +1621,8 @@ fn apply(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
         steps.push(PlanStep {
             kind: "measure".into(),
             what: "measure this computer: about a minute of JETCARP's own work, for its JETCARP \
-                   Hardware Score and limits that fit it"
+                   Hardware Score, to compare it with other computers and for Fit to this \
+                   computer's first guess"
                 .into(),
             job: None,
         });
