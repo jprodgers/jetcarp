@@ -17,8 +17,8 @@
 use super::{Limits, bytes_text};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The records' folder inside the runtime folder.
@@ -121,6 +121,10 @@ struct Me {
 
 static ME: OnceLock<Me> = OnceLock::new();
 static STOPPED: AtomicBool = AtomicBool::new(false);
+/// Held while this program's record is written, and by [`stop`]: a refresh under way when the
+/// program ends finishes before the record is removed, and none starts after, so no record is
+/// left behind (#135).
+static WRITING: Mutex<()> = Mutex::new(());
 
 /// Record this program's memory from now on, as `program`, read with `rss`: once now, then every
 /// [`EVERY`] on a thread of its own. The `jetcarp` program does this at start.
@@ -152,6 +156,7 @@ pub fn record_now() {
     let (Some(me), Some(dir)) = (ME.get(), folder()) else {
         return;
     };
+    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     if STOPPED.load(Ordering::Relaxed) {
         return;
     }
@@ -168,8 +173,11 @@ pub fn record_now() {
     }
 }
 
-/// Stop recording and remove this program's record (at its end).
+/// Stop recording and remove this program's record (at its end: the `jetcarp` program's `main`
+/// as it returns, [`exit`], and `jetcarp_display::exit::end_process`, how the app and the host
+/// end).
 pub fn stop() {
+    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     STOPPED.store(true, Ordering::Relaxed);
     if let Some(dir) = folder() {
         remove_in(&dir, std::process::id());
