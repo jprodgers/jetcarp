@@ -869,7 +869,7 @@ const TEST_GENS: u64 = 24;
 /// Draws of a family's rules until one runs on the GPU.
 const TEST_DRAWS: usize = 64;
 /// Changes when the self-test itself changes, so results are taken again.
-const TEST_VERSION: u32 = 4;
+const TEST_VERSION: u32 = 5;
 
 static TESTED: Mutex<Option<HashMap<String, SelfTest>>> = Mutex::new(None);
 
@@ -1041,11 +1041,12 @@ fn test_world(grid: &Grid, rule: &Rule, nb: Nb, seed: &SeedSpec, drop: u32) -> O
     Some(w)
 }
 
-/// Kernels a family's random draws may miss, always checked where they run: a B0 rule, JACA with
-/// a blast, Margolus blocks and isotropic rules (square grids; two states, B0 and Generations),
-/// Larger than Life (and two states with B0), forest fire and sandpiles (one with no drop, one
-/// dropping grains, one whose drop saturates the centre cell: #20), each with a seed that sets it
-/// going and its grains dropped per generation. Add a line here for a variant the draws may not reach.
+/// Kernels a family's random draws may miss, always checked where they run (the world stepper,
+/// and the explore batch for those it runs): a B0 rule, JACA with a blast, Margolus blocks and
+/// isotropic rules (square grids; two states, B0 and Generations), Larger than Life (and two
+/// states with B0), forest fire and sandpiles (one with no drop, one dropping grains, one whose
+/// drop saturates the centre cell: #20), each with a seed that sets it going and its grains
+/// dropped per generation. Add a line here for a variant the draws may not reach.
 fn extra_rules() -> Vec<(&'static str, SeedSpec, u32)> {
     vec![
         ("B013/S1", SeedSpec::Random { density: 0.35 }, 0),
@@ -1090,6 +1091,25 @@ fn world_rules(grid: &Grid) -> Vec<(Rule, Nb, SeedSpec, u32)> {
     v
 }
 
+/// The explore batch rules the self-test runs on a grid: one drawn from each family the batch
+/// stepper runs, then the [`extra_rules`] it runs (isotropic rules on the square grid among them:
+/// two states, B0 and Generations, #245), with their seeds.
+fn batch_rules(grid: &Grid) -> Vec<(Rule, Nb, SeedSpec)> {
+    let mut v: Vec<(Rule, Nb, SeedSpec)> = test_rules(grid, BatchSim::supports)
+        .into_iter()
+        .map(|(r, nb)| (r, nb, SeedSpec::RandomStates))
+        .collect();
+    for (text, seed, drop) in extra_rules() {
+        if let Ok((rule, nb)) = Rule::parse(text)
+            && drop == 0
+            && BatchSim::supports(&rule)
+        {
+            v.push((rule, nb.unwrap_or_default(), seed));
+        }
+    }
+    v
+}
+
 /// Every world kernel and the batch stepper against the CPU, on each test grid.
 fn compare_all(sim: &mut GpuSim, batch: &mut BatchSim) -> Result<String, String> {
     let (mut worlds, mut batches) = (0, 0);
@@ -1122,8 +1142,8 @@ fn compare_all(sim: &mut GpuSim, batch: &mut BatchSim) -> Result<String, String>
         }
         // One batch per neighbourhood (Larger than Life: per hood and range), as a search has.
         let mut jobs: BTreeMap<String, BatchJob> = BTreeMap::new();
-        for (rule, nb) in test_rules(&grid, BatchSim::supports) {
-            let Some(w) = test_world(&grid, &rule, nb, &SeedSpec::RandomStates, 0) else {
+        for (rule, nb, seed) in batch_rules(&grid) {
+            let Some(w) = test_world(&grid, &rule, nb, &seed, 0) else {
                 continue;
             };
             let group = match &rule {
@@ -1643,6 +1663,31 @@ mod tests {
                 );
             }
             assert!(!test_rules(&grid, BatchSim::supports).is_empty());
+        }
+    }
+
+    /// The self-test's explore batches take isotropic rules on the square grid (#245): one drawn
+    /// as the search draws them, and the extra rules' two-state, B0 and Generations ones.
+    #[test]
+    fn the_self_tests_batches_run_isotropic_rules() {
+        use jetcarp_core::explore::space::Fam;
+        for (key, cells) in TEST_GRIDS {
+            let grid = Grid::build(key, cells).unwrap();
+            let rules = batch_rules(&grid);
+            let iso: Vec<String> = rules
+                .iter()
+                .filter(|(r, _, _)| Fam::of(r) == Fam::Isotropic)
+                .filter(|(r, nb, seed)| test_world(&grid, r, *nb, seed, 0).is_some())
+                .map(|(r, _, _)| r.notation())
+                .collect();
+            if grid.topo.rows().is_none() {
+                assert!(iso.is_empty(), "{key}: {iso:?}");
+                continue;
+            }
+            for extra in ["B3-cnqy/S23-a", "B01e2a/S2-i3", "B2a3-ckn/S1e2-in3/C4"] {
+                assert!(iso.iter().any(|n| n == extra), "{extra} on {key}: {iso:?}");
+            }
+            assert!(iso.len() >= 4, "{key}: no isotropic rule drawn: {iso:?}");
         }
     }
 }

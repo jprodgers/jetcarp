@@ -73,9 +73,9 @@ fn d_old_schedule() -> u32 {
 /// Schedule 1, what searches made before JETCARP 0.4.3 keep: every tiling chosen stays in the
 /// list, even one none of the search's families can run on. Schedule 2: such tilings are left
 /// out, a family chosen by name that can run on none of the tilings chosen is refused, and when
-/// every family the processor runs is tied to one grid (isotropic rules, the elementary ones),
-/// every one of its rounds goes to those grids. A search with every family keeps today's runs
-/// under both.
+/// every family the processor runs is tied to one grid (the elementary ones, or isotropic rules
+/// when there is no GPU), every one of its rounds goes to those grids. A search with every family
+/// keeps today's runs under both.
 pub const SCHEDULE: u32 = 2;
 
 /// Families the explore search samples only when a search names them: they are left out of the
@@ -87,7 +87,11 @@ pub const OPT_IN: [Fam; 1] = [Fam::Isotropic];
 /// processor's, Larger than Life, and the ones taken only when named ([`OPT_IN`]). Von Neumann's
 /// 29-state rule is not among them.
 pub fn sampled_families() -> Vec<Fam> {
-    let mut v: Vec<Fam> = GPU_FAMS.iter().map(|x| x.0).collect();
+    let mut v: Vec<Fam> = GPU_FAMS
+        .iter()
+        .map(|x| x.0)
+        .filter(|f| !OPT_IN.contains(f))
+        .collect();
     v.extend(CPU_FAMS.iter().map(|x| x.0).filter(|f| !OPT_IN.contains(f)));
     v.push(Fam::Ltl);
     v.extend(OPT_IN);
@@ -453,9 +457,13 @@ const GPU_FAMS: &[(Fam, f64)] = &[
     (Fam::Priority, 8.0),
     (Fam::WireWorld, 1.0),
     (Fam::SpectreGlider, 1.0),
+    // Only when named ([`OPT_IN`]), and on the square grid only: the GPU gives them rounds of
+    // their own there (see `gpu_plan`), as many as this weight's share (#245).
+    (Fam::Isotropic, 8.0),
 ];
 
-/// CPU sampling weights.
+/// CPU sampling weights. A family both lists hold (isotropic rules) runs on the GPU when there
+/// is one, and on the processor only when there is not.
 const CPU_FAMS: &[(Fam, f64)] = &[
     (Fam::Turmite, 25.0),
     (Fam::Layered, 20.0),
@@ -467,13 +475,16 @@ const CPU_FAMS: &[(Fam, f64)] = &[
     (Fam::ForestFire, 3.0),
     (Fam::Sandpile, 4.0),
     (Fam::Table, 1.0),
-    // Only when named ([`OPT_IN`]). On the processor: the GPU's batches do not run them yet.
+    // Only when named ([`OPT_IN`]); here only without a GPU, where they keep the place and
+    // weight they had when only the processor ran them (#239), so a search on the processor
+    // alone draws as it did then (#245).
     (Fam::Isotropic, 8.0),
 ];
 
 /// The GPU loop's families, the CPU loop's (with a GPU, or without one: then it also takes the
 /// GPU's), and whether Larger than Life rounds run (on the GPU), within `only` (empty: every
-/// family but [`OPT_IN`]'s) and less `skip`.
+/// family but [`OPT_IN`]'s) and less `skip`. A family in both lists goes to the GPU's when there
+/// is a GPU, and keeps its place in the processor's when there is not.
 fn families(only: &[Fam], skip: &[Fam], gpu: bool) -> (Vec<(Fam, f64)>, Vec<(Fam, f64)>, bool) {
     let keep = |f: &Fam| {
         !skip.contains(f)
@@ -483,10 +494,16 @@ fn families(only: &[Fam], skip: &[Fam], gpu: bool) -> (Vec<(Fam, f64)>, Vec<(Fam
                 only.contains(f)
             }
     };
+    let on_gpu = |f: &Fam| GPU_FAMS.iter().any(|x| x.0 == *f);
+    let on_cpu = |f: &Fam| CPU_FAMS.iter().any(|x| x.0 == *f);
     let g: Vec<(Fam, f64)> = GPU_FAMS.iter().copied().filter(|x| keep(&x.0)).collect();
-    let mut c: Vec<(Fam, f64)> = CPU_FAMS.iter().copied().filter(|x| keep(&x.0)).collect();
+    let mut c: Vec<(Fam, f64)> = CPU_FAMS
+        .iter()
+        .copied()
+        .filter(|x| keep(&x.0) && !(gpu && on_gpu(&x.0)))
+        .collect();
     if !gpu {
-        c.extend(g.iter().copied());
+        c.extend(g.iter().copied().filter(|x| !on_cpu(&x.0)));
     }
     (g, c, keep(&Fam::Ltl))
 }
@@ -1834,18 +1851,40 @@ impl Search {
         Ok(true)
     }
 
-    /// A GPU round's kind (a Larger than Life round, or one of `fams`) and tiling. Some rounds go
-    /// to the least-tried tiling, so every tiling is reached by the deadline.
-    fn gpu_plan(&self, rng: &mut Rng, fams: &[(Fam, f64)], ltl_ok: bool) -> (bool, usize) {
+    /// A GPU round's kind (a Larger than Life round, or a round of `fams`), tiling and families.
+    /// Some rounds go to the least-tried tiling, so every tiling is reached by the deadline. The
+    /// families tied to one grid ([`Fam::only_on`]: isotropic rules, when that grid is in the
+    /// list) have rounds of their own on it, the least-tried of them each time, as many as their
+    /// weights' share of the families' (every round when there are no others), and the other
+    /// rounds draw from the rest, so no draw is spent on a tiling they cannot run on (#245). A
+    /// search without them draws exactly as before.
+    fn gpu_plan(
+        &self,
+        rng: &mut Rng,
+        fams: &[(Fam, f64)],
+        ltl_ok: bool,
+    ) -> (bool, usize, Vec<(Fam, f64)>) {
         let ltl_round = ltl_ok && (fams.is_empty() || rng.below(8) == 0);
+        let (tied, rest): (Vec<_>, Vec<_>) = fams
+            .iter()
+            .copied()
+            .partition(|(f, _)| f.only_on().is_some_and(|k| self.tiling_index(k).is_some()));
+        if !ltl_round && !tied.is_empty() {
+            let weight = |v: &[(Fam, f64)]| v.iter().map(|x| x.1).sum::<f64>();
+            if rest.is_empty() || rng.next_f64() * weight(fams) < weight(&tied) {
+                let native: Vec<Fam> = tied.iter().map(|x| x.0).collect();
+                let (ti, f) = self.native_round(&native);
+                return (false, ti, f);
+            }
+        }
         let ti = if ltl_round && rng.below(3) == 0 {
             self.least_tried_tiling(rng, &[(Fam::Ltl, 1.0)])
         } else if !ltl_round && rng.below(8) == 0 {
-            self.least_tried_tiling(rng, fams)
+            self.least_tried_tiling(rng, &rest)
         } else {
             self.pick_tiling(rng)
         };
-        (ltl_round, ti)
+        (ltl_round, ti, rest)
     }
 
     /// One screening batch on the GPU, sized to end before the run's end. False when not even a
@@ -1858,7 +1897,7 @@ impl Search {
         ltl_ok: bool,
         lim: &StepLimits<'_>,
     ) -> Result<bool, String> {
-        let (ltl_round, ti) = self.gpu_plan(rng, fams, ltl_ok);
+        let (ltl_round, ti, fams) = self.gpu_plan(rng, fams, ltl_ok);
         let key = self.tilings[ti].key.clone();
         let grid = self.screen_grid(&key)?;
         let nb = if grid.has_edge && rng.below(4) == 0 {
@@ -1912,7 +1951,7 @@ impl Search {
         let cands = self.emit(
             &grid,
             nb,
-            fams,
+            &fams,
             ltl,
             max_worlds,
             self.set.screen_gens,
@@ -2028,8 +2067,8 @@ impl Search {
     /// weighted picks alone would miss tilings: a quarter go to the least-tried family tied to
     /// one grid ([`Fam::only_on`], when that grid is in the list), half sweep the least-tried
     /// tiling with the families that run on any. Under schedule 2 ([`SCHEDULE`]), when every
-    /// family here is tied to one grid (isotropic rules alone), every round goes to one of them,
-    /// rather than three in four to a tiling they cannot run on.
+    /// family here is tied to one grid (isotropic rules alone, with no GPU), every round goes to
+    /// one of them, rather than three in four to a tiling they cannot run on.
     fn cpu_plan(&self, round: u64, rng: &mut Rng, fams: &[(Fam, f64)]) -> (usize, Vec<(Fam, f64)>) {
         let everywhere: Vec<(Fam, f64)> = fams
             .iter()
@@ -2890,7 +2929,11 @@ mod tests {
                 .split(',')
                 .map(|f| serde_json::from_value(serde_json::json!(f.trim())).unwrap())
                 .collect(),
-            Err(_) => CPU_FAMS.iter().chain(GPU_FAMS).map(|f| f.0).collect(),
+            Err(_) => families(&sampled_families(), &[], false)
+                .1
+                .into_iter()
+                .map(|f| f.0)
+                .collect(),
         };
         let lines = Mutex::new(Vec::new());
         std::thread::scope(|sc| {
@@ -3339,18 +3382,24 @@ mod tests {
         serde_json::from_value(v).unwrap()
     }
 
-    /// The runs of a search, screened and confirming, until `n` are screened and (when the
-    /// processor has families to run) eight CPU rounds have run, so its rounds for the families
-    /// tied to one grid have come whatever the GPU did meanwhile (or two minutes pass); with a
-    /// GPU (a stand-in that runs its batches on the processor, beside the CPU rounds) or on the
-    /// processor alone.
+    /// The runs of a search, screened and confirming, until `n` are screened, every family it
+    /// names has a run, and (when the processor has families to run) eight CPU rounds have run,
+    /// so its rounds for the families tied to one grid have come whatever the GPU did meanwhile
+    /// (or two minutes pass); with a GPU (a stand-in that runs its batches on the processor,
+    /// beside the CPU rounds) or on the processor alone.
     fn sampled(set: &Settings, gpu: bool, n: u64) -> Vec<RunOut> {
         let s = Search::new(set.clone(), Saved::default()).unwrap();
         let cpu = !families(&set.families, &set.skip_families, gpu)
             .1
             .is_empty();
         let rounds = || s.cpu_rounds.load(Ordering::Relaxed);
-        let enough = || s.screened() >= n && (!cpu || rounds() >= 8);
+        let named = set.named_families();
+        let seen = Mutex::new(HashSet::new());
+        let enough = || {
+            s.screened() >= n
+                && (!cpu || rounds() >= 8)
+                && named.iter().all(|f| seen.lock().unwrap().contains(f))
+        };
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(2)
             .build()
@@ -3372,13 +3421,16 @@ mod tests {
             };
             let backend = gpu.then_some((&mut be as &mut dyn Backend, &gpu_pool));
             assert!(s.step(&pool, backend, &lim).is_none());
-            rows.extend(s.take_delta().rows);
+            let d = s.take_delta().rows;
+            seen.lock().unwrap().extend(d.iter().map(|r| r.ev.cand.fam));
+            rows.extend(d);
         }
         assert!(
             enough(),
-            "{} screened, {} CPU rounds",
+            "{} screened, {} CPU rounds, families run {:?} of {named:?} (gpu {gpu})",
             s.screened(),
-            rounds()
+            rounds(),
+            seen.lock().unwrap()
         );
         rows
     }
@@ -3483,8 +3535,8 @@ mod tests {
         };
         let s = Search::new(every, Saved::default()).unwrap();
         assert!(s.named.lock().unwrap().iter().any(|(_, n)| iso(n)));
-        // Named beside families of any tiling: a quarter of the processor's rounds (every one
-        // of them with a GPU, which runs the others) go to isotropic rules on the square grid.
+        // Named beside families of any tiling, they run on the square grid only: on the processor
+        // in a quarter of its rounds, and with a GPU in rounds of the GPU's own there (#245).
         let named = Settings {
             families: vec![Fam::LifeLike, Fam::Generations, Fam::Cyclic, Fam::Isotropic],
             ..unnamed.clone()
@@ -3514,6 +3566,116 @@ mod tests {
                 && r.ev.cand.tiling == "square"
                 && iso(&r.ev.cand.rule)));
         }
+    }
+
+    /// A stand-in GPU that runs its batches on the processor and takes the rules the GPU's batch
+    /// stepper takes (`jetcarp_gpu::batch::BatchSim::supports`), counting the isotropic worlds
+    /// it ran.
+    struct CountingBatches(Arc<AtomicU64>);
+
+    impl Backend for CountingBatches {
+        fn name(&self) -> String {
+            "counting batches".into()
+        }
+        fn supports(&self, rule: &Rule) -> bool {
+            jetcarp_gpu::batch::BatchSim::supports(rule)
+        }
+        fn max_cells(&self) -> usize {
+            1 << 22
+        }
+        fn run(&mut self, job: &BatchJob) -> Result<Vec<WorldTrace>, String> {
+            let out = jetcarp_core::explore::batch::run_cpu(job)?;
+            let iso = job
+                .worlds
+                .iter()
+                .filter(|w| matches!(w.rule, Rule::Isotropic(_)))
+                .count();
+            self.0.fetch_add(iso as u64, Ordering::Relaxed);
+            Ok(out)
+        }
+    }
+
+    /// With a GPU, a search that names isotropic rules runs them in the GPU's batches, screening
+    /// and confirming them there, and the processor runs none of them (#245): every isotropic run
+    /// the search makes is one the GPU ran, while the processor goes on with its own families.
+    /// Without a GPU the processor runs them, drawn as before (at 8, in their place).
+    #[test]
+    fn isotropic_rules_run_on_the_gpu_when_there_is_one() {
+        let set = choosing(serde_json::json!({
+            "families": ["life_like", "turmite", "isotropic"],
+            "seed": 37,
+        }));
+        let s = Search::new(set.clone(), Saved::default()).unwrap();
+        let ran = Arc::new(AtomicU64::new(0));
+        let mut be = CountingBatches(ran.clone());
+        let (pool, gpu_pool) = (
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .build()
+                .unwrap(),
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .build()
+                .unwrap(),
+        );
+        let stop = AtomicBool::new(false);
+        let mut rows: Vec<RunOut> = Vec::new();
+        let count = |rows: &[RunOut], fam: Fam, stage: u8| {
+            rows.iter()
+                .filter(|r| r.ev.cand.fam == fam && r.stage == stage)
+                .count()
+        };
+        let enough = |rows: &[RunOut]| {
+            count(rows, Fam::Isotropic, 1) >= 100
+                && count(rows, Fam::Isotropic, 2) >= 1
+                && count(rows, Fam::Turmite, 1) >= 1
+        };
+        let t0 = Instant::now();
+        while !enough(&rows) && t0.elapsed() < Duration::from_secs(120) {
+            let lim = StepLimits {
+                until: Instant::now() + Duration::from_millis(200),
+                end: None,
+                stop: &stop,
+                max_screened: None,
+            };
+            assert!(s.step(&pool, Some((&mut be, &gpu_pool)), &lim).is_none());
+            rows.extend(s.take_delta().rows);
+        }
+        let iso_runs = rows
+            .iter()
+            .filter(|r| r.ev.cand.fam == Fam::Isotropic)
+            .count() as u64;
+        assert_eq!(
+            iso_runs,
+            ran.load(Ordering::Relaxed),
+            "every isotropic run is one the GPU ran"
+        );
+        assert!(
+            enough(&rows),
+            "{} isotropic runs screened, {} confirming; {} turmite runs",
+            count(&rows, Fam::Isotropic, 1),
+            count(&rows, Fam::Isotropic, 2),
+            count(&rows, Fam::Turmite, 1)
+        );
+        assert!(
+            rows.iter()
+                .all(|r| r.ev.cand.fam != Fam::Isotropic || r.ev.cand.tiling == "square")
+        );
+        // The loops' families: isotropic rules on the GPU, at 8, not on the processor.
+        let (g, c, _) = families(&set.families, &set.skip_families, true);
+        assert!(g.contains(&(Fam::Isotropic, 8.0)), "{g:?}");
+        assert!(c.iter().all(|x| x.0 != Fam::Isotropic), "{c:?}");
+        // With no GPU the processor's list is the one it was: isotropic rules after its own
+        // families, at 8, then the GPU's.
+        let (_, c, _) = families(&set.families, &set.skip_families, false);
+        assert_eq!(
+            c,
+            vec![
+                (Fam::Turmite, 25.0),
+                (Fam::Isotropic, 8.0),
+                (Fam::LifeLike, 30.0)
+            ]
+        );
     }
 
     /// A search records what it was told to draw from in its spec, and the spec read back makes
@@ -3608,6 +3770,12 @@ mod tests {
     /// any run measures. A rule's notation is left out only for forest fire, whose numbers come
     /// from `powf`, which may differ in its last bit between systems.
     fn schedule_pin(set: &Settings, rounds: u64) -> u64 {
+        schedule_pin_of(set, rounds, &[false, true])
+    }
+
+    /// [`schedule_pin`] with the rounds of these loops only: `false` the processor's (with no
+    /// GPU, so it takes the GPU's families too), `true` the GPU's.
+    fn schedule_pin_of(set: &Settings, rounds: u64, loops: &[bool]) -> u64 {
         let s = Search::new(set.clone(), Saved::default()).unwrap();
         let mut h = jetcarp_core::rng::Fnv::default();
         let text = |h: &mut jetcarp_core::rng::Fnv, t: &str| {
@@ -3620,7 +3788,7 @@ mod tests {
         }
         h.u64(s.tiling_total.to_bits());
         h.u64(s.named.lock().unwrap().len() as u64);
-        for gpu in [false, true] {
+        for &gpu in loops {
             let (g, c, ltl) = families(&set.families, &set.skip_families, gpu);
             let mut rng = Rng::new(set.seed ^ 0x5eed);
             // The loop runs only with families to run (as `step` has it).
@@ -3631,8 +3799,8 @@ mod tests {
             };
             for round in (1..=rounds).filter(|_| some) {
                 let (ti, fams, group) = if gpu {
-                    let (l, ti) = s.gpu_plan(&mut rng, &g, ltl);
-                    (ti, g.clone(), l.then_some((Hood::Moore, 2)))
+                    let (l, ti, f) = s.gpu_plan(&mut rng, &g, ltl);
+                    (ti, f, l.then_some((Hood::Moore, 2)))
                 } else {
                     let (ti, f) = s.cpu_plan(round, &mut rng, &c);
                     (ti, f, None)
@@ -3718,6 +3886,46 @@ mod tests {
             } else {
                 assert_eq!(pin, *want, "{what}, made now");
             }
+        }
+    }
+
+    /// On the processor alone, a search that names isotropic rules draws as it did when only the
+    /// processor ran them (#241), now that a GPU runs them when there is one (#245): its tiling
+    /// list, named rules and the candidates of its first CPU rounds, pinned as that code made
+    /// them. (With a GPU they move to the GPU's rounds; a search with a GPU never replayed, as
+    /// its rounds share the archive as they end.)
+    #[test]
+    fn a_search_naming_isotropic_rules_draws_as_before_on_the_processor() {
+        let cases = [
+            (
+                "isotropic rules alone",
+                serde_json::json!({"families": ["isotropic"]}),
+                0x37c2_b0e4_01c7_f2f9u64,
+            ),
+            (
+                "beside families of the GPU and the processor",
+                serde_json::json!({"families": ["life_like", "isotropic", "turmite", "wolfram"]}),
+                0xf8ba_1fd0_93d3_bfd9,
+            ),
+            (
+                "every family",
+                serde_json::json!({"families": sampled_families()}),
+                0x9cac_4967_9cc4_4b4a,
+            ),
+        ];
+        let pins: Vec<u64> = cases
+            .iter()
+            .map(|(what, extra, _)| {
+                let mut set = choosing(extra.clone());
+                set.seed = 38;
+                assert_eq!(set.schedule, SCHEDULE);
+                let p = schedule_pin_of(&set, 24, &[false]);
+                eprintln!("{what}: {p:#018x}");
+                p
+            })
+            .collect();
+        for ((what, _, want), pin) in cases.iter().zip(pins) {
+            assert_eq!(pin, *want, "{what}");
         }
     }
 

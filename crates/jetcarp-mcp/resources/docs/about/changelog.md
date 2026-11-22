@@ -50,12 +50,12 @@ day later (0.4.2: 17 November here, 18 November there).
   `search_start` and scripts take the same keys. In the app, *Start an explore search…* in the
   *Hunts* window has a checkbox for every group of tilings and every rule family, reached with Tab
   and named for screen readers. Isotropic rules join the families the search samples, only when
-  named, and on the processor (the GPU's batches don't run them yet). The job keeps the choice in
-  its spec and its title, and replays with it. A search that chooses nothing, and one made before,
-  draw exactly as before, which a test pins from 0.4.2's code. A search made now that names only
-  families tied to one grid (isotropic, elementary) leaves out the tilings they cannot run on, and
-  one that names a family none of its tilings can run, or `von_neumann`, which the search never
-  sampled, is refused with the reason. The GPU self-test now draws an isotropic rule too.
+  named (on the GPU, see below). The job keeps the choice in its spec and its title, and replays
+  with it. A search that chooses nothing, and one made before, draw exactly as before, which a test
+  pins from 0.4.2's code. A search made now that names only families tied to one grid (isotropic,
+  elementary) leaves out the tilings they cannot run on, and one that names a family none of its
+  tilings can run, or `von_neumann`, which the search never sampled, is refused with the reason. The
+  GPU self-test now draws an isotropic rule too.
   ([Searching](../guides/searching.md#choosing-what-to-search),
   [Search methods](../research/search-methods.md#explore),
   [#239](https://github.com/jprodgers/jetcarp/issues/239))
@@ -66,6 +66,18 @@ day later (0.4.2: 17 November here, 18 November there).
   every family, isotropic rules included, and it is what `jetcarp setup` builds too, where before
   a first build left isotropic rules out. ([First run](../getting-started/first-run.md),
   [#239](https://github.com/jprodgers/jetcarp/issues/239))
+- **Explore searches run isotropic rules on the GPU.** The GPU's batches, which run an explore
+  search's many short runs at once, now run isotropic rules too, two-state, B0 and Generations,
+  cell for cell as the processor does, so a search that names them screens and confirms them on
+  the GPU when there is one (at a weight of 8, in rounds of their own on the square grid as many as
+  that weight's share), and the processor goes on with the families only it runs. Without a GPU
+  they run on the processor as before, and a search there that names them draws as it did; a search
+  that names none draws as before with a GPU or without. The GPU self-test runs isotropic rules in
+  its explore batches too, so every adapter is tested again the first time it is used after the
+  update.
+  ([Search methods](../research/search-methods.md#explore),
+  [Isotropic rules](../automata/isotropic.md#on-the-gpu), [The GPU](../guides/gpu.md),
+  [#245](https://github.com/jprodgers/jetcarp/issues/245))
 - **Isotropic rule ranges.** A pattern on the square grid's touching neighbours now carries the
   isotropic rules it runs in exactly as stored: the births and survivals its evolution needs, and
   those it must not have, among the 51 arrangements of the live neighbours that Hensel's notation
@@ -319,6 +331,12 @@ day later (0.4.2: 17 November here, 18 November there).
   [#105](https://github.com/jprodgers/jetcarp/issues/105))
 
 ### Changed
+
+- **An explore search says, as it starts, that it isn't reproducible:** `jetcarp search explore`
+  and `jetcarp quickstart build` print it (unless `--quiet`), the *Hunts* window's explore form
+  shows it, and MCP's description of the strategy says it. What it finds depends on the computer
+  (its speed, threads and GPU); each run it finds replays exactly. Every other search is
+  reproducible (D-45 in `DECISIONS.md`). ([The exploratory search](../guides/searching.md#the-exploratory-search))
 
 - **The strobe guard counts a red flash by either WCAG definition.** WCAG 2.0's working
   definition, which PEAT and IRIS use, is a change of at least 20 in `(R - G - B) × 320`; WCAG

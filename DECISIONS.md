@@ -229,6 +229,22 @@ is dated more closely than that.
   the parity sets in the test records.
 - **Stands.**
 
+### D-45. The explore search may differ from computer to computer, and says so
+
+- **Decided:** Jimmie, 21 November 2026.
+- **The decision:** "If it's only the Explore search, and it's due to how fast of a computer you
+  have, then that's fine. We can have the Explore search be non-reproducable, but warn the user
+  about that."
+- **What it covers:** every world, scene, script and run stays reproducible on every computer, on
+  the processor and the GPU (D-14), and so does every other search. Which runs an explore search
+  tries depends on the computer's speed, threads and GPU; each run it finds replays exactly.
+- **How it's kept:** an explore search says so as it starts: on the command line, in the *Hunts*
+  window and to an MCP client (#268).
+- **Claude's part:** explained where the explore search's results depend on the computer, and
+  what making it reproducible would take (fixed-size generations, draws blind to the device), when
+  isotropic rules moved to the GPU (#268).
+- **Stands.** It narrows D-14 for this one search.
+
 ### D-15. Nothing is catalogued unverified, and nothing is claimed that we have not checked
 
 - **Decided:** Jimmie. Written down 18 November 2026.
@@ -323,6 +339,20 @@ is dated more closely than that.
   the seizure warning, with a goal of a detector built in. This happened during testing, hence it
   not being in v0.4.0."
 - **Stands.**
+
+### D-46. The strobe guard is never more lenient than any tool
+
+- **Decided:** Jimmie, 21 November 2026.
+- **The decision:** "keep the strictest definition. If any tool says it's a flash, it's a flash."
+  Asked first about the red flash, where WCAG 2.0's working definition (which PEAT and IRIS use)
+  and WCAG 2.2's differ ([#270](https://github.com/jprodgers/jetcarp/issues/270)): the guard counts
+  a red flash by either. A reversing checkerboard of squares smaller than the guard's tiles, which
+  WCAG counts and IRIS passes, is counted too ([#269](https://github.com/jprodgers/jetcarp/issues/269)).
+- **How it's kept:** the guard is compared with IRIS on a corpus of recordings (#150), and may be
+  stricter than IRIS, never more lenient.
+- **Claude's part:** found both gaps while citing the guard's sources for the book audit (#267),
+  and offered keeping WCAG 2.0's definition, moving to 2.2's, or counting either.
+- **Stands.** It applies D-21 to how the guard measures.
 
 ### D-22. Nothing is collected about users, ever
 

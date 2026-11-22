@@ -59,7 +59,8 @@ enum Strategy {
     /// The broad search over tilings, rule families, rules, and seeds (MAP-Elites): runs until
     /// stopped or out of budget, every run kept in the job's own folder (`searches/<uuid>/` beside
     /// the library: Parquet segments of a million runs, and a working database). Not
-    /// deterministic: a stopped search continues from its archive.
+    /// reproducible: what it finds depends on the computer (its speed, threads and GPU), though
+    /// each run it finds replays exactly; a stopped search continues from its archive.
     /// `jetcarp jobs runs|sheet|scene|review|clips|rescore|seal` read it.
     Explore(Box<ExploreArgs>),
     /// Run one configuration now on the CPU, measured as the explore search measures its runs:
@@ -851,6 +852,12 @@ fn explore(mut a: ExploreArgs, json: bool) -> Result<()> {
     };
     let mut i = start_in("explore", spec(&s), &a.job)?;
     i.gpu = a.gpu.asked();
+    if !a.job.quiet {
+        eprintln!(
+            "jetcarp: {}",
+            jetcarp_api::ops::search::EXPLORE_NOT_REPRODUCIBLE
+        );
+    }
     start(&a.job, i, json).map(|_| ())
 }
 
