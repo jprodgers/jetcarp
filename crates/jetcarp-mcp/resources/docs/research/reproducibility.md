@@ -149,11 +149,11 @@ happen without someone noticing.
   one hash of every cell polygon's coordinates bit for bit and one of the neighbour lists of both
   neighbourhoods in their clockwise order; and for seven tilings, a hash of Lenia's kernel weights.
 - **Dynamics pins** (`crates/jetcarp-core/tests/dynamics_pins.rs`, values in
-  `tests/data/dynamics_pins.txt`): every one of the 364 built-in Quick Start entries, which between
+  `tests/data/dynamics_pins.txt`): every one of the 371 built-in Quick Start entries, which between
   them cover every rule family on many tilings, shrunk to its 4,096-cell preview grid and run for 48
   generations, must reach its pinned state hash.
 - **Rule-semantics pins** (`crates/jetcarp-core/tests/semantics_pins.rs`, values in
-  `tests/data/semantics_pins.txt`): one small fixed scene for each of the 23 rule families of the
+  `tests/data/semantics_pins.txt`): one small fixed scene for each of the 25 rule families of the
   engine's [rule-semantics versions](../reference/library-format.md#rule-semantics-versions), started
   from cells the test chooses itself (for ants, the sandpile, Lenia and the row rules, a start of the
   engine's), must reach its pinned state after 12 to 600 generations. Each

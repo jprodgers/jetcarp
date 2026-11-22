@@ -270,7 +270,8 @@ credit and source are given:
 
 - **James Edmond**: priority tables, the Spectre glider, the hat gliders and the evolutionary search
   (2026).
-- **Adam P. Goucher**: the first glider on an aperiodic tiling (2012).
+- **Adam P. Goucher**: the first glider on an aperiodic tiling (2012); apgsearch and its Catagolue
+  census, whose soups and defaults the soup hunt follows, and against which its counts are compared.
 - **Andrew Trevorrow**: HatLife (2023).
 - **Jean-Baptiste Mouret** and **Jeff Clune**: MAP-Elites, the basis of the exploratory search.
 - **Paul Christiano** and co-authors: learning a score from human preferences; **Jimmy Secretan** and
@@ -325,3 +326,16 @@ credit and source are given:
 - **David Smith**, who found the hat in 2022 with the help of **Jaap Scherphuis**'s PolyForm Puzzle
   Solver, and **Joseph Samuel Myers**, **Craig S. Kaplan** and **Chaim Goodman-Strauss**: the hat and the
   spectre (2023).
+
+### Palettes and the strobe guard
+
+[Palettes](../reference/palettes.md#colour-vision-deficiency), [The strobe guard](../guides/strobe-guard.md)
+
+- **Gustavo M. Machado**, **Manuel M. Oliveira** and **Leandro A. F. Fernandes**: the model of
+  colour-vision deficiency the palettes are checked with (2009).
+- **Gaurav Sharma**, **Wencheng Wu** and **Edul N. Dalal**: implementation notes and test data for
+  the CIEDE2000 colour difference (2005); **Danielle Albers Szafir**: colour differences for small marks (2018);
+  **Jamie R. Nuñez**, **Christopher R. Anderton** and **Ryan S. Renslow**: cividis (2018).
+- **The W3C**: the definitions of flashes and red flashes in WCAG 2.3.1; the ITU: regular patterns
+  in ITU-R BT.1702; **Electronic Arts**: IRIS, the photosensitivity analyser whose measures the guard
+  follows and is checked against.

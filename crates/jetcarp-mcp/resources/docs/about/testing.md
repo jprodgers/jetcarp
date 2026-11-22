@@ -456,6 +456,9 @@ job that hangs is stopped rather than left running for hours.
   cannot pass without having run. On Linux the tests run once more with the default
   folders, failing if any test writes to them. On Windows each of the folder rules' link cases must
   make its junction or symbolic link and run; the log names each one.
+- **A debug build** of the whole workspace runs every test again on Linux, GPU tests on lavapipe:
+  release builds check neither arithmetic for overflow nor debug assertions, and a bug in the
+  animated WebP encoder hid from them that way until 0.4.3.
 - **The installers** are each given a release folder of the test's own: an intact archive installs;
   an archive with one byte changed, and one that `SHA256SUMS` does not list, are refused with
   nothing installed (the shell installer on Linux, the PowerShell one on Windows). The intact install
@@ -504,8 +507,8 @@ what to run, and what counts as a pass. It is carried out in three parts.
 
 **Phase 1, unattended**, on each machine:
 
-- **Parity on every GPU.** 371 scenes (every built-in Quick Start scene, 364, and 7 sandpiles that
-  drop grains) run for 300 generations on the CPU and on each adapter and graphics API the machine
+- **Parity on every GPU.** 378 scenes (every built-in Quick Start scene, 371 since 0.4.3's
+  isotropic entries, 364 for 0.4.2, and 7 sandpiles that drop grains) run for 300 generations on the CPU and on each adapter and graphics API the machine
   has: seven in all, from the Radeon and llvmpipe to the RTX and the UHD on both Vulkan and
   DirectX 12, to the M2 Max on Metal. Every final hash must match the one recorded on the Framework's CPU. Then 40 scenes chosen
   across every family and kind of tiling run for 5,000 generations each, so that slow drift shows.

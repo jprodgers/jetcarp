@@ -39,7 +39,7 @@ Quick Start build (explore 22): 949 atlas entries published (949 new, 0 updated,
 The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
 [Folders](../reference/folders.md#the-three-folders)).
 
-In three minutes it ran 28,078 worlds, each a rule of one of its 22 rule families on one of the
+In three minutes it ran 28,078 worlds, each a rule of one of its 21 rule families on one of the
 tilings, from a start of its own, and scored each for how lively, varied and long-lasting it was. It
 kept the best of each kind it saw (6,478 *elites* in 3,423 *niches*), ran the best of those again
 from other starts to confirm them (310 confirmed), and published 949 of them as atlas entries, a few
