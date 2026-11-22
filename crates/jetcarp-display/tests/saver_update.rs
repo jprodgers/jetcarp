@@ -16,10 +16,19 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 struct Scratch {
+    /// The test's own folder, removed when the test ends (while it still holds its turn: each
+    /// test binds the turn before the scratch, so the scratch is dropped first).
+    root: PathBuf,
     config: PathBuf,
     /// Stands in for `~/Library/Screen Savers`.
     savers: PathBuf,
     dylib: PathBuf,
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
 }
 
 impl Scratch {
@@ -75,6 +84,7 @@ fn scratch() -> (MutexGuard<'static, ()>, Scratch) {
     });
     let _ = std::fs::remove_dir_all(root);
     let s = Scratch {
+        root: root.clone(),
         config: root.join("config"),
         savers: root.join("Screen Savers"),
         dylib: root.join("libjetcarp_saver.dylib"),
