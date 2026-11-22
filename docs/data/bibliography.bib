@@ -535,6 +535,17 @@
   note    = {Verified via Crossref 2026-11-10}
 }
 
+% verified: repository read 2026-11-21, cloned from https://github.com/electronicarts/IRIS at commit d96978ac1107f3463b77f69a9c1b1ec5d45291a0 (14 January 2025; first commit 23 November 2023). README: luminance flashes, red saturation flashes and spatial patterns; more than 3 flashes in any second is a flash failure, "between 2-3 flashes per second in any given 5 consecutive seconds" an extended flash failure, a harmful pattern "for half a second or more" a pattern failure; a red transition at 20. config/appsettings.json: RelativeLuminanceFlashThreshold 0.1, RelativeDarkLuminanceThreshold 0.8, red FlashThreshold 20, flash AreaProportion 0.25, MaxTransitions 6, WarningTransitions 4, ExtendedFailSeconds 4 in ExtendedFailWindow 5; pattern MinStripes 6, TimeThreshold 0.5, AreaProportion 0.25; PatternDetectionEnabled false. src/RedSaturation.h: saturated red when R / (R + G + B) >= 0.8, measured as (R - G - B) * 320. src/TransitionTracker.cpp: the extended failure when frames with 4 to 6 transitions fill 4 seconds of the last 5. src/PatternDetection.cpp: frames wider than 480 pixels halved; Otsu's threshold (cv::THRESH_OTSU) for light and dark parts; contours over 0.00155 of the frame filled convex; cv::matchShapes with CONTOURS_MATCH_I1 under 0.7 for alike; harmful when at least 6 alike, the rectangle around them at least a quarter of the frame, their light parts at least 0.25
+@misc{ea2023iris,
+  author       = {{Electronic Arts}},
+  title        = {{IRIS}},
+  howpublished = {GitHub repository electronicarts/IRIS},
+  year         = {2023},
+  url          = {https://github.com/electronicarts/IRIS},
+  urldate      = {2026-11-21},
+  note         = {Photosensitivity analyser for video: luminance flashes, red flashes and spatial patterns. Read at commit d96978ac (14 January 2025), the commit JETCARP's comparison used}
+}
+
 % verified: arXiv abstract and HTML v2 (novelty-06)
 @misc{edmond2026gliders,
   author        = {Edmond, James},
@@ -1386,6 +1397,16 @@
   doi       = {10.1007/11553090_48}
 }
 
+% verified: Crossref record https://api.crossref.org/works/10.1109/TIT.1962.1057692, read 2026-11-21 (author Ming-Kuei Hu; IRE Transactions on Information Theory 8(2): 179-187, February 1962; IEEE). OpenCV's HuMoments documentation cites it as the source of the seven invariants (see opencvnd_matchshapes)
+@article{hu1962visual,
+  author  = {Hu, Ming-Kuei},
+  title   = {Visual pattern recognition by moment invariants},
+  journal = {IRE Transactions on Information Theory},
+  volume  = {8}, number = {2}, pages = {179--187}, year = {1962},
+  month   = feb,
+  doi     = {10.1109/TIT.1962.1057692}
+}
+
 % verified: Crossref record and abstract 10.1162/artl.2010.16.2.16200
 @article{hutton2010codd,
   author  = {Hutton, Tim J.},
@@ -1424,6 +1445,19 @@
   url          = {https://github.com/GollyGang/ruletablerepository/wiki/TheRules},
   urldate      = {2026-11-10},
   note         = {Codd (1968), Codd2 (2009), Devore (1973), Langton's loops (1984), Byl (1989), Chou--Reggia (1993), SDSR (1998), Evoloop (1999)}
+}
+
+% verified: read 2026-11-21: the Recommendation's page https://www.itu.int/rec/R-REC-BT.1702 (versions of 02/2005, 07/2018, 10/2019 and 11/2023; BT.1702-3 in force) and the English Word file of BT.1702-3 (11/2023) from its page at the URL, read in full. Guideline 1: a potentially harmful flash is a pair of opposing changes of 20 cd/m2 or more where the darker image is below 160 cd/m2, or a transition to or from a saturated red; not permitted when concurrent flashes cover more than 25% of the screen and there are more than three in any second; a sequence of flashing "lasting more than five seconds might constitute a risk even when it complies". Guideline 2: light and dark pairs of clearly discernible stripes in any orientation, "parallel or radial, curved or straight", or "formed by rows of repetitive elements such as polka dots", more likely harmful if they "change direction, oscillate, flash or reverse in contrast". Attachment 1 to Annex 1 (informative, "used by some administrations"): "more than five light and dark pairs of clearly discernible stripes", over more than 40% of the screen when stationary, or more than 25% when they change direction, oscillate, flash or reverse; patterns that flow smoothly in one direction are exempt
+@misc{itu2023bt1702,
+  author       = {{ITU-R}},
+  title        = {Guidance for the reduction of photosensitive epileptic seizures caused by television},
+  howpublished = {Recommendation ITU-R BT.1702-3 (11/2023)},
+  publisher    = {International Telecommunication Union, Geneva},
+  year         = {2023},
+  month        = nov,
+  url          = {https://www.itu.int/rec/R-REC-BT.1702-3-202311-I/en},
+  urldate      = {2026-11-21},
+  note         = {First approved in 2005; revised in 2018, 2019 and 2023}
 }
 
 % verified: University of Washington ResearchWorks item 90e4ec8f-3885-4618-a0f3-ad9d0b7deced (DSpace REST record: author, title, "Thesis (Master's)--University of Washington, 2019", issued 2019-08-14, advisor, handle)
@@ -2203,6 +2237,29 @@
   doi     = {10.1371/journal.pone.0199239}
 }
 
+% verified: read 2026-11-21 through the Wayback Machine, since Ofcom's site refuses automated reading: Ofcom's Section Two page (copy of 23 July 2026) links its guidance notes at the URL, and the copy of that PDF of 11 October 2026 was read: "Guidance Notes, Section 2: Harm and offence", Issue Twelve, 18 July 2017; Rule 2.12, "See attached Annex 1". Annex 1, "Ofcom Guidance Note on Flashing Images and Regular Patterns in Television" (re-issued as Ofcom Notes 25 July 2005; revised and re-issued by the ITC in July 2001; first issued as an ITC guidance note in November 1994), read in full. Its paragraph 2: a sequence of flashing images "lasting more than 5 seconds might constitute a risk even when it complies"; paragraph 3: a flash is a pair of opposing changes of 20 cd/m2 or more with the darker image below 160 cd/m2, and a transition to or from a saturated red; 3.1.1: not permitted over more than one quarter of the screen at more than three flashes a second; paragraph 5: "more than five light-dark pairs of stripes in any orientation", parallel or radial, curved or straight, or rows of repetitive elements such as polka dots, patterns that "flow smoothly across, into, or out of the screen in one direction" exempt; 5.1: not permitted when "the stripes are stationary and the pattern occupies more than 40% of the displayed screen area", or when they change direction, oscillate, flash or reverse in contrast over more than 25%, with the darker bars below 160 cd/m2 and 20 cd/m2 or more from the lighter. Its references include Harding and Jeavons, Photosensitive Epilepsy (1994), and Harding, "TV can be bad for your health", Nature Medicine (1998). The ITC's note of July 2001, with nearly the same text, is on Ofcom's site as a legacy document (gn_flash.pdf; copy of 1 October 2023 read)
+@misc{ofcom2017flashing,
+  author       = {{Ofcom}},
+  title        = {Guidance Notes, Section 2: Harm and offence. Annex 1: Ofcom Guidance Note on Flashing Images and Regular Patterns in Television},
+  howpublished = {Guidance to the Ofcom Broadcasting Code, Issue Twelve, 18 July 2017},
+  year         = {2017},
+  month        = jul,
+  url          = {https://www.ofcom.org.uk/siteassets/resources/documents/tv-radio-and-on-demand/broadcast-guidance/programme-guidance/broadcast-code-guidance/section-2-guidance-notes.pdf},
+  urldate      = {2026-11-21},
+  note         = {Annex 1 re-issued as Ofcom Notes on 25 July 2005, from the ITC's guidance note of November 1994, revised in 1999 and 2001. Read through the Wayback Machine}
+}
+
+% verified: read 2026-11-21 through the Wayback Machine's copy of 7 May 2026 (docs.opencv.org refuses automated reading), "OpenCV: Structural Analysis and Shape Descriptors", OpenCV 4.14.0-pre: matchShapes "compares two shapes. All three implemented methods use the Hu invariants (see HuMoments)"; HuMoments "calculates seven Hu invariants (introduced in [Hu62])". The formula of CONTOURS_MATCH_I1, the sum over the seven invariants of |1/m_i^A - 1/m_i^B| with m_i = sign(h_i) log h_i, read in the header the page is generated from, modules/imgproc/include/opencv2/imgproc.hpp on GitHub (4.x branch)
+@misc{opencvnd_matchshapes,
+  author       = {{OpenCV}},
+  title        = {Structural Analysis and Shape Descriptors: matchShapes},
+  howpublished = {OpenCV 4.x documentation, image processing module},
+  year         = {n.d.},
+  url          = {https://docs.opencv.org/4.x/d3/dc0/group__imgproc__shape.html},
+  urldate      = {2026-11-21},
+  note         = {Compares two shapes by their Hu invariants; IRIS uses its method CONTOURS_MATCH_I1}
+}
+
 % verified: Crossref record 10.1016/S0378-4371(02)01426-7
 @article{ostojic2003patterns,
   author  = {Ostojic, Srdjan},
@@ -2210,6 +2267,16 @@
   journal = {Physica A},
   volume  = {318}, number = {1--2}, pages = {187--199}, year = {2003},
   doi     = {10.1016/S0378-4371(02)01426-7}
+}
+
+% verified: Crossref record https://api.crossref.org/works/10.1109/TSMC.1979.4310076, read 2026-11-21 (author Nobuyuki Otsu; IEEE Transactions on Systems, Man, and Cybernetics 9(1): 62-66, January 1979; IEEE)
+@article{otsu1979threshold,
+  author  = {Otsu, Nobuyuki},
+  title   = {A Threshold Selection Method from Gray-Level Histograms},
+  journal = {IEEE Transactions on Systems, Man, and Cybernetics},
+  volume  = {9}, number = {1}, pages = {62--66}, year = {1979},
+  month   = jan,
+  doi     = {10.1109/TSMC.1979.4310076}
 }
 
 % verified: Crossref
@@ -2673,6 +2740,17 @@
   doi     = {10.1063/1.445022}
 }
 
+% verified: read 2026-11-21: the user guide at the URL (Version 1.6). PEAT "evaluates it for sequences of luminance flashes and red flashes"; its engine was developed "by the University of Wisconsin's Trace Center, working with Cambridge Research Systems UK and Dr. Graham Harding"; it detects "general flash failures, red flash failures, and extended flash warnings", with WCAG 2.0's definitions of a general flash (10% or more of the maximum relative luminance, the darker below 0.80), a red flash ("R/(R+ G + B) >= 0.8, and the change in the value of (R-G-B)x320 is > 20") and relative luminance; the extended flash warning is "any 5-second sequence of images that contain red or luminance flashing of at least one third of that required for ITC/Ofcom failure in at least 80% of the images", "not part of the WCAG guidelines". Also the tool's page, https://trace.umd.edu/peat/ (version 1.6, PEAT_2017-02-15.zip; "The PSEe engine is copyright Cambridge Research Systems Ltd."; not for broadcast, film, home entertainment or games, for which it names the Harding FPA software)
+@misc{tracend_peat,
+  author       = {{Trace Center}},
+  title        = {Photosensitive Epilepsy Analysis Tool ({PEAT}) User Guide, Version 1.6},
+  howpublished = {Trace Research and Development Center, University of Maryland},
+  year         = {n.d.},
+  url          = {https://trace.umd.edu/photosensitive-epilepsy-analysis-tool-peat-user-guide/},
+  urldate      = {2026-11-21},
+  note         = {PEAT 1.6 is the download of 15 February 2017 on https://trace.umd.edu/peat/}
+}
+
 % verified: forum thread read through the mirror conwaylife.njohnston.ca, 2026-11-10
 @misc{trevorrow2026spectrelife,
   author  = {Trevorrow, Andrew},
@@ -2780,6 +2858,40 @@
   year      = {1966},
   url       = {https://archive.org/details/theoryofselfrepr00vonn_0},
   note      = {Edited and completed by A. W. Burks. Part II written by von Neumann from late September 1952 to mid/late 1953}
+}
+
+% verified: read 2026-11-21 at the URL (W3C Recommendation 11 December 2008; editors Ben Caldwell, Michael Cooper, Loretta Guarino Reid and Gregg Vanderheiden). Success criterion 2.3.1, and the glossary's "general flash and red flash thresholds", whose Note 3 reads: "The current working definition in the field for "pair of opposing transitions involving a saturated red" is where, for either or both states involved in each transition, R/(R+ G + B) >= 0.8, and the change in the value of (R-G-B)x320 is > 20 (negative values of (R-G-B)x320 are set to zero) for both transitions", citing Harding and Binnie, Independent Analysis of the ITC Photosensitive Epilepsy Calibration Test Tape (2002)
+@misc{w3c2008wcag20,
+  author       = {{W3C}},
+  title        = {Web Content Accessibility Guidelines ({WCAG}) 2.0},
+  howpublished = {W3C Recommendation, 11 December 2008. Edited by Ben Caldwell, Michael Cooper, Loretta Guarino Reid and Gregg Vanderheiden},
+  year         = {2008},
+  month        = dec,
+  url          = {https://www.w3.org/TR/WCAG20/},
+  urldate      = {2026-11-21}
+}
+
+% verified: read 2026-11-21 at the URL (W3C Recommendation 12 December 2024; editors Alastair Campbell, Chuck Adams, Rachael Bradley Montgomery, Michael Cooper and Andrew Kirkpatrick). Success criterion 2.3.1, Three Flashes or Below Threshold (Level A): "Web pages do not contain anything that flashes more than three times in any one second period, or the flash is below the general flash and red flash thresholds". Glossary: below the thresholds when there are no more than three general and three red flashes in any second, or the combined area of concurrent flashes is no more than 0.006 steradians, "25% of any 10 degree visual field on the screen"; a general flash is a pair of opposing changes of "10% or more of the maximum relative luminance (1.0) where the relative luminance of the darker image is below 0.80"; fine, balanced patterns such as white noise or a checkerboard of squares under 0.1 degree are exempt; Note 1, a 341 x 256 rectangle at 1024 x 768 as the 10 degree field; Note 3, the newer working definition of a red flash, R/(R + G + B) >= 0.8 and a difference of more than 0.2 in the CIE 1976 UCS chromaticity diagram (ISO 9241-391); relative luminance 0.2126 R + 0.7152 G + 0.0722 B of linearised sRGB
+@misc{w3c2024wcag22,
+  author       = {{W3C}},
+  title        = {Web Content Accessibility Guidelines ({WCAG}) 2.2},
+  howpublished = {W3C Recommendation, 12 December 2024. Edited by Alastair Campbell, Chuck Adams, Rachael Bradley Montgomery, Michael Cooper and Andrew Kirkpatrick},
+  year         = {2024},
+  month        = dec,
+  url          = {https://www.w3.org/TR/WCAG22/},
+  urldate      = {2026-11-21}
+}
+
+% verified: read 2026-11-21 at the URL ("Updated 17 September 2025"; developed by the Accessibility Guidelines Working Group). The guidelines "were originally based on guidelines for the broadcasting industry as adapted for desktop monitors" and on "existing specifications in use in the UK and by others for television broadcast"; "The 341 x 256 pixel block represents a 10 degree viewport at a typical viewing distance"; for video in other colour spaces, ITU-R BT.1702's 20 cd/m2 below 160 cd/m2; "For short clips that might be looped (such as GIF animations), the content should be analyzed while looping"; users closer than the idealised distance "will be affected by flashing areas that normatively pass"; the note new in WCAG 2.2 on red flashes by chromaticity; its related resources include the Harding FPA web site and the Trace Center's PEAT
+@misc{w3c2025understanding,
+  author       = {{W3C}},
+  title        = {Understanding Success Criterion 2.3.1: Three Flashes or Below Threshold},
+  howpublished = {Understanding WCAG 2.2, W3C Web Accessibility Initiative; by the Accessibility Guidelines Working Group},
+  year         = {2025},
+  month        = sep,
+  url          = {https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html},
+  urldate      = {2026-11-21},
+  note         = {Updated 17 September 2025}
 }
 
 % verified: fetched https://www.fourmilab.ch/cellab/manual/rules.html (first 100,000 characters): "Brain" listed as identical to Toffoli and Margolus's "Brian's Brain", p. 47; Balloons credited to Silverman

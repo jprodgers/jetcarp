@@ -27,11 +27,31 @@
 //! within a few frames. Small cells flickering at random (a soup of 4-pixel cells) change
 //! neighbouring tiles independently, and are not a flash; a field, a large square or a band
 //! flipping is. Areas are still counted a tile at a time.
+//!
+//! **Fine patterns** (#269). A checkerboard of squares smaller than a tile reversing keeps every
+//! tile's mean, though each of its pixels changes as much as the squares differ; WCAG 2.3.1 counts
+//! it as flashing unless the squares are under 0.1°. So each tile's fine pattern ([`Fine`]) is
+//! compared with the last one it showed clearly ([`FineRef`]): when at least [`FINE_REVERSED`] of
+//! the windows clear in both have changed sides, the pattern has turned into its own negative, and
+//! when its light and dark parts differ by a transition's change (the darker below [`DARK_LIMIT`]),
+//! every pixel of it has made a transition: the tile makes one, as when its mean changes (a frame
+//! that does both makes one). A reversal of any speed counts once, since the frames in between,
+//! fading through grey, have no clear pattern to compare. Reversals count only where neighbouring
+//! tiles reverse together, as above. A soup's cells change a few at a time, and its tiles' patterns
+//! never turn into their negatives; the same is done for the red measure.
+//!
+//! **Red, by either definition** (#270). A tile's red transitions are WCAG 2.0's (its mean red
+//! measure, tracked as luminance is) and WCAG 2.2's (its mean colour's chromaticity moving more than
+//! [`RED_CHROMA_DELTA`] from where its run began, to or from a saturated red: [`ChromaTracker`]),
+//! counted once where both happen in one frame, by the same coherence (with no direction, for
+//! chromaticity) and the same area rule. WCAG 2.2's are counted only on tiles: the whole screen's
+//! mean colour on a dark ground has the chromaticity of whatever is lit, however small, so it
+//! would count a flicker of a few pixels as the whole screen's.
 
-use super::frame::TileMap;
+use super::frame::{Fine, TileMap};
 use super::{
     AREA_SHARE, DARK_LIMIT, EXTENDED_SECONDS, EXTENDED_WINDOW, FLASH_DELTA, MAX_TRANSITIONS,
-    RED_DELTA, Viewing, WARN_TRANSITIONS,
+    RED_CHROMA_DELTA, RED_DELTA, Viewing, WARN_TRANSITIONS,
 };
 use serde::Serialize;
 use std::collections::VecDeque;
@@ -57,6 +77,108 @@ pub const COHERENT: u32 = 3;
 
 /// How close together the agreeing transitions must be.
 pub const COHERENT_SECONDS: f64 = 0.05;
+
+/// Two fine patterns are compared over the windows clear in both, at least this many of them: a
+/// board of 4-pixel squares 2 pixels off the windows' grid leaves 9 of a tile's 49 clear (the
+/// others straddle its squares evenly).
+pub const FINE_MIN: u32 = 8;
+
+/// A fine pattern has reversed when at least this share of those windows changed sides.
+pub const FINE_REVERSED: f32 = 0.9;
+
+/// A frame's fine pattern is clear enough to compare with when its light and dark parts differ by
+/// at least this share of a transition's change.
+pub const FINE_CLEAR: f32 = 0.25;
+
+/// A tile's fine pattern as last shown clearly, for counting its reversals.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FineRef {
+    last: Option<Fine>,
+}
+
+impl FineRef {
+    /// Takes a frame's fine pattern: true when it is the last clear one turned into its own
+    /// negative, by at least a transition's change `delta`, the darker state below `dark` if given.
+    pub fn observe(&mut self, f: &Fine, delta: f32, dark: Option<f32>) -> bool {
+        if f.sig.count_ones() < FINE_MIN || f.contrast() < delta * FINE_CLEAR {
+            return false;
+        }
+        let reversed = self.last.is_some_and(|was| {
+            let both = f.sig & was.sig;
+            let n = both.count_ones();
+            let flipped = ((f.sign ^ was.sign) & both).count_ones();
+            let size = (f.contrast() + was.contrast()) / 2.0;
+            let darker = f.dark.min(was.dark);
+            n >= FINE_MIN
+                && flipped as f32 >= FINE_REVERSED * n as f32
+                && size >= delta - 1e-5
+                && dark.is_none_or(|l| darker < l)
+        });
+        self.last = Some(*f);
+        reversed
+    }
+}
+
+/// Moves in chromaticity smaller than this (CIE 1976 UCS) neither end a run nor turn it back.
+pub const CHROMA_EPSILON: f32 = 0.005;
+
+/// A colour's state for WCAG 2.2's red flashes: its chromaticity, and whether it is a saturated
+/// red.
+type Chroma = ([f32; 2], bool);
+
+/// A tile's red transitions by WCAG 2.2's definition (#270): a change of more than
+/// [`RED_CHROMA_DELTA`] in chromaticity from where the run began, to or from a saturated red.
+/// Chromaticity has no up and down, so a run is a move away from its start, and it turns back
+/// (a new run begins, from the farthest state reached) when the colour comes back towards its
+/// start by more than [`CHROMA_EPSILON`]. Each run counts once, however slowly it goes: as a
+/// transition of luminance is counted ([`Tracker`]). Black has no chromaticity, and leaves a run
+/// as it is.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ChromaTracker {
+    /// The run's start, and the state farthest from it so far, with its distance.
+    run: Option<(Chroma, Chroma, f32)>,
+    counted: bool,
+    /// The last colour taken: the same colour again changes nothing, and is not worked out again.
+    last: Option<[f32; 3]>,
+}
+
+fn chroma_distance(a: [f32; 2], b: [f32; 2]) -> f32 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
+}
+
+impl ChromaTracker {
+    /// Takes a colour in linear light: true when it makes a red transition by WCAG 2.2.
+    pub fn observe(&mut self, rgb: [f32; 3]) -> bool {
+        if self.last == Some(rgb) {
+            return false;
+        }
+        self.last = Some(rgb);
+        let Some(c) = super::chromaticity(rgb[0], rgb[1], rgb[2]) else {
+            return false;
+        };
+        let now = (c, super::saturated_red(rgb[0], rgb[1], rgb[2]));
+        let Some((start, far, far_d)) = self.run else {
+            self.run = Some((now, now, 0.0));
+            return false;
+        };
+        let d = chroma_distance(start.0, c);
+        let (start, far, far_d) = if d >= far_d {
+            (start, now, d)
+        } else if far_d - d > CHROMA_EPSILON {
+            // Turned back: a new run, from the farthest state.
+            self.counted = false;
+            (far, now, chroma_distance(far.0, c))
+        } else {
+            (start, far, far_d)
+        };
+        self.run = Some((start, far, far_d));
+        if !self.counted && far_d > RED_CHROMA_DELTA && (start.1 || far.1) {
+            self.counted = true;
+            return true;
+        }
+        false
+    }
+}
 
 /// One value's transitions.
 #[derive(Clone, Copy, Debug, Default)]
@@ -201,8 +323,14 @@ pub struct FlashReading {
     pub area_transitions: u32,
     /// The whole screen's count alone.
     pub screen_transitions: u32,
-    /// Red flashes: the same for the red measure.
+    /// The area rule over the tiles' fine-pattern reversals alone (general and red, whichever is
+    /// more): what a tile's mean cannot see.
+    pub fine_transitions: u32,
+    /// Red flashes: the same for red, by either of WCAG's definitions (2.0's red measure, 2.2's
+    /// chromaticity).
     pub red_transitions: u32,
+    /// The area rule over the tiles' red transitions by WCAG 2.2's definition alone (#270).
+    pub chroma_transitions: u32,
     /// The largest share of a 10° field covered by tiles that made at least two transitions (a
     /// flash) in the last second.
     pub share: f32,
@@ -272,6 +400,24 @@ pub struct FlashMeter {
     /// Each tile's latest transition, counted or not (time, direction), for coherence.
     raw: Vec<(f64, i8)>,
     red_raw: Vec<(f64, i8)>,
+    /// Each tile's fine patterns as last shown clearly.
+    fine_ref: Vec<FineRef>,
+    red_fine_ref: Vec<FineRef>,
+    /// Each tile's latest fine-pattern reversal, counted or not, for coherence.
+    fine_raw: Vec<f64>,
+    red_fine_raw: Vec<f64>,
+    /// Each tile's counted fine-pattern reversals (their times; the run state is unused).
+    fine: Vec<Tracker>,
+    red_fine: Vec<Tracker>,
+    /// Each tile's fine-pattern reversals in the last second, of luminance or red, whichever is
+    /// more.
+    fine_counts: Vec<u8>,
+    /// Each tile's colour, for WCAG 2.2's red transitions; its latest one, counted or not, for
+    /// coherence; those counted (their times); and how many in the last second.
+    chroma: Vec<ChromaTracker>,
+    chroma_raw: Vec<f64>,
+    chroma_times: Vec<Tracker>,
+    chroma_counts: Vec<u8>,
     last: FlashReading,
 }
 
@@ -295,6 +441,17 @@ impl FlashMeter {
             red_counts: vec![],
             raw: vec![],
             red_raw: vec![],
+            fine_ref: vec![],
+            red_fine_ref: vec![],
+            fine_raw: vec![],
+            red_fine_raw: vec![],
+            fine: vec![],
+            red_fine: vec![],
+            fine_counts: vec![],
+            chroma: vec![],
+            chroma_raw: vec![],
+            chroma_times: vec![],
+            chroma_counts: vec![],
             last: FlashReading::default(),
         }
     }
@@ -330,6 +487,13 @@ impl FlashMeter {
         &self.red_counts
     }
 
+    /// Each tile's fine-pattern reversals counted in the last second (of luminance or of the red
+    /// measure, whichever made more): flashing its mean does not show, which softening a tile's
+    /// mean cannot calm, so the guard veils it.
+    pub fn tile_fine_counts(&self) -> &[u8] {
+        &self.fine_counts
+    }
+
     /// Tiles across and down, as of the last frame.
     pub fn tiles(&self) -> (u32, u32) {
         (self.cols, self.rows)
@@ -348,12 +512,29 @@ impl FlashMeter {
             self.red_counts = vec![0; n];
             self.raw = vec![(f64::NEG_INFINITY, 0); n];
             self.red_raw = vec![(f64::NEG_INFINITY, 0); n];
+            self.fine_ref = vec![FineRef::default(); n];
+            self.red_fine_ref = vec![FineRef::default(); n];
+            self.fine_raw = vec![f64::NEG_INFINITY; n];
+            self.red_fine_raw = vec![f64::NEG_INFINITY; n];
+            self.fine = vec![Tracker::default(); n];
+            self.red_fine = vec![Tracker::default(); n];
+            self.fine_counts = vec![0; n];
+            self.chroma = vec![ChromaTracker::default(); n];
+            self.chroma_raw = vec![f64::NEG_INFINITY; n];
+            self.chroma_times = vec![Tracker::default(); n];
+            self.chroma_counts = vec![0; n];
         }
         let dt = self.last_t.map_or(0.0, |l| (t - l).clamp(0.0, 1.0));
         self.last_t = Some(t);
         let n = map.len();
         let mut now = vec![0i8; n];
         let mut now_red = vec![0i8; n];
+        let mut now_fine = vec![false; n];
+        let mut now_red_fine = vec![false; n];
+        let mut now_chroma = vec![false; n];
+        // A map made without fine patterns or colours (by hand, in tests) has none to compare.
+        let has_fine = map.fine.len() == n && map.red_fine.len() == n;
+        let has_rgb = map.rgb.len() == n;
         for i in 0..n {
             now[i] = self.lum[i].observe(map.lum[i], FLASH_DELTA, EPSILON, Some(DARK_LIMIT));
             now_red[i] = self.red[i].observe(map.red[i], RED_DELTA, RED_EPSILON, None);
@@ -362,6 +543,22 @@ impl FlashMeter {
             }
             if now_red[i] != 0 {
                 self.red_raw[i] = (t, now_red[i]);
+            }
+            if has_fine {
+                now_fine[i] = self.fine_ref[i].observe(&map.fine[i], FLASH_DELTA, Some(DARK_LIMIT));
+                now_red_fine[i] = self.red_fine_ref[i].observe(&map.red_fine[i], RED_DELTA, None);
+                if now_fine[i] {
+                    self.fine_raw[i] = t;
+                }
+                if now_red_fine[i] {
+                    self.red_fine_raw[i] = t;
+                }
+            }
+            if has_rgb {
+                now_chroma[i] = self.chroma[i].observe(map.rgb[i]);
+                if now_chroma[i] {
+                    self.chroma_raw[i] = t;
+                }
             }
         }
         // A transition counts when the area changes together: at least COHERENT tiles of the 3 by
@@ -383,22 +580,65 @@ impl FlashMeter {
             }
             k
         };
+        // A fine pattern's reversal has no direction to agree on: neighbours reversing at all.
+        let agree_fine = |raw: &[f64], i: usize| {
+            let (c, r) = (i as i64 % cols, i as i64 / cols);
+            let mut k = 0;
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let (x, y) = (c + dx, r + dy);
+                    if x >= 0
+                        && y >= 0
+                        && x < cols
+                        && y < rows
+                        && t - raw[(y * cols + x) as usize] <= COHERENT_SECONDS + 1e-9
+                    {
+                        k += 1;
+                    }
+                }
+            }
+            k
+        };
         for i in 0..n {
-            if now[i] != 0 && agree(&self.raw, i, now[i]) >= COHERENT {
+            let fine = now_fine[i] && agree_fine(&self.fine_raw, i) >= COHERENT;
+            let red_fine = now_red_fine[i] && agree_fine(&self.red_fine_raw, i) >= COHERENT;
+            // Chromaticity has no direction either.
+            let chroma = now_chroma[i] && agree_fine(&self.chroma_raw, i) >= COHERENT;
+            // A frame whose mean and fine pattern both changed made one transition; so did one
+            // whose red measure and chromaticity both did.
+            if fine || (now[i] != 0 && agree(&self.raw, i, now[i]) >= COHERENT) {
                 self.lum[i].commit(t);
             }
-            if now_red[i] != 0 && agree(&self.red_raw, i, now_red[i]) >= COHERENT {
+            if red_fine
+                || chroma
+                || (now_red[i] != 0 && agree(&self.red_raw, i, now_red[i]) >= COHERENT)
+            {
                 self.red[i].commit(t);
             }
+            if fine {
+                self.fine[i].commit(t);
+            }
+            if red_fine {
+                self.red_fine[i].commit(t);
+            }
+            if chroma {
+                self.chroma_times[i].commit(t);
+            }
         }
-        let (mut any, mut any_red) = (false, false);
+        let (mut any, mut any_red, mut any_fine, mut any_chroma) = (false, false, false, false);
         for i in 0..n {
             let c = self.lum[i].count(t) as u8;
             let r = self.red[i].count(t) as u8;
+            let f = self.fine[i].count(t).max(self.red_fine[i].count(t)) as u8;
+            let h = self.chroma_times[i].count(t) as u8;
             self.counts[i] = c;
             self.red_counts[i] = r;
+            self.fine_counts[i] = f;
+            self.chroma_counts[i] = h;
             any |= c > 0;
             any_red |= r > 0;
+            any_fine |= f > 0;
+            any_chroma |= h > 0;
         }
         // The whole screen: the view's mean, weighted by its share of the screen.
         let view_px = map.width as f64 * map.height as f64;
@@ -429,6 +669,19 @@ impl FlashMeter {
         } else {
             (0, 0.0)
         };
+        // A tile's fine-pattern reversals are among its transitions, so they count over the area
+        // only where its transitions do.
+        let fine_transitions = if any_fine && (area > 0 || red_area > 0) {
+            self.area_rule(map, &self.fine_counts).0
+        } else {
+            0
+        };
+        // The same for WCAG 2.2's red transitions, among the red ones.
+        let chroma_transitions = if any_chroma && red_area > 0 {
+            self.area_rule(map, &self.chroma_counts).0
+        } else {
+            0
+        };
         let transitions = area.max(screen_transitions);
         let red_transitions = red_area.max(screen_red);
         let level = Self::level(
@@ -446,7 +699,9 @@ impl FlashMeter {
             transitions,
             area_transitions: area,
             screen_transitions,
+            fine_transitions,
             red_transitions,
+            chroma_transitions,
             share: flash_share,
             red_share,
             level,
@@ -473,25 +728,33 @@ impl FlashMeter {
     fn area_rule(&self, map: &TileMap, counts: &[u8]) -> (u32, f32) {
         let side = self.viewing.field_tiles() as i64;
         let field_px = self.viewing.field_area();
-        let mut best = 0;
-        let mut flash_share = 0.0;
-        for k in 1..=COUNT_CAP as u8 {
+        let share = |k: u8| {
             let w: Vec<f32> = counts
                 .iter()
                 .enumerate()
                 .map(|(i, &c)| if c >= k { map.tile_px(i) } else { 0.0 })
                 .collect();
             let most = max_window(&w, map.cols as i64, map.rows as i64, side);
-            let share = (most as f64 / field_px) as f32;
-            if k == 2 {
-                flash_share = share;
+            (most / field_px) as f32
+        };
+        let over = |s: f32| s as f64 > AREA_SHARE;
+        // The share can only fall as `k` rises (tiles with k + 1 transitions are among those with
+        // k), so the largest `k` over the limit is found by halving.
+        let flash_share = share(2);
+        let best = if !over(flash_share) {
+            if over(share(1)) { 1 } else { 0 }
+        } else {
+            let (mut lo, mut hi) = (2u8, COUNT_CAP as u8);
+            while lo < hi {
+                let mid = (lo + hi).div_ceil(2);
+                if over(share(mid)) {
+                    lo = mid;
+                } else {
+                    hi = mid - 1;
+                }
             }
-            if (share as f64) > AREA_SHARE {
-                best = k as u32;
-            } else if k >= 2 {
-                break;
-            }
-        }
+            lo as u32
+        };
         (best, flash_share)
     }
 }
@@ -812,6 +1075,40 @@ mod tests {
         assert_eq!((r.red_transitions, r.level), (0, Level::Fail));
     }
 
+    /// WCAG 2.2's red transitions (#270): a move of more than 0.2 in chromaticity, to or from a
+    /// saturated red, counted once per run however slowly it goes.
+    #[test]
+    fn wcag_2_2_red_transitions_follow_chromaticity() {
+        let (red, green, blue) = ([1.0f32, 0.0, 0.0], [0.0f32, 0.3, 0.0], [0.0f32, 0.0, 1.0]);
+        let mix = |a: [f32; 3], b: [f32; 3], f: f32| [0, 1, 2].map(|k| a[k] + (b[k] - a[k]) * f);
+        // Red and green in turn: a transition each time.
+        let mut c = ChromaTracker::default();
+        assert!(!c.observe(red));
+        assert!(c.observe(green) && c.observe(red) && c.observe(green));
+        // A slow fade from red to green is one transition, and back again another.
+        let mut c = ChromaTracker::default();
+        let there: u32 = (0..=60)
+            .map(|k| c.observe(mix(red, green, k as f32 / 60.0)) as u32)
+            .sum();
+        let back: u32 = (0..=60)
+            .rev()
+            .map(|k| c.observe(mix(red, green, k as f32 / 60.0)) as u32)
+            .sum();
+        assert_eq!((there, back), (1, 1));
+        // Neither state a saturated red: green and blue, never.
+        let mut c = ChromaTracker::default();
+        assert!((0..10).all(|k| !c.observe(if k % 2 == 0 { green } else { blue })));
+        // Black has no chromaticity: red, black, red is no transition.
+        let mut c = ChromaTracker::default();
+        assert!((0..10).all(|k| !c.observe(if k % 2 == 0 { red } else { [0.0; 3] })));
+        // Red and an orange-red, under 0.2 apart: none.
+        let mut c = ChromaTracker::default();
+        assert!((0..10).all(|k| !c.observe(if k % 2 == 0 { red } else { [1.0, 0.1, 0.0] })));
+        // The brightness of a red alone moves no chromaticity.
+        let mut c = ChromaTracker::default();
+        assert!((0..10).all(|k| !c.observe(if k % 2 == 0 { red } else { [0.3, 0.0, 0.0] })));
+    }
+
     #[test]
     fn the_window_slides_a_second_at_a_time() {
         // Seven transitions spread over a little more than a second: never seven in one second.
@@ -864,11 +1161,12 @@ mod tests {
         }
     }
 
-    /// From RGBA frames through the processor's reduction: a checkerboard of squares larger than a
-    /// tile reversing every frame flashes everywhere; one of 4-pixel squares keeps every tile's
-    /// mean, so it is no flash (the stripe check's business).
+    /// From RGBA frames through the processor's reduction: a checkerboard reversing every frame
+    /// flashes everywhere, whether its squares are larger than a tile (its tiles' means change) or
+    /// smaller (its tiles' fine patterns reverse, #269), down to 3 pixels, just over 0.1° at the
+    /// distance assumed. Squares of 1 and 2 pixels are under 0.1°, and exempt, as WCAG says.
     #[test]
-    fn a_reversing_checkerboard_flashes_when_its_squares_are_large() {
+    fn a_reversing_checkerboard_flashes_unless_its_squares_are_under_a_tenth_of_a_degree() {
         let board = |sq: u32, phase: u32| {
             let mut v = Vec::with_capacity((W * H * 4) as usize);
             for y in 0..H {
@@ -880,7 +1178,15 @@ mod tests {
             }
             crate::strobe::frame::reduce(&v, W, H)
         };
-        for (sq, fails) in [(32, true), (64, true), (4, false), (8, false)] {
+        for (sq, fails) in [
+            (32, true),
+            (64, true),
+            (3, true),
+            (4, true),
+            (8, true),
+            (1, false),
+            (2, false),
+        ] {
             let (a, b) = (board(sq, 0), board(sq, 1));
             let mut m = meter();
             let mut r = FlashReading::default();
@@ -889,6 +1195,8 @@ mod tests {
             }
             assert_eq!(r.level.fails(), fails, "{sq}-pixel squares: {r:?}");
             assert_eq!(r.screen_transitions, 0, "the mean never changes");
+            // What a tile's mean cannot see, the fine patterns do.
+            assert_eq!(r.fine_transitions > 0, fails && sq < 16, "{sq}: {r:?}");
         }
     }
 
@@ -933,6 +1241,65 @@ mod tests {
             r = m.update(&map, f as f64 / 60.0);
         }
         assert_eq!(r.level, Level::Fail, "{r:?}");
+    }
+
+    /// How long the meter takes over a 4K screen's tiles, a frame at a time, with the fine
+    /// patterns and without (ignored; run with `--ignored --nocapture`). Every tile reverses
+    /// (a whole screen of 4-pixel squares) or none does.
+    #[test]
+    #[ignore]
+    fn meter_cost() {
+        let (w, h) = (3840u32, 2160u32);
+        let board = |phase: u32| {
+            let mut v = Vec::with_capacity((w * h * 4) as usize);
+            for y in 0..h {
+                for x in 0..w {
+                    let c = if (x / 4 + y / 4 + phase) % 2 == 1 {
+                        255
+                    } else {
+                        0
+                    };
+                    v.extend_from_slice(&[c, c, c, 255]);
+                }
+            }
+            crate::strobe::frame::reduce(&v, w, h)
+        };
+        let t = std::time::Instant::now();
+        let maps = [board(0), board(1)];
+        println!(
+            "reducing a 4K frame on the processor: {:.1} ms",
+            t.elapsed().as_secs_f64() * 500.0
+        );
+        let plain: Vec<TileMap> = maps
+            .iter()
+            .map(|m| {
+                let mut m = m.clone();
+                m.fine.clear();
+                m.red_fine.clear();
+                m
+            })
+            .collect();
+        let field = [
+            TileMap::uniform(w, h, [0; 3]),
+            TileMap::uniform(w, h, [255; 3]),
+        ];
+        for (name, ms) in [
+            ("with fine patterns", &maps[..]),
+            ("without", &plain[..]),
+            ("the whole field flipping", &field[..]),
+        ] {
+            for (what, every) in [("reversing every 6 frames", 6), ("still", 1_000_000)] {
+                let mut m = meter();
+                let t = std::time::Instant::now();
+                for f in 0..240u32 {
+                    m.update(&ms[((f / every) % 2) as usize], f as f64 / 60.0);
+                }
+                println!(
+                    "4K, {name}, {what}: {:.2} ms a frame",
+                    t.elapsed().as_secs_f64() * 1e3 / 240.0
+                );
+            }
+        }
     }
 
     #[test]

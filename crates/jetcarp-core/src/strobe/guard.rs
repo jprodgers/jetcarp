@@ -22,6 +22,14 @@
 //! The veil comes on and goes at [`VEIL_RATE`] and stays [`HOLD`] after the pattern has gone, so it
 //! never flashes itself. The stripe check runs every [`PATTERN_EVERY`].
 //!
+//! **Fine patterns that reverse** (#269), a checkerboard of squares smaller than a tile, flash
+//! without moving any tile's mean, so softening (which limits how fast a tile's mean may change)
+//! cannot calm them. Where they flash by the area rule on their own (over a quarter of a 10°
+//! field), the tiles that reverse and the tiles around them are veiled as well ([`fine_veil`]), at
+//! once rather than at [`VEIL_RATE`]: coming on, a veil makes each pixel one transition, as the
+//! next reversal would have. It goes, and holds, as a veil for stripes does. A few tiles reversing
+//! now and then (moving waves, Hodgepodge's swings) are left to the softening and the pace cap.
+//!
 //! The guard changes only what is shown and how fast generations are shown; a world computes the
 //! same generations either way. Switched off, it still measures, so the status can say a scene
 //! flashes, but it does nothing.
@@ -75,6 +83,19 @@ pub fn veil_for(contrast: f32, mean: f32) -> [f32; 2] {
         1.0 - (VEIL_CONTRAST / contrast.max(1e-6)).min(1.0),
         mean.min(VEIL_GREY_MAX),
     ]
+}
+
+/// The veil for tile `i` of `map`, whose fine pattern reverses ([`super::flash`]): far enough
+/// towards a dim grey that its light and dark parts differ by [`VEIL_CONTRAST`] at most, and its
+/// red measure's by as small a share of a red transition.
+pub fn fine_veil(map: &TileMap, i: usize) -> [f32; 2] {
+    let lum = map.fine.get(i).map_or(0.0, |f| f.contrast());
+    let red = map.red_fine.get(i).map_or(0.0, |f| f.contrast());
+    let mean = map.lum.get(i).copied().unwrap_or(0.0);
+    let [a, grey] = veil_for(lum, mean);
+    let red_amount =
+        1.0 - (VEIL_CONTRAST / super::FLASH_DELTA * super::RED_DELTA / red.max(1e-6)).min(1.0);
+    [a.max(red_amount), grey]
 }
 
 /// Seconds between stripe checks.
@@ -399,12 +420,53 @@ impl Guard {
                 }
             }
         }
+        // 2b. Veil fine patterns that reverse, and the tiles around them, when they flash by the
+        // area rule themselves: their flashing leaves the tiles' means alone, so softening cannot
+        // calm it. (A few tiles reversing now and then, as in a scene of moving waves, are left
+        // to the softening.) The veil comes on at once (the change it makes is one transition of
+        // each pixel, as the next reversal would be) and goes as any veil does.
+        let mut at_once = vec![false; self.veil_target.len()];
+        let fine_flashing = drawn.fine_transitions >= threshold;
+        if fine_flashing && self.can_soften {
+            let n = self.veil_target.len();
+            for (i, _) in self.input.tile_fine_counts()[..]
+                .iter()
+                .enumerate()
+                .take(n)
+                .filter(|(_, c)| **c > 0)
+            {
+                let v = fine_veil(f.input, i);
+                let (c, r) = ((i as u32 % cols) as i64, (i as u32 / cols) as i64);
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        let (x, y) = (c + dx, r + dy);
+                        if x >= 0 && y >= 0 && (x as u32) < cols && (y as u32) < rows {
+                            let j = (y as u32 * cols + x as u32) as usize;
+                            let vt = &mut self.veil_target[j];
+                            if vt.1 < t || vt.0[0] <= v[0] {
+                                *vt = (v, t + HOLD);
+                            } else {
+                                vt.1 = t + HOLD;
+                            }
+                            at_once[j] = true;
+                        }
+                    }
+                }
+            }
+        }
         let step = VEIL_RATE * dt;
-        for (v, (target, until)) in self.plan.veil.iter_mut().zip(&self.veil_target) {
+        for ((v, (target, until)), now) in self
+            .plan
+            .veil
+            .iter_mut()
+            .zip(&self.veil_target)
+            .zip(at_once)
+        {
             let want = if *until >= t { target[0] } else { 0.0 };
             if want > 0.0 {
                 v[1] = target[1];
             }
+            let step = if now { step.max(want - v[0]) } else { step };
             v[0] += (want - v[0]).clamp(-step, step);
             if v[0] <= 0.0 {
                 *v = [0.0, 0.0];

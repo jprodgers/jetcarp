@@ -22,8 +22,8 @@ It prints:
 
 ```text
 catalog:        /home/ada/.local/share/jetcarp/library.sqlite
-schema version: 3
-patterns 149, rules 1, pattern rules 149, sightings 149 (446483 copies), jobs 8, Quick Start 364, ratings 0, media 0, ants 98
+schema version: 4
+patterns 149, rules 1, pattern rules 149, sightings 149 (446483 copies), jobs 8, Quick Start 371, ratings 0, media 0, ants 98
 ```
 
 The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see

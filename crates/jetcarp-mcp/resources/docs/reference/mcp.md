@@ -681,7 +681,7 @@ Example:
 | `evolve.tiling` | string | Tiling: an id: spectre (default), hat, penrose-kd, square, hex, k2-017, ... |
 | `evolve.track_gens` | integer | Generations the mover tracker may run on aperiodic patches (default 20,000). |
 | `evolve.verify` | array or string | Verification radii as multiples of the radius: a list or "1,2,4" (default 1,2,4). |
-| `explore` | object | The broad search over tilings, rule families, rules and seeds (search_runs reads its runs). It keeps the best runs of each kind of behaviour and breeds from them, storing every run in the job's own database. Not deterministic: a resumed search continues from its archive. Settings: `jetcarp://schema/search_start/explore`. |
+| `explore` | object | The broad search over tilings, rule families, rules and seeds (search_runs reads its runs). It keeps the best runs of each kind of behaviour and breeds from them, storing every run in the job's own database. Not reproducible: what it finds depends on the computer (speed, threads, GPU), though each run it stores replays exactly; a resumed search continues from its archive. Settings: `jetcarp://schema/search_start/explore`. |
 | `explore.batch` | integer | Most worlds in a GPU batch (default 1024). |
 | `explore.confirm_cells` | integer | Cells of a confirmation run, on a bigger grid (default 64,000; an aperiodic patch is the level nearest it, and bigger than the screening patch). |
 | `explore.confirm_gens` | integer | Generations of a confirmation run (default 4096). |

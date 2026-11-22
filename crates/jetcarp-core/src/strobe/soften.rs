@@ -18,7 +18,7 @@
 //! lowers the contrast of strong stripes there. The amount and the grey are interpolated between
 //! tile centres, so a veil has no hard edges.
 
-use super::frame::{TileMap, tiles_for};
+use super::frame::{TileMap, fine_of, tiles_for};
 use super::{TILE, encode, linear, luminance_linear, red_measure_linear};
 
 /// The most a softened tile's mean luminance changes in a second: three transitions of 0.1 at
@@ -269,6 +269,10 @@ impl Softener {
         let cols = input.cols as usize;
         let mut ema = vec![[0f32; 2]; input.len()];
         let mut out_sum = vec![[0f32; 2]; input.len()];
+        // Each tile's colour shown, in linear light.
+        let mut out_rgb = vec![[0f32; 3]; input.len()];
+        // Each pixel's luminance and red measure as shown, for the fine patterns shown.
+        let mut out_px = vec![[0f32; 2]; n];
         let mut shown = vec![0u8; n * 4];
         let table = encode_table();
         for y in 0..height as usize {
@@ -297,20 +301,36 @@ impl Softener {
                 ema[t][1] += red_measure_linear(s[0], s[1], s[2]);
                 let [amount, grey] = plan.veil_at(x as u32, y as u32);
                 let o = s.map(|c| c * (1.0 - amount) + grey);
-                out_sum[t][0] += luminance_linear(o[0], o[1], o[2]);
-                out_sum[t][1] += red_measure_linear(o[0], o[1], o[2]);
+                out_px[i] = [
+                    luminance_linear(o[0], o[1], o[2]),
+                    red_measure_linear(o[0], o[1], o[2]),
+                ];
+                out_sum[t][0] += out_px[i][0];
+                out_sum[t][1] += out_px[i][1];
                 for k in 0..3 {
+                    out_rgb[t][k] += o[k];
                     shown[i * 4 + k] = table[unorm16(o[k]) as usize];
                 }
                 shown[i * 4 + 3] = 255;
             }
         }
         let mut output = input.clone();
+        let w = width as usize;
         for t in 0..input.len() {
             let px = input.tile_px(t);
             self.prev[t] = [ema[t][0] / px, ema[t][1] / px];
             output.lum[t] = out_sum[t][0] / px;
             output.red[t] = out_sum[t][1] / px;
+            output.rgb[t] = out_rgb[t].map(|c| c / px);
+            // The fine patterns shown.
+            let (x0, y0) = ((t % cols) * TILE as usize, (t / cols) * TILE as usize);
+            let (tw, th) = (
+                (w - x0).min(TILE as usize),
+                (height as usize - y0).min(TILE as usize),
+            );
+            let at = |x: usize, y: usize| out_px[(y0 + y) * w + x0 + x];
+            output.fine[t] = fine_of(tw, th, output.lum[t], |x, y| at(x, y)[0]);
+            output.red_fine[t] = fine_of(tw, th, output.red[t], |x, y| at(x, y)[1]);
         }
         self.empty = false;
         self.prev_valid = true;

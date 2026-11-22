@@ -64,7 +64,7 @@ the menu bar).
 Open the *Objects* pane and press *Find objects*. Every group of live tiles is run alone with the same
 rule until it repeats, and is counted by what it is:
 
-<img src="../images/tutorials/life-objects.webp" alt="The Objects pane: 18 objects at generation 500, 5 still, 12 oscillating, 1 moving; the row 1 × c/20 ship 8c #fabe95 is selected, and the ship is boxed in yellow in the grid" width="700">
+<img src="../images/tutorials/life-objects.webp" alt="The Objects pane: 18 objects at generation 500, 5 still, 12 oscillating, 1 moving; the row 1 × c/20 ship 8c #fabe95 is selected, and the ship is boxed in yellow in the grid; the status line notes the strobe guard softening the scene's flashes" width="700">
 
 Here 18 objects are left: 11 copies of a three-tile oscillator of period 2 (`p2 oscillator 3c`),
 another oscillator, five still lifes, and a spaceship, `c/20 ship 8c #fabe95`. Click a row to box its
@@ -89,7 +89,7 @@ pane, set *Neighbours* to *Edge*, so that only tiles across an edge count. The r
 `B3/S23V` (the `V` is for edge neighbours, as von Neumann's are on squares). Press *Edit → Reset*
 (R) to start again from the same soup, run it to the same generation, and find the objects again:
 
-<img src="../images/tutorials/life-objects-edge.webp" alt="The same world with edge neighbours: the Objects pane lists 70 still lifes and nothing else, the CAs pane shows Neighbours: Edge, and the status bar says Frozen" width="700">
+<img src="../images/tutorials/life-objects-edge.webp" alt="The same world with edge neighbours: the Objects pane lists 70 still lifes and nothing else, the CAs pane shows Neighbours: Edge, and the status bar says Frozen, with the strobe guard's note that it slowed the scene to 7.5 generations a second" width="700">
 
 With so few neighbours, nothing moves: the soup freezes into 70 still lifes within 16 generations.
 Rules behave differently on each tiling, and differently again with each neighbourhood. Set

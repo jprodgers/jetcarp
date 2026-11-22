@@ -21,6 +21,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   state hash, generation, status and command log as the CPU, over every family the GPU runs, every
   kind of edge, and runs from 1 to 180 generations; hunts with and without the GPU must leave the same
   catalogue. A GPU that cannot run something must fall back to the CPU, never run it differently.
+  The explore search's batch kernel must give every run the processor would, cell for cell: for
+  isotropic rules, 17 rules for each of eight square grids (wrapped, dead and live edges, down to
+  8 by 8) and both neighbourhoods, random over all 102 letters and near Life, two-state, B0 and
+  Generations, each run as written canonically and as read back from a shuffled notation (counts
+  and letters in any order, a count's letters listed or left out with `-`), every cell of every
+  generation up to 40 on random soups, and in batches beside B/S, JACA blasts and Larger than Life
+  (`isotropic_rules_match_cell_for_cell`, `jetcarp-gpu/tests/batch.rs`). With one letter of every
+  rule read wrong (birth on `4e`) it fails at the first generation, and the GPU self-test, whose
+  explore batches run isotropic rules too, refuses the adapter.
 - **Searches survive interruption.** Every kind of job but the exploratory search, stopped and
   resumed (on the same runner or another), must end with exactly the results of one that ran through;
   the exploratory search continues from its saved archive instead
@@ -32,8 +41,16 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   ticks with Space, reading their names from the screen-reader tree). Isotropic rules must come
   only when named. The tiling list, catalogue rules and first candidates of an older search, and
   of one that chooses nothing, are pinned as 0.4.2's code made them (`an_old_spec_replays_as_before`,
-  `jetcarp-search/src/explore/job.rs`): with isotropic rules in the default schedule, or an older
-  search's tiling list cut to its families' grids, it fails.
+  `jetcarp-search/src/explore/job.rs`): with isotropic rules in the default schedule, an older
+  search's tiling list cut to its families' grids, or one more random draw in a GPU round, it
+  fails. With a GPU, a search that names isotropic rules must run every one of them, screened and
+  confirming, in the GPU's batches, and the processor none: a stand-in GPU counts them
+  (`isotropic_rules_run_on_the_gpu_when_there_is_one`), and on a real GPU an explore job's
+  isotropic runs must all be the GPU's and match the processor's own loop run for run
+  (`jetcarp-search/tests/gpu_explore.rs`); before they went to the GPU, 116 of 116 were the
+  processor's. On the processor alone such a search must draw as it did when only the processor
+  ran them, pinned as that code made them; with isotropic rules moved to the end of the
+  processor's list it fails.
 - **Exact verification.** Every object a hunt keeps is run again alone and compared cell by cell.
 - **Golly agrees.** [Golly](https://golly.sourceforge.io/)'s command-line program, `bgolly`, reads
   the RLE JETCARP writes as the same cells, and writes it back as JETCARP reads it. It runs the
@@ -161,7 +178,26 @@ with the guard already on.
   and just under, the darker state at 0.8, a flashing square just under and just over a quarter of
   the 10° field, a strip larger than that area that never fills a quarter of a field, a view smaller
   than the field, red flashes apart from general ones, the sliding one-second window, the extended
-  failure, and checkerboards reversing.
+  failure, and checkerboards reversing. **Fine patterns** (#269,
+  `crates/jetcarp-core/tests/strobe_checkerboard.rs`): a checkerboard of squares from 3 to 32
+  pixels (from just over 0.1° to twice a tile, either side of the tile's 16) at five offsets from
+  the tiles' grid, reversing 4, 6 and 10 times a second over 6% of half a 1080p screen (over twice a
+  quarter of the 10° field, far under a quarter of the screen), must read as many transitions as it
+  reverses, a warning at 4 and 6 and a failure at 10; grey squares 0.114 apart in luminance flash
+  and squares under 0.09 apart do not, nor light squares whose darker state is 0.8 or more; and
+  squares of 1 and 2
+  pixels, under 0.1°, are exempt at every offset. These tests were written first and failed before
+  the fix (the tiles' means alone counted none of them, nor 16- to 32-pixel squares half a tile off
+  the grid). Ordinary scenes must read exactly as they did without the fine patterns: Life soups at
+  2 to 16 pixels a cell, a soup's ash (still lifes and blinkers) at 4 and 30 generations a second,
+  and fields of blocks, gliders and blinkers. **Red flashes by either definition** (#270,
+  `crates/jetcarp-core/tests/strobe_red.rs`): a pair of colours only WCAG 2.0's red measure counts
+  (two reds of one chromaticity, 135 apart in the measure), one only WCAG 2.2's counts (a dark red
+  and a dark green, 0.33 apart in chromaticity and 14.5 in the measure), and one both count (red
+  and a grey of its brightness), none of them a general flash, each fail at ten flashes a second,
+  and the guard keeps each to at most three red transitions a second on screen; WCAG 2.2's red
+  flashes keep the area rule, a square just under a quarter of the 10° field passing and one just
+  over failing. These were written first too, and the one only 2.2 counts failed before the fix.
 - **The stripe check** is tested on stripes of every orientation from 4 to 128 pixels a pair,
   checkerboards and rows of dots, which it must find; and on noise, random cells of 2 to 16 pixels,
   faint cell outlines, low contrast and bright stripes, which it must not.
@@ -169,10 +205,18 @@ with the guard already on.
   the guard says, read back a few frames late. A field flipping every frame is softened and then
   slowed and never shows more than three flashes a second, at any frame rate; flashing that slowing
   cannot stop is paused; small flashing and slow fades are left alone; switched off, it does
-  nothing.
+  nothing. A small reversing checkerboard (squares of 4 to 12 pixels, 7 to 30 generations a second)
+  is veiled and slowed, and what is shown, measured pixel by pixel as WCAG defines a flash (no
+  tiles), makes at most 4 transitions in any second, where unguarded it makes 7 or 8; on the GPU
+  (`the_gpu_guard_keeps_a_small_reversing_checkerboard_under_the_limit`), at most 3.
 - **The GPU and the processor agree**, on any driver (CI runs this on Mesa's llvmpipe as well as
   the test machines' GPUs): the GPU's tile maps and half-resolution image match the processor's
-  to the rounding of the sums, and its softened frames byte for byte. The GPU decodes pixels with
+  to the rounding of the sums, and its softened frames byte for byte; so do the tiles' mean colours,
+  as drawn and as shown, and each of the three red pairs above fails on the GPU's measure as on the
+  processor's. The tiles' fine patterns
+  match bit for bit, but for a window whose mean is exactly the threshold away from its tile's in
+  exact arithmetic (a frame of a few colours can make one), which the test recomputes and allows.
+  The GPU decodes pixels with
   the processor's own tables, not the texture unit's sRGB decoding, which differs by driver, and
   makes the red measure's saturation test in whole numbers: the measure steps from 0 to over 100
   there, so a pixel decoded a little differently could move a tile's mean by a whole step (it did,
@@ -183,7 +227,8 @@ with the guard already on.
   warning's example, which fails at 60 generations a second, is a warning at 30 and passes at 15),
   the Tron field just under and just over the rate (six and seven generations a second, and six
   for long enough to be the extended failure) and the area (shown 112 and 128 pixels across),
-  striped scenes (still stripes, a reversing checkerboard of squares smaller than a tile),
+  striped scenes (still stripes, and a checkerboard of 8-pixel squares reversing 15 times a
+  second, which since #269 fails for flashing as well),
   ordinary scenes (a Life soup, Brian's Brain, a maze, Greenberg-Hastings waves) and still fields
   with thin lines over them (white live cells at a fractional size, where seams would show, and
   with cell outlines at 8 and 16 pixels a cell; Paper's light ground with scattered cells and
@@ -201,21 +246,22 @@ with the guard already on.
   savers, both ways it can draw, and the app's whole window (ignored test, on the GPU), with the
   flipping field: what they show, read back and measured on the processor, never fails. An exported
   animation of it is caught, and its softened version, read back from the file, passes.
-- **The outside check** compares JETCARP's verdicts with those of EA's
-  [IRIS](https://github.com/electronicarts/IRIS) on recordings of what each output path drew
-  ([Comparing with IRIS](#comparing-with-iris)). For flashes it misses nothing IRIS flags, and with
-  the guard on IRIS passes every recording for flashing. For patterns, the guard for someone at
-  risk misses nothing IRIS's pattern check flags, and with it on IRIS passes every recording; the
-  usual guard counts regular stripes only, and its disagreements with IRIS are listed. IRIS, like
-  the guard, is a tool, not a certificate.
+- **The outside check** compares JETCARP's verdicts with those of EA's IRIS
+  ([Electronic Arts 2023](../research/bibliography.md#ea2023iris)) on recordings of what each
+  output path drew ([Comparing with IRIS](#comparing-with-iris)). For flashes it misses nothing
+  IRIS flags, and with the guard on IRIS passes every recording for flashing. For patterns, the
+  guard for someone at risk misses nothing IRIS's pattern check flags, and with it on IRIS passes
+  every recording; the usual guard counts regular stripes only, and its disagreements with IRIS are
+  listed. IRIS, like the guard, is a tool, not a certificate.
 
 ### Comparing with IRIS
 
 JETCARP neither ships nor builds IRIS; this is how the comparison was run, and what it found.
 
-1. **IRIS** at commit `d96978ac1107f3463b77f69a9c1b1ec5d45291a0` (14 January 2025), unchanged,
-   built as its README says: CMake with vcpkg at IRIS's own baseline (`0affe8710a4a`, which brings
-   OpenCV 4.8 with FFmpeg), its example program, release only. It was built on Fedora 45 without
+1. **IRIS** ([Electronic Arts 2023](../research/bibliography.md#ea2023iris)) at commit
+   `d96978ac1107f3463b77f69a9c1b1ec5d45291a0` (14 January 2025), unchanged, built as its README
+   says: CMake with vcpkg at IRIS's own baseline (`0affe8710a4a`, which brings OpenCV 4.8 with
+   FFmpeg), its example program, release only. It was built on Fedora 45 without
    administrator rights: the build tools vcpkg does not fetch on Linux (m4, bison, autoconf,
    automake, libtool, gperf and NASM, a few pure-Perl modules Fedora packages apart, and Jinja2)
    were built or fetched into the build's own folder. The host's compiler and headers are newer
@@ -280,12 +326,12 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 | `desktop-off-seeds-soup` | fail (pattern) | 0 / 0 | 297 | fail (flash) | fail (flash, stripes) | 8 / 0 |
 | `desktop-off-stripes-still` | pass | 1 / 0 | 0 | fail (stripes) | fail (stripes) | 1 / 0 |
 | `desktop-off-tron-blob` | fail (flash, pattern) | 31 / 0 | 53 | fail (flash, stripes) | fail (flash, stripes) | 8 / 0 |
-| `desktop-off-tron-checkerboard` | pass | 0 / 0 | 0 | fail (stripes) | fail (stripes) | 0 / 0 |
+| `desktop-off-tron-checkerboard` | pass | 0 / 0 | 0 | fail (flash, stripes) | fail (flash, stripes) | 8 / 0 |
 | `desktop-off-tron-field` | fail (flash) | 60 / 0 | 0 | fail (flash) | fail (flash) | 8 / 0 |
 | `desktop-off-tron-red` | fail (flash, red) | 37 / 37 | 0 | fail (flash, red) | fail (flash, red) | 8 / 8 |
 | `desktop-on-brians-brain` | pass | 1 / 0 | 0 | pass | fail (stripes) | 2 / 0 |
 | `desktop-on-cyclic-waves` | fail (pattern) | 1 / 0 | 24 | pass | fail (stripes) | 2 / 0 |
-| `desktop-on-hodgepodge` | pass | 1 / 0 | 0 | pass | fail (stripes) | 2 / 0 |
+| `desktop-on-hodgepodge` | pass | 2 / 0 | 0 | pass | fail (stripes) | 3 / 0 |
 | `desktop-on-life-soup` | pass | 0 / 0 | 0 | pass | fail (stripes) | 2 / 0 |
 | `desktop-on-live-field-4.37px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
 | `desktop-on-live-field-7.7px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
@@ -293,7 +339,7 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 | `desktop-on-seeds-soup` | fail (pattern) | 0 / 0 | 122 | pass | fail (stripes) | 2 / 0 |
 | `desktop-on-stripes-still` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
 | `desktop-on-tron-blob` | pass | 3 / 0 | 0 | pass | fail (stripes) | 3 / 0 |
-| `desktop-on-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
+| `desktop-on-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 3 / 0 |
 | `desktop-on-tron-field` | pass | 3 / 0 | 0 | pass | pass | 3 / 0 |
 | `desktop-on-tron-red` | pass | 2 / 3 | 0 | pass | pass | 3 / 3 |
 | `desktop-risk-brians-brain` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
@@ -306,7 +352,7 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 | `desktop-risk-seeds-soup` | pass | 0 / 0 | 0 | pass | pass | 1 / 0 |
 | `desktop-risk-stripes-still` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
 | `desktop-risk-tron-blob` | pass, warning | 5 / 0 | 0 | pass, warning | pass, warning | 4 / 0 |
-| `desktop-risk-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
+| `desktop-risk-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 3 / 0 |
 | `desktop-risk-tron-field` | pass | 3 / 0 | 0 | pass | pass | 3 / 0 |
 | `desktop-risk-tron-red` | pass | 2 / 3 | 0 | pass | pass | 3 / 3 |
 | `view-off-live-field-outlined-12px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
@@ -336,9 +382,21 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 **Flashes**: no misses. IRIS fails four recordings for flashing (the Tron field, in grey and in
 red, Tron from a blob, and Hodgepodge at 60 generations a second), and JETCARP fails all four.
 With either guard on, IRIS passes every recording for flashing (Tron from a blob with the at-risk
-guard on is a warning, a pass). One false alarm: the Seeds soup, whose flicker JETCARP counts by
+guard on is a warning, a pass). Two false alarms: the Seeds soup, whose flicker JETCARP counts by
 its area rule, a quarter of a 10° field (about 0.7% of a 1080p screen), where IRIS takes the mean
-of the whole frame. That difference is deliberate.
+of the whole frame; and since #269 the reversing checkerboard, whose frame mean never changes
+though every pixel flashes, which WCAG counts (its 8-pixel squares are over 0.1°) and JETCARP
+counts by its tiles' fine patterns. Both differences are deliberate. The comparison was run again
+for #269 with the fine patterns in: IRIS's verdicts did not change on any recording, and every
+recording with the guard on is as before, to a byte's rounding (a pixel's value may move by one,
+as the GPU tests allow), but two: the checkerboard, now veiled where it reverses as well as where
+its stripes are; and Hodgepodge with the usual guard, whose tiles' fine patterns reverse when the
+whole field swings, which now count where its tiles' means do not move, so the guard paces it
+differently. It was run once more for #270, with red flashes counted by WCAG 2.2's chromaticity as
+well as WCAG 2.0's measure: every recording came out the same, byte for byte, and every verdict
+with it. The red flashes the corpus has (the Tron field in red-orange, against black, which has no
+chromaticity) are WCAG 2.0's, which IRIS counts too; by either definition JETCARP is never more
+lenient than IRIS.
 
 **Patterns, for someone at risk**: no misses, and with the at-risk guard on IRIS passes all 22
 recordings, the Seeds soup, the Greenberg-Hastings waves and the Paper field among them, for
@@ -456,6 +514,9 @@ job that hangs is stopped rather than left running for hours.
   cannot pass without having run. On Linux the tests run once more with the default
   folders, failing if any test writes to them. On Windows each of the folder rules' link cases must
   make its junction or symbolic link and run; the log names each one.
+- **A debug build** of the whole workspace runs every test again on Linux, GPU tests on lavapipe:
+  release builds check neither arithmetic for overflow nor debug assertions, and a bug in the
+  animated WebP encoder hid from them that way until 0.4.3.
 - **The installers** are each given a release folder of the test's own: an intact archive installs;
   an archive with one byte changed, and one that `SHA256SUMS` does not list, are refused with
   nothing installed (the shell installer on Linux, the PowerShell one on Windows). The intact install
@@ -480,7 +541,9 @@ job that hangs is stopped rather than left running for hours.
   is no longer maintained is shown as a warning, and never fails it.
 - **The book** builds, its internal links all resolve, and its scripting reference matches the
   program.
-- **Golly:** the Linux job installs Ubuntu's Golly and runs the Golly test above.
+- **Golly:** the Linux job builds Golly's `bgolly` 4.0 and 5.0 from their source (Ubuntu packages
+  only Golly 3.3, which can't read every rule JETCARP writes) and runs every Golly test above with
+  each, but the one that needs a library of finds.
 - **A release** is built only from a tag whose version agrees with the program and the changelog,
   and only after the tests pass.
 
@@ -504,8 +567,8 @@ what to run, and what counts as a pass. It is carried out in three parts.
 
 **Phase 1, unattended**, on each machine:
 
-- **Parity on every GPU.** 371 scenes (every built-in Quick Start scene, 364, and 7 sandpiles that
-  drop grains) run for 300 generations on the CPU and on each adapter and graphics API the machine
+- **Parity on every GPU.** 378 scenes (every built-in Quick Start scene, 371 since 0.4.3's
+  isotropic entries, 364 for 0.4.2, and 7 sandpiles that drop grains) run for 300 generations on the CPU and on each adapter and graphics API the machine
   has: seven in all, from the Radeon and llvmpipe to the RTX and the UHD on both Vulkan and
   DirectX 12, to the M2 Max on Metal. Every final hash must match the one recorded on the Framework's CPU. Then 40 scenes chosen
   across every family and kind of tiling run for 5,000 generations each, so that slow drift shows.
@@ -579,9 +642,9 @@ fixes them. The plans, logs and results are published in
 - **Triage.** A fix that fits goes into the next candidate; anything that would change stored data,
   or is too large to test properly in time, goes to the next version. GitHub milestones track which.
   A feature that misses what it is for is held back: in `rc.3`'s testing, Fit to this computer took
-  from 45 seconds to 12 minutes to size the desktop background for a machine, against Jimmie's target
-  of 10 to 30 seconds, so 0.4.2 ships without it and a faster design is planned for 0.4.3 (#112,
-  #113).
+  from 45 seconds to 12 minutes to size the desktop background for a machine, against a target of
+  10 to 30 seconds, so 0.4.2 shipped without it; 0.4.3 brings it back, redesigned to take a few
+  seconds (#112, #113; see [How long Fit to this computer takes](#how-long-fit-to-this-computer-takes)).
 - **Fixes come with tests.** Where a test can be written, it is. Some fixes can only be checked on a
   particular system (how macOS treats a hidden window, for example); those are checked by hand
   there, in the next candidate's R. In the 0.4.2 cycle, 74 of the 102 closed issues have a test
@@ -653,10 +716,10 @@ issues.
 
 [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md) says what JETCARP does
 and does not do. Each of its promises is held up by automated tests, by a check in CI, by the
-hands-on rows of each release candidate's plan (its part S, from 0.4.3), or by how the code is
+hands-on rows of each release candidate's plan (its security rows, from 0.4.3), or by how the code is
 built. The next audit checks this table against the code.
 
-| # | Promise | Automated tests and CI checks | Hands-on (part S) |
+| # | Promise | Automated tests and CI checks | Hands-on (the plan's security rows) |
 |---|---|---|---|
 | 1 | It makes no network connections; the only network sockets it opens are local, on `127.0.0.1` | The Dependencies workflow (`deny.toml`): no HTTP, TLS, DNS, WebSocket or peer-to-peer crate, and no HTTP parser, in the dependency tree that `deny.toml` does not allow, so networking comes only on purpose; the one allowed, `httparse`, which reads the MCP server's HTTP requests, is allowed for `jetcarp-mcp` only. `the_listener_is_on_loopback_only` (`jetcarp-mcp/tests/link.rs`) and `the_endpoint_is_on_loopback_only` (`jetcarp-mcp/tests/http.rs`): no other address of the machine reaches them, and on Linux the HTTP server's one listening socket is `127.0.0.1`. By construction: the workspace's two listening sockets, the link's and the MCP server's HTTP endpoint's, are bound to `127.0.0.1` (`Listener` in `jetcarp-mcp/src/link.rs` and in `jetcarp-mcp/src/http.rs`), and the only connections it makes are to them | |
 | 2 | Nothing in a pack is run; every hash and signature is checked before anything is stored | `jetcarp-pack/tests/hostile.rs`: oversized and deep documents, unknown versions and features, altered objects, names that would leave the store, too many parts, decompression and decoding bombs, records that do not hash to their ids, unsigned and badly signed versions, links out of an export or a store | S-P1 (the same tests on each machine), S-P2 (a pack signed by a key the machine has not seen) |

@@ -40,6 +40,7 @@ This computer
   memory:    32 GB (21 GB free now)
   GPU 1002:73df: 12 GB own, may borrow 16 GB (sysfs)
   JETCARP Hardware Score: not measured yet (`jetcarp score`)
+  JETCARP in use now: jetcarp doctor 78.5 MB; 15.9 GB of the 16 GB reserved for JETCARP left
   reserved for JETCARP: 16 GB
   largest world: 8 GB
   an AI's share: small

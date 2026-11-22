@@ -5,10 +5,12 @@
 //! rule run at twice the frame rate shows the same phase in every frame and does not flash, and a
 //! slow rule drawn with a bright palette can. Every drawn frame is reduced to a coarse map of
 //! *tiles* of [`TILE`] by [`TILE`] pixels ([`frame::TileMap`]): each tile's mean relative
-//! luminance, and its mean red measure. Where frames are drawn on the GPU the reduction runs there
-//! (`jetcarp_display::strobe_gpu`); everywhere else ([`frame::reduce`]) on the processor. Both
-//! give the same map, and everything after the map is this module's, so one implementation
-//! decides for every output.
+//! luminance, and its mean red measure, and its *fine pattern* ([`frame::Fine`]): which of its
+//! 4-pixel windows are clearly lighter or darker than its mean, so that a checkerboard of squares
+//! smaller than a tile, which keeps the tile's mean when it reverses, is seen reversing (#269).
+//! Where frames are drawn on the GPU the reduction runs there (`jetcarp_display::strobe_gpu`);
+//! everywhere else ([`frame::reduce`]) on the processor. Both give the same map, and everything
+//! after the map is this module's, so one implementation decides for every output.
 //!
 //! **The definitions** are WCAG 2.3.1's, as the Trace Center's PEAT and EA's IRIS apply them:
 //!
@@ -17,13 +19,22 @@
 //! - A *transition* is a change of relative luminance of at least [`FLASH_DELTA`] (10% of the
 //!   maximum) in one direction, counted once per run, where the darker of its two states is below
 //!   [`DARK_LIMIT`]. A *flash* is a pair of opposing transitions.
-//! - A *red transition* is the same for the red measure ([`red_measure`]): for a saturated red
-//!   (red at least [`RED_SATURATION`] of `R + G + B`), `(R - G - B) * 320`, changing by at least
-//!   [`RED_DELTA`].
+//! - A *red transition* is counted by either of WCAG's two definitions (#270), since a red flash
+//!   either calls one is a red flash. WCAG 2.0's working definition, which PEAT and IRIS use: the
+//!   same as a transition, for the red measure ([`red_measure`]): for a saturated red (red at
+//!   least [`RED_SATURATION`] of `R + G + B`), `(R - G - B) * 320`, changing by at least
+//!   [`RED_DELTA`]. WCAG 2.2's (its glossary, *general flash and red flash thresholds*, note 3): a
+//!   change of more than [`RED_CHROMA_DELTA`] in CIE 1976 UCS chromaticity ([`chromaticity`]), to
+//!   or from a saturated red.
 //! - More than three flashes in any one second fail: more than [`MAX_TRANSITIONS`] transitions
 //!   in a sliding one-second window. [`WARN_TRANSITIONS`] (two flashes a second) is a warning, and
-//!   a warning that lasts four seconds out of five is the *extended* failure IRIS reports
-//!   (Harding's guidance on sustained flashing).
+//!   a warning that lasts four seconds out of five is the *extended* failure IRIS reports (the
+//!   broadcasting guidance, ITU-R BT.1702-3 and Ofcom's, notes that flashing for more than five
+//!   seconds may be a risk even within the limits).
+//! - **Fine patterns:** a pattern of squares of 0.1° or more that turns into its own negative
+//!   makes every pixel of it change by the squares' difference, so it is a transition wherever it
+//!   is, though no tile's mean changes; finer patterns are exempt, as WCAG says ([`frame`],
+//!   [`flash`]).
 //! - **The area rule:** flashes are harmful only where the flashing areas together cover more than
 //!   [`AREA_SHARE`] of any 10° field of vision. The size of that field in pixels depends on the
 //!   screen and on how far away it is watched, which JETCARP cannot know, so it assumes a
@@ -37,12 +48,12 @@
 //! would count on a recording of the screen is counted here too ([`flash::FlashMeter`]).
 //!
 //! **Stripes** ([`pattern`]): regular high-contrast stripes can trigger seizures as flashes can
-//! (ITU-R BT.1702, the Harding guidance). They are measured on a half-resolution luminance image
-//! of the frame ([`frame::LumImage`]).
+//! (ITU-R BT.1702-3; Ofcom's guidance on flashing images and regular patterns). They are measured
+//! on a half-resolution luminance image of the frame ([`frame::LumImage`]).
 //!
 //! **The guard** ([`guard`]) acts on the readings, in order: it *softens* (each tile's brightness
-//! may change only so fast, so a flip becomes a fade, and strong stripes lose their contrast),
-//! then *caps the pace*, then *pauses* with a note saying why. It never changes what a world
+//! may change only so fast, so a flip becomes a fade, and strong stripes and reversing fine
+//! patterns lose their contrast), then *caps the pace*, then *pauses* with a note saying why. It never changes what a world
 //! computes, only what is drawn and how fast generations are shown.
 //!
 //! The guard reduces the risk; it does not make JETCARP safe for someone with photosensitive
@@ -77,6 +88,10 @@ pub const RED_SATURATION: f32 = 0.8;
 
 /// The red measure's scale: `(R - G - B) * RED_SCALE`.
 pub const RED_SCALE: f32 = 320.0;
+
+/// A red transition by WCAG 2.2's definition: a change of more than this in CIE 1976 UCS
+/// chromaticity (`u'`, `v'`; unitless), where one of the two states is a saturated red.
+pub const RED_CHROMA_DELTA: f32 = 0.2;
 
 /// More transitions than this in one second fail: more than three flashes a second.
 pub const MAX_TRANSITIONS: u32 = 6;
@@ -158,6 +173,23 @@ pub fn red_measure_linear(r: f32, g: f32, b: f32) -> f32 {
     } else {
         0.0
     }
+}
+
+/// Whether linear-light red, green and blue are a saturated red: red at least [`RED_SATURATION`]
+/// of `R + G + B` (WCAG's `R / (R + G + B) >= 0.8`).
+pub fn saturated_red(r: f32, g: f32, b: f32) -> bool {
+    let s = r + g + b;
+    s > 0.0 && r >= RED_SATURATION * s
+}
+
+/// The CIE 1976 UCS chromaticity (`u'`, `v'`) of linear-light sRGB red, green and blue, by way of
+/// CIE XYZ with sRGB's primaries and D65 white (IEC 61966-2-1); None for black, which has none.
+pub fn chromaticity(r: f32, g: f32, b: f32) -> Option<[f32; 2]> {
+    let x = 0.4124 * r + 0.3576 * g + 0.1805 * b;
+    let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    let z = 0.0193 * r + 0.1192 * g + 0.9505 * b;
+    let d = x + 15.0 * y + 3.0 * z;
+    (d > 1e-6).then(|| [4.0 * x / d, 9.0 * y / d])
 }
 
 /// Full light in the fixed-point linear values of [`linear_fixed`].
@@ -338,6 +370,36 @@ mod tests {
         assert_eq!(red_measure([255, 128, 128]), 0.0);
         // Magenta-ish: blue takes it below the share.
         assert_eq!(red_measure([255, 0, 200]), 0.0);
+    }
+
+    /// Chromaticity (#270): sRGB's white, red, green and blue fall where CIE 1976 UCS puts D65 and
+    /// sRGB's primaries (from their CIE 1931 xy: u' = 4x / (-2x + 12y + 3), v' = 9y / (...)).
+    #[test]
+    fn chromaticity_puts_srgb_s_primaries_where_they_belong() {
+        let uv = |x: f32, y: f32| {
+            let d = -2.0 * x + 12.0 * y + 3.0;
+            [4.0 * x / d, 9.0 * y / d]
+        };
+        for (rgb, xy) in [
+            ([1.0, 1.0, 1.0], (0.3127, 0.3290)),
+            ([1.0, 0.0, 0.0], (0.64, 0.33)),
+            ([0.0, 1.0, 0.0], (0.30, 0.60)),
+            ([0.0, 0.0, 1.0], (0.15, 0.06)),
+        ] {
+            let c = chromaticity(rgb[0], rgb[1], rgb[2]).unwrap();
+            let want = uv(xy.0, xy.1);
+            assert!(
+                (c[0] - want[0]).abs() < 2e-3 && (c[1] - want[1]).abs() < 2e-3,
+                "{rgb:?}: {c:?} vs {want:?}"
+            );
+        }
+        // Brightness does not move it; black has none.
+        let a = chromaticity(0.5, 0.2, 0.1).unwrap();
+        let b = chromaticity(0.05, 0.02, 0.01).unwrap();
+        assert!((a[0] - b[0]).abs() < 1e-6 && (a[1] - b[1]).abs() < 1e-6);
+        assert_eq!(chromaticity(0.0, 0.0, 0.0), None);
+        assert!(saturated_red(1.0, 0.1, 0.1) && !saturated_red(1.0, 0.2, 0.1));
+        assert!(!saturated_red(0.0, 0.0, 0.0));
     }
 
     #[test]

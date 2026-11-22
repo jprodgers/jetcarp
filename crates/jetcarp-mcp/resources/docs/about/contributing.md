@@ -158,7 +158,7 @@ the scene; the pictures of the app are drawn offscreen by ignored tests, in
 `target/release/jetcarp` unless `JETCARP=` names another binary, and both take a filter to render only
 some figures. Some pages are generated, and say so at the top: edit their sources and run
 `docs/tools/gen-bibliography.py`, `gen-named-rules.py`, `gen-tiling-catalogue.py`, `gen-palettes.py`,
-`gen-scripting.py`, `gen-cli.py` or `gen-mcp.py` instead of editing the page (all but the bibliography's
+`gen-scripting.py`, `gen-cli.py`, `gen-mcp.py` or `gen-shortcuts.py` instead of editing the page (all but the bibliography's
 and the scripting reference's read a freshly built `target/release/jetcarp`). Each takes `--check`,
 which writes nothing and fails if the committed page is not what it would write; CI runs every one,
 and `docs/tools/check-rule-notation.py`, which parses the rule notation page's table of examples.

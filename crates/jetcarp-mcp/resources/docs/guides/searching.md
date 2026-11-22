@@ -224,6 +224,12 @@ search on the processor and `--gpu` on the GPU whatever the setting, in this and
 jetcarp search explore --minutes 60 --label first-look
 ```
 
+**It isn't reproducible**, unlike every other search, and it says so as it starts (on the command
+line, in the *Hunts* window and to an MCP client): what it finds depends on the computer, on its
+speed, its threads and its GPU, so the same settings find different things on another computer or
+another day. Each run it finds replays exactly, anywhere; it's which runs it tries that differs.
+The end of this section says why.
+
 ### Choosing what to search
 
 By itself an explore search draws from every tiling it knows and every rule family but isotropic
@@ -245,7 +251,7 @@ jetcarp search explore --minutes 60 --skip-tiling-groups aperiodic --skip-famili
   `greenberg_hastings`, `hodgepodge`, `priority`, `wireworld`, `spectre_glider`, `turmite`,
   `layered`, `wolfram`, `hex_wolfram`, `hex_tri`, `margolus`, `lenia`, `forest_fire`, `sandpile`,
   `table`, `ltl` and `isotropic`. [Isotropic rules](../automata/isotropic.md) are searched only
-  when named here, and on the processor: the GPU's batches don't run them yet.
+  when named here, on the GPU when there is one and on the processor when there is not.
 - **Leaving some out.** `--skip-tilings`, `--skip-tiling-groups` and `--skip-families` take the
   same names and leave those out of what the others chose.
 - **Families tied to one grid.** Isotropic rules, the elementary rules (`wolfram`), Margolus blocks

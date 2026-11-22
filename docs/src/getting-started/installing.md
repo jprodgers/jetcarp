@@ -356,7 +356,7 @@ has the details.
 
 ## Open the app
 
-<img src="../images/jetcarp-icon.png" alt="JETCARP's icon: a black line drawing of a koi carp with jet engines, curled inside a white rounded square with a black outline" width="128">
+<img src="../images/jetcarp-icon.png" alt="JETCARP's icon for now: a glider, five black squares on a three-by-three grid, inside a white rounded square with a black outline" width="128">
 
 With JETCARP installed, run `jetcarp` with no arguments in a terminal. This opens the app, on Linux,
 macOS and Windows alike:
@@ -371,7 +371,7 @@ on Windows).
 
 Or open it like any other app, from its icon. The installers put it among your apps for you, and
 the [setup window](first-run.md) offers to; after any other way of installing (pipx, uv, pip,
-Homebrew, winget, cargo, a release archive) you can also run this once:
+Homebrew, cargo, a release archive) you can also run this once:
 
 ```bash
 jetcarp launcher install
@@ -385,11 +385,11 @@ jetcarp launcher install
 
 Each keeps working when JETCARP is upgraded. On Linux and macOS it starts the program by a path an
 upgrade keeps (Homebrew's `jetcarp` link, not the version's own folder); *JETCARP.app* holds a
-small launcher that starts the program, not a copy of it. On Windows, winget's and Scoop's folders
-name the version, so the Start menu entry starts a copy of the windowless launcher in a folder of
+small launcher that starts the program, not a copy of it. On Windows, Scoop's folders name the
+version, so the Start menu entry starts a copy of the windowless launcher in a folder of
 JETCARP's own instead, beside a record of the `jetcarp.exe` it starts. When the program the record
-names has gone, as after `winget upgrade`, the launcher finds JETCARP on your `PATH`, where winget
-and Scoop keep the current version, and that run puts its own path in the record. A record naming
+names has gone, as after `scoop update`, the launcher finds JETCARP on your `PATH`, where Scoop
+keeps the current version, and that run puts its own path in the record. A record naming
 a program that is still there is left alone, so a second copy of JETCARP, such as one you built
 yourself, never takes the entry over: run `jetcarp launcher install` with the one you want the
 entry to start, or again if you move the program by hand. Scoop adds a *JETCARP* entry

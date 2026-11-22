@@ -55,7 +55,7 @@ const STRATEGIES: &[(&str, &str)] = &[
     ),
     (
         "explore",
-        "The broad search over tilings, rule families, rules and seeds (search_runs reads its runs). It keeps the best runs of each kind of behaviour and breeds from them, storing every run in the job's own database. Not deterministic: a resumed search continues from its archive.",
+        "The broad search over tilings, rule families, rules and seeds (search_runs reads its runs). It keeps the best runs of each kind of behaviour and breeds from them, storing every run in the job's own database. Not reproducible: what it finds depends on the computer (speed, threads, GPU), though each run it stores replays exactly; a resumed search continues from its archive.",
     ),
 ];
 
