@@ -55,11 +55,15 @@ mod tests {
         assert_eq!((icon.width, icon.height), (256, 256));
         assert_eq!(icon.rgba.len(), 256 * 256 * 4);
         let px = |x: usize, y: usize| &icon.rgba[(y * 256 + x) * 4..][..4];
-        // The rounded square's corners are transparent, its outline black, inside it white.
-        assert_eq!(px(0, 0)[3], 0);
-        assert_eq!(px(128, 1), [0, 0, 0, 255]);
-        assert_eq!(px(128, 12), [255, 255, 255, 255]);
-        assert_eq!(px(12, 128), [255, 255, 255, 255]);
+        // Whatever the drawing: a rounded tile, so its corners are transparent and its middle
+        // opaque, with more than one colour on it (the drawing is read, not a blank square).
+        for (x, y) in [(0, 0), (255, 0), (0, 255), (255, 255)] {
+            assert_eq!(px(x, y)[3], 0, "corner ({x}, {y})");
+        }
+        assert_eq!(px(128, 128)[3], 255);
+        let colours: std::collections::HashSet<&[u8]> =
+            icon.rgba.chunks(4).filter(|p| p[3] == 255).collect();
+        assert!(colours.len() > 1, "one colour only");
         // The same picture each time, decoded once.
         assert!(Arc::ptr_eq(&icon, &window_icon()));
     }
