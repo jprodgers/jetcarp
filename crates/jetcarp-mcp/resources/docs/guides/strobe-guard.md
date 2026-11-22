@@ -19,8 +19,8 @@ deliberate confirmation ([Turning it off](#turning-it-off)).
 The guard measures what reaches the screen, never what a rule "should" do. A field that flips every
 generation (a Margolus Tron background, say), run at twice the frame rate, shows the same phase in
 every frame and does not flash at all; a slow rule with a bright palette can. Each frame is reduced to tiles of 16 by 16 pixels, each with its mean
-brightness and its mean "redness", worked out on the GPU where the frame is drawn there and on the
-processor otherwise.
+brightness, its mean "redness" and its mean colour, and its fine pattern ([below](#fine-patterns)),
+worked out on the GPU where the frame is drawn there and on the processor otherwise.
 
 The definitions are those of WCAG 2.2's success criterion 2.3.1, *Three Flashes or Below Threshold*
 ([W3C 2024](../research/bibliography.md#w3c2024wcag22);
@@ -32,10 +32,18 @@ The definitions are those of WCAG 2.2's success criterion 2.3.1, *Three Flashes 
   `0.2126 R + 0.7152 G + 0.0722 B`, from 0 (black) to 1 (white).
 - **A transition** is a change of brightness of at least 0.1 in one direction, where the darker of
   its two states is below 0.8. **A flash** is a pair of opposite transitions.
-- **A red transition** is the same for saturated red (red at least 80% of red, green and blue
-  together): a change of at least 20 in `(R - G - B) × 320`. This is the working definition WCAG
-  2.0 gives ([W3C 2008](../research/bibliography.md#w3c2008wcag20)), which PEAT and IRIS use.
-  WCAG 2.2 gives a newer one, a change in chromaticity, which the guard does not use.
+- **A red transition** is counted by either of WCAG's two definitions: if either calls it a red
+  flash, it is one. WCAG 2.0's working definition
+  ([W3C 2008](../research/bibliography.md#w3c2008wcag20)), which PEAT and IRIS use, is the same as
+  a transition, for saturated red (red at least 80% of red, green and blue together): a change of
+  at least 20 in `(R - G - B) × 320`. WCAG 2.2's
+  ([W3C 2024](../research/bibliography.md#w3c2024wcag22)) is a change of more than 0.2 in
+  chromaticity, on the CIE 1976 UCS diagram, to or from a saturated red: red to a green or a grey of
+  the same brightness, say, which 2.0's measure may barely see. The guard measures it on each
+  tile's mean colour, counts a run of change once however slowly it goes, and counts one red
+  transition in a frame where both definitions see one. It counts WCAG 2.2's only on tiles, by the
+  area rule: on a dark ground the whole screen's mean colour has the chromaticity of whatever is
+  lit, however little of it, so the screen's mean is tracked by 2.0's measure alone.
 - **More than three flashes in any one second fail**: more than six transitions in a sliding
   window of one second. Two or three flashes a second is a warning, and a warning that lasts four
   seconds out of five fails too: IRIS's *extended failure*. PEAT warns of long flashing below the
@@ -59,11 +67,27 @@ allows.
 A flash is an area changing together, so a tile's transition counts only when at least two of the
 eight tiles around it made the same transition within the same few frames. A field, a large square
 or a band flipping counts; a soup of small cells flickering at random changes neighbouring tiles
-independently, and does not. A tile counts what changes its mean, so a checkerboard of squares
-smaller than a tile reversing in step keeps every tile's mean, and the guard does not count it as
-a flash. WCAG does, unless the squares are smaller than 0.1° (under 3 pixels at the distance
-assumed above): the guard catches such a checkerboard only as a stripe pattern, once it covers
-more than a quarter of the screen.
+independently, and does not.
+
+<a id="fine-patterns"></a>**Fine patterns.** A checkerboard of squares smaller than a tile, reversing
+in step, keeps every tile's mean brightness, though every pixel of it changes by as much as its
+squares differ. WCAG counts it as flashing unless the squares are smaller than 0.1° (under 3 pixels
+at the distance assumed above), and so does the guard. Besides its mean, each tile keeps its fine
+pattern: which of its windows of 4 by 4 pixels, one every 2 pixels across and down (49 in a tile),
+are clearly lighter or darker than the tile as a whole (by at least a tenth of the difference
+between its light and dark pixels). A window of 4 pixels holds whole periods of a checkerboard of 1-
+or 2-pixel squares, so such a board leaves every window at the tile's mean and shows no pattern at
+all, wherever it lies; squares of 3 pixels and more leave windows lighter and darker, at any offset.
+When at least nine in ten of the windows clear in this frame and in the tile's last clear one have
+changed sides, its pattern has turned into its own negative, and if its light and dark pixels
+differ by at least 0.1 (the darker below 0.8), every pixel of it has made a transition: the tile
+makes one, counted with its other transitions, where neighbouring tiles reverse together, by the
+same area rule. A reversal counts once, whether sudden or a fade. The same is done for
+"redness". So a board of squares from 3 pixels up, larger squares half a tile off the tiles' grid
+(whose tiles straddle squares evenly), and a stripe pattern that reverses, count as flashing
+wherever they cover a quarter of a 10° field, long before they cover a quarter of the screen. A
+soup's cells change a few at a time, so its tiles' patterns never turn into their negatives: Life
+soups from 1 to 16 pixels a cell, still lifes, gliders and blinkers are read as before.
 
 **Stripes.** Regular high-contrast stripes can trigger seizures as flashes can (ITU-R BT.1702,
 [ITU-R 2023](../research/bibliography.md#itu2023bt1702); Ofcom's guidance on flashing images and
@@ -108,6 +132,14 @@ Strong stripes are **veiled** where they are found: blended towards a dim grey (
 0.18) until their contrast is 0.04, below what counts. The veil comes on over an eighth of a
 second, well within the half second stripes are allowed, and stays for a second and a half after
 they go, so it never flashes itself.
+
+A [fine pattern](#fine-patterns) that reverses keeps its tiles' mean brightness, so softening, which
+limits how fast that mean may change, cannot calm it. Where fine patterns flash on their own over a
+quarter of a 10° field, the tiles that reverse and those around them are veiled too, at once rather
+than over an eighth of a second (coming on, the veil changes each pixel once, as the next reversal
+would have), and the veil goes as it does for stripes. The scene is slowed as any flashing scene
+is, and once it no longer flashes, the veil lets go. A few tiles reversing now and then, as
+Hodgepodge's waves do when the whole field swings, are left to the softening and the slowing.
 
 The guard changes only what is shown and how fast generations are shown. A world computes the same
 generations whatever the guard does, and a scene's hash is the same.
@@ -245,7 +277,8 @@ The softened version is, when showing each frame up to four times longer brings 
 one flash a second and it has no strong stripes, the animation slowed: every frame stays as drawn,
 so an oscillator's few phases do not blur into one.
 Otherwise it is the guard's softening carried out on the frames: every tile that flashes anywhere in
-the loop is softened throughout, and stripes are veiled where they were found; the softener goes
+the loop is softened throughout, fine patterns that reverse are veiled where they flash, and stripes
+are veiled where they were found; the softener goes
 round the loop twice and keeps the second time, so the end flows into the start. What is saved is
 what is checked: a GIF has at most 256 colours, and squeezing a fade into them could turn it back
 into a flip, so the saved file is read back and checked again. If it still fails, each frame is
@@ -256,13 +289,17 @@ Since 0.4.3 the strobe guard is part of every animation's render key, so `jetcar
 
 ## What it costs
 
-Measuring is one read of each frame on the GPU, in a compute pass. On an AMD Radeon 8060S it takes
-0.02 ms a frame at 1920 × 1080 (0.1% of a 60 Hz frame) and 0.08 ms at 3840 × 2160; on a weak
-integrated GPU, which reads memory perhaps a tenth as fast, it should stay near 1 to 2% of a frame
-at 1080p. Softening costs more, 0.1 ms a frame at 1080p on the same GPU, but only while it acts.
-The stripe check takes about 3 ms of one processor core for a 1080p frame, four times a second. On
-a surface the guard cannot read in place, each frame is drawn into a texture and copied to the
-screen.
+Measuring is one read of each frame on the GPU, in a compute pass, fine patterns and colours
+included. On an AMD Radeon 8060S it takes 0.07 ms a frame at 1920 × 1080 (0.4% of a 60 Hz frame)
+and 0.29 ms at 3840 × 2160 (1.7%); with neither it took 0.03 and 0.11 ms. On a weak integrated
+GPU, perhaps a tenth as fast, it should stay under 5% of a frame at 1080p (not yet measured). Its
+readings come back to the processor, 80 bytes a tile (2.6 MB a frame at 3840 × 2160), in about
+0.15 ms. Counting the transitions in them takes the processor about 0.45 ms a frame at
+3840 × 2160 (0.23 ms with neither), for the frames as drawn and again as shown, and up to 1.3 ms
+while the whole screen flashes. Softening costs more, 0.15 ms a frame at 1080p on the same GPU,
+but only while it acts. The stripe check takes about 3 ms of one processor core for a 1080p frame,
+four times a second. On a surface the guard cannot read in place, each frame is drawn into a
+texture and copied to the screen.
 
 ## What it cannot do
 
@@ -270,7 +307,18 @@ screen.
   picture (its brightness, its contrast, any motion smoothing).
 - It assumes a viewing distance and a pixel size. Watching from closer than 40 cm, or on a screen
   with larger pixels than 96 an inch at its scale factor, makes a 10° field fewer pixels than it
-  assumes.
+  assumes. On a screen with a scale factor above 1, a fine pattern of 3-pixel squares counts,
+  though there they are under 0.1°: stricter than WCAG.
+- It counts a fine pattern flashing when the pattern turns into its own negative. A pattern that
+  changes only in part, a soup of small cells or a field of blinkers, counts only where it changes
+  its tiles' mean brightness. Measured pixel by pixel, with no tiles, WCAG's definition counts more
+  of such flicker: by that measure a Life soup at 30 generations a second flashes more than three
+  times a second at every cell size from 1 to 16 pixels (under 3 pixels, WCAG's exception for a
+  fine, balanced pattern may apply), where the guard counts it from about 8 pixels a cell.
+- It measures WCAG 2.2's red flashes on each tile's mean colour. On a dark ground a tile's colour
+  is that of its few lit pixels, so a small red flicker counts for its whole tile: stricter than
+  WCAG. A fine pattern of reds and greens of one brightness reversing is counted by WCAG 2.0's
+  measure only.
 - It acts on a frame or two of readings: a scene that starts flashing shows a few transitions
   before the softening starts. It starts at two, so even then what reaches the screen stays at
   three flashes a second or fewer.

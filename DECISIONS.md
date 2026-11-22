@@ -340,6 +340,20 @@ is dated more closely than that.
   not being in v0.4.0."
 - **Stands.**
 
+### D-46. The strobe guard is never more lenient than any tool
+
+- **Decided:** Jimmie, 21 November 2026.
+- **The decision:** "keep the strictest definition. If any tool says it's a flash, it's a flash."
+  Asked first about the red flash, where WCAG 2.0's working definition (which PEAT and IRIS use)
+  and WCAG 2.2's differ ([#270](https://github.com/jprodgers/jetcarp/issues/270)): the guard counts
+  a red flash by either. A reversing checkerboard of squares smaller than the guard's tiles, which
+  WCAG counts and IRIS passes, is counted too ([#269](https://github.com/jprodgers/jetcarp/issues/269)).
+- **How it's kept:** the guard is compared with IRIS on a corpus of recordings (#150), and may be
+  stricter than IRIS, never more lenient.
+- **Claude's part:** found both gaps while citing the guard's sources for the book audit (#267),
+  and offered keeping WCAG 2.0's definition, moving to 2.2's, or counting either.
+- **Stands.** It applies D-21 to how the guard measures.
+
 ### D-22. Nothing is collected about users, ever
 
 - **Decided:** Jimmie. Written down in these words 18 November 2026.

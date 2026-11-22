@@ -1,10 +1,14 @@
 //! The stripe check (#147): regular, high-contrast stripes, which can trigger seizures as flashes
-//! can (ITU-R BT.1702; the Harding guidance; IRIS's pattern check).
+//! can (ITU-R BT.1702-3; Ofcom's guidance on flashing images and regular patterns; IRIS's pattern
+//! check).
 //!
 //! The guidance describes a harmful pattern as clearly discernible stripes, more than five
 //! light-dark pairs of them, in any orientation, filling a large part of the screen: more than a
-//! quarter when they move, flicker or reverse, more than 40% when still. IRIS uses a quarter
-//! either way, and so does JETCARP, so a still pattern counts as soon as a moving one would. The
+//! quarter when they move, flicker or reverse, more than 40% when still (Ofcom's rule, which
+//! BT.1702-3 gives as informative guidance). IRIS uses a quarter either way, and so does JETCARP,
+//! so a still pattern counts as soon as a moving one would. A fine pattern that reverses is a flash
+//! as well, wherever it is over a quarter of a 10° field (WCAG 2.3.1; [`super::flash`]), so the
+//! flash meter counts that one long before it covers a quarter of the screen. The
 //! stripes may be straight or not, and made of rows of separate elements (a checkerboard, dots).
 //!
 //! **How it is measured.** The half-resolution luminance image of the frame ([`LumImage`]) is

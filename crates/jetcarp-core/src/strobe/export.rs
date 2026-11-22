@@ -13,9 +13,10 @@
 //! shows strong stripes for half a second.
 //!
 //! **The softened version** ([`soften`]) is the guard's softening carried out on the frames: every
-//! tile that flashes anywhere in the loop is softened throughout, and stripes are veiled where they
-//! were found. The softener runs over the loop twice and keeps the second pass, so the end flows
-//! into the start.
+//! tile that flashes anywhere in the loop is softened throughout, fine patterns that reverse
+//! (which softening a tile's mean cannot calm, [`super::flash`]) are veiled, and stripes are veiled
+//! where they were found. The softener runs over the loop twice and keeps the second pass, so the
+//! end flows into the start.
 //!
 //! **The guard's choice** ([`guard`]): when showing each frame up to [`MAX_SLOWER`] times longer
 //! brings it to one flash a second (and it has no strong stripes), the animation is slowed: every
@@ -27,7 +28,7 @@
 use super::Viewing;
 use super::flash::{FlashMeter, FlashReading, Level};
 use super::frame::reduce_both;
-use super::guard::{PATTERN_EVERY, veil_for};
+use super::guard::{PATTERN_EVERY, fine_veil, veil_for};
 use super::pattern::{PatternLevel, PatternMeter, PatternReading};
 use super::soften::{Plan, Softener};
 use crate::render::Image;
@@ -221,21 +222,29 @@ pub fn soften(frames: &[Image], delay_ms: u32, at_risk: bool) -> Vec<Image> {
     for (k, i) in looped(frames.len(), delay_ms).enumerate() {
         let t = k as f64 * dt;
         let (map, half) = reduce_both(&frames[i].rgba, w, h);
-        flash.update(&map, t);
+        // Fine patterns that flash by the area rule themselves are veiled as well, as the guard
+        // veils them: softening a tile's mean cannot calm them.
+        let fine_flashing = flash.update(&map, t).fine_transitions >= 2;
         let (cols, rows) = flash.tiles();
-        for (j, (&c, &r)) in flash
+        for (j, ((&c, &r), &fine)) in flash
             .tile_counts()
             .iter()
             .zip(flash.tile_red_counts())
+            .zip(flash.tile_fine_counts())
             .enumerate()
         {
             if c >= 2 || r >= 2 {
+                let veil = (fine_flashing && fine > 0).then(|| fine_veil(&map, j));
                 let (x, y) = ((j as u32 % cols) as i64, (j as u32 / cols) as i64);
                 for dy in -1..=1 {
                     for dx in -1..=1 {
                         let (xx, yy) = (x + dx, y + dy);
                         if xx >= 0 && yy >= 0 && (xx as u32) < cols && (yy as u32) < rows {
-                            plan.soften[(yy as u32 * cols + xx as u32) as usize] = true;
+                            let k = (yy as u32 * cols + xx as u32) as usize;
+                            plan.soften[k] = true;
+                            if let Some(v) = veil.filter(|v| v[0] > plan.veil[k][0]) {
+                                plan.veil[k] = v;
+                            }
                         }
                     }
                 }

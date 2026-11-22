@@ -196,7 +196,26 @@ with the guard already on.
   and just under, the darker state at 0.8, a flashing square just under and just over a quarter of
   the 10° field, a strip larger than that area that never fills a quarter of a field, a view smaller
   than the field, red flashes apart from general ones, the sliding one-second window, the extended
-  failure, and checkerboards reversing.
+  failure, and checkerboards reversing. **Fine patterns** (#269,
+  `crates/jetcarp-core/tests/strobe_checkerboard.rs`): a checkerboard of squares from 3 to 32
+  pixels (from just over 0.1° to twice a tile, either side of the tile's 16) at five offsets from
+  the tiles' grid, reversing 4, 6 and 10 times a second over 6% of half a 1080p screen (over twice a
+  quarter of the 10° field, far under a quarter of the screen), must read as many transitions as it
+  reverses, a warning at 4 and 6 and a failure at 10; grey squares 0.114 apart in luminance flash
+  and squares under 0.09 apart do not, nor light squares whose darker state is 0.8 or more; and
+  squares of 1 and 2
+  pixels, under 0.1°, are exempt at every offset. These tests were written first and failed before
+  the fix (the tiles' means alone counted none of them, nor 16- to 32-pixel squares half a tile off
+  the grid). Ordinary scenes must read exactly as they did without the fine patterns: Life soups at
+  2 to 16 pixels a cell, a soup's ash (still lifes and blinkers) at 4 and 30 generations a second,
+  and fields of blocks, gliders and blinkers. **Red flashes by either definition** (#270,
+  `crates/jetcarp-core/tests/strobe_red.rs`): a pair of colours only WCAG 2.0's red measure counts
+  (two reds of one chromaticity, 135 apart in the measure), one only WCAG 2.2's counts (a dark red
+  and a dark green, 0.33 apart in chromaticity and 14.5 in the measure), and one both count (red
+  and a grey of its brightness), none of them a general flash, each fail at ten flashes a second,
+  and the guard keeps each to at most three red transitions a second on screen; WCAG 2.2's red
+  flashes keep the area rule, a square just under a quarter of the 10° field passing and one just
+  over failing. These were written first too, and the one only 2.2 counts failed before the fix.
 - **The stripe check** is tested on stripes of every orientation from 4 to 128 pixels a pair,
   checkerboards and rows of dots, which it must find; and on noise, random cells of 2 to 16 pixels,
   faint cell outlines, low contrast and bright stripes, which it must not.
@@ -204,10 +223,18 @@ with the guard already on.
   the guard says, read back a few frames late. A field flipping every frame is softened and then
   slowed and never shows more than three flashes a second, at any frame rate; flashing that slowing
   cannot stop is paused; small flashing and slow fades are left alone; switched off, it does
-  nothing.
+  nothing. A small reversing checkerboard (squares of 4 to 12 pixels, 7 to 30 generations a second)
+  is veiled and slowed, and what is shown, measured pixel by pixel as WCAG defines a flash (no
+  tiles), makes at most 4 transitions in any second, where unguarded it makes 7 or 8; on the GPU
+  (`the_gpu_guard_keeps_a_small_reversing_checkerboard_under_the_limit`), at most 3.
 - **The GPU and the processor agree**, on any driver (CI runs this on Mesa's llvmpipe as well as
   the test machines' GPUs): the GPU's tile maps and half-resolution image match the processor's
-  to the rounding of the sums, and its softened frames byte for byte. The GPU decodes pixels with
+  to the rounding of the sums, and its softened frames byte for byte; so do the tiles' mean colours,
+  as drawn and as shown, and each of the three red pairs above fails on the GPU's measure as on the
+  processor's. The tiles' fine patterns
+  match bit for bit, but for a window whose mean is exactly the threshold away from its tile's in
+  exact arithmetic (a frame of a few colours can make one), which the test recomputes and allows.
+  The GPU decodes pixels with
   the processor's own tables, not the texture unit's sRGB decoding, which differs by driver, and
   makes the red measure's saturation test in whole numbers: the measure steps from 0 to over 100
   there, so a pixel decoded a little differently could move a tile's mean by a whole step (it did,
@@ -218,7 +245,8 @@ with the guard already on.
   warning's example, which fails at 60 generations a second, is a warning at 30 and passes at 15),
   the Tron field just under and just over the rate (six and seven generations a second, and six
   for long enough to be the extended failure) and the area (shown 112 and 128 pixels across),
-  striped scenes (still stripes, a reversing checkerboard of squares smaller than a tile),
+  striped scenes (still stripes, and a checkerboard of 8-pixel squares reversing 15 times a
+  second, which since #269 fails for flashing as well),
   ordinary scenes (a Life soup, Brian's Brain, a maze, Greenberg-Hastings waves) and still fields
   with thin lines over them (white live cells at a fractional size, where seams would show, and
   with cell outlines at 8 and 16 pixels a cell; Paper's light ground with scattered cells and
@@ -316,12 +344,12 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 | `desktop-off-seeds-soup` | fail (pattern) | 0 / 0 | 297 | fail (flash) | fail (flash, stripes) | 8 / 0 |
 | `desktop-off-stripes-still` | pass | 1 / 0 | 0 | fail (stripes) | fail (stripes) | 1 / 0 |
 | `desktop-off-tron-blob` | fail (flash, pattern) | 31 / 0 | 53 | fail (flash, stripes) | fail (flash, stripes) | 8 / 0 |
-| `desktop-off-tron-checkerboard` | pass | 0 / 0 | 0 | fail (stripes) | fail (stripes) | 0 / 0 |
+| `desktop-off-tron-checkerboard` | pass | 0 / 0 | 0 | fail (flash, stripes) | fail (flash, stripes) | 8 / 0 |
 | `desktop-off-tron-field` | fail (flash) | 60 / 0 | 0 | fail (flash) | fail (flash) | 8 / 0 |
 | `desktop-off-tron-red` | fail (flash, red) | 37 / 37 | 0 | fail (flash, red) | fail (flash, red) | 8 / 8 |
 | `desktop-on-brians-brain` | pass | 1 / 0 | 0 | pass | fail (stripes) | 2 / 0 |
 | `desktop-on-cyclic-waves` | fail (pattern) | 1 / 0 | 24 | pass | fail (stripes) | 2 / 0 |
-| `desktop-on-hodgepodge` | pass | 1 / 0 | 0 | pass | fail (stripes) | 2 / 0 |
+| `desktop-on-hodgepodge` | pass | 2 / 0 | 0 | pass | fail (stripes) | 3 / 0 |
 | `desktop-on-life-soup` | pass | 0 / 0 | 0 | pass | fail (stripes) | 2 / 0 |
 | `desktop-on-live-field-4.37px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
 | `desktop-on-live-field-7.7px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
@@ -329,7 +357,7 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 | `desktop-on-seeds-soup` | fail (pattern) | 0 / 0 | 122 | pass | fail (stripes) | 2 / 0 |
 | `desktop-on-stripes-still` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
 | `desktop-on-tron-blob` | pass | 3 / 0 | 0 | pass | fail (stripes) | 3 / 0 |
-| `desktop-on-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
+| `desktop-on-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 3 / 0 |
 | `desktop-on-tron-field` | pass | 3 / 0 | 0 | pass | pass | 3 / 0 |
 | `desktop-on-tron-red` | pass | 2 / 3 | 0 | pass | pass | 3 / 3 |
 | `desktop-risk-brians-brain` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
@@ -342,7 +370,7 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 | `desktop-risk-seeds-soup` | pass | 0 / 0 | 0 | pass | pass | 1 / 0 |
 | `desktop-risk-stripes-still` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
 | `desktop-risk-tron-blob` | pass, warning | 5 / 0 | 0 | pass, warning | pass, warning | 4 / 0 |
-| `desktop-risk-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
+| `desktop-risk-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 3 / 0 |
 | `desktop-risk-tron-field` | pass | 3 / 0 | 0 | pass | pass | 3 / 0 |
 | `desktop-risk-tron-red` | pass | 2 / 3 | 0 | pass | pass | 3 / 3 |
 | `view-off-live-field-outlined-12px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
@@ -372,9 +400,21 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 **Flashes**: no misses. IRIS fails four recordings for flashing (the Tron field, in grey and in
 red, Tron from a blob, and Hodgepodge at 60 generations a second), and JETCARP fails all four.
 With either guard on, IRIS passes every recording for flashing (Tron from a blob with the at-risk
-guard on is a warning, a pass). One false alarm: the Seeds soup, whose flicker JETCARP counts by
+guard on is a warning, a pass). Two false alarms: the Seeds soup, whose flicker JETCARP counts by
 its area rule, a quarter of a 10° field (about 0.7% of a 1080p screen), where IRIS takes the mean
-of the whole frame. That difference is deliberate.
+of the whole frame; and since #269 the reversing checkerboard, whose frame mean never changes
+though every pixel flashes, which WCAG counts (its 8-pixel squares are over 0.1°) and JETCARP
+counts by its tiles' fine patterns. Both differences are deliberate. The comparison was run again
+for #269 with the fine patterns in: IRIS's verdicts did not change on any recording, and every
+recording with the guard on is as before, to a byte's rounding (a pixel's value may move by one,
+as the GPU tests allow), but two: the checkerboard, now veiled where it reverses as well as where
+its stripes are; and Hodgepodge with the usual guard, whose tiles' fine patterns reverse when the
+whole field swings, which now count where its tiles' means do not move, so the guard paces it
+differently. It was run once more for #270, with red flashes counted by WCAG 2.2's chromaticity as
+well as WCAG 2.0's measure: every recording came out the same, byte for byte, and every verdict
+with it. The red flashes the corpus has (the Tron field in red-orange, against black, which has no
+chromaticity) are WCAG 2.0's, which IRIS counts too; by either definition JETCARP is never more
+lenient than IRIS.
 
 **Patterns, for someone at risk**: no misses, and with the at-risk guard on IRIS passes all 22
 recordings, the Seeds soup, the Greenberg-Hastings waves and the Paper field among them, for
