@@ -23,6 +23,8 @@ big enough computer gets the same result from the same scene, as JETCARP promise
 | Memory, and how much is free | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` and the virtual memory statistics |
 | The processor and its cores | `/proc/cpuinfo` | the registry's processor name | `sysctl machdep.cpu.brand_string` |
 | GPU memory | `mem_info_vram_total` and `mem_info_gtt_total` under `/sys/class/drm`, which AMD's driver writes (other drivers' GPUs are estimated) | DXGI's dedicated and shared memory | one pool shared with the processor |
+| How busy the processor is, as it measures | `/proc/stat`, less its own time from `/proc/self/stat` | `GetSystemTimes`, less its own from `GetProcessTimes` | `host_statistics`, less its own from `getrusage` |
+| How busy the GPU is, as it measures | AMD's `gpu_busy_percent`; NVIDIA's management library (NVML, `libnvidia-ml.so.1`, which NVIDIA's driver installs); for Intel's and other drivers' GPUs, DRM `fdinfo`: each program's GPU time, in `/proc/<pid>/fdinfo` | the `\GPU Engine(*)\Utilization Percentage` counters (PDH), which every vendor's driver gives and Task Manager shows | each `IOAccelerator`'s `PerformanceStatistics`, `Device Utilization %` (IOKit, what `ioreg -r -d 1 -c IOAccelerator` shows), with no administrator rights |
 
 A GPU whose memory the system does not report gets its limit from its buffer limits and a cautious
 share of the memory reserved for JETCARP, said as an estimate. On a computer whose firmware sets
@@ -225,9 +227,17 @@ in the [memory pool](#sharing-the-pool).
   counts its busy time, less the measuring program's own. An idle desktop keeps a few percent busy;
   a game, a video call, a build or another simulation keeps a quarter or more. The parts on every
   core lose about the share others take, so at 15% they read about 15% low.
-- **A busy GPU**: 25% or more, where its driver says how busy it is (on Linux, AMD's
-  `gpu_busy_percent`). The figure counts the desktop's own drawing, so its threshold is higher.
-  Other GPUs, and Windows and macOS, give no figure, so only the processor is looked at there.
+- **A busy GPU**: 25% or more of its time, on Windows, macOS and Linux, whatever its make
+  ([What JETCARP reads](#what-jetcarp-reads) says from where). The figure is the busiest GPU's
+  busiest drawing or compute engine: a game or another simulation keeps it far above, while a
+  video decoded or a copy runs on engines of its own and is not counted. It counts the desktop's
+  own drawing, so its threshold is higher. Windows' counters and `fdinfo` leave the measuring
+  program's own drawing out; AMD's, NVIDIA's and macOS's figures are the whole GPU's.
+  - `fdinfo` sees only the programs you may read, so another user's (a second login's game) are
+    not seen; the i915 and xe drivers' own counters would see them, but need administrator rights.
+  - Where the GPU's load can't be read (an NVIDIA GPU on Linux without its management library, or
+    a system that gives no figure), the result says *GPU load not read*, and why. That never
+    stops the measuring, nor marks it as taken under load.
 
 The load is looked at once JETCARP has held still, for up to five seconds while it stays over a
 threshold (a job's step under way ends first). Then the app's *This computer* window and setup's
@@ -238,8 +248,10 @@ never asks: it says what it found and measures anyway, so scripts carry on.
 
 **A score measured anyway is marked as taken under load**, in the result, in `machine.json` and in
 the report, beside the score. Its `conditions` say other programs' share of the processor (`cpu`,
-0 to 1) and the GPU's busy figure (`gpu`) as the measuring started, the JETCARP programs that held
-still (`paused`) and those that couldn't (`not_paused`), and `under_load`. Such a score is likely
+0 to 1) and the GPU's busy figure (`gpu`) as the measuring started, where the GPU's figure came
+from (`gpu_load_source`: `pdh` on Windows, `iokit` on macOS, `amdgpu`, `nvml` or `fdinfo` on Linux)
+or why it wasn't read (`gpu_not_read`), the JETCARP programs that held still (`paused`) and those
+that couldn't (`not_paused`), and `under_load`. Such a score is likely
 lower than the computer's. **The limits never come from the score**: they come from the hardware
 and your own values, so a score taken under load leaves them as they were. Fit to this computer's
 first guesses, which do come from the score's parts, skip a score taken under load, as they skip a
@@ -263,7 +275,7 @@ Nothing is drawn or sent anywhere.
 JETCARP Hardware Score: 1,234 (score v1, 2026-11-21 14:05, JETCARP 0.4.3)
   Life soups on the hat                    processor (16 threads)     402 soups/s
   ...
-  taken with the computer quiet (other programs 3% of the processor, the GPU 1% busy)
+  taken with the computer quiet (other programs 3% of the processor, the GPU 1% busy, from AMD's gpu_busy_percent)
 Kept in ~/.config/jetcarp/machine.json
 Report: report.md
 Report: report.json

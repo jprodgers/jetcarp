@@ -803,14 +803,22 @@ day later (0.4.2: 17 November here, 18 November there).
   computer* used to leave the world paused). Before measuring, each says plainly that games,
   video, builds and other simulations lower the score, and asks for them to be closed. A JETCARP
   program that can't hold still (`jetcarp run`, a script, another measuring) is named, and so is a
-  processor busy with something else (other programs at 15% or more of it) or, where Linux's
-  driver says, a GPU at 25% or more: the app and setup wait and measure once it has gone, with
+  processor busy with something else (other programs at 15% or more of it) or a GPU at 25% or
+  more, read on Windows (its GPU engine counters, every vendor's), macOS (IOKit's
+  `Device Utilization %`) and Linux (AMD's `gpu_busy_percent`, NVIDIA's NVML, or DRM `fdinfo` for
+  Intel and others), with where it was read kept beside the score, or *GPU load not read* and why:
+  the app and setup wait and measure once it has gone, with
   *Measure anyway*; `jetcarp score` asks in a terminal whether to wait, and otherwise measures
   anyway and says so, so scripts never wait on a question. A score measured anyway is marked as
   taken under load, with what was found, in the result, `machine.json` and the report; the limits
   never came from the score and are unchanged, and Fit to this computer's first guesses skip such
   a score. ([While it measures](../guides/this-computer.md#while-it-measures),
   [#301](https://github.com/jprodgers/jetcarp/issues/301))
+- **Setup says what measuring is for.** Its measuring page, `jetcarp setup` and its plan said
+  measuring gave the computer "limits that fit it", but the limits come from the hardware and your
+  own values, never the score. They now say the JETCARP Hardware Score is for comparing computers
+  and for Fit to this computer's first guess.
+  ([First run](../getting-started/first-run.md), [#301](https://github.com/jprodgers/jetcarp/issues/301))
 - **`jetcarp score`'s progress reads in a log.** With its output going to a file or a pipe, its
   steps ran together on one line, ended by a terminal's erase code. Each step is now a line of its
   own, with no escape codes; in a terminal the line is still redrawn in place. `jetcarp library

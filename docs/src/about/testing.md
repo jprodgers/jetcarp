@@ -86,6 +86,17 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   answers on the processor, and on the GPU where there is one (Mesa's software renderer in CI), and
   a device with a wrong answer must be left out of the score. CI checks the answers, never the
   speed: no test depends on how fast the machine is.
+- **The load before measuring.** The GPU's load is read from a different place on each system, so
+  each reader's arithmetic is tested on every system from fixtures (`jetcarp-core`'s
+  `machine::gpu_load`): a list of Windows' GPU engine counters from a machine with an NVIDIA and an
+  Intel GPU (each engine's processes summed, video and copy engines and the measuring program's
+  own left out), two IOAccelerator `PerformanceStatistics` dictionaries as `ioreg` prints them (an
+  Apple GPU's `Device Utilization %`, an older driver's `GPU Activity(%)`), `fdinfo` of amdgpu,
+  i915 and xe clients a second apart (engine time in nanoseconds, and xe's cycles), and NVML
+  stand-ins (three GPUs, one of which can't say). A live reading must give a figure between 0 and
+  1 and say where from, or say why there is none; on Linux with an AMD GPU it must give one.
+  Whether a busy GPU is noticed is checked by hand in the sittings on each system, since CI's
+  runners have no GPU to keep busy.
 - **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
   person's own values, the two linked memory values and the ceilings; a world over the limit is
   refused before anything is built, naming the limit and where it came from. The memory each kind
