@@ -217,6 +217,11 @@ struct Letter {
     fail_share: f32,
     /// The same with two or more (a flash a second).
     flash_share: f32,
+    /// The most transitions in the last second that more than a quarter of some field made, among
+    /// the pixels that made one in this frame: WCAG's "flashes occurring concurrently" read
+    /// strictly (general or red). The verdict is the stricter reading above; for a period-2 field
+    /// the two agree, since all of its flipping pixels flip together.
+    concurrent: u8,
 }
 
 impl Letter {
@@ -226,6 +231,7 @@ impl Letter {
             red: self.red.max(o.red),
             fail_share: self.fail_share.max(o.fail_share),
             flash_share: self.flash_share.max(o.flash_share),
+            concurrent: self.concurrent.max(o.concurrent),
         }
     }
     fn most(&self) -> u8 {
@@ -263,12 +269,14 @@ impl Wcag {
         let lin = self.lin;
         let mut lum_c = vec![0u8; self.px.len()];
         let mut red_c = vec![0u8; self.px.len()];
+        let mut now_c = vec![0u8; self.px.len()];
         let (any_lum, any_red) = self
             .px
             .par_iter_mut()
             .zip(rgba.par_chunks_exact(4))
             .zip(lum_c.par_iter_mut().zip(red_c.par_iter_mut()))
-            .map(|((p, c), (lc, rc))| {
+            .zip(now_c.par_iter_mut())
+            .map(|(((p, c), (lc, rc)), nc)| {
                 let v = values(&lin, c);
                 let l = p.lum.update(v.lum, 0.1, Some(0.8));
                 if l {
@@ -282,6 +290,8 @@ impl Wcag {
                 }
                 *lc = p.lum_t.count(t);
                 *rc = p.red_t.count(t);
+                // Concurrent: the pixels that made a transition in this frame.
+                *nc = (if l { *lc } else { 0 }).max(if r20 || r22 { *rc } else { 0 });
                 (l, r20 || r22)
             })
             .reduce(|| (false, false), |a, b| (a.0 || b.0, a.1 || b.1));
@@ -289,11 +299,17 @@ impl Wcag {
         let none = (0, 0.0, 0.0);
         let (general, gf, g2) = if any_lum { self.area(&lum_c) } else { none };
         let (red, rf, r2) = if any_red { self.area(&red_c) } else { none };
+        let concurrent = if any_lum || any_red {
+            self.area(&now_c).0
+        } else {
+            0
+        };
         Letter {
             general,
             red,
             fail_share: gf.max(rf),
             flash_share: g2.max(r2),
+            concurrent,
         }
     }
 
@@ -747,7 +763,7 @@ fn letter_verdict(l: &Letter, cell_px: f64) -> String {
 
 fn print_row(r: &Row) {
     println!(
-        "| {} | {} | {} | {} | {} | {:.0}% | {:.0}% | {} ({}) | {} ({}: area {}, fine {}, screen {}) | {} (guard {}) | {:.0}%{} | {:.0}% | {}{} |",
+        "| {} | {} | {} | {} | {} | {:.0}% | {:.0}% | {} ({}) | {} ({}: area {}, fine {}, partial {}, screen {}) | {} (guard {}) | {:.0}%{} | {:.0}% | {}{} |",
         r.name,
         if r.window { "window" } else { "screen" },
         r.cell_px,
@@ -756,11 +772,12 @@ fn print_row(r: &Row) {
         r.p2 * 100.0,
         r.letter.fail_share * 100.0,
         letter_verdict(&r.letter, r.cell_px),
-        r.letter.most(),
+        format!("{}, concurrent {}", r.letter.most(), r.letter.concurrent),
         level_name(r.drawn.worst()),
         r.drawn.most(),
         r.drawn.area_transitions.max(r.drawn.red_transitions),
         r.drawn.fine_transitions,
+        r.drawn.partial_transitions,
         r.drawn.screen_transitions,
         r.shown_letter.most(),
         r.shown,
@@ -810,8 +827,9 @@ fn motif_case(name: &str, px: f64, palette: &'static str, speed: f64) -> Case {
     }
 }
 
-/// Ordinary scenes at `px` pixels a cell: a field of still lifes, of gliders slow and fast, a Life
-/// soup, and its ash (still lifes and a few blinkers), slow and fast.
+/// Ordinary scenes at `px` pixels a cell: a field of still lifes, just drawn and once its cells'
+/// colours have settled (a cell's colour follows its age, to 400 generations), of gliders slow and
+/// fast, a Life soup, and its ash (still lifes and a few blinkers), slow and fast.
 fn ordinary(px: f64, palette: &'static str) -> Vec<Case> {
     let need = |v: u32| (v as f64 / px).ceil() as u32 + 2;
     let (w, h) = (need(VW), need(VH));
@@ -840,10 +858,20 @@ fn ordinary(px: f64, palette: &'static str) -> Vec<Case> {
     let glider = [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)];
     let soup = r#"{"random": {"density": 0.35}}"#;
     let (ash, _) = ash("B3/S23", px, palette, 1500, 11);
+    let blocks = world(w, h, "B3/S23", palette, &tiled(4, &block), 1);
+    let mut settled = blocks.clone();
+    for _ in 0..400 {
+        settled.step();
+    }
     vec![
         case(
-            "still lifes (blocks, every 4 cells)",
-            world(w, h, "B3/S23", palette, &tiled(4, &block), 1),
+            "still lifes (blocks, every 4 cells), just drawn",
+            blocks,
+            30.0,
+        ),
+        case(
+            "still lifes (blocks, every 4 cells), settled",
+            settled,
             30.0,
         ),
         case(
@@ -899,7 +927,7 @@ fn the_guard_counts_dense_period_2_fields() {
         .map(|r| {
             format!(
                 "{}, {} px a cell, {}: reference {} ({:.0}% of a field), guard {:?} ({} transitions: \
-                 area {}, fine {})",
+                 area {}, partial {})",
                 r.name,
                 r.cell_px,
                 r.palette,
@@ -908,7 +936,7 @@ fn the_guard_counts_dense_period_2_fields() {
                 r.drawn.worst(),
                 r.drawn.most(),
                 r.drawn.area_transitions,
-                r.drawn.fine_transitions
+                r.drawn.partial_transitions
             )
         })
         .collect();
@@ -962,28 +990,33 @@ fn through_the_guard_dense_period_2_fields_stay_under_the_limit() {
 }
 
 /// What must be left alone: sparser period-2 fields, which the reference passes (a blinker every
-/// 5 cells, 16% of the area; beacons, 8%), and ordinary scenes (still lifes, gliders, a Life soup
-/// and its ash). The guard never veils them, and it never counts still lifes or slow scenes as
-/// flashing at all.
+/// 5 cells, 16% of the area, at 7 pixels a cell and more; beacons, 8%), and ordinary scenes (still
+/// lifes, gliders, a Life soup and its ash). The guard never veils one where the reference counts
+/// no flash, and never counts a slow scene, or still lifes whose colours have settled, as flashing
+/// at all. (Still lifes just drawn, in a palette whose colours pass through a saturated red as the
+/// cells age, flash red once together, which the reference counts: the guard may act on that.)
 #[test]
 fn sparse_period_2_fields_and_ordinary_scenes_are_left_alone() {
     let mut cases = vec![];
     for (px, pal) in [(4.0, "Ember"), (6.0, "Paper"), (8.0, "Thermal")] {
-        cases.push(motif_case("blinkers, every 5", px, pal, 30.0));
         cases.push(motif_case("beacons", px, pal, 30.0));
         cases.extend(ordinary(px, pal));
+    }
+    for (px, pal) in [(8.0, "Ember"), (8.0, "Thermal"), (12.0, "Paper")] {
+        cases.push(motif_case("blinkers, every 5", px, pal, 30.0));
     }
     let rows: Vec<Row> = cases.par_iter().map(|c| run(c, 3.0)).collect();
     let wrong: Vec<String> = rows
         .iter()
         .filter(|r| {
-            let slow_or_still = r.speed < 7.0 || r.name.starts_with("still");
-            r.veiled > 0.0 || (slow_or_still && r.drawn.worst() != Level::Pass)
+            let slow_or_still = r.speed < 7.0 || r.name.contains("settled");
+            (r.veiled > 0.0 && r.letter.most() < 2)
+                || (slow_or_still && (r.drawn.worst() != Level::Pass || r.veiled > 0.0))
         })
         .map(|r| {
             format!(
                 "{} at {} gen/s, {} px a cell, {}: veiled {:.0}%, reference {}, guard {:?} ({}: \
-                 area {}, fine {})",
+                 area {}, partial {})",
                 r.name,
                 r.speed,
                 r.cell_px,
@@ -993,11 +1026,78 @@ fn sparse_period_2_fields_and_ordinary_scenes_are_left_alone() {
                 r.drawn.worst(),
                 r.drawn.most(),
                 r.drawn.area_transitions,
-                r.drawn.fine_transitions
+                r.drawn.partial_transitions
             )
         })
         .collect();
     assert!(wrong.is_empty(), "left alone, but:\n{}", wrong.join("\n"));
+}
+
+/// The densest field of each kind, pinned (#275): at 4 pixels a cell (the app's display's
+/// default) and 8 (the command line's), in the default palette, in a window, 30 generations a
+/// second. For each, whether the reference fails it, pixel by pixel, and whether the guard's
+/// meter does, as drawn. Blinkers 4 cells apart flip a quarter of the area, which a field of
+/// 4-pixel cells is over by a hair wherever a field of vision falls across more of their rows; at
+/// 8 pixels a cell the cells' outlines keep part of each cell still, and the field flips a fifth,
+/// which the guard, counting its windows a little larger than they are
+/// ([`jetcarp_core::strobe::flash::WINDOW_MARGIN`]), counts as flashing: stricter than WCAG. They
+/// agree on every other one. A regression either way moves a pin.
+const PINS: &[(&str, f64, bool, bool)] = &[
+    ("blinkers, every 5", 4.0, false, false),
+    ("blinkers, every 5", 8.0, false, false),
+    ("beacons", 4.0, false, false),
+    ("beacons", 8.0, false, false),
+    ("blinkers, 4 by 4", 4.0, true, true),
+    ("blinkers, 4 by 4", 8.0, false, true),
+    ("blinker pairs", 4.0, true, true),
+    ("blinker pairs", 8.0, false, true),
+    ("toads", 4.0, true, true),
+    ("toads", 8.0, true, true),
+    ("clocks", 4.0, true, true),
+    ("clocks", 8.0, true, true),
+    ("agar, 50%", 4.0, true, true),
+    ("agar, 50%", 8.0, true, true),
+    ("agar, 55%", 4.0, true, true),
+    ("agar, 55%", 8.0, true, true),
+    ("agar, 73%", 4.0, true, true),
+    ("agar, 73%", 8.0, true, true),
+    ("Venetian blinds", 4.0, true, true),
+    ("Venetian blinds", 8.0, true, true),
+];
+
+#[test]
+fn the_densest_period_2_fields_are_pinned() {
+    let rows: Vec<(Row, bool, bool)> = PINS
+        .par_iter()
+        .map(|&(name, px, letter, guard)| {
+            (
+                run(&motif_case(name, px, "Ember", 30.0), 1.5),
+                letter,
+                guard,
+            )
+        })
+        .collect();
+    let moved: Vec<String> = rows
+        .iter()
+        .filter(|(r, letter, guard)| {
+            (r.letter.fails(), r.drawn.worst().fails()) != (*letter, *guard)
+        })
+        .map(|(r, letter, guard)| {
+            format!(
+                "{}, {} px a cell: reference fails {} ({}, {:.0}% of a field), guard fails {} \
+                 ({:?}, {}); pinned {letter}, {guard}",
+                r.name,
+                r.cell_px,
+                r.letter.fails(),
+                r.letter.most(),
+                r.letter.fail_share * 100.0,
+                r.drawn.worst().fails(),
+                r.drawn.worst(),
+                r.drawn.most()
+            )
+        })
+        .collect();
+    assert!(moved.is_empty(), "pins moved:\n{}", moved.join("\n"));
 }
 
 /// The study's table (ignored; run with `--ignored --nocapture`): every field at every cell size
@@ -1093,5 +1193,89 @@ fn ash_of_the_named_rules() {
     out.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
     for (s, r) in out {
         println!("{r}: {:.1}% of cells period 2", s * 100.0);
+    }
+}
+
+/// How well the tiles' windows stand for the pixels that change (ignored; `--ignored
+/// --nocapture`, cases in `JETCARP_P2_CASES` as `name|cell px|palette;...`, `soup` and
+/// `gliders` for ordinary scenes): over the frames that change, the share of the view's pixels
+/// that changed by 0.1 or more since the frame before, and the share the guard counts for its
+/// tiles' changes ([`Change`]), and its windows' alone.
+#[test]
+#[ignore]
+fn windows_against_pixels() {
+    use jetcarp_core::strobe::flash::{Change, window_share};
+    use jetcarp_core::strobe::{DARK_LIMIT, FLASH_DELTA};
+    let specs = std::env::var("JETCARP_P2_CASES").unwrap_or("toads|16|Thermal".into());
+    for spec in specs.split(';') {
+        let p: Vec<&str> = spec.split('|').collect();
+        let pal: &'static str = Box::leak(p[2].to_string().into_boxed_str());
+        let cell: f64 = p[1].parse().unwrap();
+        let c = match p[0] {
+            "soup" => ordinary(cell, pal)
+                .into_iter()
+                .find(|c| c.name == "Life soup")
+                .unwrap(),
+            "gliders" => ordinary(cell, pal)
+                .into_iter()
+                .find(|c| c.name.starts_with("gliders") && c.speed > 10.0)
+                .unwrap(),
+            name => motif_case(name, cell, pal, 30.0),
+        };
+        let mut world = c.world.clone();
+        let start = world.generation;
+        let mut change = vec![];
+        let mut last: Option<Vec<f32>> = None;
+        let lin: [f64; 256] = std::array::from_fn(|i| lin(i as u8));
+        let (mut sum, mut est, mut frames, mut most, mut most_est) =
+            (0f64, [0f64; 4], 0, 0f64, [0f64; 4]);
+        for k in 0..90u32 {
+            let due = (k as f64 * c.speed / FPS + 1e-9).floor() as u64;
+            while world.generation - start < due {
+                world.step();
+            }
+            let px = draw(&world, &c);
+            let map = reduce(&px, VW, VH);
+            if change.len() != map.len() {
+                change = vec![Change::default(); map.len()];
+            }
+            let lum: Vec<f32> = px.chunks_exact(4).map(|q| values(&lin, q).lum).collect();
+            let changed = last.as_ref().map_or(0, |l| {
+                l.iter()
+                    .zip(&lum)
+                    .filter(|(a, b)| (*a - *b).abs() >= 0.1)
+                    .count()
+            });
+            let mut e = [0f64; 4];
+            for i in 0..map.len() {
+                let c = change[i].compare(map.lum[i], &map.fine[i], FLASH_DELTA, Some(DARK_LIMIT));
+                let px = map.tile_px(i) as f64;
+                // The share the guard counts, and the windows' alone.
+                e[0] += c.share as f64 * px;
+                e[1] += window_share(c.mask) as f64 * px;
+            }
+            last = Some(lum);
+            let n = (VW * VH) as f64;
+            if changed > 0 {
+                frames += 1;
+                sum += changed as f64 / n;
+                most = most.max(changed as f64 / n);
+                for j in 0..4 {
+                    est[j] += e[j] / n;
+                    most_est[j] = most_est[j].max(e[j] / n);
+                }
+            }
+        }
+        let f = frames.max(1) as f64;
+        println!(
+            "{spec}: pixels changed {:.1}% (most {:.1}%); the guard's share {:.1}% ({:.1}%), the \
+             windows' alone {:.1}% ({:.1}%)",
+            100.0 * sum / f,
+            100.0 * most,
+            100.0 * est[0] / f,
+            100.0 * most_est[0],
+            100.0 * est[1] / f,
+            100.0 * most_est[1]
+        );
     }
 }

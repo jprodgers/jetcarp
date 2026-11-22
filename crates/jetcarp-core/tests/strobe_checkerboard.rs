@@ -418,12 +418,19 @@ fn readings(maps: &[TileMap]) -> (FlashReading, FlashReading, u32) {
 
 /// Ordinary scenes do not flash by their fine patterns: a soup's cells change a few at a time,
 /// still lifes and gliders keep their shapes, and a blinker's two phases are not each other's
-/// negative. The meter reads every one as it did before #269.
+/// negative. The meter reads every one as it did before #269, except a field of blinkers
+/// flipping 30 times a second: since #275 the tiles' windows that flip back and forth count as
+/// flashing (`strobe_period2.rs`), and over a field of small cells, a blinker every 5 of them
+/// (16% of the area flipping, under WCAG's quarter), they count more than flips: stricter than
+/// WCAG.
 #[test]
 fn ordinary_scenes_are_read_as_before() {
     let (vw, vh) = (320, 240);
     let mut moved = vec![];
-    for o in ordinary(vw, vh, &[2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0]) {
+    for o in ordinary(vw, vh, &[2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0])
+        .into_iter()
+        .filter(|o| !(o.name.contains("blinkers") && o.speed > 7.0))
+    {
         let maps: Vec<TileMap> = frames(&o, vw, vh, 3.0)
             .iter()
             .map(|f| reduce(f, vw, vh))

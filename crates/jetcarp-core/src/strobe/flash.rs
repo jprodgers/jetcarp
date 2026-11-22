@@ -40,6 +40,28 @@
 //! tiles reverse together, as above. A soup's cells change a few at a time, and its tiles' patterns
 //! never turn into their negatives; the same is done for the red measure.
 //!
+//! **Partial change** (#275). A field of period-2 oscillators whose two phases are not each
+//! other's negative (blinkers, toads, clocks, denser agars) flips part of each tile every
+//! generation: a tile's mean may not move, and its fine pattern does not reverse, but WCAG counts
+//! each of its flipping pixels as flashing. So each tile's windows are also compared with the
+//! frame before ([`Change`]): a window that changed sides, its light and dark parts a transition's
+//! change apart, made a transition of the pixels under it; so did the light or dark windows of a
+//! tile that went from one brightness to a pattern or back (a cell appearing on a dark tile), and
+//! the whole of a tile whose one brightness changed. A window's change the same way as its last
+//! continues that run, as a transition is counted once a run. The changes count where the tile
+//! oscillates, back where it was two, three or four changes before (a soup's tiles seldom are, as
+//! their cells change a few at a time and at different moments), and where neighbouring tiles
+//! changed too; each window's are kept with their times ([`Flips`]). WCAG counts the area of
+//! flashes occurring concurrently, so in each frame the area rule counts the share of each tile
+//! under the windows that changed in that frame and `k` times in the last second, alongside the
+//! tiles' own transitions: over a grid of windows that do not overlap, the one that changed most
+//! ([`window_share`]), but no more than the tile's light part for windows that came into it and
+//! its dark part for those that left it ([`Change::compare`]), counted [`WINDOW_MARGIN`] larger, so
+//! that a field over the quarter never reads under it. Where the tile's mean moved much less than
+//! its changing windows ([`PARTIAL`]),
+//! softening its mean cannot calm them: the area rule over those alone is
+//! [`FlashReading::partial_transitions`], and the guard veils them.
+//!
 //! **Red, by either definition** (#270). A tile's red transitions are WCAG 2.0's (its mean red
 //! measure, tracked as luminance is) and WCAG 2.2's (its mean colour's chromaticity moving more than
 //! [`RED_CHROMA_DELTA`] from where its run began, to or from a saturated red: [`ChromaTracker`]),
@@ -48,7 +70,7 @@
 //! mean colour on a dark ground has the chromaticity of whatever is lit, however small, so it
 //! would count a flicker of a few pixels as the whole screen's.
 
-use super::frame::{Fine, TileMap};
+use super::frame::{FINE_SIDE, FINE_SIG, Fine, TileMap};
 use super::{
     AREA_SHARE, DARK_LIMIT, EXTENDED_SECONDS, EXTENDED_WINDOW, FLASH_DELTA, MAX_TRANSITIONS,
     RED_CHROMA_DELTA, RED_DELTA, Viewing, WARN_TRANSITIONS,
@@ -116,6 +138,342 @@ impl FineRef {
         });
         self.last = Some(*f);
         reversed
+    }
+}
+
+/// The windows of one of [`FINE_SIDE`] by [`FINE_SIDE`], every other one across and down from
+/// the first in a row (`gx`) and in a column (`gy`): windows that do not overlap.
+const fn grid(gx: u32, gy: u32) -> u64 {
+    let mut m = 0u64;
+    let mut y = gy;
+    while y < FINE_SIDE {
+        let mut x = gx;
+        while x < FINE_SIDE {
+            m |= 1 << (y * FINE_SIDE + x);
+            x += 2;
+        }
+        y += 2;
+    }
+    m
+}
+
+/// The four grids of windows that do not overlap (4 pixels apart, at each of the four offsets).
+const GRIDS: [u64; 4] = [grid(0, 0), grid(1, 0), grid(0, 1), grid(1, 1)];
+
+/// Every window.
+pub const ALL_WINDOWS: u64 = (1 << (FINE_SIDE * FINE_SIDE)) - 1;
+
+/// The share of a tile the windows `mask` stand for: the most of any grid of windows that do not
+/// overlap, as a share of that grid's windows (so windows that overlap count once).
+pub fn window_share(mask: u64) -> f32 {
+    GRIDS
+        .iter()
+        .map(|g| (mask & g).count_ones() as f32 / g.count_ones() as f32)
+        .fold(0.0, f32::max)
+}
+
+/// The share of a tile its windows' changes stand for, counted this much larger: 4-pixel windows
+/// are coarser than the lines they miss (the outlines a light palette darkens beside a lit cell,
+/// cells of 3 pixels), and a field just over WCAG's quarter must not read under it (#275). A
+/// sparse field of small cells, a sixth of it flipping, may read as more than a quarter.
+pub const WINDOW_MARGIN: f32 = 1.3;
+
+/// A tile's windows changed "in part" when its mean moved less than this share of what they
+/// moved: softening (which limits how fast a tile's mean changes) holds a tile's flipping pixels
+/// to three transitions a second only where they are all of it, and to four where they are three
+/// quarters of it.
+pub const PARTIAL: f32 = 0.75;
+
+/// A tile's windows compared with the frame before (#275): which windows' pixels made a
+/// transition since then.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Change {
+    /// The frame before: the tile's mean and its fine pattern.
+    last: Option<(f32, Fine)>,
+    /// Each window whose last change was up, and down: a change the same way again continues
+    /// the same run, and is not another transition.
+    up: u64,
+    down: u64,
+    /// The tile's states after its last few changes, oldest first: its mean, and its windows
+    /// clear and above.
+    states: [(f32, u64, u64); CYCLE + 1],
+    n: u8,
+}
+
+/// The longest cycle of changes a tile may go round to count as oscillating ([`Change`]).
+pub const CYCLE: usize = 4;
+
+/// What [`Change::compare`] found in a frame: the windows whose pixels made a transition, a bit
+/// each as in [`Fine`]; the share of the tile they stand for; whether the tile's mean moved less
+/// than [`PARTIAL`] of what they did (softening its mean could not calm them); and whether the
+/// tile is back where it was `cycle` changes before (0 if not).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Changed {
+    pub mask: u64,
+    pub share: f32,
+    pub partial: bool,
+    pub cycle: u32,
+}
+
+impl Change {
+    /// Takes a frame's mean and fine pattern ([`Changed`]): the windows whose pixels made a
+    /// transition since the frame before, a change of at least `delta` (the darker state below
+    /// `dark` if given) the other way from their last one.
+    ///
+    /// - Both frames have a clear pattern: the windows that changed sides, from the dark part to
+    ///   the light or back, where the light and dark parts are `delta` apart. A window that
+    ///   changed sides only because the tile's mean moved past it is not counted.
+    /// - One of them is of one brightness (a dark tile where a cell appeared, say): the other's
+    ///   light windows, where its light part is `delta` from that brightness, and its dark ones
+    ///   likewise.
+    /// - Both are of one brightness: every window, where it changed by `delta`.
+    ///
+    /// The share is the windows' ([`window_share`]), but no more than the light part of the tile
+    /// for windows that came into it, and the dark part for those that went into that: a window
+    /// a cell appeared in part of is counted, and the cell is no larger for it.
+    pub fn compare(&mut self, mean: f32, f: &Fine, delta: f32, dark: Option<f32>) -> Changed {
+        if self.last == Some((mean, *f)) {
+            return Changed::default();
+        }
+        let Some((m0, f0)) = self.last.replace((mean, *f)) else {
+            self.push((mean, f.sig, f.sign));
+            return Changed::default();
+        };
+        let clear = |f: &Fine| f.sig.count_ones() >= FINE_MIN && f.contrast() >= delta * FINE_CLEAR;
+        // Two values a transition apart, the darker below the limit; a hair under counts.
+        let apart =
+            |a: f32, b: f32| (a - b).abs() >= delta - 1e-5 && dark.is_none_or(|l| a.min(b) < l);
+        // The share of a tile's pixels in its light part.
+        let light = |m: f32, f: &Fine| {
+            if f.light > f.dark {
+                ((m - f.dark) / (f.light - f.dark)).clamp(0.0, 1.0)
+            } else {
+                0.0
+            }
+        };
+        let (s0, s1) = (light(m0, &f0), light(mean, f));
+        // The windows that went up and down, the most of the tile each can be, and the most any
+        // of them moved.
+        let (mut up, mut down, mut most_up, mut most_down, mut size) =
+            (0u64, 0u64, 0f32, 0f32, 0f32);
+        let mut moved = |mask: u64, from: f32, to: f32, part: f32| {
+            if mask != 0 && apart(from, to) {
+                if to > from {
+                    up |= mask;
+                    most_up += part;
+                } else {
+                    down |= mask;
+                    most_down += part;
+                }
+                size = size.max((to - from).abs());
+            }
+        };
+        match (clear(&f0), clear(f)) {
+            (true, true) => {
+                let both = f.sig & f0.sig;
+                // How far a window surely moved, beyond the tile's mean moving.
+                let slack = FINE_SIG * (f.contrast() + f0.contrast());
+                if mean - m0 + slack > 0.0 {
+                    moved(both & !f0.sign & f.sign, f0.dark, f.light, s1.min(1.0 - s0));
+                }
+                if m0 - mean + slack > 0.0 {
+                    moved(both & f0.sign & !f.sign, f0.light, f.dark, s0.min(1.0 - s1));
+                }
+            }
+            (false, true) => {
+                moved(f.sig & f.sign, m0, f.light, s1);
+                moved(f.sig & !f.sign, m0, f.dark, 1.0 - s1);
+            }
+            (true, false) => {
+                moved(f0.sig & f0.sign, f0.light, mean, s0);
+                moved(f0.sig & !f0.sign, f0.dark, mean, 1.0 - s0);
+            }
+            (false, false) => moved(ALL_WINDOWS, m0, mean, 1.0),
+        }
+        // A window's change the same way as its last continues that run.
+        let (new_up, new_down) = (up & !self.up, down & !self.down);
+        self.up = (self.up | up) & !down;
+        self.down = (self.down | down) & !up;
+        let mask = new_up | new_down;
+        if mask == 0 {
+            return Changed::default();
+        }
+        let share = (window_share(new_up).min(most_up) + window_share(new_down).min(most_down))
+            .min(window_share(mask))
+            .min(1.0);
+        // Back where it was two, three or four changes ago: the tile is oscillating.
+        self.push((mean, f.sig, f.sign));
+        let now = self.states[self.n as usize - 1];
+        // The same state: its mean within half a transition, and its windows clear in both on
+        // the same sides, but a tenth of them (cells that stay ageing in their colours meanwhile).
+        let same = |a: (f32, u64, u64), b: (f32, u64, u64)| {
+            let both = a.1 & b.1;
+            let differ = ((a.2 ^ b.2) & both).count_ones();
+            (a.0 - b.0).abs() <= 0.5 * delta && differ as f32 <= 0.1 * both.count_ones() as f32
+        };
+        let cycle = (2..=CYCLE)
+            .find(|&p| self.n as usize > p && same(now, self.states[self.n as usize - 1 - p]))
+            .unwrap_or(0);
+        Changed {
+            mask,
+            share,
+            partial: (mean - m0).abs() < PARTIAL * size,
+            cycle: cycle as u32,
+        }
+    }
+
+    fn push(&mut self, state: (f32, u64, u64)) {
+        if self.n as usize == self.states.len() {
+            self.states.rotate_left(1);
+            self.n -= 1;
+        }
+        self.states[self.n as usize] = state;
+        self.n += 1;
+    }
+}
+
+/// A tile's windows that changed ([`Change`]) in the last second, with when, so that the windows
+/// that changed `k` times can be told; and which changed in the latest frame read.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Flips {
+    times: [f64; RING],
+    masks: [u64; RING],
+    /// Each change in part of the tile ([`PARTIAL`]); each made where neighbouring tiles changed
+    /// too; and each counted, a part of the tile's oscillation; a bit each.
+    partial: u8,
+    coherent: u8,
+    counted: u8,
+    n: u8,
+    /// The windows that changed in the latest frame (none if none counted), the share of the
+    /// tile they stand for, and whether in part of it.
+    now: u64,
+    now_share: f32,
+    now_partial: bool,
+    /// Each window's counted changes in the last second, as four bit planes of a count (of all
+    /// changes, and of those in part of the tile), and the most of any window.
+    planes: [[u64; 4]; 2],
+    most: [u8; 2],
+}
+
+impl Flips {
+    /// Takes the windows changing at `t` (none, for the latest frame's; `t` never decreasing), as
+    /// [`Change`] found them, made where neighbouring tiles changed too or not. The changes of a
+    /// cycle, made with neighbouring tiles, are counted: the tile is flashing. Changes made a second
+    /// or more before `t` are forgotten.
+    pub fn commit(&mut self, t: f64, changed: Changed, coherent: bool) {
+        let Changed {
+            mask,
+            share,
+            partial,
+            cycle,
+        } = changed;
+        self.now = 0;
+        self.now_share = share;
+        self.now_partial = partial;
+        // Forget what is over a second old (as a transition's count does, [`Tracker::count`]),
+        // and the oldest change if there is no room.
+        while self.n > 0
+            && (self.times[0] <= t - 1.0 + 1e-6 || (mask != 0 && self.n as usize == RING))
+        {
+            self.times.rotate_left(1);
+            self.masks.rotate_left(1);
+            self.partial >>= 1;
+            self.coherent >>= 1;
+            self.counted >>= 1;
+            self.n -= 1;
+        }
+        if mask != 0 {
+            let k = self.n as usize;
+            let bit = 1u8 << k;
+            self.times[k] = t;
+            self.masks[k] = mask;
+            self.partial = (self.partial & !bit) | ((partial as u8) << k);
+            self.coherent = (self.coherent & !bit) | ((coherent as u8) << k);
+            self.counted &= !bit;
+            self.n += 1;
+            if cycle > 0 {
+                // The changes of the cycle, this one and those before it.
+                for j in (k + 1).saturating_sub(cycle as usize)..=k {
+                    self.counted |= self.coherent & (1 << j);
+                }
+            }
+            if self.counted & bit != 0 {
+                self.now = mask;
+            }
+        }
+        if self.counted == 0 {
+            (self.planes, self.most) = ([[0; 4]; 2], [0, 0]);
+        } else {
+            for p in [false, true] {
+                let planes = self.count(p);
+                self.planes[p as usize] = planes;
+                self.most[p as usize] = (1..=RING as u32)
+                    .rev()
+                    .find(|&k| Self::at_least(planes, k) != 0)
+                    .unwrap_or(0) as u8;
+            }
+        }
+    }
+
+    /// Each window's counted changes (only those in part of the tile, if `partial`), as four bit
+    /// planes of a count.
+    fn count(&self, partial: bool) -> [u64; 4] {
+        let mut p = [0u64; 4];
+        for k in 0..self.n as usize {
+            if self.counted >> k & 1 == 1 && (!partial || self.partial >> k & 1 == 1) {
+                let mut carry = self.masks[k];
+                for b in p.iter_mut() {
+                    let c = *b & carry;
+                    *b ^= carry;
+                    carry = c;
+                }
+            }
+        }
+        p
+    }
+
+    /// The windows that changed at least `k` times (1 to [`RING`]).
+    fn at_least(p: [u64; 4], k: u32) -> u64 {
+        let [b0, b1, b2, b3] = p;
+        match k {
+            0 => !0,
+            1 => b0 | b1 | b2 | b3,
+            2 => b1 | b2 | b3,
+            3 => (b0 & b1) | b2 | b3,
+            4 => b2 | b3,
+            5 => (b2 & (b0 | b1)) | b3,
+            6 => (b2 & b1) | b3,
+            7 => (b2 & b1 & b0) | b3,
+            _ => b3,
+        }
+    }
+
+    /// The share of the tile under windows that changed in the latest frame and at least `k`
+    /// times in the last second (only changes in part of the tile, if `partial`), counted
+    /// [`WINDOW_MARGIN`] larger.
+    pub fn share(&self, k: u32, partial: bool) -> f32 {
+        if self.now == 0 || (partial && !self.now_partial) {
+            return 0.0;
+        }
+        let all = window_share(self.now);
+        let some = window_share(self.now & Self::at_least(self.planes[partial as usize], k));
+        if all > 0.0 {
+            (self.now_share * some / all * WINDOW_MARGIN).min(1.0)
+        } else {
+            0.0
+        }
+    }
+
+    /// The most times any window changed in the last second (only changes in part of the tile,
+    /// if `partial`).
+    pub fn most(&self, partial: bool) -> u32 {
+        self.most[partial as usize] as u32
+    }
+
+    /// Whether it holds any change, or one in the latest frame: a frame with no change must still
+    /// be taken, to forget old ones.
+    pub fn held(&self) -> bool {
+        self.n > 0 || self.now != 0
     }
 }
 
@@ -326,6 +684,10 @@ pub struct FlashReading {
     /// The area rule over the tiles' fine-pattern reversals alone (general and red, whichever is
     /// more): what a tile's mean cannot see.
     pub fine_transitions: u32,
+    /// The area rule over the tiles' windows that changed where the tile's mean moved much less
+    /// than they did (#275; general and red, whichever is more): what softening a tile's mean
+    /// cannot calm.
+    pub partial_transitions: u32,
     /// Red flashes: the same for red, by either of WCAG's definitions (2.0's red measure, 2.2's
     /// chromaticity).
     pub red_transitions: u32,
@@ -412,6 +774,22 @@ pub struct FlashMeter {
     /// Each tile's fine-pattern reversals in the last second, of luminance or red, whichever is
     /// more.
     fine_counts: Vec<u8>,
+    /// Each tile's windows compared with the frame before (#275), of luminance and of the red
+    /// measure; the windows that changed, with when; and each tile's latest change, counted or
+    /// not, for coherence.
+    change: Vec<Change>,
+    red_change: Vec<Change>,
+    /// Each tile's means and fine patterns as last seen, to tell at once that it has not changed.
+    seen: Vec<Option<(f32, Fine, f32, Fine)>>,
+    /// Each tile's most changes of one window in the last second, among those its mean moved
+    /// much less than: what the guard veils.
+    partial_counts: Vec<u8>,
+    /// The same for all of its windows' changes.
+    change_counts: Vec<u8>,
+    flips: Vec<Flips>,
+    red_flips: Vec<Flips>,
+    flips_raw: Vec<f64>,
+    red_flips_raw: Vec<f64>,
     /// Each tile's colour, for WCAG 2.2's red transitions; its latest one, counted or not, for
     /// coherence; those counted (their times); and how many in the last second.
     chroma: Vec<ChromaTracker>,
@@ -452,6 +830,15 @@ impl FlashMeter {
             chroma_raw: vec![],
             chroma_times: vec![],
             chroma_counts: vec![],
+            change: vec![],
+            red_change: vec![],
+            seen: vec![],
+            partial_counts: vec![],
+            change_counts: vec![],
+            flips: vec![],
+            red_flips: vec![],
+            flips_raw: vec![],
+            red_flips_raw: vec![],
             last: FlashReading::default(),
         }
     }
@@ -494,6 +881,21 @@ impl FlashMeter {
         &self.fine_counts
     }
 
+    /// Each tile's windows' changes (#275) counted in the last second, the most of any one window,
+    /// among those where the tile's mean moved much less than they did (of luminance or of the red
+    /// measure, whichever made more): flashing softening a tile's mean cannot calm, so the guard
+    /// veils it.
+    pub fn tile_partial_counts(&self) -> &[u8] {
+        &self.partial_counts
+    }
+
+    /// Each tile's windows' changes counted in the last second, the most of any one window (of
+    /// luminance or of the red measure): a tile whose mean changes with its neighbours' in turn,
+    /// one up as the next goes down, is flashing as much as one whose mean changes with theirs.
+    pub fn tile_change_counts(&self) -> &[u8] {
+        &self.change_counts
+    }
+
     /// Tiles across and down, as of the last frame.
     pub fn tiles(&self) -> (u32, u32) {
         (self.cols, self.rows)
@@ -523,6 +925,15 @@ impl FlashMeter {
             self.chroma_raw = vec![f64::NEG_INFINITY; n];
             self.chroma_times = vec![Tracker::default(); n];
             self.chroma_counts = vec![0; n];
+            self.change = vec![Change::default(); n];
+            self.seen = vec![None; n];
+            self.red_change = vec![Change::default(); n];
+            self.partial_counts = vec![0; n];
+            self.change_counts = vec![0; n];
+            self.flips = vec![Flips::default(); n];
+            self.red_flips = vec![Flips::default(); n];
+            self.flips_raw = vec![f64::NEG_INFINITY; n];
+            self.red_flips_raw = vec![f64::NEG_INFINITY; n];
         }
         let dt = self.last_t.map_or(0.0, |l| (t - l).clamp(0.0, 1.0));
         self.last_t = Some(t);
@@ -532,6 +943,8 @@ impl FlashMeter {
         let mut now_fine = vec![false; n];
         let mut now_red_fine = vec![false; n];
         let mut now_chroma = vec![false; n];
+        let mut now_flips = vec![Changed::default(); n];
+        let mut now_red_flips = vec![Changed::default(); n];
         // A map made without fine patterns or colours (by hand, in tests) has none to compare.
         let has_fine = map.fine.len() == n && map.red_fine.len() == n;
         let has_rgb = map.rgb.len() == n;
@@ -552,6 +965,26 @@ impl FlashMeter {
                 }
                 if now_red_fine[i] {
                     self.red_fine_raw[i] = t;
+                }
+                // A tile as it was in the last frame has not changed (most tiles, most frames):
+                // known from a compact copy, without reading its changes' history.
+                let seen = (map.lum[i], map.fine[i], map.red[i], map.red_fine[i]);
+                if self.seen[i] != Some(seen) {
+                    self.seen[i] = Some(seen);
+                    now_flips[i] = self.change[i].compare(
+                        map.lum[i],
+                        &map.fine[i],
+                        FLASH_DELTA,
+                        Some(DARK_LIMIT),
+                    );
+                    now_red_flips[i] =
+                        self.red_change[i].compare(map.red[i], &map.red_fine[i], RED_DELTA, None);
+                }
+                if now_flips[i].mask != 0 {
+                    self.flips_raw[i] = t;
+                }
+                if now_red_flips[i].mask != 0 {
+                    self.red_flips_raw[i] = t;
                 }
             }
             if has_rgb {
@@ -624,12 +1057,35 @@ impl FlashMeter {
             if chroma {
                 self.chroma_times[i].commit(t);
             }
+            // Windows that changed, counted where the tile oscillates and neighbouring tiles
+            // changed too.
+            // (A tile that did not change and holds no changes is left as it is.)
+            for (flips, raw, now) in [
+                (&mut self.flips[i], &self.flips_raw, now_flips[i]),
+                (
+                    &mut self.red_flips[i],
+                    &self.red_flips_raw,
+                    now_red_flips[i],
+                ),
+            ] {
+                if now.mask != 0 || flips.held() {
+                    let coherent = now.mask != 0 && agree_fine(raw, i) >= COHERENT;
+                    flips.commit(t, now, coherent);
+                }
+            }
         }
         let (mut any, mut any_red, mut any_fine, mut any_chroma) = (false, false, false, false);
+        let (mut any_flips, mut any_red_flips) = (false, false);
         for i in 0..n {
             let c = self.lum[i].count(t) as u8;
             let r = self.red[i].count(t) as u8;
             let f = self.fine[i].count(t).max(self.red_fine[i].count(t)) as u8;
+            self.partial_counts[i] =
+                self.flips[i].most(true).max(self.red_flips[i].most(true)) as u8;
+            self.change_counts[i] =
+                self.flips[i].most(false).max(self.red_flips[i].most(false)) as u8;
+            any_flips |= self.flips[i].now != 0;
+            any_red_flips |= self.red_flips[i].now != 0;
             let h = self.chroma_times[i].count(t) as u8;
             self.counts[i] = c;
             self.red_counts[i] = r;
@@ -659,26 +1115,40 @@ impl FlashMeter {
             .update((mr * share) as f32, t, RED_DELTA, RED_EPSILON, None);
         let screen_transitions = self.screen_lum.count(t);
         let screen_red = self.screen_red.count(t);
-        let (area, flash_share) = if any {
-            self.area_rule(map, &self.counts)
+        // A tile's transitions count its whole area; a tile with fewer counts the pixels under
+        // its windows that changed in this frame, `k` times in the last second (#275).
+        let flips = [(&self.flips[..], false)];
+        let red_flips = [(&self.red_flips[..], false)];
+        let (area, flash_share) = if any || any_flips {
+            self.area_rule(map, &self.counts, if any_flips { &flips } else { &[] })
         } else {
             (0, 0.0)
         };
-        let (red_area, red_share) = if any_red {
-            self.area_rule(map, &self.red_counts)
+        let (red_area, red_share) = if any_red || any_red_flips {
+            self.area_rule(
+                map,
+                &self.red_counts,
+                if any_red_flips { &red_flips } else { &[] },
+            )
         } else {
             (0, 0.0)
         };
         // A tile's fine-pattern reversals are among its transitions, so they count over the area
-        // only where its transitions do.
+        // only where its transitions do; so do its windows' changes.
         let fine_transitions = if any_fine && (area > 0 || red_area > 0) {
-            self.area_rule(map, &self.fine_counts).0
+            self.area_rule(map, &self.fine_counts, &[]).0
+        } else {
+            0
+        };
+        let partial = [(&self.flips[..], true), (&self.red_flips[..], true)];
+        let partial_transitions = if (any_flips || any_red_flips) && (area > 0 || red_area > 0) {
+            self.area_rule(map, &vec![0; n], &partial).0
         } else {
             0
         };
         // The same for WCAG 2.2's red transitions, among the red ones.
         let chroma_transitions = if any_chroma && red_area > 0 {
-            self.area_rule(map, &self.chroma_counts).0
+            self.area_rule(map, &self.chroma_counts, &[]).0
         } else {
             0
         };
@@ -700,6 +1170,7 @@ impl FlashMeter {
             area_transitions: area,
             screen_transitions,
             fine_transitions,
+            partial_transitions,
             red_transitions,
             chroma_transitions,
             share: flash_share,
@@ -724,15 +1195,28 @@ impl FlashMeter {
 
     /// The area rule over these per-tile counts: the largest `k` for which tiles with at least
     /// `k` transitions cover more than [`AREA_SHARE`] of some field, and the largest share
-    /// covered by tiles with at least two.
-    fn area_rule(&self, map: &TileMap, counts: &[u8]) -> (u32, f32) {
+    /// covered by tiles with at least two. A tile with fewer counts the share of it under windows
+    /// that changed in this frame and `k` times in the last second, by any of `flips` (each with
+    /// whether only changes in part of a tile count).
+    fn area_rule(&self, map: &TileMap, counts: &[u8], flips: &[(&[Flips], bool)]) -> (u32, f32) {
         let side = self.viewing.field_tiles() as i64;
         let field_px = self.viewing.field_area();
         let share = |k: u8| {
             let w: Vec<f32> = counts
                 .iter()
                 .enumerate()
-                .map(|(i, &c)| if c >= k { map.tile_px(i) } else { 0.0 })
+                .map(|(i, &c)| {
+                    let px = map.tile_px(i);
+                    if c >= k {
+                        px
+                    } else {
+                        let s = flips
+                            .iter()
+                            .map(|(f, partial)| f[i].share(k as u32, *partial))
+                            .fold(0.0, f32::max);
+                        s * px
+                    }
+                })
                 .collect();
             let most = max_window(&w, map.cols as i64, map.rows as i64, side);
             (most / field_px) as f32
@@ -1245,7 +1729,8 @@ mod tests {
 
     /// How long the meter takes over a 4K screen's tiles, a frame at a time, with the fine
     /// patterns and without (ignored; run with `--ignored --nocapture`). Every tile reverses
-    /// (a whole screen of 4-pixel squares) or none does.
+    /// (a whole screen of 4-pixel squares) or none does; or every tile's windows change, half of
+    /// them (a period-2 agar).
     #[test]
     #[ignore]
     fn meter_cost() {
@@ -1283,12 +1768,32 @@ mod tests {
             TileMap::uniform(w, h, [0; 3]),
             TileMap::uniform(w, h, [255; 3]),
         ];
+        // A whole screen of a period-2 agar of 4-pixel cells, half of them flipping (#275): every
+        // tile's windows change in every frame that changes.
+        let agar = |phase: usize| {
+            const PHASES: [&[u8]; 2] = [b"ooo.oo.o.o..o...", b"..o....o.oooo.oo"];
+            let mut v = Vec::with_capacity((w * h * 4) as usize);
+            for y in 0..h {
+                for x in 0..w {
+                    let on = PHASES[phase][((y / 4 % 4) * 4 + x / 4 % 4) as usize] == b'o';
+                    let c = if on { 255 } else { 0 };
+                    v.extend_from_slice(&[c, c, c, 255]);
+                }
+            }
+            crate::strobe::frame::reduce(&v, w, h)
+        };
+        let agars = [agar(0), agar(1)];
         for (name, ms) in [
             ("with fine patterns", &maps[..]),
             ("without", &plain[..]),
             ("the whole field flipping", &field[..]),
+            ("a period-2 agar", &agars[..]),
         ] {
-            for (what, every) in [("reversing every 6 frames", 6), ("still", 1_000_000)] {
+            for (what, every) in [
+                ("reversing every 6 frames", 6),
+                ("every frame", 1),
+                ("still", 1_000_000),
+            ] {
                 let mut m = meter();
                 let t = std::time::Instant::now();
                 for f in 0..240u32 {
@@ -1298,6 +1803,175 @@ mod tests {
                     "4K, {name}, {what}: {:.2} ms a frame",
                     t.elapsed().as_secs_f64() * 1e3 / 240.0
                 );
+            }
+        }
+    }
+
+    /// A tile of 4-pixel cells, those at `lit` (cell column, row) at `on`, the rest at `off`: its
+    /// mean and fine pattern.
+    fn cells(lit: &[(usize, usize)], on: f32, off: f32) -> (f32, Fine) {
+        let at = |x: usize, y: usize| {
+            if lit.contains(&(x / 4, y / 4)) {
+                on
+            } else {
+                off
+            }
+        };
+        let mean = (0..256).map(|i| at(i % 16, i / 16)).sum::<f32>() / 256.0;
+        (mean, crate::strobe::frame::fine_of(16, 16, mean, at))
+    }
+
+    /// #275: a blinker's two phases in a tile keep its mean, and its fine pattern does not reverse,
+    /// but the windows over its flipping cells change sides, and change back: the tile oscillates,
+    /// back where it was two changes before.
+    #[test]
+    fn a_tile_s_windows_that_flip_back_and_forth_are_its_change() {
+        let a = cells(&[(0, 1), (1, 1), (2, 1)], 0.9, 0.0);
+        let b = cells(&[(1, 0), (1, 1), (1, 2)], 0.9, 0.0);
+        assert!((a.0 - b.0).abs() < 1e-6, "the same mean");
+        let mut c = Change::default();
+        let mut cmp = |x: &(f32, Fine)| c.compare(x.0, &x.1, FLASH_DELTA, Some(DARK_LIMIT));
+        // The first frame has nothing to compare with.
+        assert_eq!(cmp(&a), Changed::default());
+        let one = cmp(&b);
+        assert!(one.mask != 0 && one.partial && one.cycle == 0, "{one:?}");
+        // Four of the sixteen cells flipped: a quarter of the tile, and no more than its light
+        // part in each phase allows.
+        assert!((0.25..=0.375).contains(&one.share), "{one:?}");
+        // Back: the same windows, and the tile is where it was two changes before.
+        let two = cmp(&a);
+        assert_eq!((two.mask, two.partial, two.cycle), (one.mask, true, 2));
+        // The same frame again is no change.
+        assert_eq!(cmp(&a).mask, 0);
+        // A change smaller than a transition is none: grey cells 0.05 apart.
+        let mut c = Change::default();
+        let (g1, g2) = (cells(&[(0, 0)], 0.3, 0.25), cells(&[(1, 1)], 0.3, 0.25));
+        c.compare(g1.0, &g1.1, FLASH_DELTA, Some(DARK_LIMIT));
+        assert_eq!(
+            c.compare(g2.0, &g2.1, FLASH_DELTA, Some(DARK_LIMIT)).mask,
+            0
+        );
+    }
+
+    /// A tile of one brightness that changes by steps the same way makes one transition, as a run
+    /// does; changing back, another. A cell appearing on a dark tile changes its windows, a share
+    /// of the tile no larger than the cell.
+    #[test]
+    fn a_tile_s_changes_count_once_a_run() {
+        let flat = |v: f32| (v, Fine::flat(v));
+        let mut c = Change::default();
+        let mut cmp = |x: (f32, Fine)| c.compare(x.0, &x.1, FLASH_DELTA, Some(DARK_LIMIT));
+        cmp(flat(0.9));
+        let one = cmp(flat(0.7));
+        assert_eq!(
+            (one.mask, one.share, one.partial),
+            (ALL_WINDOWS, 1.0, false),
+            "the whole tile, its mean with it"
+        );
+        assert_eq!(cmp(flat(0.5)).mask, 0);
+        assert_eq!(cmp(flat(0.3)).mask, 0);
+        assert_eq!(cmp(flat(0.5)).mask, ALL_WINDOWS);
+        // From dark to a lit cell and back: the cell's windows, and the tile is back.
+        let mut c = Change::default();
+        let mut cmp = |x: &(f32, Fine)| c.compare(x.0, &x.1, FLASH_DELTA, Some(DARK_LIMIT));
+        let (dark, lit) = (flat(0.0), cells(&[(2, 2)], 0.9, 0.0));
+        cmp(&dark);
+        let on = cmp(&lit);
+        assert!(on.mask != 0 && on.partial, "{on:?}");
+        assert!(
+            (on.share - 1.0 / 16.0).abs() < 1e-3,
+            "one cell of sixteen: {on:?}"
+        );
+        let off = cmp(&dark);
+        assert_eq!((off.mask, off.cycle), (on.mask, 2));
+        // Light changes at 0.8 and above are none, as for any transition.
+        let mut c = Change::default();
+        c.compare(0.85, &flat(0.85).1, FLASH_DELTA, Some(DARK_LIMIT));
+        assert_eq!(
+            c.compare(1.0, &flat(1.0).1, FLASH_DELTA, Some(DARK_LIMIT))
+                .mask,
+            0
+        );
+    }
+
+    /// A tile's flips count once it oscillates, the cycle's changes with it, where neighbouring
+    /// tiles changed too, and only those of the frame read count over the area.
+    #[test]
+    fn flips_count_a_cycle_made_with_neighbours() {
+        let changed = |cycle: u32| Changed {
+            mask: 0b1111,
+            share: 0.2,
+            partial: true,
+            cycle,
+        };
+        let mut f = Flips::default();
+        f.commit(0.0, changed(0), true);
+        assert_eq!((f.share(1, false), f.most(false)), (0.0, 0));
+        f.commit(0.1, changed(2), true);
+        assert_eq!((f.most(false), f.most(true)), (2, 2));
+        // The share counted larger, as all of the windows' shares are.
+        assert_eq!(f.share(2, false), 0.2 * WINDOW_MARGIN);
+        assert_eq!(f.share(3, false), 0.0);
+        // A frame with no change: nothing changes now, though the counts stand.
+        f.commit(0.15, Changed::default(), true);
+        assert_eq!((f.share(1, false), f.most(false)), (0.0, 2));
+        // A change not made with neighbours is not counted, nor is it later.
+        f.commit(0.2, changed(2), false);
+        assert_eq!(f.most(false), 2);
+        // A second later the first two have gone.
+        f.commit(1.15, Changed::default(), true);
+        assert_eq!(f.most(false), 0);
+        // The grids of windows that do not overlap: a whole tile is all of it, one window a
+        // sixteenth of the grid it is in.
+        assert_eq!(window_share(ALL_WINDOWS), 1.0);
+        assert_eq!(window_share(1), 1.0 / 16.0);
+    }
+
+    /// From RGBA frames: a field of period-2 oscillators over the whole view (#275), half of its
+    /// 4-pixel cells flipping each generation, no tile's mean moving and no fine pattern reversing,
+    /// fails, and by the changes of its windows in part of each tile; a single blinker in a corner
+    /// does not.
+    #[test]
+    fn a_dense_period_2_field_flashes_by_its_windows() {
+        const PHASES: [&[u8]; 2] = [b"ooo.oo.o.o..o...", b"..o....o.oooo.oo"];
+        let agar = |phase: usize, inside: &dyn Fn(u32, u32) -> bool| {
+            let mut v = Vec::with_capacity((W * H * 4) as usize);
+            for y in 0..H {
+                for x in 0..W {
+                    let on = inside(x, y)
+                        && PHASES[phase][(((y + 3) / 4 % 4) * 4 + (x + 1) / 4 % 4) as usize]
+                            == b'o';
+                    let c = if on { 230 } else { 20 };
+                    v.extend_from_slice(&[c, c, c, 255]);
+                }
+            }
+            crate::strobe::frame::reduce(&v, W, H)
+        };
+        let all = |_: u32, _: u32| true;
+        let corner = |x: u32, y: u32| x < 16 && y < 16;
+        for (inside, fails) in [(&all as &dyn Fn(u32, u32) -> bool, true), (&corner, false)] {
+            let maps = [agar(0, inside), agar(1, inside)];
+            assert!(
+                maps[0]
+                    .lum
+                    .iter()
+                    .zip(&maps[1].lum)
+                    .all(|(a, b)| (a - b).abs() < 1e-5)
+            );
+            let mut m = meter();
+            let mut worst = FlashReading::default();
+            for f in 0..60u32 {
+                // Thirty generations a second.
+                let r = m.update(&maps[(f / 2 % 2) as usize], f as f64 / 60.0);
+                if r.transitions > worst.transitions {
+                    worst = r;
+                }
+            }
+            assert_eq!(worst.level.fails(), fails, "{worst:?}");
+            assert_eq!(worst.fine_transitions, 0, "no fine pattern reverses");
+            if fails {
+                assert!(worst.partial_transitions > MAX_TRANSITIONS, "{worst:?}");
+                assert!(m.tile_partial_counts().iter().all(|&c| c > 0));
             }
         }
     }
