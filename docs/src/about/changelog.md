@@ -688,6 +688,12 @@ day later (0.4.2: 17 November here, 18 November there).
 - **A repeated `jetcarp uninstall --settings --data` says the folders are already gone,** instead of
   only "Nothing to undo", which read as if the options had been ignored.
   ([#144](https://github.com/jprodgers/jetcarp/issues/144))
+- **`jetcarp uninstall` empties the runtime folder and removes it,** where it removed only the
+  host's lock file: the locks, port and token files and memory records JETCARP's programs left
+  there go, any a running program still uses are kept and named, and on Windows, where it is the
+  data folder, the library stays. On Linux and macOS the app ended with SIGTERM, SIGHUP or Ctrl-C
+  closes as its window does, removing its port and token file, which SIGTERM left on the Mac.
+  ([Uninstalling](../guides/uninstalling.md), [#135](https://github.com/jprodgers/jetcarp/issues/135))
 - **The installers' `--uninstall` names each folder it keeps and what it holds,** instead of "kept
   your settings, data and pictures" when only the pictures were left.
   ([#142](https://github.com/jprodgers/jetcarp/issues/142))

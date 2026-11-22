@@ -85,8 +85,17 @@ It reports each step as *done* or *FAILED* with the reason. The steps it may lis
   the Dock, take it out of the Dock too;
 - **forget the recorded host command**, a small file in the settings folder that GNOME's menu and the
   Windows screen saver use to start the host;
-- **remove the host's lock file**, the empty `host.lock` in the runtime folder that keeps a second
-  host from starting, once no host holds it;
+- **remove what JETCARP's programs left in the runtime folder** (see
+  [Folders](../reference/folders.md#runtime-folder)), naming each file: the host's `host.lock`,
+  which keeps a second host from starting, and *Fit to this computer*'s `tune.lock`, once nothing
+  holds them; the app's, the host's and the MCP HTTP endpoints' port and token files
+  (`app-endpoint.json` and the others), once nothing answers on their port; and the memory
+  records in `memory/`, once their program has stopped refreshing them. Then the folder itself,
+  if that empties it, except on Windows, where it is the data folder (`--data` deletes that). A
+  program removes its port and token file and its memory record as it quits, but the locks stay
+  for the next one, and so does whatever a program that was ended another way (a crash, say)
+  left. A file that a program still running uses is kept, and the report says which and why:
+  quit the app (or stop `jetcarp mcp --http`) and run `jetcarp uninstall --yes` again;
 - **remove the empty folder of job locks**, `library.sqlite-jobs` beside the pattern library. A
   paused job's lock in it keeps it, since the job will need it when it resumes.
 
@@ -167,7 +176,7 @@ writes outside the program's own folder. `~` is your home folder.
 | Settings folder | `~/.config/jetcarp` | `~/Library/Application Support/jetcarp` | `%APPDATA%\jetcarp` |
 | Data folder | `~/.local/share/jetcarp` | `~/Library/Application Support/jetcarp/data` | `%LOCALAPPDATA%\jetcarp` |
 | Output folder (kept) | `~/Pictures/JETCARP` | `~/Pictures/JETCARP` | your Pictures folder, `\JETCARP` |
-| Runtime files (a port number, an access token and a lock file) | `$XDG_RUNTIME_DIR/jetcarp`, else `~/.cache/jetcarp` | `~/.cache/jetcarp` | inside the data folder |
+| Runtime files (the running programs' port numbers and access tokens, locks and memory records) | `$XDG_RUNTIME_DIR/jetcarp`, else `~/.cache/jetcarp` | `~/.cache/jetcarp` | inside the data folder |
 | Among your apps | `~/.local/share/applications/jetcarp.desktop`, and `jetcarp.png` in each size's `apps` folder in `~/.local/share/icons/hicolor` | `~/Applications/JETCARP.app` | `JETCARP.lnk` in `%APPDATA%\Microsoft\Windows\Start Menu\Programs`, and `jetcarpw.exe` and `jetcarp-program` in `%LOCALAPPDATA%\jetcarp\launcher` |
 | Start at login | `~/.config/autostart/jetcarp-host.desktop` | `~/Library/LaunchAgents/com.jimmieprodgers.jetcarp.host.plist` | the value `JETCARP` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |
 | GNOME Shell extension | `~/.local/share/gnome-shell/extensions/jetcarp@jimmieprodgers.com`, and its entry in GNOME's list of enabled extensions | | |
@@ -175,10 +184,10 @@ writes outside the program's own folder. `~` is your home folder.
 | Screen saver log | | `jetcarp-saver.log` in the screen saver's sandbox (`~/Library/Containers/com.apple.ScreenSaver.Engine.legacyScreenSaver/Data/tmp/` on macOS 27) | |
 
 The Linux paths are the usual ones; they follow your XDG settings. A data folder chosen at setup is
-wherever you chose. `jetcarp uninstall` removes the host's lock file (and the runtime folder, if
-that leaves it empty); the port number and access token are removed as the app or host that wrote
-them quits. It does not remove the macOS screen saver's log, which is small; delete it by hand if
-you like.
+wherever you chose. `jetcarp uninstall` removes the runtime files that no running program uses,
+and then the runtime folder if that empties it (on Windows it is the data folder, which only
+`--data` deletes); the app, the host and the MCP HTTP endpoint remove their own as they quit. It
+does not remove the macOS screen saver's log, which is small; delete it by hand if you like.
 
 To remove the GNOME extension by hand, switch it off in GNOME's *Extensions* app before deleting its
 folder, or run this, which does both:
