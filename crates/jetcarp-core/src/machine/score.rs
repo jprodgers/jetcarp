@@ -359,8 +359,8 @@ mod tests {
         let md = s.markdown(&hw, &l, &[]);
         assert!(
             md.contains(
-                "**Taken under load:** the processor was 50% busy with other programs. The score \
-                 is likely lower"
+                "**Taken under load:** the processor was 50% busy with other programs (GPU load \
+                 not read). The score is likely lower"
             ),
             "{md}"
         );
