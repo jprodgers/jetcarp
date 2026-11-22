@@ -89,6 +89,29 @@ wherever they cover a quarter of a 10° field, long before they cover a quarter 
 soup's cells change a few at a time, so its tiles' patterns never turn into their negatives: Life
 soups from 1 to 16 pixels a cell, still lifes, gliders and blinkers are read as before.
 
+<a id="partial-change"></a>**Change in part of a tile.** A field of oscillators whose two phases
+are not each other's negative (blinkers, toads, clocks, and denser patterns of period 2 that fill
+the plane) flips part of each tile every generation: a tile's mean may not move, and its fine
+pattern does not reverse, but each flipping pixel flashes. WCAG counts such a field where more than
+a quarter of a 10° field flips: the densest lattice of blinkers flips a quarter of its area, of
+toads and clocks a third, and the densest such patterns on small tori a half to three quarters;
+soups of Long Life, Walled Cities, 3-4 Life and DotLife settle with as much. So each tile's windows
+are also compared with the frame before. A window that changed sides, the tile's light and dark
+parts at least 0.1 apart, made a transition of the pixels under it; so did a tile's light or dark
+windows where it went from one brightness to a pattern or back (a cell appearing on a dark tile),
+and the whole of a tile whose one brightness changed. A window's change the same way as its last
+continues one run, as a transition is counted once a run. A tile's changes count where it
+oscillates, back where it was two, three or four changes before, and where neighbouring tiles
+changed too. WCAG counts the area of flashes "occurring concurrently", so in each frame the area
+rule counts, alongside the tiles' own transitions, the part of each tile under the windows that
+changed in that frame and at least so many times in the last second. That part is what the
+windows that do not overlap show, but no more than the tile's light part for windows that came
+into it, or its dark part for windows that left it; and it is counted 30% larger, since 4-pixel
+windows miss thin lines (the outlines a light palette darkens beside a lit cell) and parts of
+cells of 3 pixels, and a field over WCAG's quarter must never read under it. A soup's cells change
+a few at a time and at different moments, so its tiles seldom come back where they were: soups,
+still lifes, gliders and Life's ash are read as before.
+
 **Stripes.** Regular high-contrast stripes can trigger seizures as flashes can (ITU-R BT.1702,
 [ITU-R 2023](../research/bibliography.md#itu2023bt1702); Ofcom's guidance on flashing images and
 regular patterns, [Ofcom 2017](../research/bibliography.md#ofcom2017flashing)). The guard looks
@@ -140,6 +163,13 @@ than over an eighth of a second (coming on, the veil changes each pixel once, as
 would have), and the veil goes as it does for stripes. The scene is slowed as any flashing scene
 is, and once it no longer flashes, the veil lets go. A few tiles reversing now and then, as
 Hodgepodge's waves do when the whole field swings, are left to the softening and the slowing.
+
+[Change in part of a tile](#partial-change) is calmed the same way. Where a tile's changing part
+moves its mean by much less than its pixels (under three quarters as much), softening its mean
+cannot hold its pixels to three transitions a second, so where such change flashes over a quarter
+of a 10° field, those tiles and the tiles around them are veiled at once; where the whole of a tile
+changes with its neighbours in turn (large cells, one tile up as the next goes down), it is
+softened. Either way the scene is slowed, and the veil lets go once it no longer flashes.
 
 The guard changes only what is shown and how fast generations are shown. A world computes the same
 generations whatever the guard does, and a scene's hash is the same.
@@ -278,8 +308,8 @@ The softened version is, when showing each frame up to four times longer brings 
 one flash a second and it has no strong stripes, the animation slowed: every frame stays as drawn,
 so an oscillator's few phases do not blur into one.
 Otherwise it is the guard's softening carried out on the frames: every tile that flashes anywhere in
-the loop is softened throughout, fine patterns that reverse are veiled where they flash, and stripes
-are veiled where they were found; the softener goes
+the loop is softened throughout, fine patterns that reverse and change in part of a tile are veiled
+where they flash, and stripes are veiled where they were found; the softener goes
 round the loop twice and keeps the second time, so the end flows into the start. What is saved is
 what is checked: a GIF has at most 256 colours, and squeezing a fade into them could turn it back
 into a flip, so the saved file is read back and checked again. If it still fails, each frame is
@@ -295,9 +325,12 @@ included. On an AMD Radeon 8060S it takes 0.07 ms a frame at 1920 × 1080 (0.4% 
 and 0.29 ms at 3840 × 2160 (1.7%); with neither it took 0.03 and 0.11 ms. On a weak integrated
 GPU, perhaps a tenth as fast, it should stay under 5% of a frame at 1080p (not yet measured). Its
 readings come back to the processor, 80 bytes a tile (2.6 MB a frame at 3840 × 2160), in about
-0.15 ms. Counting the transitions in them takes the processor about 0.45 ms a frame at
-3840 × 2160 (0.23 ms with neither), for the frames as drawn and again as shown, and up to 1.3 ms
-while the whole screen flashes. Softening costs more, 0.15 ms a frame at 1080p on the same GPU,
+0.15 ms. Counting the transitions in them takes the processor (a Ryzen AI Max+ 395) about
+0.9 ms a frame at 3840 × 2160 (0.6 ms with neither), for the frames as drawn and again as shown;
+2 to 3.5 ms while the whole screen flashes, and up to 8 ms in the frames the whole screen changes
+in part of every tile, every frame, until the scene is slowed. Comparing each tile's windows with
+the frame before ([Change in part of a tile](#partial-change)) doubled these, from 0.5, 0.35 and
+1.5 ms. Softening costs more, 0.15 ms a frame at 1080p on the same GPU,
 but only while it acts. The stripe check takes about 3 ms of one processor core for a 1080p frame,
 four times a second. On a surface the guard cannot read in place, each frame is drawn into a
 texture and copied to the screen.
@@ -310,12 +343,21 @@ texture and copied to the screen.
   with larger pixels than 96 an inch at its scale factor, makes a 10° field fewer pixels than it
   assumes. On a screen with a scale factor above 1, a fine pattern of 3-pixel squares counts,
   though there they are under 0.1°: stricter than WCAG.
-- It counts a fine pattern flashing when the pattern turns into its own negative. A pattern that
-  changes only in part, a soup of small cells or a field of blinkers, counts only where it changes
-  its tiles' mean brightness. Measured pixel by pixel, with no tiles, WCAG's definition counts more
-  of such flicker: by that measure a Life soup at 30 generations a second flashes more than three
-  times a second at every cell size from 1 to 16 pixels (under 3 pixels, WCAG's exception for a
-  fine, balanced pattern may apply), where the guard counts it from about 8 pixels a cell.
+- It sees each tile through 49 windows of 4 by 4 pixels. A change in part of a tile counts where
+  the tile oscillates; change that does not come back counts only where it moves the tiles' means,
+  and softening, which holds a tile's mean, does not hold each of its pixels: the dense, restless
+  ash some rules settle into (Walled Cities and 3-4 Life at 4 pixels a cell) can show a second or
+  so of flashing before the scene is slowed. Since the windows' part of a tile is counted 30%
+  larger than they show, a sparser field of small cells flipping in part can read as flashing
+  where WCAG would pass it (a blinker every 4 cells at 7 to 10 pixels a cell, or every 5 cells at
+  3 to 6, a fifth or a sixth of it flipping): stricter than WCAG. Cells of 1 and 2 pixels, under 0.1°, are mostly not seen in part,
+  as WCAG's exception for a fine, balanced pattern allows.
+- It counts the area of flashes occurring together, as WCAG words it. Counting each pixel's own
+  transitions over a second, whenever they came, counts more of a soup's flicker: by that measure a
+  Life soup at 30 generations a second flashes more than three times a second at every cell size
+  from 1 to 16 pixels, though the pixels flipping together in any frame cover far less than a
+  quarter of a 10° field more than once a second. The guard counts such a soup from about 8 pixels a
+  cell, where its tiles' means change together.
 - It measures WCAG 2.2's red flashes on each tile's mean colour. On a dark ground a tile's colour
   is that of its few lit pixels, so a small red flicker counts for its whole tile: stricter than
   WCAG. A fine pattern of reds and greens of one brightness reversing is counted by WCAG 2.0's

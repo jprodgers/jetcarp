@@ -9,3 +9,8 @@
 /packaging/icons/** -text
 /crates/jetcarp-display/icons/** -text
 /crates/jetcarp/jetcarp.ico -text
+# The bundled fonts and their licences are checked byte for byte against their READMEs' SHA-256s
+# (the licence texts too), so a Windows checkout must not give the text files CRLF line endings.
+/crates/jetcarp-core/fonts/** -text
+/crates/jetcarp-display/fonts/** -text
+/docs/theme/fonts/** -text

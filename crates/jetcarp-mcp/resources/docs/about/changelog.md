@@ -473,6 +473,13 @@ day later (0.4.2: 17 November here, 18 November there).
   Code comments that cited "the Harding guidance" now cite Ofcom's guidance and ITU-R BT.1702-3.
   ([Fine patterns](../guides/strobe-guard.md#fine-patterns),
   [#269](https://github.com/jprodgers/jetcarp/issues/269))
+- **The strobe guard counts fields of oscillators that flip only part of each tile.** Dense
+  fields of blinkers, toads, clocks and denser period-2 patterns kept every tile's mean and
+  reversed no fine pattern, so the guard passed them, though WCAG, pixel by pixel, counts them as
+  flashing; each tile's windows that flip back and forth now count by the area they cover, and
+  are veiled where they flash, on the GPU and the processor alike.
+  ([Change in part of a tile](../guides/strobe-guard.md#partial-change),
+  [#275](https://github.com/jprodgers/jetcarp/issues/275))
 
 - **The Windows installer's `-Uninstall` leaves the user PATH alone when JETCARP's folder isn't on
   it.** It wrote the PATH back whatever it held, tidied (empty entries dropped), so a PATH could
