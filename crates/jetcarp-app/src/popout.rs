@@ -89,6 +89,16 @@ pub fn os_title(title: &str) -> String {
     format!("JETCARP · {title}")
 }
 
+/// The egui id of `key`'s floating window.
+fn window_id(key: &str) -> Id {
+    Id::unique(("jetcarp-win", key))
+}
+
+/// The layer `key`'s floating window is drawn on.
+pub fn window_layer(key: &str) -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Middle, window_id(key))
+}
+
 /// The viewport id of `key`'s popped-out window.
 pub fn viewport_id(key: &str) -> ViewportId {
     ViewportId::from_hash_of(("jetcarp-popout", key))
@@ -219,7 +229,7 @@ pub fn show<R>(
         }
         return (Some(r), events);
     }
-    let id = Id::unique(("jetcarp-win", spec.key));
+    let id = window_id(spec.key);
     // No `open` for egui: its close button would come first in Tab's order, named "Close window".
     // Ours is drawn after the contents, so it is the window's last control, named for it (#308).
     let mut w = egui::Window::new(spec.title)

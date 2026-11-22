@@ -1047,6 +1047,10 @@ impl JetcarpApp {
             Tool(t) => {
                 let on = !self.tool_open(t);
                 self.set_tool_open(t, on);
+                // Its first control takes the keyboard once it shows (#308).
+                if on {
+                    self.kb.focus_window = Some((crate::popout::window_layer(t.key()), 10));
+                }
             }
         }
     }

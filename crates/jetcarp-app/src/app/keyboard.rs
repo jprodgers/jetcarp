@@ -138,6 +138,9 @@ pub(super) struct KeyboardRt {
     /// An arrow key pressed last frame on a control of a floating window: the control, and its
     /// window's layer.
     arrow_from: Option<(egui::Id, egui::LayerId)>,
+    /// A tool window just opened from the menus or by its key: its layer, to give the keyboard to
+    /// its first control once it is drawn, and how many more frames to wait for it.
+    pub focus_window: Option<(egui::LayerId, u8)>,
     /// F10 asked for the menu bar.
     pub menu_request: bool,
     /// The menu bar's buttons and their menus, as drawn last frame.
@@ -190,6 +193,7 @@ impl JetcarpApp {
             self.kb.escaped_from = None;
         }
         self.escape_from_pane(ctx);
+        self.focus_opened_window(ctx);
         // F6: the next part of the window; Shift+F6 the one before.
         for (m, back) in [(Modifiers::NONE, false), (Modifiers::SHIFT, true)] {
             if take_key(ctx, Key::F6, m) {
@@ -237,6 +241,27 @@ impl JetcarpApp {
             || (egui::Popup::is_any_open(ctx) && self.kb.on_menus);
         self.kb.last_focus = focused;
         a11y::note_focus(ctx);
+    }
+
+    /// A tool window opened from the menus or by its key (#308): the keyboard to its first control,
+    /// where F6 would put it, once the window has been drawn, so Esc closes it and Tab goes
+    /// through it. Opened from the menu bar, the keyboard was left nowhere and Esc did nothing.
+    fn focus_opened_window(&mut self, ctx: &egui::Context) {
+        let Some((layer, left)) = self.kb.focus_window.take() else {
+            return;
+        };
+        let first = a11y::last_regions(ctx)
+            .iter()
+            .find(|r| r.layer == layer)
+            .and_then(|r| a11y::focusable_in(ctx, r).first().copied());
+        match first {
+            Some(id) => {
+                ctx.memory_mut(|m| m.request_focus(id));
+                ctx.move_to_top(layer);
+            }
+            None if left > 0 => self.kb.focus_window = Some((layer, left - 1)),
+            None => {}
+        }
     }
 
     /// egui's arrow keys take the keyboard to the nearest control that way on screen, in any
