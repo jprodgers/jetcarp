@@ -1366,3 +1366,66 @@ fn child_screen_reader_names_are_the_same_in_every_font() {
     assert!(atkinson.iter().all(|(_, v)| !v.is_empty()));
     done();
 }
+
+/// Tab reaches the script editor's code box (#295). A box that senses dragging (to select text),
+/// with its scroll area's bars drawn inside it, was taken for a dragged background and passed over
+/// by Tab and F6 alike. The tool-window walk above never met it: it opens *Scripts and sweeps…* on
+/// its Sweep tab, and leaves out what it takes for mouse-only.
+#[test]
+fn tab_reaches_the_script_editor_s_code_box() {
+    in_scratch("app::keyboard_tests::child_tab_reaches_the_script_editor_s_code_box");
+}
+
+#[test]
+#[ignore = "started by tab_reaches_the_script_editor_s_code_box, in a scratch process"]
+fn child_tab_reaches_the_script_editor_s_code_box() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
+    // A script long enough to scroll, so the scroll bars are drawn.
+    let long = crate::scripts_ui::EXAMPLES
+        .iter()
+        .map(|e| e.1)
+        .max_by_key(|s| s.len())
+        .unwrap();
+    k.app
+        .scripts
+        .set_text_for_test(&format!("{long}\n{long}\n{long}"));
+    k.app.scripts.tab = crate::scripts_ui::Tab::Script;
+    k.app.set_tool_open(menu::ToolWin::Scripts, true);
+    k.frames(4);
+    let ws = k.focusable();
+    let (code, layer) = ws
+        .iter()
+        .find(|w| {
+            k.nodes
+                .get(&w.0.accesskit_id())
+                .is_some_and(|n| n.role == accesskit::Role::MultilineTextInput)
+        })
+        .map(|w| (w.0, w.1))
+        .expect("the code box is drawn");
+    let chrome = k.app.kb_chrome(&k.ctx);
+    assert!(
+        !chrome.contains(&code),
+        "the code box is taken for a mouse-only widget"
+    );
+    let first = ws
+        .iter()
+        .find(|w| w.1 == layer && !chrome.contains(&w.0))
+        .unwrap()
+        .0;
+    k.ctx.memory_mut(|m| m.request_focus(first));
+    k.frames(2);
+    let mut reached = k.focused() == Some(code);
+    for _ in 0..ws.len() + 5 {
+        if reached {
+            break;
+        }
+        k.key(Key::Tab);
+        k.frames(1);
+        reached = k.focused() == Some(code);
+    }
+    assert!(reached, "Tab never reached the code box");
+    done();
+}
