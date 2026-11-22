@@ -167,6 +167,8 @@ impl JetcarpApp {
     /// match (the person can tick it again).
     pub(super) fn a11y_frame(&mut self, ctx: &egui::Context) {
         self.fonts_frame(ctx);
+        // The Mac screen saver has the strobe guard's setting and the font baked in (#287).
+        self.saver_frame();
         let now = self.started.elapsed().as_secs_f64();
         self.a11y.watch.poll(now);
         let want = (
@@ -450,10 +452,10 @@ fn settings_ui(
     ui.separator();
     ui.heading("Font");
     // On macOS the screen saver has its own copy, as it has of its rotation (the Screensaver
-    // pane's Install says so too).
+    // pane's Install says so too), copied again when the font changes (#287).
     let saver = if jetcarp_display::saver::BAKED {
-        " The macOS screen saver has the font copied in when it's installed, so install it again \
-         after changing the font."
+        " The macOS screen saver has its own copy of the font, which JETCARP brings up to date \
+         when you change it."
     } else {
         ""
     };
