@@ -105,10 +105,11 @@ mod tests {
     /// What the twin prints once AI control has recorded its endpoint.
     const READY: &str = "quit signal test: the endpoint is recorded";
 
-    /// SIGTERM (how `kill`, a logout or a system shutting down ends a program) ends the app as
-    /// its window's close button does: its settings are saved, its jobs stopped at a checkpoint,
-    /// and AI control's endpoint file, `app-endpoint.json` in the runtime folder, is removed. On
-    /// the Mac, an app ended with SIGTERM left the file behind.
+    /// SIGTERM (what `kill` sends, and a system as it shuts down) ends the app as its window's
+    /// close button does: its settings are saved, its jobs stopped at a checkpoint, and AI
+    /// control's endpoint file, `app-endpoint.json` in the runtime folder, is removed, and so is
+    /// its record in the memory pool (`memory/<pid>.json`). On the Mac, an app ended with SIGTERM
+    /// left the endpoint file behind; an app that quit left its memory record.
     #[test]
     fn sigterm_ends_the_app_as_closing_its_window_does() {
         let root = jetcarp_core::scratch::ScratchDir::new("quit-signal");
@@ -170,6 +171,11 @@ mod tests {
             said.join("\n")
         );
         assert!(endpoint.exists(), "{}", endpoint.display());
+        let record = root
+            .join("run")
+            .join(jetcarp_core::machine::pool::DIR)
+            .join(format!("{}.json", child.id()));
+        assert!(record.exists(), "{}", record.display());
 
         let pid = child.id().to_string();
         let sent = Command::new("kill").args(["-TERM", &pid]).status().unwrap();
@@ -200,12 +206,17 @@ mod tests {
             status.success(),
             "the app ends as on_exit ends it, with 0: {status:?}; its stderr:\n{err}"
         );
+        assert!(
+            !record.exists(),
+            "the app left its memory record {}",
+            record.display()
+        );
     }
 
-    /// The twin: the app as `run` makes it (`crate::new_app`), its photosensitive seizure warning
-    /// answered in the scratch settings folder and AI control on at launch
-    /// (`JETCARP_AI_CONTROL`), run frame by frame until its window is asked to close, and then
-    /// ended as eframe ends it, through `on_exit`.
+    /// The twin: the app as `run` makes it (`crate::new_app`), recording its memory as the
+    /// `jetcarp` program does, its photosensitive seizure warning answered in the scratch settings
+    /// folder and AI control on at launch (`JETCARP_AI_CONTROL`), run frame by frame until its
+    /// window is asked to close, and then ended as eframe ends it, through `on_exit`.
     #[test]
     #[ignore = "started by sigterm_ends_the_app_as_closing_its_window_does, in a scratch process"]
     fn child_runs_until_its_window_is_closed() {
@@ -220,6 +231,7 @@ mod tests {
         )
         .unwrap();
         let endpoint = jetcarp_mcp::link::endpoint_file().unwrap();
+        jetcarp_core::machine::pool::start("the app", jetcarp_search::jobs::explore::memory_bytes);
         let ctx = egui::Context::default();
         let cc = eframe::CreationContext::_new_kittest(ctx.clone());
         let mut app = crate::new_app(&cc, crate::cli::LaunchArgs::default());
