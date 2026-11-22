@@ -2,8 +2,9 @@
 //!
 //! macOS runs third-party savers inside its own sandboxed process (`legacyScreenSaver`), which
 //! cannot read JETCARP's settings or library. So installing bakes everything the saver shows into
-//! the bundle: the rotation, every item's scene inline, and the frame rate and caption. Change the
-//! rotation and install again to update it. No administrator rights are needed.
+//! the bundle: the rotation, every item's scene inline, the frame rate and caption, and the
+//! caption's font (a font file chosen in the app is copied in). Change the rotation or the font and
+//! install again to update it. No administrator rights are needed.
 
 use crate::caption::{CaptionFont, CaptionSettings};
 use crate::fonts::FontChoice;
@@ -39,7 +40,9 @@ pub const PRINCIPAL_CLASS: &str = "JETCARPSaverView";
 pub const DYLIB: &str = "libjetcarp_saver.dylib";
 /// The baked settings, in the bundle's Resources.
 pub const BAKED_FILE: &str = "jetcarp-saver.json";
-pub const BAKED_FORMAT: u32 = 1;
+/// 2 added the caption's font ([`Baked::font`]); a bundle of format 1 has none, and draws its
+/// caption in Atkinson Hyperlegible Next.
+pub const BAKED_FORMAT: u32 = 2;
 const EXECUTABLE: &str = "JETCARP";
 /// The copy of the caption's font in the bundle's Resources, with the file's own extension.
 const FONT_STEM: &str = "caption-font";
@@ -103,7 +106,10 @@ pub struct Baked {
     /// guard's stricter stripe rule ([`jetcarp_core::strobe::similar`]).
     #[serde(default)]
     pub strobe_at_risk: bool,
-    /// The caption's font (#273), as the app's Font setting named it when the bundle was built.
+    /// The caption's font (#273), as the app's Font setting named it when the bundle was built:
+    /// the sandboxed saver can't read the setting, nor be counted on to read the user's font
+    /// folders, so a font file chosen there is copied in. Atkinson when missing (format 1).
+    #[serde(default)]
     pub font: BakedFont,
     /// The file `font` names, read when baked, for [`write_bundle`] to copy in.
     #[serde(skip)]
@@ -138,7 +144,6 @@ pub fn bake(
     font: &FontChoice,
     lookup: &dyn Fn(&str) -> Option<Scene>,
 ) -> Result<(Baked, Vec<String>), String> {
-    let _ = font;
     let (rotation, mut slots, mut warnings) = rotation::load_stored(name)?;
     for s in &mut slots {
         match profiles::source_scene(&s.profile, lookup) {
@@ -150,6 +155,10 @@ pub fn bake(
             Err(e) => warnings.push(format!("{}: {e}", s.label)),
         }
     }
+    let (font, font_file) = bake_font(font).unwrap_or_else(|w| {
+        warnings.push(w);
+        (BakedFont::Atkinson, None)
+    });
     let baked = Baked {
         format: BAKED_FORMAT,
         rotation,
@@ -163,28 +172,97 @@ pub fn bake(
             jetcarp_core::photosensitivity::GuardPlace::Desktop,
         ),
         strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
-        font: BakedFont::Atkinson,
-        font_file: None,
+        font,
+        font_file,
     };
     Ok((baked, warnings))
 }
 
-/// The baked settings from `text`, a bundle's [`BAKED_FILE`].
+/// The caption's font to bake in for the app's Font setting `choice`, and the file to copy in.
+/// The saver's code has Atkinson and egui's fonts built in. An installed font or a font file is
+/// read now, whole (a collection too, its face recorded), and checked as the saver will read it;
+/// one that can't be is a warning for the install's report, and the caption is in Atkinson.
+fn bake_font(choice: &FontChoice) -> Result<(BakedFont, Option<FontBytes>), String> {
+    let FontChoice::File {
+        family,
+        path,
+        index,
+    } = choice
+    else {
+        let font = match choice {
+            FontChoice::Egui => BakedFont::Egui,
+            _ => BakedFont::Atkinson,
+        };
+        return Ok((font, None));
+    };
+    let warn = |e: String| {
+        format!(
+            "the caption's font, {family}, can't be copied into the screen saver ({}); its caption \
+             is in Atkinson Hyperlegible Next",
+            e.trim_end_matches('.')
+        )
+    };
+    let file = crate::fonts::load(path, Some(*index)).map_err(warn)?;
+    if ab_glyph::FontRef::try_from_slice_and_index(&file.bytes, file.index).is_err() {
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        return Err(warn(format!("{name} isn't a font JETCARP can read")));
+    }
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .filter(|e| ["ttf", "otf", "ttc", "otc"].contains(&e.as_str()))
+        .unwrap_or_else(|| "ttf".into());
+    let font = BakedFont::File {
+        family: file.family,
+        file: format!("{FONT_STEM}.{ext}"),
+        index: file.index,
+    };
+    Ok((font, Some(FontBytes(std::sync::Arc::new(file.bytes)))))
+}
+
+/// The baked settings from `text`, a bundle's [`BAKED_FILE`]: of this format or an earlier one,
+/// whose missing settings take their defaults (format 1's caption is in Atkinson).
 pub fn parse_baked(text: &str) -> Result<Baked, String> {
     let baked: Baked = serde_json::from_str(text).map_err(|e| e.to_string())?;
-    if baked.format != BAKED_FORMAT {
+    if baked.format > BAKED_FORMAT {
         return Err(format!(
-            "it is format {}, this code reads {BAKED_FORMAT}; install the saver again",
+            "it is format {}, newer than this code reads ({BAKED_FORMAT}); install the saver again",
             baked.format
         ));
     }
     Ok(baked)
 }
 
-/// The caption's fonts for the `font` baked into a bundle whose Resources are at `resources`.
+/// The caption's fonts for the `font` baked into a bundle whose Resources are at `resources`, and
+/// a note when the bundle's copy of a font file is missing or can't be used: the caption is then in
+/// Atkinson Hyperlegible Next, as on the desktop background.
 pub fn caption_font(font: &BakedFont, resources: &Path) -> (CaptionFont, Option<String>) {
-    let _ = (font, resources, FONT_STEM);
-    (CaptionFont::default(), None)
+    let choice = match font {
+        BakedFont::Atkinson => FontChoice::Atkinson,
+        BakedFont::Egui => FontChoice::Egui,
+        BakedFont::File {
+            family,
+            file,
+            index,
+        } => FontChoice::File {
+            family: family.clone(),
+            // A file in Resources itself, whatever the name says.
+            path: resources.join(Path::new(file).file_name().unwrap_or_default()),
+            index: *index,
+        },
+    };
+    match CaptionFont::for_choice(&choice) {
+        Ok(f) => (f, None),
+        Err(e) => (
+            CaptionFont::default(),
+            Some(format!(
+                "the caption can't be drawn in {}, the font copied in when the screen saver was \
+                 installed ({}); it is in Atkinson Hyperlegible Next",
+                font.label(),
+                e.trim_end_matches('.')
+            )),
+        ),
+    }
 }
 
 /// `~/Library/Screen Savers/JETCARP.saver`.
@@ -248,6 +326,14 @@ pub fn write_bundle(dest: &Path, dylib: &Path, baked: &Baked) -> Result<(), Stri
     let file = resources.join(BAKED_FILE);
     let text = serde_json::to_string(baked).map_err(|e| e.to_string())?;
     std::fs::write(&file, text).map_err(|e| err(&file, e))?;
+    if let BakedFont::File { file, .. } = &baked.font {
+        let bytes = baked
+            .font_file
+            .as_ref()
+            .ok_or_else(|| format!("{file}: the caption's font wasn't read when it was baked"))?;
+        let path = resources.join(file);
+        std::fs::write(&path, &*bytes.0).map_err(|e| err(&path, e))?;
+    }
     if let Some(pictures) = thumbnails(baked) {
         for (name, png) in ["thumbnail.png", "thumbnail@2x.png"]
             .into_iter()

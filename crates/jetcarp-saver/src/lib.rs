@@ -4,7 +4,8 @@
 //! `JETCARPSaverView` per screen, plus a small one for the preview in System Settings. Every view in
 //! the process shares one stage, so all screens show the same simulation, built for the largest of
 //! them. Everything shown comes from the settings baked into the bundle when it was installed
-//! (`jetcarp_display::macsaver`); nothing outside the bundle is read.
+//! (`jetcarp_display::macsaver`), the caption's font among them (a font file chosen in the app is
+//! copied into the bundle's Resources); nothing outside the bundle is read.
 //!
 //! Since macOS 14 the screen saver process keeps running after the saver is dismissed, and stacks
 //! a new set of views on top each time. So the saver quits its process when macOS says the screen
@@ -25,7 +26,8 @@
 
 #![cfg(target_os = "macos")]
 
-use jetcarp_display::macsaver::{BAKED_FILE, BAKED_FORMAT, BUNDLE_ID, Baked};
+use jetcarp_display::caption::CaptionFont;
+use jetcarp_display::macsaver::{self, BAKED_FILE, BUNDLE_ID, Baked};
 use jetcarp_display::painter::{self, Painter};
 use jetcarp_display::simgpu::SimBackend;
 use jetcarp_display::stage::{self, Stage};
@@ -37,6 +39,8 @@ use objc2_screen_saver::ScreenSaverView;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ffi::c_void;
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Share of a frame spent stepping; the rest is for drawing.
@@ -96,6 +100,8 @@ struct Shared {
     baked: Option<Baked>,
     fps: f32,
     caption: jetcarp_display::caption::CaptionSettings,
+    /// The caption's font, from the bundle (Atkinson when its copy can't be used).
+    caption_font: Arc<CaptionFont>,
     use_gpu: bool,
     /// The strobe guard's setting, baked in, and whether it uses the stricter at-risk rule.
     strobe_guard: bool,
@@ -217,8 +223,8 @@ fn own_bundle() -> Result<Retained<AnyObject>, String> {
     b.ok_or(format!("no bundle at {}", root.display()))
 }
 
-/// The baked settings in this bundle's Resources.
-fn read_baked() -> Result<Baked, String> {
+/// The baked settings in this bundle's Resources, and that folder.
+fn read_baked() -> Result<(Baked, PathBuf), String> {
     let bundle = own_bundle()?;
     let (stem, ext) = BAKED_FILE
         .rsplit_once('.')
@@ -230,14 +236,12 @@ fn read_baked() -> Result<Baked, String> {
     let path = path.ok_or(format!("{BAKED_FILE} is missing from the bundle"))?;
     let path = path.to_string();
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
-    let baked: Baked = serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))?;
-    if baked.format != BAKED_FORMAT {
-        return Err(format!(
-            "{path} is format {}, this code reads {BAKED_FORMAT}; install the saver again",
-            baked.format
-        ));
-    }
-    Ok(baked)
+    let baked = macsaver::parse_baked(&text).map_err(|e| format!("{path}: {e}"))?;
+    let resources = std::path::Path::new(&path)
+        .parent()
+        .ok_or(format!("{path} is in no folder"))?
+        .to_path_buf();
+    Ok((baked, resources))
 }
 
 impl Shared {
@@ -246,11 +250,17 @@ impl Shared {
             jetcarp_gpu::pile::PileGpu::headless()
                 .map(|g| Box::new(g) as Box<dyn jetcarp_core::pile::Toppler>)
         });
-        let baked = read_baked()?;
+        let (baked, resources) = read_baked()?;
+        // As the desktop background does: Atkinson when the bundle's copy of the font is unusable.
+        let (caption_font, note) = macsaver::caption_font(&baked.font, &resources);
+        if let Some(n) = note {
+            log(&n);
+        }
         log(&format!(
-            "rotation {:?}, {} items",
+            "rotation {:?}, {} items, caption in {}",
             baked.rotation.name,
-            baked.slots.len()
+            baked.slots.len(),
+            baked.font.label()
         ));
         Ok(Shared {
             instance: wgpu::Instance::new(
@@ -259,6 +269,7 @@ impl Shared {
             gpu: None,
             fps: baked.fps.max(1.0),
             caption: baked.caption,
+            caption_font: Arc::new(caption_font),
             use_gpu: baked.gpu,
             strobe_guard: baked.strobe_guard,
             strobe_at_risk: baked.strobe_at_risk,
@@ -657,6 +668,7 @@ impl JetcarpSaverView {
                 .map_err(|e| format!("no surface: {e}"))?
         };
         let (strobe_guard, strobe_at_risk) = (sh.strobe_guard, sh.strobe_at_risk);
+        let caption_font = Arc::clone(&sh.caption_font);
         let gpu = sh.gpu_for(&surface)?;
         let caps = surface.get_capabilities(&gpu.adapter);
         let mut config = painter::surface_config(&caps, size)?;
@@ -665,6 +677,7 @@ impl JetcarpSaverView {
         let mut painter = Painter::guarded(&gpu.device, config.format, strobe_guard);
         painter.set_guard_at_risk(strobe_at_risk);
         painter.set_readable(readable);
+        painter.set_caption_font(&caption_font);
         let s = Surface {
             painter,
             surface,
