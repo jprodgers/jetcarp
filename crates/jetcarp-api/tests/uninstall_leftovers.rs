@@ -38,8 +38,10 @@ fn the_host_lock_and_an_empty_jobs_folder_go_once_nothing_holds_them() {
     let plan = run(false);
     let whats: Vec<&str> = plan.steps.iter().map(|s| s.what.as_str()).collect();
     assert_eq!(whats.len(), 2, "{whats:?}");
+    // The runtime folder's step (#135; `uninstall_runtime.rs` tests the rest of it).
     assert!(
-        whats[0].starts_with("remove the host's lock file"),
+        whats[0].starts_with("remove what JETCARP's programs left in the runtime folder")
+            && whats[0].ends_with(": host.lock"),
         "{whats:?}"
     );
     assert!(

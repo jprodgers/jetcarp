@@ -32,6 +32,8 @@ mod palette_pick;
 mod pile_ui;
 mod popout;
 mod previews;
+#[cfg(unix)]
+mod quit_signal;
 mod results;
 mod rhai_edit;
 mod scripts_ui;
@@ -136,7 +138,16 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
     eframe::run_native(
         "JETCARP",
         opts,
-        Box::new(move |cc| Ok(Box::new(app::JetcarpApp::new(cc, launch)))),
+        Box::new(move |cc| Ok(Box::new(new_app(cc, launch)))),
     )
     .map_err(|e| e.to_string())
+}
+
+/// The app, once eframe has made its window and its context. On Linux and macOS, SIGTERM,
+/// SIGHUP and SIGINT close it from then on as its window's close button does (`quit_signal`,
+/// #135).
+fn new_app(cc: &eframe::CreationContext<'_>, launch: LaunchArgs) -> app::JetcarpApp {
+    #[cfg(unix)]
+    quit_signal::install(&cc.egui_ctx);
+    app::JetcarpApp::new(cc, launch)
 }

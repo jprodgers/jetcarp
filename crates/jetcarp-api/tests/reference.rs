@@ -308,7 +308,10 @@ impl Platform for Fake {
 #[test]
 fn uninstall_lists_then_undoes() {
     let runs = Arc::new(AtomicUsize::new(0));
-    let cx = Ctx::new().with_platform(Arc::new(Fake(runs.clone())));
+    // A runtime folder of its own, so the uninstall never empties the real one (#135).
+    let cx = Ctx::new()
+        .with_platform(Arc::new(Fake(runs.clone())))
+        .with_runtime_dir(Some(scratch("uninstall-runtime").join("jetcarp")));
     let plan = SystemUninstall::run(&cx, UninstallIn::default(), &Quiet).unwrap();
     assert_eq!(runs.load(Ordering::SeqCst), 0);
     assert!(!plan.done);

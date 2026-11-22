@@ -212,6 +212,18 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   script writes must hold the `.ico` file's seven images as icon resources and list them in icon
   group 1 (`crates/jetcarp/tests/version_res.rs`), and the app's windows' icon must decode to the
   256 px picture.
+- **Uninstalling.** In scratch folders on every system, `jetcarp uninstall --data` and
+  `--settings` must delete only folders that hold nothing but JETCARP's own, refusing any other
+  before doing anything (`crates/jetcarp-api/tests/uninstall_folders.rs`), both of them with the
+  data folder inside the settings folder, as on macOS (`uninstall_nested.rs`), and a second run
+  must say the folders are already gone (`uninstall_again.rs`). The runtime
+  folder must be emptied of the locks, port and token files (one of them half-written) and memory
+  records that programs left, keeping and naming those a running app or host still uses, then
+  removed; a file JETCARP did not put there must be left alone, and in Windows' layout, where it
+  is the data folder, the library must stay unless `--data` deletes the whole folder
+  (`uninstall_runtime.rs`, `uninstall_leftovers.rs`). The whole app, headless and with AI control
+  on, must end on SIGTERM as closing its window does, removing its endpoint file
+  (`crates/jetcarp-app/src/quit_signal.rs`, Linux and macOS).
 - **The book.** The command-line and MCP reference pages and the keyboard page's table of keys are
   generated from the program and checked against it, and the copy of the book built into the
   program must match the book.
