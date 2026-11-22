@@ -483,7 +483,9 @@ job that hangs is stopped rather than left running for hours.
   is no longer maintained is shown as a warning, and never fails it.
 - **The book** builds, its internal links all resolve, and its scripting reference matches the
   program.
-- **Golly:** the Linux job installs Ubuntu's Golly and runs the Golly test above.
+- **Golly:** the Linux job builds Golly's `bgolly` 4.0 and 5.0 from their source (Ubuntu packages
+  only Golly 3.3, which can't read every rule JETCARP writes) and runs every Golly test above with
+  each, but the one that needs a library of finds.
 - **A release** is built only from a tag whose version agrees with the program and the changelog,
   and only after the tests pass.
 
@@ -582,9 +584,9 @@ fixes them. The plans, logs and results are published in
 - **Triage.** A fix that fits goes into the next candidate; anything that would change stored data,
   or is too large to test properly in time, goes to the next version. GitHub milestones track which.
   A feature that misses what it is for is held back: in `rc.3`'s testing, Fit to this computer took
-  from 45 seconds to 12 minutes to size the desktop background for a machine, against Jimmie's target
-  of 10 to 30 seconds, so 0.4.2 ships without it and a faster design is planned for 0.4.3 (#112,
-  #113).
+  from 45 seconds to 12 minutes to size the desktop background for a machine, against a target of
+  10 to 30 seconds, so 0.4.2 shipped without it; 0.4.3 brings it back, redesigned to take a few
+  seconds (#112, #113; see [How long Fit to this computer takes](#how-long-fit-to-this-computer-takes)).
 - **Fixes come with tests.** Where a test can be written, it is. Some fixes can only be checked on a
   particular system (how macOS treats a hidden window, for example); those are checked by hand
   there, in the next candidate's R. In the 0.4.2 cycle, 74 of the 102 closed issues have a test
