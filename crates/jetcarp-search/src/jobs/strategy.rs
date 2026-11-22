@@ -217,6 +217,33 @@ fn write<S: Strategy + ?Sized>(
     })
 }
 
+/// What a job's progress says while it waits for a measuring to end.
+pub const WAITING: &str = "JETCARP is measuring this computer";
+
+/// Between two steps, while JETCARP measures this computer (the JETCARP Hardware Score, #301):
+/// wait, in this process and with the lease held (its heartbeat goes on, on a thread of its
+/// own), until the measuring has ended, the run is stopped, or another process pauses the job.
+/// The progress says so meanwhile (`waiting`), and the next step's write takes it away.
+fn wait_while_measuring<S: Strategy + ?Sized>(s: &S, cx: &RunCx<'_>) {
+    use jetcarp_core::machine::quiet;
+    use std::time::{Duration, Instant};
+    let mut p = s.progress(JobStatus::Running);
+    if let Value::Object(m) = &mut p {
+        m.insert("waiting".into(), WAITING.into());
+    }
+    cx.live.set(p);
+    let mut asked = Instant::now();
+    while quiet::held() && !cx.stopped() {
+        std::thread::sleep(Duration::from_millis(250));
+        if asked.elapsed() >= Duration::from_secs(2) {
+            asked = Instant::now();
+            if cx.paused_elsewhere() {
+                break;
+            }
+        }
+    }
+}
+
 /// The runner's loop for a step-based strategy: restore from the job's checkpoint, then until
 /// the strategy is done: stop (paused) when the stop flag is set, another process marked the
 /// job `paused`, or the item budget has run; else run a step and write its results, progress,
@@ -249,7 +276,12 @@ pub fn drive<S: Strategy + ?Sized>(s: &mut S, cx: &RunCx<'_>) -> Result<Value, S
     let mut sink = Sink::default();
     let p = write(cx, s, &mut sink, JobStatus::Running, true, false)?;
     cx.live.set(p);
+    // This program holds still while JETCARP measures this computer (#301).
+    jetcarp_core::machine::quiet::honour();
     loop {
+        if jetcarp_core::machine::quiet::held() {
+            wait_while_measuring(s, cx);
+        }
         let out_of_items = cx.items.is_some_and(|n| s.items() >= n);
         if cx.stopped() || out_of_items || cx.paused_elsewhere() {
             let p = write(cx, s, &mut sink, JobStatus::Paused, true, false)?;
