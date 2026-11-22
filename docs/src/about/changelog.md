@@ -188,10 +188,11 @@ day later (0.4.2: 17 November here, 18 November there).
   ([Scripting](../reference/scripting.md))
 - **The strobe guard: JETCARP watches what it draws, and softens, slows or pauses a scene before
   it flashes more than three times a second or shows strong regular stripes.** Every frame is
-  measured as WCAG 2.3.1 defines flashes and red flashes, with its area rule (a quarter of a 10°
-  field, for a screen watched from 40 cm at 96 pixels an inch for each step of its scale factor),
-  and the screen's mean as IRIS measures it; regular high-contrast stripes over a quarter of the
-  screen are measured as ITU-R BT.1702 describes them. The guard first softens the tiles that flash
+  measured as WCAG 2.3.1 defines flashes and red flashes (the red measure as WCAG 2.0 gives it,
+  which PEAT and IRIS use), with its area rule (a quarter of a 10° field, for a screen watched from
+  40 cm at 96 pixels an inch for each step of its scale factor), and the screen's mean as IRIS
+  measures it; regular high-contrast stripes over a quarter of the screen are measured as ITU-R
+  BT.1702 describes them. The guard first softens the tiles that flash
   (their brightness may change by at most 0.3 a second), then slows a scene that keeps flashing,
   down to half a generation a second, then pauses it with a note saying why; strong stripes are
   veiled. It is on for everyone, in the app's view, full screen, the outputs, the world AI control
@@ -286,9 +287,9 @@ day later (0.4.2: 17 November here, 18 November there).
     ([#94](https://github.com/jprodgers/jetcarp/issues/94))
 - **For someone who answered the seizure warning *at risk*, the strobe guard is stricter about
   patterns.** Their guard, which can never be turned off, also veils any pattern of similar parts,
-  regular or not, as EA's IRIS counts one (at least six parts alike in shape over a quarter of the
-  screen, light parts at least 0.25 and 0.1 brighter than the dark ones, for half a second): soups,
-  waves and mazes are often shown dimmed for them. Everyone else keeps the regular-stripes rule. It
+  regular or not, as EA's IRIS counts one (at least six parts alike in shape, the rectangle around
+  them a quarter of the screen, light parts at least 0.25, for half a second; JETCARP also asks that
+  they be 0.1 brighter than the dark ones): soups, waves and mazes are often shown dimmed for them. Everyone else keeps the regular-stripes rule. It
   applies in the app, full screen, the desktop background and the screen savers, and their exported
   animations; with it on, IRIS passes every recording of the test corpus, for flashes and for
   patterns. ([Stricter for someone at risk](../guides/strobe-guard.md#stricter-for-someone-at-risk))
@@ -682,6 +683,18 @@ day later (0.4.2: 17 November here, 18 November there).
   the layered rules and the one engine for every tiling.
   ([Findings](../research/findings.md#how-the-list-was-cut),
   [Bibliography](../research/bibliography.md), [#179](https://github.com/jprodgers/jetcarp/issues/179))
+- **The strobe guard's sources are cited, and its page says where the guard differs from them.**
+  The bibliography holds WCAG 2.2 and its *Understanding* page for success criterion 2.3.1, WCAG
+  2.0, ITU-R BT.1702-3, Ofcom's guidance note on flashing images and regular patterns, the Trace
+  Center's PEAT, EA's IRIS, Otsu (1979), Hu (1962) and OpenCV's `matchShapes`, each read before it
+  was cited; *The strobe guard*, *Accessibility* and *How JETCARP is tested* cite them. What the
+  book called "the Harding guidance" is now cited as what it rests on, Ofcom's guidance and
+  BT.1702, the source of the 40% allowed for still stripes. The page now says that the red measure
+  is WCAG 2.0's, not WCAG 2.2's newer one; that IRIS's rule for similar parts asks nothing of their
+  contrast, which JETCARP adds; and that a checkerboard reversing in squares smaller than a tile,
+  which WCAG counts as flashing unless its squares are under 0.1°, is caught only as stripes, over a
+  quarter of the screen.
+  ([The strobe guard](../guides/strobe-guard.md), [Bibliography](../research/bibliography.md))
 
 ## [0.4.2] – 2026-11-17
 

@@ -22,18 +22,27 @@ every frame and does not flash at all; a slow rule with a bright palette can. Ea
 brightness and its mean "redness", worked out on the GPU where the frame is drawn there and on the
 processor otherwise.
 
-The definitions are those of [WCAG 2.3.1](https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html),
-as the Trace Center's PEAT and EA's [IRIS](https://github.com/electronicarts/IRIS) apply them:
+The definitions are those of WCAG 2.2's success criterion 2.3.1, *Three Flashes or Below Threshold*
+([W3C 2024](../research/bibliography.md#w3c2024wcag22);
+[W3C 2025](../research/bibliography.md#w3c2025understanding)), as the Trace Center's PEAT
+([Trace Center n.d.](../research/bibliography.md#tracend_peat)) and EA's IRIS
+([Electronic Arts 2023](../research/bibliography.md#ea2023iris)) apply them:
 
 - **Brightness** is relative luminance: each colour channel decoded from sRGB to linear light, then
   `0.2126 R + 0.7152 G + 0.0722 B`, from 0 (black) to 1 (white).
 - **A transition** is a change of brightness of at least 0.1 in one direction, where the darker of
   its two states is below 0.8. **A flash** is a pair of opposite transitions.
 - **A red transition** is the same for saturated red (red at least 80% of red, green and blue
-  together): a change of at least 20 in `(R - G - B) × 320`.
+  together): a change of at least 20 in `(R - G - B) × 320`. This is the working definition WCAG
+  2.0 gives ([W3C 2008](../research/bibliography.md#w3c2008wcag20)), which PEAT and IRIS use.
+  WCAG 2.2 gives a newer one, a change in chromaticity, which the guard does not use.
 - **More than three flashes in any one second fail**: more than six transitions in a sliding
   window of one second. Two or three flashes a second is a warning, and a warning that lasts four
-  seconds out of five fails too (IRIS's extended failure).
+  seconds out of five fails too: IRIS's *extended failure*. PEAT warns of long flashing below the
+  limits without failing it, and the broadcasting guidance notes that flashing for more than five
+  seconds might be a risk even within its limits
+  ([ITU-R 2023](../research/bibliography.md#itu2023bt1702);
+  [Ofcom 2017](../research/bibliography.md#ofcom2017flashing)).
 
 **The area rule.** Flashes are harmful when the flashing areas together cover more than a quarter
 of any 10° field of vision. How many pixels that is depends on the screen and on how far away you
@@ -51,11 +60,14 @@ A flash is an area changing together, so a tile's transition counts only when at
 eight tiles around it made the same transition within the same few frames. A field, a large square
 or a band flipping counts; a soup of small cells flickering at random changes neighbouring tiles
 independently, and does not. A tile counts what changes its mean, so a checkerboard of squares
-smaller than a tile reversing in step keeps every tile's mean: it is not a flash either, and is
-caught as a stripe pattern instead.
+smaller than a tile reversing in step keeps every tile's mean, and the guard does not count it as
+a flash. WCAG does, unless the squares are smaller than 0.1° (under 3 pixels at the distance
+assumed above): the guard catches such a checkerboard only as a stripe pattern, once it covers
+more than a quarter of the screen.
 
-**Stripes.** Regular high-contrast stripes can trigger seizures as flashes can
-([ITU-R BT.1702](https://www.itu.int/rec/R-REC-BT.1702), the Harding guidance). The guard looks
+**Stripes.** Regular high-contrast stripes can trigger seizures as flashes can (ITU-R BT.1702,
+[ITU-R 2023](../research/bibliography.md#itu2023bt1702); Ofcom's guidance on flashing images and
+regular patterns, [Ofcom 2017](../research/bibliography.md#ofcom2017flashing)). The guard looks
 for them four times a second, in a half-resolution copy of the frame, in windows of 16 by 16
 samples at four scales, so stripes from 4 to about 128 pixels a pair are seen. A window has stripes
 when its light and dark parts differ by at least 0.05 in brightness (the dark ones below 0.8); when
@@ -68,11 +80,12 @@ and hexagons from about 12 pixels a cell) would be strong stripes, rows of repea
 JETCARP draws them there no more than 0.06 darker than the cells: under the stripe check's limit,
 and still visible. Elsewhere, beside darker cells, over small bright shapes, and on tilings whose
 outlines make no stripes, outlines look as they always have. Stripes covering more than a quarter
-of the screen, with more than five light-dark pairs across them, are a harmful pattern; harmful for
-half a second, they fail, as IRIS counts them. The guidance allows still stripes over up to 40% of the screen; JETCARP,
-like IRIS, uses a quarter for still and moving stripes alike. Stripes finer than 4 pixels a pair
-blur into the half-resolution copy and are not measured; at the assumed distance they are more
-than six cycles a degree.
+of the screen, with more than five light-dark pairs across them, are a harmful pattern (the
+guidance's limit for stripes that oscillate, flash or reverse); harmful for half a second, they
+fail, as IRIS counts them. For still stripes the guidance allows up to 40% of the screen (Ofcom's
+rule, which BT.1702 gives as informative guidance); JETCARP, like IRIS, uses a quarter for still
+and moving stripes alike. Stripes finer than 4 pixels a pair blur into the half-resolution copy
+and are not measured; at the assumed distance they are more than six cycles a degree.
 
 ## What it does
 
@@ -104,11 +117,12 @@ generations whatever the guard does, and a scene's hash is the same.
 For someone who answered the warning *I have, or may have, a seizure disorder*, whose guard can
 never be turned off, the guard is stricter about patterns. Besides regular stripes, it veils any
 **pattern of similar parts**, regular or not, as EA's IRIS counts one: at least six parts alike in
-shape (a soup of square cells, scattered dark cells on a light ground, a field of waves) that
-together cover a quarter of the screen or more, their light parts at least 0.25 in brightness and
-at least 0.1 brighter than the dark ones, for half a second. It veils them where they are, as
-stripes are, and far enough that their light parts drop below 0.25. Flashes are measured as for
-everyone.
+shape (a soup of square cells, scattered dark cells on a light ground, a field of waves), the
+rectangle around them a quarter of the screen or more, their light parts at least 0.25 in
+brightness, for half a second. JETCARP also asks that the light parts be at least 0.1 brighter than
+the dark ones, the change a flash needs; IRIS does not. The guard veils such patterns where they
+are, as it veils stripes, and far enough that their light parts drop below 0.25. Flashes are
+measured as for everyone.
 
 So for them ordinary soups, waves and mazes are often shown dimmed, where for anyone else they are
 shown as drawn. It applies wherever their answer does: the app's view, full screen and the outputs,
@@ -120,11 +134,14 @@ fail, for flashes or for patterns, on any recording of the test corpus
 safe for someone with a seizure disorder.
 
 How it is measured: the half-resolution copy of the frame (halved again until it is at most 480
-samples wide) is cut into light and dark at Otsu's threshold, as IRIS cuts it; each connected light
+samples wide) is cut into light and dark at Otsu's threshold
+([Otsu 1979](../research/bibliography.md#otsu1979threshold)), as IRIS cuts it; each connected light
 or dark part from 0.155% to a sixth of the copy is taken as its convex hull, and two parts are alike
-when their Hu moments differ by less than 0.7 (OpenCV's `matchShapes`, IRIS's measure and
-threshold). The most parts alike to one of them, and the rectangle around them, are the pattern. A
-check costs a millisecond or two, four times a second, and only for someone at risk.
+when their Hu moments ([Hu 1962](../research/bibliography.md#hu1962visual)) differ by less than 0.7
+by OpenCV's `matchShapes`, method I1
+([OpenCV n.d.](../research/bibliography.md#opencvnd_matchshapes)), IRIS's measure and threshold.
+The most parts alike to one of them, and the rectangle around them, are the pattern. A check costs
+a millisecond or two, four times a second, and only for someone at risk.
 
 ## Where it works
 
@@ -205,12 +222,14 @@ status` report the switch as `strobe_guard`.
 
 An animation posted online flashes for whoever opens it. Exported GIF and WebP animations are
 measured frame by frame, at their own frame rate, looping as a player would (at least twice and for
-at least six seconds, so the seam where the end meets the start is measured too), as shown at its
-own size on the screen the guard assumes (above): the 10° field is 265 of its pixels across, a
-little smaller than WCAG's own estimate for a 1024 × 768 screen. The whole frame's mean is tracked
-as IRIS tracks a recording, so a small animation that flashes all over is caught too. An animation
-that flashes more than three times a second, or two or three times a second for four seconds out of
-five, or shows strong stripes for half a second, is caught before it is saved.
+at least six seconds, so the seam where the end meets the start is measured too), as WCAG asks of
+clips that may loop ([W3C 2025](../research/bibliography.md#w3c2025understanding)). Each is
+measured as shown at its own size on the screen the guard assumes (above): the 10° field is 265 of
+its pixels across, a little smaller than WCAG's own estimate for a 1024 × 768 screen, a rectangle
+of 341 by 256 ([W3C 2024](../research/bibliography.md#w3c2024wcag22)). The whole frame's mean is
+tracked as IRIS tracks a recording, so a small animation that flashes all over is caught too. An
+animation that flashes more than three times a second, or two or three times a second for four
+seconds out of five, or shows strong stripes for half a second, is caught before it is saved.
 
 - **In the app** (*File → Export animation…*), such an animation is held before it is saved, with
   what was found and a choice: **Save the softened version** (the default), or **Cancel**. With the

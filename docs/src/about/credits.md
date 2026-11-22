@@ -336,6 +336,11 @@ credit and source are given:
 - **Gaurav Sharma**, **Wencheng Wu** and **Edul N. Dalal**: implementation notes and test data for
   the CIEDE2000 colour difference (2005); **Danielle Albers Szafir**: colour differences for small marks (2018);
   **Jamie R. Nuñez**, **Christopher R. Anderton** and **Ryan S. Renslow**: cividis (2018).
-- **The W3C**: the definitions of flashes and red flashes in WCAG 2.3.1; the ITU: regular patterns
-  in ITU-R BT.1702; **Electronic Arts**: IRIS, the photosensitivity analyser whose measures the guard
-  follows and is checked against.
+- **The W3C**: the definitions of flashes and red flashes in WCAG 2.3.1, the red measure as WCAG 2.0
+  gives it; **the ITU** and **Ofcom**: regular patterns, in ITU-R BT.1702 and in Ofcom's guidance on
+  flashing images and regular patterns; **the Trace Center**: PEAT, which applies WCAG's definitions
+  as the guard does; **Electronic Arts**: IRIS, the photosensitivity analyser whose measures the
+  guard follows and is checked against.
+- **Nobuyuki Otsu**: the threshold that splits light from dark in the stricter pattern check
+  (1979); **Ming-Kuei Hu**: the moment invariants by which it compares shapes (1962), as OpenCV's
+  `matchShapes` compares them.

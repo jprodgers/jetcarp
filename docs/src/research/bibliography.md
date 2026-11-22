@@ -6,7 +6,7 @@
 > **Generated page.** This list is built from `docs/data/bibliography.bib` by
 > `docs/tools/gen-bibliography.py`. Edit the BibTeX file, not this page.
 
-These are the 279 works cited across the JETCARP documentation. Each was checked
+These are the 289 works cited across the JETCARP documentation. Each was checked
 against a primary record where one could be read (a DOI landing page or Crossref, arXiv, the
 publisher, archive.org, the author's or project's own page, or LifeWiki) when the history
 research was compiled in November 2026. The 10 marked † could not be read, and rest on a
@@ -122,6 +122,8 @@ directly.
 <span id="durrett1993asymptotic"></span>Durrett, Richard and David Griffeath (1993). “Asymptotic Behavior of Excitable Cellular Automata”. *Experimental Mathematics* 2(3): 183–208. doi:[10.1080/10586458.1993.10504277](https://doi.org/10.1080/10586458.1993.10504277). <small>`durrett1993asymptotic`</small>
 
 ## E
+
+<span id="ea2023iris"></span>Electronic Arts (2023). “IRIS”. GitHub repository electronicarts/IRIS. <https://github.com/electronicarts/IRIS>; accessed 2026-11-21. <small>`ea2023iris`</small>
 
 <span id="edmond2026gliders"></span>Edmond, James (2026). “Gliders on Aperiodic Monotilings: Cellular Automata on the Hat and Spectre”. [arXiv:2609.22579](https://arxiv.org/abs/2609.22579). <small>`edmond2026gliders`</small>
 
@@ -283,6 +285,8 @@ directly.
 
 <span id="hill2005penrose"></span>Hill, Margaret, Susan Stepney and Francis Wan (2005). “Penrose Life: Ash and Oscillators”. In *Advances in Artificial Life (ECAL 2005)*, pp. 471–480. Springer. doi:[10.1007/11553090_48](https://doi.org/10.1007/11553090_48). <small>`hill2005penrose`</small>
 
+<span id="hu1962visual"></span>Hu, Ming-Kuei (1962). “Visual pattern recognition by moment invariants”. *IRE Transactions on Information Theory* 8(2): 179–187. doi:[10.1109/TIT.1962.1057692](https://doi.org/10.1109/TIT.1962.1057692). <small>`hu1962visual`</small>
+
 <span id="hutton2010codd"></span>Hutton, Tim J. (2010). “Codd's self-replicating computer”. *Artificial Life* 16(2): 99–117. doi:[10.1162/artl.2010.16.2.16200](https://doi.org/10.1162/artl.2010.16.2.16200). <small>`hutton2010codd`</small>
 
 <span id="hutton2015twodimensional"></span>Hutton, Tim and others (2015). “Two Dimensional Turing Machines”. GollyGang ruletablerepository wiki. <https://github.com/GollyGang/ruletablerepository/wiki/TwoDimensionalTuringMachines>; accessed 2026-11-10. <small>`hutton2015twodimensional`</small>
@@ -290,6 +294,10 @@ directly.
 <span id="huttonnd_ready"></span>Hutton, Tim, Robert Munafo, Andrew Trevorrow, Tom Rokicki and Dan Wills (n.d.). “Ready: a cross-platform implementation of various reaction-diffusion systems”. GollyGang, GitHub. <https://github.com/GollyGang/ready>; accessed 2026-11-10. <small>`huttonnd_ready`</small>
 
 <span id="huttonnd_ruletablerepository"></span>Hutton, Tim and others (n.d.). “Rule Table Repository: The Rules”. GitHub wiki, GollyGang/ruletablerepository. <https://github.com/GollyGang/ruletablerepository/wiki/TheRules>; accessed 2026-11-10. <small>`huttonnd_ruletablerepository`</small>
+
+## I
+
+<span id="itu2023bt1702"></span>ITU-R (2023). “Guidance for the reduction of photosensitive epileptic seizures caused by television”. Recommendation ITU-R BT.1702-3 (11/2023). International Telecommunication Union, Geneva. <https://www.itu.int/rec/R-REC-BT.1702-3-202311-I/en>; accessed 2026-11-21. <small>`itu2023bt1702`</small>
 
 ## J
 
@@ -465,7 +473,13 @@ directly.
 
 ## O
 
+<span id="ofcom2017flashing"></span>Ofcom (2017). “Guidance Notes, Section 2: Harm and offence. Annex 1: Ofcom Guidance Note on Flashing Images and Regular Patterns in Television”. Guidance to the Ofcom Broadcasting Code, Issue Twelve, 18 July 2017. <https://www.ofcom.org.uk/siteassets/resources/documents/tv-radio-and-on-demand/broadcast-guidance/programme-guidance/broadcast-code-guidance/section-2-guidance-notes.pdf>; accessed 2026-11-21. <small>`ofcom2017flashing`</small>
+
+<span id="opencvnd_matchshapes"></span>OpenCV (n.d.). “Structural Analysis and Shape Descriptors: matchShapes”. OpenCV 4.x documentation, image processing module. <https://docs.opencv.org/4.x/d3/dc0/group__imgproc__shape.html>; accessed 2026-11-21. <small>`opencvnd_matchshapes`</small>
+
 <span id="ostojic2003patterns"></span>Ostojic, Srdjan (2003). “Patterns formed by addition of grains to only one site of an abelian sandpile”. *Physica A* 318(1–2): 187–199. doi:[10.1016/S0378-4371(02)01426-7](https://doi.org/10.1016/S0378-4371(02)01426-7). <small>`ostojic2003patterns`</small>
+
+<span id="otsu1979threshold"></span>Otsu, Nobuyuki (1979). “A Threshold Selection Method from Gray-Level Histograms”. *IEEE Transactions on Systems, Man, and Cybernetics* 9(1): 62–66. doi:[10.1109/TSMC.1979.4310076](https://doi.org/10.1109/TSMC.1979.4310076). <small>`otsu1979threshold`</small>
 
 <span id="owens2010game"></span>Owens, Nick and Susan Stepney (2010). “The Game of Life Rules on Penrose Tilings: Still Life and Oscillators”. In Adamatzky, Andrew (ed.), *Game of Life Cellular Automata*, pp. 331–378. Springer. doi:[10.1007/978-1-84996-217-9_18](https://doi.org/10.1007/978-1-84996-217-9_18). <small>`owens2010game`</small>
 
@@ -561,6 +575,8 @@ directly.
 
 <span id="toussaint1983particle"></span>Toussaint, Douglas and Frank Wilczek (1983). “Particle–antiparticle annihilation in diffusive motion”. *Journal of Chemical Physics* 78(5): 2642–2647. doi:[10.1063/1.445022](https://doi.org/10.1063/1.445022). <small>`toussaint1983particle`</small>
 
+<span id="tracend_peat"></span>Trace Center (n.d.). “Photosensitive Epilepsy Analysis Tool (PEAT) User Guide, Version 1.6”. Trace Research and Development Center, University of Maryland. <https://trace.umd.edu/photosensitive-epilepsy-analysis-tool-peat-user-guide/>; accessed 2026-11-21. <small>`tracend_peat`</small>
+
 <span id="trevorrow2023hatlife"></span>Trevorrow, Andrew (2023). “HatLife”. ConwayLife.com forums, thread t=6015. <https://conwaylife.com/forums/viewtopic.php?p=161425>; accessed 2026-11-10. <small>`trevorrow2023hatlife`</small>
 
 <span id="trevorrow2026spectrelife"></span>Trevorrow, Andrew (2026). “SpectreLife”. ConwayLife.com forums, thread t=7489. <https://conwaylife.com/forums/viewtopic.php?t=7489>; accessed 2026-11-10. <small>`trevorrow2026spectrelife`</small>
@@ -582,6 +598,12 @@ directly.
 <span id="vonneumann1966theory"></span>von Neumann, John (1966). *Theory of Self-Reproducing Automata*. Urbana, IL: University of Illinois Press. <https://archive.org/details/theoryofselfrepr00vonn_0>. <small>`vonneumann1966theory`</small>
 
 ## W
+
+<span id="w3c2008wcag20"></span>W3C (2008). “Web Content Accessibility Guidelines (WCAG) 2.0”. W3C Recommendation, 11 December 2008. Edited by Ben Caldwell, Michael Cooper, Loretta Guarino Reid and Gregg Vanderheiden. <https://www.w3.org/TR/WCAG20/>; accessed 2026-11-21. <small>`w3c2008wcag20`</small>
+
+<span id="w3c2024wcag22"></span>W3C (2024). “Web Content Accessibility Guidelines (WCAG) 2.2”. W3C Recommendation, 12 December 2024. Edited by Alastair Campbell, Chuck Adams, Rachael Bradley Montgomery, Michael Cooper and Andrew Kirkpatrick. <https://www.w3.org/TR/WCAG22/>; accessed 2026-11-21. <small>`w3c2024wcag22`</small>
+
+<span id="w3c2025understanding"></span>W3C (2025). “Understanding Success Criterion 2.3.1: Three Flashes or Below Threshold”. Understanding WCAG 2.2, W3C Web Accessibility Initiative; by the Accessibility Guidelines Working Group. <https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html>; accessed 2026-11-21. <small>`w3c2025understanding`</small>
 
 <span id="walkernd_cellabrules"></span>Rucker, Rudy and John Walker (n.d.). “CelLab User Guide: Rules”. <https://www.fourmilab.ch/cellab/manual/rules.html>; accessed 2026-11-10. <small>`walkernd_cellabrules`</small>
 

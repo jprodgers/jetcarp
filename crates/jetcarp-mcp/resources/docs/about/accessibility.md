@@ -19,15 +19,19 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
   the same answer, however they are started: from the app, the command line, at login or by an AI
   client. See [Photosensitive seizure warning](../getting-started/photosensitivity.md).
 - **The strobe guard.** JETCARP watches every frame it draws for flashing and red flashing (as
-  [WCAG 2.3.1](https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html)
-  defines them) and for strong regular stripes (as ITU-R BT.1702 and the Harding guidance describe
-  them). Before a scene crosses those limits it softens it, then slows it, then pauses it with a
-  note saying why. The guard runs wherever JETCARP draws: the app, full screen, the desktop
-  background, the screen savers, and the animations it exports, which it checks before saving. See
+  WCAG 2.3.1 defines them: [W3C 2024](../research/bibliography.md#w3c2024wcag22);
+  [W3C 2025](../research/bibliography.md#w3c2025understanding)) and for strong regular stripes (as
+  ITU-R BT.1702 and Ofcom's broadcasting guidance describe them:
+  [ITU-R 2023](../research/bibliography.md#itu2023bt1702);
+  [Ofcom 2017](../research/bibliography.md#ofcom2017flashing)). Before a scene crosses those limits
+  it softens it, then slows it, then pauses it with a note saying why. The guard runs wherever
+  JETCARP draws: the app, full screen, the desktop background, the screen savers, and the
+  animations it exports, which it checks before saving. See
   [The strobe guard](../guides/strobe-guard.md).
 - **Stricter for someone at risk.** If you answered that you have, or may have, a seizure
   disorder, the guard also dims any pattern of similar parts, regular or not, as EA's IRIS
-  analyser counts one, so soups, waves and mazes are often shown dimmed for you. See
+  analyser counts one ([Electronic Arts 2023](../research/bibliography.md#ea2023iris)), so soups,
+  waves and mazes are often shown dimmed for you. See
   [Stricter for someone at risk](../guides/strobe-guard.md#stricter-for-someone-at-risk).
 - **Who can turn it off.** The guard is on for everyone. If you answered that you have, or may
   have, a seizure disorder, it can't be turned off. If you answered that you don't, you can turn it
@@ -147,11 +151,12 @@ These are known, and each is tracked:
 
 ## How this was assessed
 
-The maintainer assessed JETCARP against the [Web Content Accessibility Guidelines
-2.2](https://www.w3.org/TR/WCAG22/) where they apply to a desktop program, with Claude Code, in
-November 2026. No outside party has audited it. The strobe guard's detector is compared with
-[IRIS](https://github.com/electronicarts/IRIS), Electronic Arts' open-source photosensitivity
-analyser, on a corpus of scenes made to flash, scenes just under the limits and ordinary scenes
+The maintainer assessed JETCARP against the Web Content Accessibility Guidelines 2.2
+([W3C 2024](../research/bibliography.md#w3c2024wcag22)) where they apply to a desktop program,
+with Claude Code, in November 2026. No outside party has audited it. The strobe guard's detector
+is compared with IRIS, Electronic Arts' open-source photosensitivity analyser
+([Electronic Arts 2023](../research/bibliography.md#ea2023iris)), on a corpus of scenes made to
+flash, scenes just under the limits and ordinary scenes
 ([How JETCARP is tested](testing.md)).
 
 ## Tell us

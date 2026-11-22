@@ -201,21 +201,22 @@ with the guard already on.
   savers, both ways it can draw, and the app's whole window (ignored test, on the GPU), with the
   flipping field: what they show, read back and measured on the processor, never fails. An exported
   animation of it is caught, and its softened version, read back from the file, passes.
-- **The outside check** compares JETCARP's verdicts with those of EA's
-  [IRIS](https://github.com/electronicarts/IRIS) on recordings of what each output path drew
-  ([Comparing with IRIS](#comparing-with-iris)). For flashes it misses nothing IRIS flags, and with
-  the guard on IRIS passes every recording for flashing. For patterns, the guard for someone at
-  risk misses nothing IRIS's pattern check flags, and with it on IRIS passes every recording; the
-  usual guard counts regular stripes only, and its disagreements with IRIS are listed. IRIS, like
-  the guard, is a tool, not a certificate.
+- **The outside check** compares JETCARP's verdicts with those of EA's IRIS
+  ([Electronic Arts 2023](../research/bibliography.md#ea2023iris)) on recordings of what each
+  output path drew ([Comparing with IRIS](#comparing-with-iris)). For flashes it misses nothing
+  IRIS flags, and with the guard on IRIS passes every recording for flashing. For patterns, the
+  guard for someone at risk misses nothing IRIS's pattern check flags, and with it on IRIS passes
+  every recording; the usual guard counts regular stripes only, and its disagreements with IRIS are
+  listed. IRIS, like the guard, is a tool, not a certificate.
 
 ### Comparing with IRIS
 
 JETCARP neither ships nor builds IRIS; this is how the comparison was run, and what it found.
 
-1. **IRIS** at commit `d96978ac1107f3463b77f69a9c1b1ec5d45291a0` (14 January 2025), unchanged,
-   built as its README says: CMake with vcpkg at IRIS's own baseline (`0affe8710a4a`, which brings
-   OpenCV 4.8 with FFmpeg), its example program, release only. It was built on Fedora 45 without
+1. **IRIS** ([Electronic Arts 2023](../research/bibliography.md#ea2023iris)) at commit
+   `d96978ac1107f3463b77f69a9c1b1ec5d45291a0` (14 January 2025), unchanged, built as its README
+   says: CMake with vcpkg at IRIS's own baseline (`0affe8710a4a`, which brings OpenCV 4.8 with
+   FFmpeg), its example program, release only. It was built on Fedora 45 without
    administrator rights: the build tools vcpkg does not fetch on Linux (m4, bison, autoconf,
    automake, libtool, gperf and NASM, a few pure-Perl modules Fedora packages apart, and Jinja2)
    were built or fetched into the build's own folder. The host's compiler and headers are newer
