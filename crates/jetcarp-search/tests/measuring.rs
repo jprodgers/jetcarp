@@ -74,12 +74,16 @@ fn a_running_job_waits_while_jetcarp_measures() {
         )
         .unwrap()
     };
+    // Unheld, the hunt's progress moves on with each step (about three seconds of soups).
+    let before = soups();
+    wait("the hunt's next step", &|| soups() > before);
     write();
-    // A step under way ends first (a hunt's run about three seconds at most).
-    std::thread::sleep(Duration::from_secs(4));
+    // A step under way ends first.
+    std::thread::sleep(Duration::from_secs(5));
     write();
     let a = soups();
-    std::thread::sleep(Duration::from_secs(2));
+    // Long enough for two or three steps, had it run on.
+    std::thread::sleep(Duration::from_secs(8));
     let b = soups();
     assert_eq!(a, b, "the hunt ran on while JETCARP measured");
     // The measuring ends: the hunt carries on in this process, as it was.
