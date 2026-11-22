@@ -381,16 +381,70 @@ pub(crate) fn show<T: serde::Serialize + Report>(out: &T, json: bool) -> Result<
     out.check().map_err(anyhow::Error::new)
 }
 
-/// Progress as one line on standard error, rewritten in place (`\r`), fitted to the terminal's
-/// width (#104); the caller ends it.
-pub(crate) struct ProgressLine;
+/// Progress on standard error. In a terminal: one line rewritten in place (`\r` and the erase
+/// code), fitted to the terminal's width (#104), which the caller ends ([`ProgressLine::end`] or
+/// [`ProgressLine::erase`]). To a file or a pipe: plain lines, with no escape codes and no `\r`
+/// (#299): every step on a line of its own ([`ProgressLine::steps`], a benchmark's few steps), or
+/// a count at most every five seconds ([`ProgressLine::counts`], a library check's many).
+pub(crate) struct ProgressLine {
+    tty: bool,
+    /// Off a terminal, the shortest time between two lines (none: every report).
+    every: Option<f64>,
+    /// When a line was last written off a terminal; whether one shows in the terminal.
+    last: std::sync::Mutex<(Option<std::time::Instant>, bool)>,
+}
+
+impl ProgressLine {
+    fn new(every: Option<f64>) -> ProgressLine {
+        use std::io::IsTerminal;
+        ProgressLine {
+            tty: std::io::stderr().is_terminal(),
+            every,
+            last: std::sync::Mutex::new((None, false)),
+        }
+    }
+
+    /// Each report a step of its own.
+    pub(crate) fn steps() -> ProgressLine {
+        ProgressLine::new(None)
+    }
+
+    /// Reports that count up, as often as many times a second.
+    pub(crate) fn counts() -> ProgressLine {
+        ProgressLine::new(Some(5.0))
+    }
+
+    /// In a terminal, end the line shown, so it stays above what follows; elsewhere nothing.
+    pub(crate) fn end(&self) {
+        let mut l = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if l.1 {
+            eprintln!();
+            l.1 = false;
+        }
+    }
+
+    /// In a terminal, erase the line shown (what follows says the same); elsewhere nothing.
+    pub(crate) fn erase(&self) {
+        let mut l = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if l.1 {
+            eprint!("{}", term::clear_line());
+            l.1 = false;
+        }
+    }
+}
+
 impl Progress for ProgressLine {
     fn report(&self, _done: u64, _total: Option<u64>, msg: &str) {
-        use std::io::IsTerminal;
-        if std::io::stderr().is_terminal() {
+        let mut l = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if self.tty {
             eprint!("{}{}", term::clear_line(), term::fit_to_stderr(msg));
-        } else {
-            eprint!("\r{msg}");
+            l.1 = true;
+        } else if self
+            .every
+            .is_none_or(|s| l.0.is_none_or(|t| t.elapsed().as_secs_f64() >= s))
+        {
+            eprintln!("{msg}");
+            l.0 = Some(std::time::Instant::now());
         }
     }
 }

@@ -72,8 +72,9 @@ pub fn score(cx: &Ctx, a: ScoreArgs, json: bool) -> Result<()> {
     let r = if json {
         MachineScore::run(cx, i, &Quiet)
     } else {
-        let r = MachineScore::run(cx, i, &ProgressLine);
-        eprint!("{}", crate::term::clear_line());
+        let p = ProgressLine::steps();
+        let r = MachineScore::run(cx, i, &p);
+        p.erase();
         r
     };
     show(&r?, json)
