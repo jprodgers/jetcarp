@@ -454,7 +454,8 @@ fn settings_ui(
             "JETCARP's words are in Atkinson Hyperlegible Next, a font whose letters are easier to \
              tell apart, designed by the Braille Institute for low-vision readers. You can choose \
              any font installed on this computer instead, or a font file. A character the font \
-             lacks is drawn in egui's own fonts.",
+             lacks is drawn in egui's own fonts, or else in an installed font that has it. The \
+             caption on the desktop background follows the Font setting.",
         )
         .small(),
     );
