@@ -78,7 +78,7 @@ pub fn folder() -> Option<PathBuf> {
     crate::paths::runtime_dir().map(|d| d.join(DIR))
 }
 
-/// This process's holds.
+/// This process's holds (changed only under [`WRITING`]).
 static HOLDS: AtomicUsize = AtomicUsize::new(0);
 /// Held while this process's record is written or removed, so a renewal under way when the last
 /// hold ends finishes before the record is removed, and none starts after.
@@ -131,7 +131,10 @@ pub struct Hold {
 impl Hold {
     /// Say that `program` measures, now and every [`EVERY`] until dropped.
     pub fn take(program: &str) -> Hold {
-        HOLDS.fetch_add(1, Ordering::SeqCst);
+        {
+            let _w = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+            HOLDS.fetch_add(1, Ordering::SeqCst);
+        }
         renew(program);
         let stop = Arc::new(AtomicBool::new(false));
         let (s, program) = (stop.clone(), program.to_string());
@@ -155,9 +158,9 @@ impl Drop for Hold {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
         let _w = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-        let before = HOLDS
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
-            .unwrap_or(0);
+        // Counted under the lock, as taking one is (and after `end_now`, none is left).
+        let before = HOLDS.load(Ordering::SeqCst);
+        HOLDS.store(before.saturating_sub(1), Ordering::SeqCst);
         if before == 1
             && let Some(dir) = folder()
         {
@@ -260,12 +263,15 @@ pub struct Load {
     pub gpu: Option<f64>,
 }
 
+/// A way to measure the load over so many seconds.
+type Sampler = fn(f64) -> Load;
+
 /// What [`Load::sample`] uses instead of the system's figures (tests).
-static SAMPLER: RwLock<Option<fn(f64) -> Load>> = RwLock::new(None);
+static SAMPLER: RwLock<Option<Sampler>> = RwLock::new(None);
 
 /// Measure the load with `f` instead of the system's figures, in this process from now on: the
 /// tests, whose machine is busy with other tests.
-pub fn sample_with(f: fn(f64) -> Load) {
+pub fn sample_with(f: Sampler) {
     if let Ok(mut s) = SAMPLER.write() {
         *s = Some(f);
     }
