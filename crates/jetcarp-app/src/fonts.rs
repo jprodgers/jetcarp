@@ -213,10 +213,7 @@ fn check_face(bytes: &[u8], index: u32) -> Result<String, String> {
     }
     let charmap = font.charmap();
     let outlines = font.outline_glyphs();
-    let mut missing = basic_latin()
-        .filter(|c| charmap.map(*c).is_none())
-        .peekable();
-    if missing.peek().is_some() {
+    if basic_latin().any(|c| charmap.map(c).is_none()) {
         return Err(
             "has no basic Latin letters and digits (A to Z, a to z, 0 to 9), so JETCARP's words \
              can't be drawn in it."
