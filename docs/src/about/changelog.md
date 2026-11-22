@@ -467,6 +467,13 @@ day later (0.4.2: 17 November here, 18 November there).
   are veiled where they flash, on the GPU and the processor alike.
   ([Change in part of a tile](../guides/strobe-guard.md#partial-change),
   [#275](https://github.com/jprodgers/jetcarp/issues/275))
+- **The strobe guard veils dense restless ash at once.** Ash that keeps changing in part of each
+  tile without coming back (Walled Cities, 34 Life, Long Life, a Seeds soup) was softened and
+  slowed, but up to a second and a half of flashing reached the screen first; such change now
+  counts where it flashes on its own and is veiled at once, while Brian's Brain and Life soups,
+  which WCAG counted pixel by pixel does not count as flashing together, are left alone.
+  ([Restless change](../guides/strobe-guard.md#restless-change),
+  [#289](https://github.com/jprodgers/jetcarp/issues/289))
 
 - **The Windows installer's `-Uninstall` leaves the user PATH alone when JETCARP's folder isn't on
   it.** It wrote the PATH back whatever it held, tidied (empty entries dropped), so a PATH could
