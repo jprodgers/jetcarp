@@ -105,10 +105,11 @@ fn save(config: &Path, state: &BuiltFrom) {
     let file = config.join(STATE_FILE);
     let tmp = config.join(format!("{STATE_FILE}.{}", std::process::id()));
     let text = serde_json::to_string_pretty(state).unwrap_or_default();
-    if std::fs::create_dir_all(config).is_ok() && std::fs::write(&tmp, text + "\n").is_ok() {
-        if std::fs::rename(&tmp, &file).is_err() {
-            let _ = std::fs::remove_file(&tmp);
-        }
+    if std::fs::create_dir_all(config).is_ok()
+        && std::fs::write(&tmp, text + "\n").is_ok()
+        && std::fs::rename(&tmp, &file).is_err()
+    {
+        let _ = std::fs::remove_file(&tmp);
     }
 }
 

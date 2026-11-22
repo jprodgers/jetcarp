@@ -102,6 +102,9 @@ fn guard_off(config: &Path) {
     photosensitivity::set_guard_in(config, GuardPlace::Desktop, false).unwrap();
 }
 
+/// A change to the settings, as a test makes it.
+type Change = Box<dyn Fn()>;
+
 /// Each thing the bundle bakes, changed however it is changed (here, as the files are written),
 /// marks it out of date.
 #[test]
@@ -112,7 +115,7 @@ fn a_change_marks_the_bundle_out_of_date() {
     assert!(!out_of_date(&s.config, &t), "just built");
     let config = s.config.clone();
     let dylib = s.dylib.clone();
-    let changes: Vec<(&str, Box<dyn Fn()>)> = vec![
+    let changes: Vec<(&str, Change)> = vec![
         (
             "the rotation chosen",
             Box::new(|| {
