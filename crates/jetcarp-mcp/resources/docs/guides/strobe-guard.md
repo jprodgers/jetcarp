@@ -19,8 +19,8 @@ deliberate confirmation ([Turning it off](#turning-it-off)).
 The guard measures what reaches the screen, never what a rule "should" do. A field that flips every
 generation (a Margolus Tron background, say), run at twice the frame rate, shows the same phase in
 every frame and does not flash at all; a slow rule with a bright palette can. Each frame is reduced to tiles of 16 by 16 pixels, each with its mean
-brightness and its mean "redness", and its fine pattern ([below](#fine-patterns)), worked out on the
-GPU where the frame is drawn there and on the processor otherwise.
+brightness, its mean "redness" and its mean colour, and its fine pattern ([below](#fine-patterns)),
+worked out on the GPU where the frame is drawn there and on the processor otherwise.
 
 The definitions are those of WCAG 2.2's success criterion 2.3.1, *Three Flashes or Below Threshold*
 ([W3C 2024](../research/bibliography.md#w3c2024wcag22);
@@ -32,10 +32,18 @@ The definitions are those of WCAG 2.2's success criterion 2.3.1, *Three Flashes 
   `0.2126 R + 0.7152 G + 0.0722 B`, from 0 (black) to 1 (white).
 - **A transition** is a change of brightness of at least 0.1 in one direction, where the darker of
   its two states is below 0.8. **A flash** is a pair of opposite transitions.
-- **A red transition** is the same for saturated red (red at least 80% of red, green and blue
-  together): a change of at least 20 in `(R - G - B) × 320`. This is the working definition WCAG
-  2.0 gives ([W3C 2008](../research/bibliography.md#w3c2008wcag20)), which PEAT and IRIS use.
-  WCAG 2.2 gives a newer one, a change in chromaticity, which the guard does not use.
+- **A red transition** is counted by either of WCAG's two definitions: if either calls it a red
+  flash, it is one. WCAG 2.0's working definition
+  ([W3C 2008](../research/bibliography.md#w3c2008wcag20)), which PEAT and IRIS use, is the same as
+  a transition, for saturated red (red at least 80% of red, green and blue together): a change of
+  at least 20 in `(R - G - B) × 320`. WCAG 2.2's
+  ([W3C 2024](../research/bibliography.md#w3c2024wcag22)) is a change of more than 0.2 in
+  chromaticity, on the CIE 1976 UCS diagram, to or from a saturated red: red to a green or a grey of
+  the same brightness, say, which 2.0's measure may barely see. The guard measures it on each
+  tile's mean colour, counts a run of change once however slowly it goes, and counts one red
+  transition in a frame where both definitions see one. It counts WCAG 2.2's only on tiles, by the
+  area rule: on a dark ground the whole screen's mean colour has the chromaticity of whatever is
+  lit, however little of it, so the screen's mean is tracked by 2.0's measure alone.
 - **More than three flashes in any one second fail**: more than six transitions in a sliding
   window of one second. Two or three flashes a second is a warning, and a warning that lasts four
   seconds out of five fails too: IRIS's *extended failure*. PEAT warns of long flashing below the
@@ -281,17 +289,17 @@ Since 0.4.3 the strobe guard is part of every animation's render key, so `jetcar
 
 ## What it costs
 
-Measuring is one read of each frame on the GPU, in a compute pass, fine patterns included. On an AMD
-Radeon 8060S it takes 0.07 ms a frame at 1920 × 1080 (0.4% of a 60 Hz frame) and 0.26 ms at
-3840 × 2160 (1.5%); without the fine patterns it took 0.03 and 0.11 ms. On a weak integrated GPU,
-perhaps a tenth as fast, it should stay under 5% of a frame at 1080p (not yet measured). Its
-readings come back to the processor, 64 bytes a tile (2 MB a frame at 3840 × 2160), in about
-0.1 ms. Counting the transitions in them takes the processor about 0.35 ms a frame at
-3840 × 2160 (0.23 ms without the fine patterns), for the frames as drawn and again as shown, and
-up to 1.2 ms while the whole screen flashes. Softening costs more, 0.15 ms a frame at 1080p on the
-same GPU, but only while it acts. The stripe check takes about 3 ms of one processor core for a 1080p frame, four
-times a second. On a surface the guard cannot read in place, each frame is drawn into a texture and
-copied to the screen.
+Measuring is one read of each frame on the GPU, in a compute pass, fine patterns and colours
+included. On an AMD Radeon 8060S it takes 0.07 ms a frame at 1920 × 1080 (0.4% of a 60 Hz frame)
+and 0.29 ms at 3840 × 2160 (1.7%); with neither it took 0.03 and 0.11 ms. On a weak integrated
+GPU, perhaps a tenth as fast, it should stay under 5% of a frame at 1080p (not yet measured). Its
+readings come back to the processor, 80 bytes a tile (2.6 MB a frame at 3840 × 2160), in about
+0.15 ms. Counting the transitions in them takes the processor about 0.45 ms a frame at
+3840 × 2160 (0.23 ms with neither), for the frames as drawn and again as shown, and up to 1.3 ms
+while the whole screen flashes. Softening costs more, 0.15 ms a frame at 1080p on the same GPU,
+but only while it acts. The stripe check takes about 3 ms of one processor core for a 1080p frame,
+four times a second. On a surface the guard cannot read in place, each frame is drawn into a
+texture and copied to the screen.
 
 ## What it cannot do
 
@@ -307,6 +315,10 @@ copied to the screen.
   of such flicker: by that measure a Life soup at 30 generations a second flashes more than three
   times a second at every cell size from 1 to 16 pixels (under 3 pixels, WCAG's exception for a
   fine, balanced pattern may apply), where the guard counts it from about 8 pixels a cell.
+- It measures WCAG 2.2's red flashes on each tile's mean colour. On a dark ground a tile's colour
+  is that of its few lit pixels, so a small red flicker counts for its whole tile: stricter than
+  WCAG. A fine pattern of reds and greens of one brightness reversing is counted by WCAG 2.0's
+  measure only.
 - It acts on a frame or two of readings: a scene that starts flashing shows a few transitions
   before the softening starts. It starts at two, so even then what reaches the screen stays at
   three flashes a second or fewer.

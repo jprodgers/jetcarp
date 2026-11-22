@@ -173,7 +173,14 @@ with the guard already on.
   the fix (the tiles' means alone counted none of them, nor 16- to 32-pixel squares half a tile off
   the grid). Ordinary scenes must read exactly as they did without the fine patterns: Life soups at
   2 to 16 pixels a cell, a soup's ash (still lifes and blinkers) at 4 and 30 generations a second,
-  and fields of blocks, gliders and blinkers.
+  and fields of blocks, gliders and blinkers. **Red flashes by either definition** (#270,
+  `crates/jetcarp-core/tests/strobe_red.rs`): a pair of colours only WCAG 2.0's red measure counts
+  (two reds of one chromaticity, 135 apart in the measure), one only WCAG 2.2's counts (a dark red
+  and a dark green, 0.33 apart in chromaticity and 14.5 in the measure), and one both count (red
+  and a grey of its brightness), none of them a general flash, each fail at ten flashes a second,
+  and the guard keeps each to at most three red transitions a second on screen; WCAG 2.2's red
+  flashes keep the area rule, a square just under a quarter of the 10° field passing and one just
+  over failing. These were written first too, and the one only 2.2 counts failed before the fix.
 - **The stripe check** is tested on stripes of every orientation from 4 to 128 pixels a pair,
   checkerboards and rows of dots, which it must find; and on noise, random cells of 2 to 16 pixels,
   faint cell outlines, low contrast and bright stripes, which it must not.
@@ -187,7 +194,9 @@ with the guard already on.
   (`the_gpu_guard_keeps_a_small_reversing_checkerboard_under_the_limit`), at most 3.
 - **The GPU and the processor agree**, on any driver (CI runs this on Mesa's llvmpipe as well as
   the test machines' GPUs): the GPU's tile maps and half-resolution image match the processor's
-  to the rounding of the sums, and its softened frames byte for byte. The tiles' fine patterns
+  to the rounding of the sums, and its softened frames byte for byte; so do the tiles' mean colours,
+  as drawn and as shown, and each of the three red pairs above fails on the GPU's measure as on the
+  processor's. The tiles' fine patterns
   match bit for bit, but for a window whose mean is exactly the threshold away from its tile's in
   exact arithmetic (a frame of a few colours can make one), which the test recomputes and allows.
   The GPU decodes pixels with
@@ -366,7 +375,11 @@ recording with the guard on is as before, to a byte's rounding (a pixel's value 
 as the GPU tests allow), but two: the checkerboard, now veiled where it reverses as well as where
 its stripes are; and Hodgepodge with the usual guard, whose tiles' fine patterns reverse when the
 whole field swings, which now count where its tiles' means do not move, so the guard paces it
-differently.
+differently. It was run once more for #270, with red flashes counted by WCAG 2.2's chromaticity as
+well as WCAG 2.0's measure: every recording came out the same, byte for byte, and every verdict
+with it. The red flashes the corpus has (the Tron field in red-orange, against black, which has no
+chromaticity) are WCAG 2.0's, which IRIS counts too; by either definition JETCARP is never more
+lenient than IRIS.
 
 **Patterns, for someone at risk**: no misses, and with the at-risk guard on IRIS passes all 22
 recordings, the Seeds soup, the Greenberg-Hastings waves and the Paper field among them, for
