@@ -484,23 +484,28 @@ the families tied to one grid (the elementary rules, Margolus blocks and rule ta
 grid, the hexagonal elementary rules on theirs), on that grid, and half to the least-tried tiling.
 
 A search can be limited to some tilings, groups of tilings and families, and told to leave some out
-(`--tilings`, `--tiling-groups`, `--families` and their `--skip-` forms; see
-[Choosing what to search](../guides/searching.md#choosing-what-to-search)). The weights of what is
-left stay as they were. [Isotropic rules](../automata/isotropic.md) are drawn only when a search
-names them, on the processor at a weight of 8, so a search that names no families draws exactly as
-it did before they came. A draw is a Life-like rule of the eight touching neighbours, drawn as the
-Life-like family draws one, with one to six of its letters (Hensel's arrangements, for birth and
-for survival) turned on or off, so most stay near a B/S rule as the known isotropic rules do; a
-quarter are Generations rules of 3 to 8 states, none is born on 0, and none is left with every
-letter or none of each count, which would be the B/S rule itself. A variation turns one letter on
-or off, or changes a Generations rule's states by one. The search's spec keeps what it was told,
-so it carries on, and replays, with it. A search made from 0.4.3 leaves out the tilings none of its
-families can run on, refuses a family named that none of its tilings can run, and, when every
-family its CPU loop runs is tied to one grid (isotropic rules alone), sends every CPU round there;
-a search made before keeps its whole tiling list (its spec has no `schedule`), so it carries on
-drawing as before. A search that chooses nothing draws the same either way: a test pins the tiling
-list, the catalogue rules and the candidates of the first rounds of an older search and of one made
-now, as 0.4.2's code made them.
+(`--tilings`, `--tiling-groups`, `--families` and their `--skip-` forms; see [Choosing what to
+search](../guides/searching.md#choosing-what-to-search)). The weights of what is left stay as they
+were. [Isotropic rules](../automata/isotropic.md) are drawn only when a search names them, at a
+weight of 8, so a search that names no families draws exactly as it did before they came. With a GPU
+they are among the GPU loop's families, and run on the square grid only, so they have GPU rounds of
+their own there, as many as their weight's share of the families named (every round when they are
+named alone), while the GPU's other rounds draw from the rest; the processor runs none of them.
+Without a GPU the CPU loop draws them, after its own families and before the GPU's, as it did before
+the GPU's batches ran them, so a search on the processor alone that names them draws as it did then
+(a test pins its first rounds as that code made them). A draw is a Life-like rule of the eight
+touching neighbours, drawn as the Life-like family draws one, with one to six of its letters
+(Hensel's arrangements, for birth and for survival) turned on or off, so most stay near a B/S rule
+as the known isotropic rules do; a quarter are Generations rules of 3 to 8 states, none is born on
+0, and none is left with every letter or none of each count, which would be the B/S rule itself. A
+variation turns one letter on or off, or changes a Generations rule's states by one. The search's
+spec keeps what it was told, so it carries on, and replays, with it. A search made from 0.4.3 leaves
+out the tilings none of its families can run on, refuses a family named that none of its tilings can
+run, and, when every family its CPU loop runs is tied to one grid (isotropic rules alone, without a
+GPU), sends every CPU round there; a search made before keeps its whole tiling list (its spec has no
+`schedule`), so it carries on drawing as before. A search that chooses nothing draws the same either
+way: a test pins the tiling list, the catalogue rules and the candidates of the first rounds of an
+older search and of one made now, as 0.4.2's code made them.
 
 **How it scores.** Each run is reduced to a fixed set of measurements (when it settled, its density
 and activity early and late, entropy, smoothness, the sizes and number of its parts, how far things

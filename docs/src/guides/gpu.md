@@ -11,7 +11,8 @@ the processor. Only the speed differs.
   priority rules, on lattices and on aperiodic patches, and Margolus block rules and isotropic rules
   on the square grid. Other rules step on the processor, and a world that mixes them moves between the two as it
   needs.
-- **Explore searches**: the rules a GPU can run go there in batches.
+- **Explore searches**: the rules a GPU can run go there in batches, isotropic rules among them;
+  the others (turmites, Lenia, sandpiles and the like) run on the processor beside them.
 - **Hunts**: the start of each soup.
 - **Large sandpiles** on periodic tilings.
 
@@ -115,9 +116,11 @@ steps faster than every core.
 
 ## The self-test
 
-The first time JETCARP uses an adapter, it steps one rule of every family the GPU runs, on a square
-lattice, a lattice of several tile types and a Spectre patch, and runs the same rules as explore
-batches. It compares every hash with the processor's. This takes about a tenth of a second (more on
+The first time JETCARP uses an adapter, it steps one rule of every family the GPU runs, and a few
+kinds random draws may miss (B0 rules, JACA with a blast, isotropic rules with B0 and Generations,
+Larger than Life), on a square lattice, a lattice of several tile types and a Spectre patch, and
+runs those the explore batches take as explore batches. It compares every hash with the
+processor's. This takes about a tenth of a second (more on
 a software adapter). The result is kept in `gpu-checks.json` in the settings folder, for that
 adapter, driver and JETCARP version, so it runs again only after an update; on a fresh install,
 JETCARP makes the settings folder for it. An adapter whose results differ is never used, and
@@ -140,7 +143,7 @@ GPU: auto (automatic)
   display: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (integrated)
       why: the adapter driving the screen (automatic)
       limits: 1864135 storage buffers per stage, 2 GiB storage bindings, 2 GiB buffers
-      self-test: passed (101 ms, kept from before): 66 world rules and 33 explore batches matched the CPU
+      self-test: passed (141 ms, kept from before): 66 world rules and 46 explore batches matched the CPU
       the app and the desktop background simulate on it
   compute: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (integrated)
       why: the fastest adapter (automatic)

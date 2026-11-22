@@ -1448,6 +1448,11 @@ impl DashWindow {
     pub fn explore_form_ui(&mut self, ui: &mut egui::Ui) -> bool {
         let f = &mut self.explore;
         ui.label(RichText::new("Explore search: what to search").strong());
+        ui.label(
+            RichText::new(jetcarp_api::ops::search::EXPLORE_NOT_REPRODUCIBLE)
+                .small()
+                .weak(),
+        );
         ui.label("Tilings");
         ui.horizontal_wrapped(|ui| {
             for (g, on) in f.groups.iter_mut() {
@@ -2340,7 +2345,12 @@ mod tests {
             .iter()
             .map(|(id, n)| {
                 let ticked = n.toggled().map(|t| t == egui::accesskit::Toggled::True);
-                (n.role(), n.label().unwrap_or("").to_string(), ticked, id.0)
+                // A label's words are its value; every other node's, its name.
+                let words = match n.role() {
+                    egui::Role::Label => n.value(),
+                    _ => n.label(),
+                };
+                (n.role(), words.unwrap_or("").to_string(), ticked, id.0)
             })
             .collect();
         (nodes, u.focus.0, started)
@@ -2378,6 +2388,13 @@ mod tests {
         );
         explore_frame(&ctx, &mut w, vec![]);
         let (nodes, _, _) = explore_frame(&ctx, &mut w, vec![]);
+        // It says, before anything is chosen, that the search isn't reproducible.
+        assert!(
+            nodes
+                .iter()
+                .any(|n| n.1 == jetcarp_api::ops::search::EXPLORE_NOT_REPRODUCIBLE),
+            "the form doesn't say the search isn't reproducible"
+        );
         let boxes: Vec<&A11yNode> = nodes
             .iter()
             .filter(|n| n.0 == egui::Role::CheckBox)

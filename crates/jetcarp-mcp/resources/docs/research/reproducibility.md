@@ -196,7 +196,10 @@ tests in `crates/jetcarp-gpu/tests` require it to match the CPU exactly:
   every Quick Start entry of these families. Everything the state hash covers must agree, and so
   must JACA's glow and counts.
 - **The exploratory search's batches** (`batch.rs`): populations, changes, hashes and frames of many
-  worlds stepped together.
+  worlds stepped together; for isotropic rules (two-state, Generations and B0, random over all
+  their letters and written in shuffled notation too) every cell of every generation. An explore
+  job on the GPU must store runs that the processor's own loop measures the same, its isotropic
+  runs among them (`crates/jetcarp-search/tests/gpu_explore.rs`).
 - **Soup hunts** (`crates/jetcarp-search/tests/gpu_hunt.rs`): every soup's opening run must be identical, and a hunt with the GPU must
   leave exactly the catalogue a CPU-only hunt leaves.
 - **Large sandpiles** (`pile.rs`): the same pile, toppling count and sweep count at every step.

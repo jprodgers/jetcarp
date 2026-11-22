@@ -1304,3 +1304,56 @@ fn mcp_over_http_warns_before_it_says_it_is_ready() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// An explore search and a Quick Start build say, as they start, that the search isn't
+/// reproducible (what it finds depends on the computer), unless asked to be quiet; their help
+/// says so too.
+#[test]
+fn explore_searches_say_they_are_not_reproducible() {
+    let dir = out_root().join(format!("cli-explore-warn-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let l = dir.join("lib").display().to_string();
+    let run = |quiet: bool| {
+        let mut args = vec![
+            "search",
+            "explore",
+            "--library",
+            &l,
+            "--families",
+            "life_like",
+            "--tilings",
+            "square",
+            "--screen-cells",
+            "100",
+            "--screen-gens",
+            "16",
+            "--confirm-cells",
+            "100",
+            "--confirm-gens",
+            "16",
+            "--limit",
+            "1",
+            "--threads",
+            "1",
+            "--json",
+        ];
+        if quiet {
+            args.push("--quiet");
+        }
+        let o = jetcarp(&args);
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stderr).to_string()
+    };
+    let err = run(false);
+    assert!(err.contains("isn't reproducible"), "{err}");
+    assert!(err.contains("replays exactly"), "{err}");
+    assert!(
+        !run(true).contains("isn't reproducible"),
+        "quiet means quiet"
+    );
+    let help =
+        String::from_utf8_lossy(&jetcarp(&["search", "explore", "--help"]).stdout).to_string();
+    assert!(help.contains("Not reproducible"), "{help}");
+    let _ = std::fs::remove_dir_all(dir);
+}

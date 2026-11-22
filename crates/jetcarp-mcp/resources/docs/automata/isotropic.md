@@ -184,8 +184,8 @@ the record (`jetcarp library show`, the app, the MCP tools), stored in the libra
 record also has a B/S rule range when a B/S rule gives its evolution; an object of an isotropic rule
 whose evolution needs a count's arrangements to differ has only the isotropic one. The exploratory
 search samples isotropic rules when a search names them (`jetcarp search explore --families
-isotropic`), on the processor, since its GPU batches don't run them yet, and leaves them out
-otherwise, the named ones too ([Search methods](../research/search-methods.md#explore)). HashLife
+isotropic`), on the GPU when there is one and on the processor when there is not, and leaves
+them out otherwise, the named ones too ([Search methods](../research/search-methods.md#explore)). HashLife
 (`jetcarp hashlife`) does not run them.
 
 ### On the GPU
@@ -195,6 +195,13 @@ CPU's result: the rule's 512-bit table travels with each step, and B0 rules foll
 background. The tests compare the state hash every few generations on even and odd sides with every
 kind of edge, from odd step counts and with several steps per generation, and give the GPU the
 isotropic tables of B/S rules to compare with the CPU's B/S stepper.
+
+Explore searches run them in the GPU's batches too, many short runs at once, two-state, B0 and
+Generations: each cell reads its eight touching neighbours by place, from a list made as the
+processor finds them, so a run gives the same cells on the GPU as on the processor. The tests
+compare every cell of every generation for random rules over all 102 letters, written in shuffled
+notation too, on every kind of edge, and the GPU's self-test runs an isotropic batch before the
+GPU is used.
 
 ### Copy as RLE
 

@@ -27,6 +27,8 @@ struct WorldParams {
 // topo[csr * n + i] = the offset in topo of cell i's record: [degree | missing << 16, delta...],
 // each delta being neighbour - cell, wrapping. `missing` counts neighbour slots past a dead edge,
 // which the list leaves out. Records are shared between cells (see intern_records in batch.rs).
+// The isotropic rules' list holds records of another shape: [present, eight deltas], the touching
+// neighbours by place (moore_records in batch.rs).
 @group(0) @binding(2) var<storage, read> topo: array<u32>;
 @group(0) @binding(3) var<storage, read> worlds: array<WorldParams>;
 @group(0) @binding(4) var<storage, read> tables: array<u32>;
@@ -52,6 +54,7 @@ const KIND_PRIORITY: u32 = 6u;
 const KIND_LTL: u32 = 7u;
 const KIND_JACA: u32 = 8u;
 const KIND_B0: u32 = 9u;
+const KIND_ISO: u32 = 10u;
 
 fn mix_cell(i: u32) -> u32 {
   return ((i * 0x9E3779B1u) ^ (i >> 7u)) | 1u;
@@ -249,6 +252,45 @@ fn step(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) l
             let bn = (((*p).a >> sn) & 1u) == 1u;
             if (bp && !bn) { v = 1u; }
             else if (bn && !bp) { v = 2u; }
+          }
+        }
+      }
+      // Isotropic rules on the square grid (step.rs `step_iso`, `step_iso_b0`): the cell's record
+      // is its eight touching neighbours by place (`moore_records` in batch.rs), m the slots that
+      // have a cell. The arrangement of the state-1 neighbours, bit k for slot k, looks up birth
+      // (tables[a..a + 8]) or survival (tables[a + 8..a + 16]); dying Generations cells count up.
+      // c = 1: two states with B0, stored relative to the background (tables[b..]: its tail and
+      // phases, then its state at each phase); a slot past a dead edge is in the background, past
+      // a live edge live.
+      case KIND_ISO: {
+        if (s >= 2u) {
+          if (s + 1u < (*p).states) { v = s + 1u; }
+        } else {
+          var b0 = 0u;
+          var b1 = 0u;
+          if ((*p).c == 1u) {
+            let tail = tables[(*p).b];
+            let phases = tables[(*p).b + 1u];
+            b0 = tables[(*p).b + 2u + b0_phase(disp.tick - 1u, tail, phases)];
+            b1 = tables[(*p).b + 2u + b0_phase(disp.tick, tail, phases)];
+          }
+          let edge = select(b0, 1u, cfg.live != 0u);
+          var x = 0u;
+          for (var k = 0u; k < 8u; k += 1u) {
+            var bit = edge;
+            if (((m >> k) & 1u) != 0u) {
+              bit = u32((src[gi + topo[rec + 1u + k]] & 0xffu) == 1u) ^ b0;
+            }
+            x |= bit << k;
+          }
+          let real = u32(s != 0u) ^ b0;
+          let hit = (tables[(*p).a + 8u * real + x / 32u] >> (x % 32u)) & 1u;
+          if ((*p).c == 1u) {
+            v = hit ^ b1;
+          } else if (s == 0u || hit == 1u) {
+            v = hit;
+          } else if ((*p).states > 2u) {
+            v = 2u;
           }
         }
       }

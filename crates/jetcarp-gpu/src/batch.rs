@@ -5,9 +5,11 @@
 //! a multiple of the workgroup size, so a workgroup belongs to exactly one world. Every topology
 //! kind runs through the same neighbour lists (`neighbor_csr`), stored as records of deltas shared
 //! between cells so that the table fits in the GPU's cache (see `intern_records`); without
-//! that, large worlds run several times slower. Generations run in short submissions (75 ms by
-//! default, see [`BatchSim::set_target_secs`]); a generation too large for one submission is
-//! split into ranges of worlds, so the driver never sees a long-running dispatch.
+//! that, large worlds run several times slower. Isotropic rules, which read the square grid's
+//! eight touching neighbours by place, have a list of their own in that order (`moore_records`).
+//! Generations run in short submissions (75 ms by default, see [`BatchSim::set_target_secs`]); a
+//! generation too large for one submission is split into ranges of worlds, so the driver never
+//! sees a long-running dispatch.
 //!
 //! [`BatchSim`] is an explore search's GPU backend (`jetcarp_core::explore::batch::Backend`).
 
@@ -16,7 +18,7 @@ use jetcarp_core::explore::batch::{Backend, BatchJob, GIVEN_UP, WorldTrace, mix,
 use jetcarp_core::jaca::JacaRule;
 use jetcarp_core::ltl::{Hood, LtlRule, Reach};
 use jetcarp_core::rules::Rule;
-use jetcarp_core::topology::{Csr, Nb, Storage};
+use jetcarp_core::topology::{Csr, LatticeGrid, Nb, Storage};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -47,6 +49,7 @@ const KIND_PRIORITY: u32 = 6;
 const KIND_LTL: u32 = 7;
 const KIND_JACA: u32 = 8;
 const KIND_B0: u32 = 9;
+const KIND_ISO: u32 = 10;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -58,7 +61,8 @@ struct WorldParams {
     a: u32,
     b: u32,
     c: u32,
-    /// The CSR this world uses (0, or 1 for Larger than Life in a mixed batch).
+    /// The neighbour list this world uses: 0, or 1 for Larger than Life in a mixed batch; for an
+    /// isotropic rule the list of touching neighbours by place, after the others.
     d: u32,
 }
 
@@ -152,6 +156,18 @@ fn world_params(rule: &Rule, tables: &mut Vec<u32>, words: u32) -> Option<WorldP
             tables.extend(bitset(birth, words));
             tables.extend(bitset(survive, words));
         }
+        // Isotropic rules (`jetcarp_core::isotropic`): birth and survival by the arrangement of the
+        // live neighbours, the rule's 16-word table at tables[a..]. c = 1: two states with B0,
+        // stored relative to the background, whose phases `run_until` adds at tables[b..].
+        Rule::Isotropic(r) => {
+            (p.kind, p.states, p.a, p.c) = (
+                KIND_ISO,
+                r.states as u32,
+                tables.len() as u32,
+                rule.b0_masks().is_some() as u32,
+            );
+            tables.extend(r.table());
+        }
         Rule::Jaca(j) => {
             let JacaRule {
                 pos_birth,
@@ -224,20 +240,27 @@ struct TopoKey {
     nb: Nb,
     needs_nb: bool,
     ltl: Option<(Hood, u8)>,
+    /// The touching neighbours by place, for isotropic rules ([`moore_records`]).
+    moore: bool,
 }
 
 impl TopoKey {
+    /// Do the resident lists serve a batch that needs these? The list of touching neighbours by
+    /// place comes last, so one kept for an earlier batch is no hindrance to a batch without
+    /// isotropic rules.
     fn matches(
         &self,
         topo: &Arc<Topology>,
         nb: Nb,
         needs_nb: bool,
         ltl: Option<(Hood, u8)>,
+        moore: bool,
     ) -> bool {
         Arc::ptr_eq(&self.topo, topo)
             && self.needs_nb == needs_nb
             && self.ltl == ltl
             && (!needs_nb || self.nb == nb)
+            && (self.moore || !moore)
     }
 }
 
@@ -249,6 +272,8 @@ struct TopoInfo {
     avg_edges: f64,
     /// Sum of `mix` over the cells: the hash of an all-zero world.
     base_hash: u32,
+    /// The index of the list of touching neighbours by place, when it is resident.
+    moore: Option<u32>,
 }
 
 /// Build the shared neighbour records of one list: `cells[i]` is the offset (into the pool) of a
@@ -291,6 +316,34 @@ fn intern_records(
             pool.extend_from_slice(&rec);
             bucket.push(at);
             at
+        })
+        .collect()
+}
+
+/// The square grid's eight touching neighbours of every cell, by place, in the order an isotropic
+/// rule reads them (`jetcarp_core::isotropic::OFFSETS`: NW, N, NE, W, E, SW, S, SE), found as the
+/// processor finds them (`LatticeGrid::resolve`, so wrapping as it does), as records shared
+/// between cells as [`intern_records`]'s are: `[present, delta...]`, eight deltas (`neighbour -
+/// cell`, wrapping; 0 for a slot past a dead edge), with bit `k` of `present` set when slot `k`
+/// has a cell.
+fn moore_records(g: &LatticeGrid, n: usize, pool: &mut Vec<u32>) -> Vec<u32> {
+    let mut seen: HashMap<[u32; 9], u32> = HashMap::new();
+    (0..n)
+        .map(|i| {
+            let (u, j, _) = g.decompose(i);
+            let x = u + g.row_start[j as usize];
+            let mut rec = [0u32; 9];
+            for (k, &(dx, dy)) in jetcarp_core::isotropic::OFFSETS.iter().enumerate() {
+                if let Some(c) = g.resolve(x + dx, j + dy, 0) {
+                    rec[0] |= 1 << k;
+                    rec[1 + k] = (c as u32).wrapping_sub(i as u32);
+                }
+            }
+            *seen.entry(rec).or_insert_with(|| {
+                let at = pool.len() as u32;
+                pool.extend_from_slice(&rec);
+                at
+            })
         })
         .collect()
 }
@@ -494,17 +547,19 @@ impl BatchSim {
         self.stats
     }
 
-    /// Upload the neighbour lists unless the same ones are already resident.
+    /// Upload the neighbour lists unless the same ones are already resident: `nb`'s, the Larger
+    /// than Life reach, and with `moore` the touching neighbours by place (isotropic rules).
     fn bind_topology(
         &mut self,
         job: &BatchJob,
         needs_nb: bool,
         ltl: Option<(Hood, u8)>,
+        moore: bool,
     ) -> Result<(), String> {
         if self
             .info
             .as_ref()
-            .is_some_and(|i| i.key.matches(&job.topo, job.nb, needs_nb, ltl))
+            .is_some_and(|i| i.key.matches(&job.topo, job.nb, needs_nb, ltl, moore))
         {
             return Ok(());
         }
@@ -540,16 +595,24 @@ impl BatchSim {
                 return Err("a neighbour list points past the world".into());
             }
         }
-        let table_len = lists.len() * n;
+        // The counting lists' records end here; the records by place (another shape) follow.
+        let counted = pool.len();
+        let by_place = if moore {
+            let g = topo.rows().ok_or("isotropic rules need the square grid")?;
+            Some(moore_records(g, n, &mut pool))
+        } else {
+            None
+        };
+        let table_len = (lists.len() + by_place.is_some() as usize) * n;
         let mut words: Vec<u32> = Vec::with_capacity(table_len + pool.len());
-        for (_, cells) in &lists {
+        for cells in lists.iter().map(|(_, c)| c).chain(&by_place) {
             words.extend(cells.iter().map(|&at| at + table_len as u32));
         }
         words.extend_from_slice(&pool);
         let edges: usize = lists.iter().map(|(c, _)| c.nb.len()).sum();
         let mut max_count = 0u32;
         let mut at = 0usize;
-        while at < pool.len() {
+        while at < counted {
             let w = pool[at];
             max_count = max_count.max((w & 0xffff) + (w >> 16));
             at += 1 + (w & 0xffff) as usize;
@@ -568,10 +631,12 @@ impl BatchSim {
                 nb: job.nb,
                 needs_nb,
                 ltl,
+                moore,
             },
             max_count,
             avg_edges,
             base_hash,
+            moore: by_place.is_some().then_some(lists.len() as u32),
         });
         Ok(())
     }
@@ -673,6 +738,7 @@ impl BatchSim {
             })?;
         let mut ltl: Option<(Hood, u8)> = None;
         let mut needs_nb = false;
+        let mut moore = false;
         for w in &job.worlds {
             match &w.rule {
                 Rule::Ltl(l) => match ltl {
@@ -688,13 +754,21 @@ impl BatchSim {
                     if !BatchSim::supports(r) {
                         return Err(format!("{} cannot run in a batch", r.notation()));
                     }
+                    // An isotropic rule reads the touching neighbours by place; the batch's own
+                    // list is kept too, so a grid's lists stay resident between the search's
+                    // batches with and without isotropic rules.
+                    moore |= matches!(r, Rule::Isotropic(_));
                     needs_nb = true;
                 }
             }
         }
-        self.bind_topology(job, needs_nb, ltl)?;
+        if moore && job.topo.rows().is_none() {
+            return Err("isotropic rules need the square grid".into());
+        }
+        self.bind_topology(job, needs_nb, ltl, moore)?;
         let info = self.info.as_ref().unwrap();
         let (base_hash, avg_edges) = (info.base_hash, info.avg_edges);
+        let moore_csr = info.moore;
         let words = ltl_words(info.max_count);
 
         // Rule parameters. CSR 0 is the job's neighbourhood when any world uses it, else the
@@ -708,8 +782,29 @@ impl BatchSim {
             let mut p = world_params(&w.rule, &mut tables, words)
                 .ok_or_else(|| format!("{} cannot run in a batch", w.rule.notation()))?;
             let mut passes = 1.0;
+            let mut reads = avg_edges;
             if p.kind == KIND_LTL {
                 p.d = ltl_csr;
+            } else if p.kind == KIND_ISO {
+                p.d = moore_csr.ok_or("no list of touching neighbours by place")?;
+                reads = 8.0;
+                if p.c == 1 {
+                    // The background, uniform on the square grid (as `step_iso_b0` has it, from
+                    // the B/S rule of counts 0 and 8 on the touching neighbours): tail and
+                    // phases, then its state at each phase.
+                    let g = job
+                        .topo
+                        .rows()
+                        .ok_or("isotropic rules need the square grid")?;
+                    let (b, s) = w
+                        .rule
+                        .b0_masks()
+                        .ok_or("an isotropic B0 rule's background")?;
+                    let t = jetcarp_core::b0::Types::new(g, Nb::Touch, b, s)?;
+                    p.b = tables.len() as u32;
+                    tables.extend([t.tail as u32, t.phases() as u32]);
+                    tables.extend((0..t.phases()).map(|q| t.state(q, 0) as u32));
+                }
             } else if p.kind == KIND_JACA && p.c > 0 {
                 max_blast = max_blast.max(p.c);
                 passes += p.c as f64 + 1.0;
@@ -729,7 +824,7 @@ impl BatchSim {
                         .map(|(&s, &l)| s as u32 | l << 1),
                 );
             }
-            edges += (avg_edges + 1.0) * n as f64 * passes;
+            edges += (reads + 1.0) * n as f64 * passes;
             params.push(p);
         }
         let dev = &self.device;

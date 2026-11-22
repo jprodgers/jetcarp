@@ -1454,6 +1454,13 @@ impl EvolveIn {
 // ---------------------------------------------------------------------------------------------
 // Explore searches
 
+/// What every front end says when an explore search starts (the maintainer's decision: it stays
+/// as it is, and says so). Each run in it replays exactly; which runs it draws depends on the
+/// computer.
+pub const EXPLORE_NOT_REPRODUCIBLE: &str = "An explore search isn't reproducible: what it finds \
+     depends on the computer (its speed, its threads and its GPU), so the same settings find \
+     different things on another computer or another day. Each run it finds replays exactly.";
+
 /// The broad exploratory search (strategy `explore`): MAP-Elites over tiling, rule family, rule, and seed. It keeps the best few runs of each niche (family, tiling group, behaviour), breeds from them, confirms the best on bigger grids, and stores every run in its own folder (`searches/<uuid>/` beside the library: Parquet segments of a million runs, and a working database). It runs until stopped or out of budget, and is not deterministic: a stopped search continues from its archive.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
