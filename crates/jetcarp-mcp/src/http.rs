@@ -1796,7 +1796,7 @@ pub fn serve(opts: Serve, stop: Arc<AtomicBool>) -> Result<(), String> {
             .retain(|k, _| k.as_ref().is_none_or(|k| open.contains(k)));
     }
     drop(listener);
-    crate::stdio::stop_own_jobs();
+    crate::stdio::stop_own_jobs("the server is closing");
     Ok(())
 }
 

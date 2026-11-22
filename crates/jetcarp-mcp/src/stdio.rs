@@ -393,18 +393,19 @@ pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), St
             out.flush().map_err(|e| e.to_string())?;
         }
     }
-    stop_own_jobs();
+    stop_own_jobs("the client has gone");
     Ok(())
 }
 
 /// How long the server waits, once its client has gone, for its own jobs to stop.
 const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// stdin has closed: the client has gone, and the server exits. The searches started on its own
-/// threads (`search_start` without `detach`) would end with it, left marked running with
+/// stdin has closed: the client has gone, and the server exits (`why` says so: "the client has
+/// gone", or "the server is closing" as `jetcarp mcp --http` stops). The searches started on its
+/// own threads (`search_start` without `detach`) would end with it, left marked running with
 /// nothing running them (#64): stop each at its next checkpoint, as `job_stop` does, so it is
 /// left paused and resumable. Searches in processes of their own carry on.
-pub(crate) fn stop_own_jobs() {
+pub(crate) fn stop_own_jobs(why: &str) {
     let reg = tools::ctx().registry();
     let running: Vec<i64> = {
         let lib = tools::ctx().library();
@@ -415,28 +416,35 @@ pub(crate) fn stop_own_jobs() {
     };
     if !running.is_empty() {
         let ids: Vec<String> = running.iter().map(|j| j.to_string()).collect();
-        eprintln!(
-            "jetcarp mcp: the client has gone; stopping job {} at its next checkpoint",
+        say(format_args!(
+            "jetcarp mcp: {why}; stopping job {} at its next checkpoint",
             ids.join(", ")
-        );
+        ));
     }
     for (job, ended) in reg.stop_all(STOP_WAIT) {
         if !running.contains(&job) {
             continue;
         }
         match ended {
-            Some(Ok(o)) => eprintln!(
+            Some(Ok(o)) => say(format_args!(
                 "jetcarp mcp: job {job} is {}",
                 jetcarp_search::jobs::status_name(o.status)
-            ),
-            Some(Err(e)) => eprintln!("jetcarp mcp: job {job} failed: {e}"),
-            None => eprintln!(
+            )),
+            Some(Err(e)) => say(format_args!("jetcarp mcp: job {job} failed: {e}")),
+            None => say(format_args!(
                 "jetcarp mcp: job {job} had not stopped after {} s; `jetcarp jobs resume {job}` \
                  carries it on",
                 STOP_WAIT.as_secs()
-            ),
+            )),
         }
     }
+}
+
+/// A line on standard error that never panics, as `eprintln!` does when standard error has gone:
+/// the terminal a server was started from closing (SIGHUP) stops it, and it says what it stops
+/// as it goes.
+fn say(line: std::fmt::Arguments) {
+    let _ = writeln!(std::io::stderr(), "{line}");
 }
 
 #[cfg(test)]
