@@ -239,6 +239,11 @@ fn the_launcher_goes_in_with_its_icon_and_comes_out_with_uninstall() {
     assert!(ok && said.contains("nothing to remove"), "{said}");
     let (ok, plan, _) = jetcarp(&h, &["uninstall"]);
     assert!(ok && !plan.contains("remove JETCARP"), "{plan}");
+    // Neither `launcher` nor `uninstall` records itself in the memory pool, so they make no
+    // runtime folder: the installers' `--uninstall` runs `launcher` after `jetcarp uninstall` has
+    // removed that folder, and left an empty `memory/` in it (#135).
+    let run = h.join("run/jetcarp");
+    assert!(!run.exists(), "{} was made", run.display());
     let _ = std::fs::remove_dir_all(&h);
 }
 

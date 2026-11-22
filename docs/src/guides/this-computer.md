@@ -114,7 +114,8 @@ So 30,000 by 30,000 cells of Life take 6.7 GB, and a world of several CAs counts
 Each JETCARP program writes down the memory it holds (its resident memory, as the system counts
 it) in the runtime folder, as `memory/<process id>.json`, when it starts and every 2 seconds after,
 and removes it when it ends; a record not renewed for 10 seconds belongs to a program that has gone,
-and no longer counts. From those records:
+and no longer counts. (`jetcarp uninstall` and `jetcarp launcher`, which build nothing and are over
+in a moment, write none, so that they leave no runtime folder behind.) From those records:
 
 - **A new world must fit what is left of the pool**, as well as the largest-world limit: the pool,
   less what every other JETCARP program holds, less what this one holds beyond the world the new
