@@ -41,7 +41,9 @@ When reduced motion is on:
   keyboard) to play it; click it again to still it.
 - **A scene opens paused,** with a note in the status line: "Paused because your system asks for
   reduced motion. Space runs it; Settings → Accessibility changes this." Space, or *Run → Run /
-  Pause*, runs it as usual.
+  Pause*, runs it as usual. When the [strobe guard](strobe-guard.md) has a note too, the guard's
+  comes first and this one follows it on the same line; with the status bar off, the two show over
+  the grid's top left, this one below the guard's.
 - **The interface's own animations are off:** windows and menus appear at once, collapsing headers
   open without sliding, scrolling jumps rather than glides, and spinners and progress bars stand
   still.

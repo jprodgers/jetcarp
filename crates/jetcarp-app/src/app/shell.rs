@@ -36,6 +36,9 @@ pub(super) struct ShellState {
     /// A message, and when it appeared (the grid shows it a while when the status bar is off).
     seen_message: Option<String>,
     message_at: f64,
+    /// The strobe guard's note, and when it appeared (the same, for the guard's own note).
+    seen_guard: Option<String>,
+    guard_at: f64,
     /// The widths the status bar's items have reached in this world (and the world they were
     /// reached in), so a count that loses a digit keeps its space and the items after it stay put.
     status_w: Vec<f32>,
@@ -74,6 +77,8 @@ impl ShellState {
             window_placed: false,
             window_placing: false,
             message_at: 0.0,
+            seen_guard: None,
+            guard_at: 0.0,
             status_w: vec![],
             status_w_world: (0, 0),
         }
@@ -94,6 +99,8 @@ pub(super) enum Mirror {
 const REVEAL_EDGE: f32 = 4.0;
 /// Seconds an auto-hidden menu stays after the pointer leaves it.
 const HIDE_AFTER: f64 = 1.0;
+/// Seconds a new note shows over the grid while the status bar is off.
+const OVERLAY_FOR: f64 = 6.0;
 
 impl JetcarpApp {
     /// Everything in the root window, every frame.
@@ -103,6 +110,13 @@ impl JetcarpApp {
         if self.message.as_ref().map(|m| &m.0) != self.shell.seen_message.as_ref() {
             self.shell.seen_message = self.message.as_ref().map(|m| m.0.clone());
             self.shell.message_at = now;
+        }
+        let guard = self.guard_status().map(|g| g.0);
+        if guard != self.shell.seen_guard {
+            if guard.is_some() {
+                self.shell.guard_at = now;
+            }
+            self.shell.seen_guard = guard;
         }
         let saver = self.saver_active();
         if !saver {
@@ -307,8 +321,48 @@ impl JetcarpApp {
         // never wrapped onto a second line.
         ui.horizontal(|ui| {
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+            // Notes showing at once share the line one after another, never drawn at the same
+            // place (#307): the strobe guard's first, since it is about safety, then the message
+            // (such as why a scene opened paused), cut short with "…" to the room left.
+            let sim = self.screen == Screen::Sim;
+            let guard = self.guard_status().filter(|_| sim);
+            if let Some((note, strong)) = guard {
+                let c = if strong {
+                    Color32::from_rgb(0xff, 0xb0, 0x60)
+                } else {
+                    Color32::from_rgb(0xff, 0xd8, 0x90)
+                };
+                // With a message beside it, the guard's note leaves it a third of the line.
+                let room = if self.message.is_some() {
+                    ui.available_width() * 2.0 / 3.0
+                } else {
+                    ui.available_width()
+                };
+                let clicked = ui
+                    .scope(|ui| {
+                        ui.set_max_width(room);
+                        ui.add(
+                            egui::Label::new(RichText::new(note).color(crate::theme::ink(ui, c)))
+                                .sense(egui::Sense::click()),
+                        )
+                        .on_hover_text("Settings → Safety")
+                        .clicked()
+                    })
+                    .inner;
+                if clicked {
+                    self.strobe.window_open = true;
+                }
+                ui.separator();
+            }
             if let Some((m, err)) = self.message.clone() {
-                ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
+                // Room kept for its dismiss button and the separator after it.
+                let sp = ui.spacing();
+                let room =
+                    (ui.available_width() - sp.interact_size.y - 3.0 * sp.item_spacing.x).max(0.0);
+                ui.scope(|ui| {
+                    ui.set_max_width(room);
+                    ui.colored_label(crate::theme::ink(ui, message_color(err)), m);
+                });
                 if ui
                     .small_button("×")
                     .on_hover_text("Dismiss")
@@ -319,27 +373,8 @@ impl JetcarpApp {
                 }
                 ui.separator();
             }
-            if self.screen != Screen::Sim {
+            if !sim {
                 return;
-            }
-            // The strobe guard, while it acts.
-            if let Some((note, strong)) = self.guard_status() {
-                let c = if strong {
-                    Color32::from_rgb(0xff, 0xb0, 0x60)
-                } else {
-                    Color32::from_rgb(0xff, 0xd8, 0x90)
-                };
-                if ui
-                    .add(
-                        egui::Label::new(RichText::new(note).color(crate::theme::ink(ui, c)))
-                            .sense(egui::Sense::click()),
-                    )
-                    .on_hover_text("Settings → Safety")
-                    .clicked()
-                {
-                    self.strobe.window_open = true;
-                }
-                ui.separator();
             }
             let (status, pops) = match &self.stats {
                 Some(s) => (run_status(self.playing, &s.status), s.populations.clone()),
@@ -412,29 +447,46 @@ impl JetcarpApp {
         ui.painter().galley(at, galley, Color32::WHITE);
     }
 
-    /// With the status bar off, the grid shows a new message for a few seconds.
+    /// With the status bar off, the grid shows a new note for a few seconds: the strobe guard's
+    /// and the message, stacked one below the other at its top left, the guard's on top (#307).
     pub(super) fn message_overlay(&self, ui: &egui::Ui, rect: egui::Rect) {
         if self.shell.status_bar || self.saver_active() {
             return;
         }
-        let Some((m, err)) = &self.message else {
-            return;
-        };
-        let age = ui.input(|i| i.time) - self.shell.message_at;
-        if age > 6.0 {
+        let now = ui.input(|i| i.time);
+        let mut notes = vec![];
+        if self.screen == Screen::Sim
+            && let Some((g, strong)) = self.guard_status()
+            && now - self.shell.guard_at <= OVERLAY_FOR
+        {
+            let c = if strong {
+                Color32::from_rgb(0xff, 0xb0, 0x60)
+            } else {
+                Color32::from_rgb(0xff, 0xd8, 0x90)
+            };
+            notes.push((g, c));
+        }
+        if let Some((m, err)) = &self.message
+            && now - self.shell.message_at <= OVERLAY_FOR
+        {
+            notes.push((m.clone(), message_color(*err)));
+        }
+        if notes.is_empty() {
             return;
         }
         ui.ctx()
             .request_repaint_after(std::time::Duration::from_millis(250));
-        let font = egui::FontId::proportional(14.0);
-        let galley = ui
-            .painter()
-            .layout(m.clone(), font, message_color(*err), rect.width() - 40.0);
-        let at = rect.left_top() + egui::vec2(12.0, 12.0);
-        let bg = egui::Rect::from_min_size(at, galley.size()).expand(6.0);
-        ui.painter()
-            .rect_filled(bg, 4.0, Color32::from_black_alpha(180));
-        ui.painter().galley(at, galley, Color32::WHITE);
+        let mut at = rect.left_top() + egui::vec2(12.0, 12.0);
+        for (text, color) in notes {
+            let font = egui::FontId::proportional(14.0);
+            let galley = ui.painter().layout(text, font, color, rect.width() - 40.0);
+            let bg = egui::Rect::from_min_size(at, galley.size()).expand(6.0);
+            ui.painter()
+                .rect_filled(bg, 4.0, Color32::from_black_alpha(180));
+            let below = galley.size().y + 12.0 + 6.0;
+            ui.painter().galley(at, galley, Color32::WHITE);
+            at.y += below;
+        }
     }
 
     /// The Scene pane: name, description, and the latest message.
