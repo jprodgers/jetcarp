@@ -27,6 +27,7 @@ mod research;
 mod script_cmd;
 mod search_cmd;
 mod setup_cmd;
+mod stop_signal;
 mod term;
 mod wallpaper_cmd;
 

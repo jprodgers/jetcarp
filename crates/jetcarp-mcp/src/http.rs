@@ -1770,9 +1770,52 @@ pub fn serve(opts: Serve, stop: Arc<AtomicBool>) -> Result<(), String> {
             .map_err(|e| format!("could not listen on 127.0.0.1: {e}"))?,
     };
     announce(&listener, &opts);
+    // The stop cuts the calls in flight short (#278); one that goes on past the grace is left,
+    // and the server ends as it would after it: its endpoint file, its own jobs, its memory
+    // record.
+    let settled = Arc::new(AtomicBool::new(false));
+    {
+        let cancellers = cancellers.clone();
+        let (file, token) = (
+            listener.file().map(Path::to_path_buf),
+            listener.token.clone(),
+        );
+        crate::stopping::watch(
+            stop.clone(),
+            settled.clone(),
+            move || cancellers.lock().unwrap().values().cloned().collect(),
+            move || {
+                crate::stdio::say(format_args!(
+                    "jetcarp mcp: a call was still running {} s after the stop; ending without \
+                     its answer",
+                    crate::stopping::GRACE.as_secs()
+                ));
+                if let Some(p) = &file
+                    && recorded_token(p).as_deref() == Some(token.as_str())
+                {
+                    let _ = std::fs::remove_file(p);
+                }
+                crate::stdio::stop_own_jobs_within("the server is closing", crate::stdio::END_WAIT);
+                jetcarp_core::machine::pool::exit(0);
+            },
+        );
+    }
     let mut clients: HashMap<Option<String>, Client> = HashMap::new();
     while !stop.load(Ordering::SeqCst) {
         if let Some(p) = listener.recv_timeout(Duration::from_millis(200)) {
+            if stop.load(Ordering::SeqCst) {
+                // Not taken up: the server is stopping.
+                let reply = p.message.get("id").map(|id| {
+                    protocol::error_response(
+                        id,
+                        protocol::INTERNAL_ERROR,
+                        crate::stopping::STOPPING_WORDS,
+                        None,
+                    )
+                });
+                p.reply(reply);
+                break;
+            }
             let key = p.session().map(String::from);
             let c = clients.entry(key.clone()).or_insert_with(|| {
                 let mut c = Client::new(opts.app, info.clone());
@@ -1794,6 +1837,13 @@ pub fn serve(opts: Serve, stop: Arc<AtomicBool>) -> Result<(), String> {
             .lock()
             .unwrap()
             .retain(|k, _| k.as_ref().is_none_or(|k| open.contains(k)));
+    }
+    settled.store(true, Ordering::SeqCst);
+    // The last answers reach their callers before the connections are closed: up to a second
+    // for the callers to hang up.
+    let t0 = Instant::now();
+    while listener.connection_count() > 0 && t0.elapsed() < Duration::from_secs(1) {
+        std::thread::sleep(Duration::from_millis(20));
     }
     drop(listener);
     crate::stdio::stop_own_jobs("the server is closing");

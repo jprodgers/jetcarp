@@ -5,7 +5,7 @@ use clap::Args;
 use jetcarp_script::{Event, RunOptions, Screen};
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -183,24 +183,24 @@ Run one with: jetcarp script --example NAME"
             }
         }
     };
-    // Ctrl-C: the first press cancels (sweeps finish the runs in flight and write their manifest,
-    // so the folder can be resumed); a second press quits at once.
+    // Ctrl-C, SIGTERM or SIGHUP (#278): the first cancels (sweeps finish the runs in flight and
+    // write their manifest, so the folder can be resumed), and the script ends with 128 + the
+    // signal's number (130 for Ctrl-C); a second quits at once.
     let cancel = Arc::new(AtomicBool::new(false));
-    let presses = Arc::new(AtomicU32::new(0));
+    let code = Arc::new(AtomicI32::new(crate::stop_signal::status("SIGINT")));
     {
-        let (cancel, presses) = (cancel.clone(), presses.clone());
-        let _ = ctrlc::set_handler(move || {
-            if presses.fetch_add(1, Ordering::SeqCst) == 0 {
-                cancel.store(true, Ordering::SeqCst);
-                eprintln!(
-                    "\nCtrl-C: stopping after the runs in flight and saving the manifest (press Ctrl-C again to quit now)"
-                );
-            } else {
-                eprintln!(
-                    "\nCtrl-C again: quitting; the folder can still be resumed from manifest.partial.jsonl"
-                );
-                jetcarp_core::machine::pool::exit(130);
-            }
+        let (cancel, code) = (cancel.clone(), code.clone());
+        crate::stop_signal::on_stop(move |sig| {
+            code.store(crate::stop_signal::status(sig), Ordering::SeqCst);
+            cancel.store(true, Ordering::SeqCst);
+            // Never `eprintln!`, which panics when standard error has gone.
+            let _ = writeln!(
+                std::io::stderr(),
+                "\n{}: stopping after the runs in flight and saving the manifest ({}; the folder \
+                 can still be resumed from manifest.partial.jsonl)",
+                crate::stop_signal::shown(sig),
+                crate::stop_signal::again(sig)
+            );
         });
     }
     let s = jetcarp_script::run(&source, opts, on_event, cancel.clone());
@@ -249,7 +249,7 @@ Run one with: jetcarp script --example NAME"
                 );
             }
         }
-        jetcarp_core::machine::pool::exit(130);
+        jetcarp_core::machine::pool::exit(code.load(Ordering::SeqCst));
     }
     if let Some(e) = &s.error {
         bail!("{}: {e}", file.display());

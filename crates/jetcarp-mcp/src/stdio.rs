@@ -9,7 +9,8 @@
 //! and the app's `notifications/progress` for a forwarded call are written to stdout as they come.
 //!
 //! When stdin closes (the client has gone), the searches running on the server's own threads are
-//! stopped at their next checkpoint, paused and resumable, before the server exits.
+//! stopped at their next checkpoint, paused and resumable, before the server exits. SIGTERM,
+//! SIGHUP and Ctrl-C stop it the same way, a call still running cut short ([`crate::stopping`]).
 //!
 //! [`Client`] is one client's state, whatever carries its messages: stdin and stdout here, or one
 //! session of the HTTP endpoint ([`crate::http`]), so both offer the same tools on the same terms.
@@ -348,11 +349,36 @@ impl Canceller {
         }
         true
     }
+
+    /// The server is stopping: cancel every call of this client's in flight that is not
+    /// cancelled yet, as a `notifications/cancelled` for each would ([`crate::stopping`]).
+    pub(crate) fn cancel_all(&self) {
+        let ids: Vec<String> = self
+            .cancels
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, f)| !f.load(std::sync::atomic::Ordering::SeqCst))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in ids {
+            if let Ok(id) = serde_json::from_str::<Value>(&id) {
+                self.cancel(
+                    &json!({"jsonrpc": "2.0", "method": "notifications/cancelled",
+                    "params": {"requestId": id, "reason": crate::stopping::STOPPING_WORDS}}),
+                );
+            }
+        }
+    }
 }
 
 /// Serve MCP on stdin/stdout until stdin closes, then stop the jobs running on the server's own
 /// threads ([`stop_own_jobs`]). `app`: start attached to the JETCARP app.
+///
+/// SIGTERM, SIGHUP and Ctrl-C stop it the same way ([`crate::http::stop_on_signal`], #278): a
+/// call in flight is cut short, with [`crate::stopping::GRACE`] to give its answer.
 pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), String> {
+    let stop = crate::http::stop_on_signal();
     let mut client = Client::new(app, info_from(port, token)?);
     client.connect_app();
     // stdout is locked per message: progress notifications come from worker threads while a
@@ -362,6 +388,25 @@ pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), St
         let _ = writeln!(out, "{msg}");
         let _ = out.flush();
     }));
+    // The stop cuts the call in flight short; one that goes on past the grace is left.
+    let settled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let canceller = client.canceller();
+        crate::stopping::watch(
+            stop.clone(),
+            settled.clone(),
+            move || vec![canceller.clone()],
+            || {
+                say(format_args!(
+                    "jetcarp mcp: a call was still running {} s after the stop; ending without \
+                     its answer",
+                    crate::stopping::GRACE.as_secs()
+                ));
+                stop_own_jobs_within("the server is closing", END_WAIT);
+                jetcarp_core::machine::pool::exit(0);
+            },
+        );
+    }
     // stdin on its own thread: cancellations act at once, the rest is answered in order.
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     {
@@ -386,19 +431,41 @@ pub fn run(app: bool, port: Option<u16>, token: Option<String>) -> Result<(), St
             })
             .map_err(|e| e.to_string())?;
     }
-    for line in rx {
+    let stopped = || stop.load(std::sync::atomic::Ordering::SeqCst);
+    let mut wrote = Ok(());
+    while !stopped() {
+        let line = match rx.recv_timeout(std::time::Duration::from_millis(200)) {
+            Ok(line) => line,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        };
         if let Some(r) = client.answer_line(&line) {
             let mut out = std::io::stdout().lock();
-            writeln!(out, "{r}").map_err(|e| e.to_string())?;
-            out.flush().map_err(|e| e.to_string())?;
+            wrote = writeln!(out, "{r}")
+                .and_then(|()| out.flush())
+                .map_err(|e| e.to_string());
+            if wrote.is_err() {
+                break;
+            }
         }
     }
-    stop_own_jobs("the client has gone");
-    Ok(())
+    settled.store(true, std::sync::atomic::Ordering::SeqCst);
+    // Its own jobs stop whatever ended it: a client that has gone, a signal, or stdout closed.
+    stop_own_jobs(if stopped() {
+        "the server is closing"
+    } else {
+        "the client has gone"
+    });
+    wrote
 }
 
 /// How long the server waits, once its client has gone, for its own jobs to stop.
 const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// How long a server ending without the answer of a call still running ([`crate::stopping`])
+/// waits for its own jobs to stop. They are marked paused at once; one not at its checkpoint by
+/// then carries on from the one before.
+pub(crate) const END_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// stdin has closed: the client has gone, and the server exits (`why` says so: "the client has
 /// gone", or "the server is closing" as `jetcarp mcp --http` stops). The searches started on its
@@ -406,6 +473,11 @@ const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 /// nothing running them (#64): stop each at its next checkpoint, as `job_stop` does, so it is
 /// left paused and resumable. Searches in processes of their own carry on.
 pub(crate) fn stop_own_jobs(why: &str) {
+    stop_own_jobs_within(why, STOP_WAIT)
+}
+
+/// [`stop_own_jobs`], waiting up to `within` for them to stop.
+pub(crate) fn stop_own_jobs_within(why: &str, within: std::time::Duration) {
     let reg = tools::ctx().registry();
     let running: Vec<i64> = {
         let lib = tools::ctx().library();
@@ -421,7 +493,7 @@ pub(crate) fn stop_own_jobs(why: &str) {
             ids.join(", ")
         ));
     }
-    for (job, ended) in reg.stop_all(STOP_WAIT) {
+    for (job, ended) in reg.stop_all(within) {
         if !running.contains(&job) {
             continue;
         }
@@ -434,7 +506,7 @@ pub(crate) fn stop_own_jobs(why: &str) {
             None => say(format_args!(
                 "jetcarp mcp: job {job} had not stopped after {} s; `jetcarp jobs resume {job}` \
                  carries it on",
-                STOP_WAIT.as_secs()
+                within.as_secs()
             )),
         }
     }
@@ -443,7 +515,7 @@ pub(crate) fn stop_own_jobs(why: &str) {
 /// A line on standard error that never panics, as `eprintln!` does when standard error has gone:
 /// the terminal a server was started from closing (SIGHUP) stops it, and it says what it stops
 /// as it goes.
-fn say(line: std::fmt::Arguments) {
+pub(crate) fn say(line: std::fmt::Arguments) {
     let _ = writeln!(std::io::stderr(), "{line}");
 }
 

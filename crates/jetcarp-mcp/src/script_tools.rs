@@ -125,7 +125,13 @@ fn run_script(c: &mut Call) -> Res {
     };
     if stop.load(std::sync::atomic::Ordering::Relaxed) {
         return Ok(ToolOutput::error(format!(
-            "cancelled after {:.1} s ({} log lines; output folders: {})",
+            "{} after {:.1} s ({} log lines; output folders: {})",
+            if crate::stopping::is_stopping() {
+                // #278
+                "the server is stopping, so the script was stopped"
+            } else {
+                "cancelled"
+            },
             s.seconds,
             s.log.len(),
             dirs()
