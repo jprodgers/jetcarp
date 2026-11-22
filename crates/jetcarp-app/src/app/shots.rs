@@ -1307,6 +1307,7 @@ fn shots_this_computer() {
                 program: "the desktop background".into(),
                 bytes: 1200 << 20,
                 at_ms: 0,
+                pauses: true,
             }],
             own: 640 << 20,
             program: "the app".into(),

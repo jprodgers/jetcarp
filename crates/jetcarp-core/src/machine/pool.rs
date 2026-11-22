@@ -38,6 +38,10 @@ pub struct Use {
     pub bytes: u64,
     /// When it was recorded, milliseconds since 1970.
     pub at_ms: u64,
+    /// It holds still while JETCARP measures this computer ([`super::quiet::honour`]): the app,
+    /// the desktop background, a program running a job.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pauses: bool,
 }
 
 fn now_ms() -> u64 {
@@ -121,6 +125,8 @@ struct Me {
 
 static ME: OnceLock<Me> = OnceLock::new();
 static STOPPED: AtomicBool = AtomicBool::new(false);
+/// This program holds still while JETCARP measures ([`set_pauses`]).
+static PAUSES: AtomicBool = AtomicBool::new(false);
 /// Held while this program's record is written, and by [`stop`]: a refresh under way when the
 /// program ends finishes before the record is removed, and none starts after, so no record is
 /// left behind (#135).
@@ -151,6 +157,20 @@ pub fn start(program: &str, rss: fn() -> Option<u64>) {
         });
 }
 
+/// Whether this program records its memory ([`start`] ran): the `jetcarp` and `jetcarp-mcp`
+/// programs do, tests and code using the crates as a library don't.
+pub fn recording() -> bool {
+    ME.get().is_some()
+}
+
+/// Say in this program's record whether it holds still while JETCARP measures this computer
+/// ([`super::quiet`]); recorded at once.
+pub fn set_pauses(on: bool) {
+    if PAUSES.swap(on, Ordering::SeqCst) != on {
+        record_now();
+    }
+}
+
 /// Refresh this program's record now (after it built or dropped something large).
 pub fn record_now() {
     let (Some(me), Some(dir)) = (ME.get(), folder()) else {
@@ -168,6 +188,7 @@ pub fn record_now() {
                 program: me.program.clone(),
                 bytes,
                 at_ms: now_ms(),
+                pauses: PAUSES.load(Ordering::Relaxed),
             },
         );
     }
@@ -257,6 +278,7 @@ mod tests {
             program: program.into(),
             bytes: gib << 30,
             at_ms,
+            pauses: false,
         }
     }
 

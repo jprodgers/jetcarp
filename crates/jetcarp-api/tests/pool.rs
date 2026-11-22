@@ -47,6 +47,7 @@ fn a_world_must_fit_what_the_other_programs_leave() {
                 program: "the desktop background".into(),
                 bytes: (gib_tenths << 30) / 10,
                 at_ms,
+                pauses: true,
             },
         )
         .unwrap();
