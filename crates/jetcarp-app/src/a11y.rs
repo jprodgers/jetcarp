@@ -915,6 +915,44 @@ pub fn region_of(ctx: &egui::Context, regions: &[Region], id: egui::Id) -> Optio
         .position(|r| r.layer == w.layer_id && r.rect.contains(at))
 }
 
+/// ↓ and ↑ through a list of controls in their order, as through a list's items (#309): egui's
+/// arrows go to the nearest control that way on screen, which in wrapped rows of check boxes
+/// passes most of them by. `ids` are the list's controls in order, and `head` the control just
+/// before them (a section's header): ↑ from the first goes to it, ↓ from it to the first. Call
+/// once they are drawn.
+pub fn arrow_list(ctx: &egui::Context, head: Option<egui::Id>, ids: &[egui::Id]) {
+    use egui::{Key, Modifiers};
+    let Some(f) = ctx.memory(|m| m.focused()) else {
+        return;
+    };
+    let (down, up) = ctx.input(|i| {
+        (
+            i.key_pressed(Key::ArrowDown) && i.modifiers.is_none(),
+            i.key_pressed(Key::ArrowUp) && i.modifiers.is_none(),
+        )
+    });
+    if down == up {
+        return;
+    }
+    let to = match (ids.iter().position(|i| *i == f), down) {
+        (Some(i), true) => ids.get(i + 1).copied(),
+        (Some(0), false) => head,
+        (Some(i), false) => Some(ids[i - 1]),
+        (None, true) if Some(f) == head => ids.first().copied(),
+        _ => None,
+    };
+    if let Some(to) = to {
+        ctx.memory_mut(|m| {
+            m.move_focus(egui::FocusDirection::None);
+            m.request_focus(to);
+        });
+        ctx.input_mut(|i| {
+            i.consume_key(Modifiers::NONE, Key::ArrowDown);
+            i.consume_key(Modifiers::NONE, Key::ArrowUp);
+        });
+    }
+}
+
 /// Scroll widget `id` into view this frame, if last frame showed only part of it: an accessibility
 /// request egui answers inside the scroll area that holds it, when it draws it.
 pub fn scroll_into_view(ctx: &egui::Context, id: egui::Id) {

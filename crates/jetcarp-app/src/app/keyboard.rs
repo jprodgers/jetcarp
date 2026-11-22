@@ -135,6 +135,9 @@ pub(super) struct KeyboardRt {
     pointer_at: f64,
     /// The text box Esc just left: Tab carries on from it rather than from the window's start.
     escaped_from: Option<egui::Id>,
+    /// An arrow key pressed last frame on a control of a floating window: the control, and its
+    /// window's layer.
+    arrow_from: Option<(egui::Id, egui::LayerId)>,
     /// F10 asked for the menu bar.
     pub menu_request: bool,
     /// The menu bar's buttons and their menus, as drawn last frame.
@@ -158,6 +161,7 @@ impl JetcarpApp {
         if let Some(d) = self.kb.skip.take() {
             ctx.memory_mut(|m| m.move_focus(d));
         }
+        self.keep_arrows_in_window(ctx);
         let tab = ctx.input(|i| {
             i.events.iter().find_map(|e| match e {
                 egui::Event::Key {
@@ -233,6 +237,51 @@ impl JetcarpApp {
             || (egui::Popup::is_any_open(ctx) && self.kb.on_menus);
         self.kb.last_focus = focused;
         a11y::note_focus(ctx);
+    }
+
+    /// egui's arrow keys take the keyboard to the nearest control that way on screen, in any
+    /// layer: from the top or bottom of a floating window, to a control of the main window hidden
+    /// behind it, where its ring can't be seen (#309). An arrow that took it out of its window
+    /// brings it back to where it was.
+    fn keep_arrows_in_window(&mut self, ctx: &egui::Context) {
+        let layer_of = |id: egui::Id| {
+            ctx.viewport(|v| {
+                v.this_pass
+                    .widgets
+                    .get(id)
+                    .or_else(|| v.prev_pass.widgets.get(id))
+                    .map(|w| w.layer_id)
+            })
+        };
+        if let Some((from, layer)) = self.kb.arrow_from.take()
+            && let Some(now) = ctx.memory(|m| m.focused())
+            && now != from
+            && layer_of(now) != Some(layer)
+            && ctx.memory(|m| m.allows_interaction(layer))
+            && ctx.viewport(|v| v.prev_pass.widgets.get(from).is_some())
+        {
+            ctx.memory_mut(|m| m.request_focus(from));
+        }
+        let f = a11y::last_focus(ctx);
+        let arrow = ctx.input(|i| {
+            i.modifiers.is_none()
+                && [
+                    Key::ArrowUp,
+                    Key::ArrowDown,
+                    Key::ArrowLeft,
+                    Key::ArrowRight,
+                ]
+                .into_iter()
+                .any(|k| i.key_pressed(k))
+        });
+        if arrow
+            && !f.popup
+            && !f.text
+            && let (Some(id), Some(layer)) = (f.id, f.layer)
+            && layer != egui::LayerId::background()
+        {
+            self.kb.arrow_from = Some((id, layer));
+        }
     }
 
     /// Esc on a control of a docked pane (not a text box, nor in a list): the keyboard back to the
