@@ -1029,6 +1029,8 @@ pub struct DashWindow {
     /// The start-an-explore-search form (#239).
     pub explore: ExploreForm,
     explore_open: bool,
+    /// The form was opened from the menu: its first control takes the keyboard as it shows.
+    explore_focus: bool,
     explore_error: Option<String>,
     heat_tex: Option<(u64, bool, TextureHandle)>,
     anims: Option<AnimCache>,
@@ -1063,6 +1065,7 @@ impl Default for DashWindow {
             form_error: None,
             explore: ExploreForm::default(),
             explore_open: false,
+            explore_focus: false,
             explore_error: None,
             heat_tex: None,
             anims: None,
@@ -1441,6 +1444,14 @@ impl DashWindow {
         }
     }
 
+    /// *Tools → Start an explore search…* (#310): the window open, on top, with the explore form
+    /// open and the keyboard on its first control.
+    pub fn open_explore_form(&mut self) {
+        self.open = true;
+        self.explore_open = true;
+        self.explore_focus = true;
+    }
+
     /// The explore form (#239): a checkbox for each group of tilings and each rule family, with
     /// buttons to tick or clear each list, then how long and where it runs. Every control is a
     /// standard one, reached with Tab and named for screen readers by its own words (the number
@@ -1454,9 +1465,15 @@ impl DashWindow {
                 .weak(),
         );
         ui.label("Tilings");
+        let focus = std::mem::take(&mut self.explore_focus);
         ui.horizontal_wrapped(|ui| {
-            for (g, on) in f.groups.iter_mut() {
-                ui.checkbox(on, group_label(g)).on_hover_text(group_note(g));
+            for (i, (g, on)) in f.groups.iter_mut().enumerate() {
+                let r = ui.checkbox(on, group_label(g)).on_hover_text(group_note(g));
+                if i == 0 && focus {
+                    r.request_focus();
+                    r.scroll_to_me(Some(egui::Align::Center));
+                    ui.ctx().move_to_top(ui.layer_id());
+                }
             }
             list_buttons(ui, &mut f.groups, "tiling group", None);
         });

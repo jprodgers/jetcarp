@@ -197,6 +197,8 @@ pub(super) enum Action {
     AutoReseed,
     /// The setup wizard (`crate::setup_ui`).
     Setup,
+    /// The Hunts window with its explore form open and the keyboard on it (#310).
+    StartExplore,
     /// Show (and focus) a control pane, wherever it is.
     Pane(&'static str),
     /// Open or close a tool window.
@@ -274,6 +276,7 @@ impl Action {
             IdentifyMonitors,
             AutoReseed,
             Setup,
+            StartExplore,
         ];
         v.extend(panes::PANES.iter().map(|p| Pane(p.id)));
         v.extend(ToolWin::ALL.map(Tool));
@@ -326,6 +329,7 @@ impl Action {
             IdentifyMonitors => "Identify monitors".into(),
             AutoReseed => "Auto reseed".into(),
             Setup => "Setup…".into(),
+            StartExplore => "Start an explore search…".into(),
             Pane("screensaver") => "Screensaver settings…".into(),
             Pane("desktop") => "Desktop background settings…".into(),
             Pane(id) => panes::pane_def(id).map(|d| d.title).unwrap_or(id).into(),
@@ -387,6 +391,9 @@ impl Action {
             }
             Setup => {
                 "Choose what JETCARP sets up: packs, Quick Start entries of your own, the desktop"
+            }
+            StartExplore => {
+                "Choose the tilings and rule families an explore search draws from (in the Hunts window)"
             }
             Tool(t) => t.hint(),
             _ => "",
@@ -583,6 +590,7 @@ pub(super) const MENUS: &[(&str, &[Item])] = &[
             Sep,
             A(A_::Tool(ToolWin::Library)),
             A(A_::Tool(ToolWin::Hunts)),
+            A(A_::StartExplore),
             A(A_::Tool(ToolWin::CatalogTools)),
             Sep,
             A(A_::Tool(ToolWin::Ants)),
@@ -1035,6 +1043,7 @@ impl JetcarpApp {
             IdentifyMonitors => self.identify_monitors(ctx),
             AutoReseed => self.toggle_auto_reseed(),
             Setup => self.setup.show_again(),
+            StartExplore => self.dash.open_explore_form(),
             Tool(t) => {
                 let on = !self.tool_open(t);
                 self.set_tool_open(t, on);
