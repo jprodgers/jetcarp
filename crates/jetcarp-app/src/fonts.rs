@@ -680,8 +680,8 @@ pub(crate) mod tests {
     }
 
     /// Characters the app shows that egui's own fonts never drew either (a font of the system's
-    /// can be chosen for them): the macOS key symbols and the Reseed pane's star.
-    const NEVER_DRAWN: &str = "⌃⌘⌥⌦⌫★";
+    /// can be chosen for them): the macOS key symbols.
+    const NEVER_DRAWN: &str = "⌃⌘⌥⌦⌫";
 
     #[test]
     fn the_fallback_draws_every_interface_symbol() {

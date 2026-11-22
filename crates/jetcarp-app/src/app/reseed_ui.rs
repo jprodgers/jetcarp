@@ -1037,7 +1037,7 @@ pub(super) fn policies_editor(
     .inner
 }
 
-/// The built-in presets as buttons, then `saved` presets (starred). Returns the one clicked:
+/// The built-in presets as buttons, then `saved` presets (marked `*`). Returns the one clicked:
 /// a built-in's id or a saved preset's name.
 pub(super) fn preset_buttons(ui: &mut egui::Ui, saved: &[NamedPolicies]) -> Option<String> {
     let mut install = None;
@@ -1049,7 +1049,7 @@ pub(super) fn preset_buttons(ui: &mut egui::Ui, saved: &[NamedPolicies]) -> Opti
         }
         for p in saved {
             if ui
-                .button(format!("★ {}", p.name))
+                .button(saved_label(&p.name))
                 .on_hover_text("Saved preset")
                 .clicked()
             {
@@ -1061,7 +1061,7 @@ pub(super) fn preset_buttons(ui: &mut egui::Ui, saved: &[NamedPolicies]) -> Opti
 }
 
 /// The preset *Seed → Auto reseed* installs when a world has no policies: a built-in one or one
-/// of the saved ones (starred), kept in the app settings.
+/// of the saved ones (marked `*`), kept in the app settings.
 fn auto_preset_combo(ui: &mut egui::Ui, s: &mut ReseedSettings) {
     let label = auto_preset_label(&s.auto_preset, &s.presets);
     ui.horizontal(|ui| {
@@ -1075,20 +1075,26 @@ fn auto_preset_combo(ui: &mut egui::Ui, s: &mut ReseedSettings) {
                         .on_hover_text(p.hint);
                 }
                 for p in &s.presets {
-                    ui.selectable_value(&mut s.auto_preset, p.name.clone(), format!("★ {}", p.name));
+                    ui.selectable_value(&mut s.auto_preset, p.name.clone(), saved_label(&p.name));
                 }
             });
     });
 }
 
-/// How the combo names the auto-reseed preset `id`: a built-in's name, a saved preset starred,
+/// A saved preset as the pane names it: `* name`, so it stands apart from the built-in ones. (An
+/// asterisk, which every font has, where a star would need a font of the system's.)
+fn saved_label(name: &str) -> String {
+    format!("* {name}")
+}
+
+/// How the combo names the auto-reseed preset `id`: a built-in's name, a saved preset marked `*`,
 /// or the screensaver preset's name for one that no longer exists (it falls back to that).
 fn auto_preset_label(id: &str, saved: &[NamedPolicies]) -> String {
     if let Some(p) = PRESETS.iter().find(|p| p.id == id) {
         return p.name.to_string();
     }
     if saved.iter().any(|p| p.name == id) {
-        return format!("★ {id}");
+        return saved_label(id);
     }
     PRESETS
         .iter()
@@ -1294,7 +1300,7 @@ mod tests {
         }];
         assert_eq!(auto_preset_label("screensaver", &saved), "Screensaver");
         assert_eq!(auto_preset_label("storm", &saved), "Storm");
-        assert_eq!(auto_preset_label("mine", &saved), "★ mine");
+        assert_eq!(auto_preset_label("mine", &saved), "* mine");
         // A saved preset deleted since: Seed → Auto reseed falls back to the screensaver preset.
         assert_eq!(auto_preset_label("gone", &saved), "Screensaver");
         assert!(find_preset("gone", &saved, 1000).is_none());
