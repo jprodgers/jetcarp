@@ -159,10 +159,7 @@ impl JetcarpApp {
                     };
                     spec.size = ui_spec.size;
                     spec.boundary = ui_spec.boundary;
-                    if self.exec(Command::SetTiling { tiling: spec }).is_some() {
-                        self.message =
-                            Some(("Tiling rebuilt from the editor's tile.".into(), false));
-                    }
+                    self.set_tiling_saying(spec, "Tiling rebuilt from the editor's tile.");
                 }
                 crate::editor::EditorAction::Message(m, err) => self.message = Some((m, err)),
             }

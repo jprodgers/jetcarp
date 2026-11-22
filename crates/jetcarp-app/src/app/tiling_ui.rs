@@ -81,7 +81,7 @@ impl JetcarpApp {
         if self.t_size == SizeChoice::Fill {
             spec.size = Some(self.fill_size(&spec));
         }
-        self.exec(Command::SetTiling { tiling: spec });
+        self.set_tiling_bg(spec);
         true
     }
 
@@ -127,7 +127,7 @@ impl JetcarpApp {
             Some(crate::isohedral_ui::IhChange::Params(ev)) if ev.finished => {
                 let mut spec = self.tiling_spec_from_ui(true);
                 spec.params = Some(ev.params);
-                self.exec(Command::SetTiling { tiling: spec });
+                self.set_tiling_bg(spec);
             }
             _ => {}
         }
@@ -322,9 +322,7 @@ impl JetcarpApp {
                         } else {
                             self.t_boundary
                         };
-                        if self.exec(Command::SetTiling { tiling: spec }).is_some() {
-                            self.message = Some(("Tile loaded.".into(), false));
-                        }
+                        self.set_tiling_saying(spec, "Tile loaded.");
                     }
                     Err(e) => self.message = Some((format!("Tile JSON: {e}"), true)),
                 }
