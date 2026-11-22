@@ -1756,7 +1756,9 @@ fn clear_runtime(dir: &Path, keep: &[PathBuf]) -> Result<Option<String>, String>
             if kept.len() == 1 { "it" } else { "them" }
         ))
     } else if goes && dir.exists() {
-        Some("kept the folder, which holds files JETCARP did not put there".into())
+        // Something not JETCARP's, or on Windows the screen saver or the launcher's copy if
+        // their own steps kept them.
+        Some("kept the folder, which holds other files".into())
     } else {
         None
     })
