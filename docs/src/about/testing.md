@@ -483,7 +483,9 @@ job that hangs is stopped rather than left running for hours.
   is no longer maintained is shown as a warning, and never fails it.
 - **The book** builds, its internal links all resolve, and its scripting reference matches the
   program.
-- **Golly:** the Linux job installs Ubuntu's Golly and runs the Golly test above.
+- **Golly:** the Linux job builds Golly's `bgolly` 4.0 and 5.0 from their source (Ubuntu packages
+  only Golly 3.3, which can't read every rule JETCARP writes) and runs every Golly test above with
+  each, but the one that needs a library of finds.
 - **A release** is built only from a tag whose version agrees with the program and the changelog,
   and only after the tests pass.
 
