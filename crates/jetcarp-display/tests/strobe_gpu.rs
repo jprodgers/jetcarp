@@ -695,6 +695,167 @@ fn the_gpu_guard_keeps_a_small_reversing_checkerboard_under_the_limit() {
     }
 }
 
+/// A dense field of period-2 oscillators (#275), over the whole frame: Life's densest agar on a
+/// torus of 4 by 4 cells whose two phases are not each other's negative (half its cells flip each
+/// generation), `px` pixels a cell, offset from the tiles by (1, 3), in the default palette's
+/// colours (Ember's newborn cells on the dark slate). Its tiles' means do not move.
+fn agar(w: u32, h: u32, px: u32, phase: u32) -> Vec<u8> {
+    const PHASES: [&str; 2] = ["ooo./oo.o/.o../o...", "..o./...o/.ooo/o.oo"];
+    let rows: Vec<&[u8]> = PHASES[phase as usize % 2]
+        .split('/')
+        .map(str::as_bytes)
+        .collect();
+    let mut v = Vec::with_capacity((w * h * 4) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            let (cx, cy) = (((x + 1) / px % 4) as usize, ((y + 3) / px % 4) as usize);
+            let c = if rows[cy][cx] == b'o' {
+                [0xff, 0xd2, 0x7a]
+            } else {
+                [0x1d, 0x20, 0x29]
+            };
+            v.extend_from_slice(&[c[0], c[1], c[2], 255]);
+        }
+    }
+    v
+}
+
+/// The GPU's reading of a dense period-2 field (#275) is the processor's, and the meter counts it
+/// as flashing, as WCAG does pixel by pixel, though no tile's mean moves and no fine pattern
+/// reverses: its tiles' windows flip back and forth.
+#[test]
+fn the_gpu_measure_counts_a_dense_period_2_field() {
+    use jetcarp_core::strobe::Viewing;
+    use jetcarp_core::strobe::flash::{FlashMeter, Level};
+    let Some(g) = gpu() else { return };
+    let (w, h) = (640u32, 480u32);
+    let mut s = StrobeGpu::new(&g.device);
+    let mut wrong = vec![];
+    for px in [3u32, 4, 8] {
+        let maps: Vec<_> = (0..2)
+            .map(|p| {
+                let f = agar(w, h, px, p);
+                let tex = g.texture(&f, w, h);
+                let (_, r) = g.frame(&mut s, &tex, &Plan::none_for(w, h), 0.016, p as f64, false);
+                let what = format!("{px}-pixel cells, phase {p}");
+                same_fine(
+                    &r.input,
+                    &reduce(&f, w, h),
+                    Some((&f, w)),
+                    LUM_SUMS,
+                    RED_SUMS,
+                    &what,
+                );
+                r.input
+            })
+            .collect();
+        let mut m = FlashMeter::new(Viewing::screen(1.0), None);
+        let mut worst = Level::Pass;
+        for f in 0..120u32 {
+            // Thirty generations a second.
+            let r = m.update(&maps[((f / 2) % 2) as usize], f as f64 / 60.0);
+            worst = worst.max(r.level);
+        }
+        if !worst.fails() {
+            wrong.push(format!("{px}-pixel cells: {worst:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The guard on the GPU ([`GuardedGpu`]) keeps a dense period-2 field (#275) under the limit on
+/// screen: what it shows, read back and measured pixel by pixel as WCAG defines a flash, never
+/// fails, and it is the guard that keeps it so. The view is a window on a 1080p screen, so the
+/// stripe check, which counts a pattern over a quarter of the screen, cannot act on the field:
+/// the flash measure must. Drawn and measured offscreen only.
+#[test]
+fn the_gpu_guard_keeps_a_dense_period_2_field_under_the_limit() {
+    use jetcarp_core::strobe::flash::{COUNT_CAP, EPSILON, Tracker};
+    use jetcarp_core::strobe::guard::Pace;
+    use jetcarp_core::strobe::{DARK_LIMIT, FLASH_DELTA, Viewing, luminance};
+    use jetcarp_display::strobe_gpu::GuardedGpu;
+    let Some(g) = gpu() else { return };
+    let (w, h) = (640u32, 480u32);
+    // Pixel by pixel over a square larger than the 10° field.
+    let allowed = Viewing::screen(1.0).flash_area();
+    let (rx, ry, rw) = (160u32, 90u32, 300u32);
+    let measure = |px: &mut Vec<Tracker>, rgba: &[u8], t: f64| {
+        let mut at_least = [0usize; COUNT_CAP as usize + 2];
+        for (i, tr) in px.iter_mut().enumerate() {
+            let (x, y) = (rx + i as u32 % rw, ry + i as u32 / rw);
+            let p = &rgba[((y * w + x) * 4) as usize..];
+            tr.update(
+                luminance([p[0], p[1], p[2]]),
+                t,
+                FLASH_DELTA,
+                EPSILON,
+                Some(DARK_LIMIT),
+            );
+            at_least[tr.count(t) as usize] += 1;
+        }
+        for k in (0..=COUNT_CAP as usize).rev() {
+            at_least[k] += at_least[k + 1];
+        }
+        (1..=COUNT_CAP)
+            .rev()
+            .find(|&k| at_least[k as usize] as f64 > allowed)
+            .unwrap_or(0)
+    };
+    for (cell, speed) in [(4u32, 30.0f64), (8, 10.0)] {
+        let frames = [0, 1].map(|p| agar(w, h, cell, p));
+        let tex = [0, 1].map(|p| g.texture(&frames[p], w, h));
+        for on in [false, true] {
+            let screen = Some(1920.0 * 1080.0);
+            let mut gg = GuardedGpu::new(&g.device, Viewing::screen(1.0), screen, on);
+            let mut px = vec![Tracker::default(); (rw * rw) as usize];
+            let (mut due, mut gen_no, mut most) = (0.0f64, 0u64, 0);
+            for k in 0..(60 * 5) as u32 {
+                let t = k as f64 / 60.0;
+                let pace = gg.guard.cap().map_or(speed, |c| (c as f64).min(speed));
+                gg.update(
+                    &g.device,
+                    Pace {
+                        speed: speed as f32,
+                        reached: Some(pace as f32),
+                        frame_rate: 60.0,
+                    },
+                );
+                if k > 0 && gg.guard.paused().is_none() {
+                    due += pace / 60.0;
+                    gen_no = (due + 1e-9).floor() as u64;
+                }
+                let phase = (gen_no % 2) as usize;
+                let mut enc = g.device.create_command_encoder(&Default::default());
+                let shown = gg.frame(&g.device, &g.queue, &mut enc, Some(&tex[phase]), t);
+                g.queue.submit([enc.finish()]);
+                gg.gpu.after_submit();
+                g.wait();
+                let out = match shown {
+                    Shown::Softened => g.read(gg.gpu.softened_texture().expect("softened")),
+                    Shown::Drawn => frames[phase].clone(),
+                };
+                most = most.max(measure(&mut px, &out, t));
+            }
+            eprintln!(
+                "{cell}-pixel cells at {speed} gen/s, guard {}: {most} transitions a second \
+                 shown, pixel by pixel; {:?}",
+                if on { "on" } else { "off" },
+                gg.guard.report().action
+            );
+            if on {
+                assert!(
+                    most <= 4,
+                    "{cell}-pixel cells at {speed} generations a second: {most} transitions a \
+                     second shown ({:?})",
+                    gg.guard.report()
+                );
+            } else {
+                assert!(most > 6, "{cell}-pixel cells unguarded: {most}");
+            }
+        }
+    }
+}
+
 /// Red flashes by either definition (#270): one only WCAG 2.0's working definition catches (two
 /// reds of one chromaticity), one only WCAG 2.2's (a dark red and a dark green, more than 0.2
 /// apart in CIE 1976 UCS chromaticity, under 20 apart in the 2.0 measure), and one both. Each,
