@@ -50,6 +50,8 @@ pub(crate) use settings::saved_gpu_choice;
 mod shell;
 #[cfg(test)]
 mod shots;
+#[cfg(test)]
+mod size_tests;
 mod start_screen;
 mod strobe;
 mod tiling_ui;

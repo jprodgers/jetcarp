@@ -1047,6 +1047,75 @@ fn limits_and_a_short_score() {
     );
 }
 
+/// A world over this machine's largest world, lowered to 1 GB in the test's own settings, is
+/// refused with the reason by `jetcarp run` and by `jetcarp api call world.new`, never made
+/// smaller to fit (#300): 100,000 x 100,000 squares need about 75 GB. A world within the limit is
+/// built at the size asked: 20,000 x 1,000 squares, about 150 MB.
+#[test]
+fn worlds_over_the_limit_are_refused_by_the_command_line_never_made_smaller() {
+    use jetcarp_core::{Boundary, CaSpec, Scene, SeedSpec, TilingSpec};
+    let pid = std::process::id();
+    let cfg = test_dir("JETCARP_CONFIG_DIR", "config").join(format!("small-world-{pid}"));
+    let dir = out_root().join(format!("small-world-{pid}"));
+    for d in [&cfg, &dir] {
+        let _ = std::fs::remove_dir_all(d);
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_jetcarp"))
+            .args(args)
+            .env("JETCARP_OUT", out_root())
+            .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+            .env("JETCARP_CONFIG_DIR", &cfg)
+            .output()
+            .expect("run jetcarp")
+    };
+    let set = run(&["limits", "set", "world", "1GB"]);
+    assert!(
+        set.status.success(),
+        "{}",
+        String::from_utf8_lossy(&set.stderr)
+    );
+    let scene = |w: u32, h: u32| {
+        let p = dir.join(format!("square-{w}x{h}.json"));
+        let mut sc = Scene::new(TilingSpec::rect("square", w, h, Boundary::Wrap));
+        sc.cas.push(CaSpec::new("B3/S23").seed(SeedSpec::Empty));
+        std::fs::write(&p, sc.to_json()).unwrap();
+        p.to_str().unwrap().to_string()
+    };
+    let reason = "this world needs 74.5 GB; this machine's limit is 1 GB (your own value";
+    let o = run(&["run", &scene(100_000, 100_000)]);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(!o.status.success() && err.contains(reason), "{err}");
+    let o = run(&[
+        "api",
+        "call",
+        "world.new",
+        r#"{"tiling": "square", "width": 100000, "height": 100000, "cas": ["Life"]}"#,
+    ]);
+    assert!(!o.status.success());
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["error"]["kind"], "limit", "{v}");
+    assert!(
+        v["error"]["message"].as_str().unwrap().starts_with(reason),
+        "{v}"
+    );
+    let o = run(&["run", &scene(20_000, 1_000), "--json"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["cells"], 20_000_000, "{v}");
+    assert!(
+        v["tiling"]
+            .as_str()
+            .unwrap()
+            .contains("20000x1000 unit cells"),
+        "{v}"
+    );
+    for d in [&cfg, &dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
 /// Each run of the program records its memory in JETCARP's pool and removes the record when it
 /// ends, however it ends: done, refused, or failed with a status of its own (`jetcarp api call`
 /// of an operation that fails exits with 1).

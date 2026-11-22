@@ -20,7 +20,7 @@ const CHILD: &str = "JETCARP_KEYBOARD_TEST_CHILD";
 
 /// Run the `#[ignore]`d test `name` (`app::keyboard_tests::child_…`) in a process of its own,
 /// every folder JETCARP uses a scratch one; panic with its output when it fails.
-fn in_scratch(name: &str) {
+pub(super) fn in_scratch(name: &str) {
     let short = name.rsplit("::").next().unwrap_or(name);
     let root = jetcarp_core::scratch::ScratchDir::new(&format!("kb-{short}"));
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
@@ -67,14 +67,14 @@ fn in_scratch(name: &str) {
 const PASSED: &str = "keyboard test passed";
 
 /// The end of a twin that passed: say so, and end the process at once.
-fn done() -> ! {
+pub(super) fn done() -> ! {
     println!("{PASSED}");
     jetcarp_display::exit::end_process(0)
 }
 
 /// In a twin: whether it was started by [`in_scratch`] (else it returns at once, touching no
 /// folder of the person running it).
-fn child() -> bool {
+pub(super) fn child() -> bool {
     std::env::var_os(CHILD).is_some()
 }
 

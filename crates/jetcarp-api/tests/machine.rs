@@ -255,3 +255,65 @@ fn an_ais_worlds_fit_its_share() {
         "{e}"
     );
 }
+
+/// A world over the limit is refused with the reason, never made smaller to fit (#300): 100,000
+/// x 100,000 squares (about 75 GB) from `world.new` and `set_tiling`, on the command line's
+/// limits (the reference machine's 4 GB) and on an AI's (its share of them); nothing is built.
+/// Within the limit, a world larger than any view draws cell by cell is built at the size asked.
+#[test]
+fn worlds_over_the_limit_are_refused_with_the_reason_never_made_smaller() {
+    let new = |cx: &Ctx, h: &mut Session, w: u32, hh: u32| {
+        WorldNew::run(
+            cx,
+            h,
+            serde_json::from_value::<NewWorldIn>(json!({
+                "tiling": "square", "width": w, "height": hh, "cas": ["Life"]
+            }))
+            .unwrap(),
+            &Quiet,
+        )
+    };
+    let set_tiling = |cx: &Ctx, h: &mut Session, w: u32, hh: u32| {
+        let t = serde_json::to_value(square(w, hh)).unwrap();
+        WorldApply::run(
+            cx,
+            h,
+            serde_json::from_value(json!({"commands": [{"op": "set_tiling", "tiling": t}]}))
+                .unwrap(),
+            &Quiet,
+        )
+    };
+    let machine = Ctx::new().with_limits(Limits::for_this_machine());
+    let ai = Ctx::new().with_limits(Limits::for_an_ai());
+    let mut h = Session::new();
+    new(&machine, &mut h, 64, 64).unwrap();
+    for cx in [&machine, &ai] {
+        let e = fails(new(cx, &mut h, 100_000, 100_000), ErrorKind::Limit);
+        let reason = |m: &str| {
+            if cx.limits.world_memory == WorldMemory::Ai {
+                m.contains("an AI's share, small, of this machine's limits")
+                    && m.contains("Tools → This computer…, or `jetcarp limits`")
+            } else {
+                m.contains("this world needs 74.5 GB; this machine's limit is 4 GB (half of")
+            }
+        };
+        assert!(reason(&e.message), "world.new: {e}");
+        let e = fails(set_tiling(cx, &mut h, 100_000, 100_000), ErrorKind::Limit);
+        assert!(reason(&e.message), "set_tiling: {e}");
+        assert_eq!(h.world().topo.len(), 64 * 64, "nothing was built");
+    }
+    // An AI's grid over its cells, not its sides, says where that limit comes from too.
+    let e = fails(new(&ai, &mut h, 3000, 3000), ErrorKind::Limit);
+    assert!(
+        e.message.starts_with(
+            "3000 x 3000 on square is 9,000,000 cells, over the limit of 4,000,000 cells (try \
+             2000 x 2000). It is an AI's share, small, of this machine's limits"
+        ),
+        "{e}"
+    );
+    // Within the limit: 20,000 x 1,000 squares, 20 million cells (about 150 MB), built as asked.
+    let out = new(&machine, &mut h, 20_000, 1_000).unwrap();
+    assert_eq!(out.status.cells, 20_000_000);
+    let g = h.world().topo.lattice().unwrap();
+    assert_eq!((g.w, g.h), (20_000, 1_000));
+}

@@ -198,8 +198,10 @@ impl JetcarpApp {
                     egui::DragValue::new(v).range(1..=16384).speed(1.0)
                 }
                 let rw = ui.add(side(&mut w)).on_hover_text("Unit cells across");
+                crate::a11y::name(&rw, "Width in unit cells");
                 ui.label("×");
                 let rh = ui.add(side(&mut h)).on_hover_text("Unit cells down");
+                crate::a11y::name(&rh, "Height in unit cells");
                 ui.label("unit cells").on_hover_text(
                     "A unit cell is the tiling's repeating block: one cell on the square, hexagon and \
                      triangle grids' own units, several on others. HashLife's jump in place needs \
