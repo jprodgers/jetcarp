@@ -28,7 +28,7 @@ which suits a wallpaper, and here it runs on the aperiodic Penrose tiling of thi
 
 In the *CAs* pane, open the list after *Palette* (it says *Prism*) and choose *Aurora*:
 
-<img src="../images/tutorials/wallpaper-palette-list.webp" alt="Brian's Brain on Penrose rhombs running in orange and blue, with the CAs pane's palette list open: Ember, Tide, Prism (chosen), Ink, Mono, Aurora (under the pointer), Synthwave, Moss, Candy" width="700">
+<img src="../images/tutorials/wallpaper-palette-list.webp" alt="Brian's Brain on Penrose rhombs running in orange and blue, with the CAs pane's palette list open: Ember, Tide, Prism (chosen), Ink, Mono, Aurora (under the pointer), Synthwave, Moss, Candy; the Scene pane and the status bar carry the strobe guard's note that it is softening the scene's flashes" width="700">
 
 The world turns mint and violet at once. *CA → Palettes…* opens the palette window, which shows
 every palette, applies one to every automaton at once, and makes palettes of your own (see
@@ -43,7 +43,7 @@ Keep this world as it is now by saving it as a *screensaver profile*: press *Sav
 profile* under *Profiles*. The profile is named after the scene and holds its tiling, rule, seed and
 palette. Then set *Show* to *One profile* and *Profile* to *Brian's Brain on Penrose rhombs*:
 
-<img src="../images/tutorials/wallpaper-screensaver-pane.webp" alt="The Screensaver pane: Start the screensaver; Show One profile, Profile Brian's Brain on Penrose rhombs; While it runs, and a link to the Desktop background settings; the list of profiles, and the new profile Brian's Brain on Penrose rhombs open in the editor; the world now in the Aurora palette" width="700">
+<img src="../images/tutorials/wallpaper-screensaver-pane.webp" alt="The Screensaver pane: Start the screensaver; Show One profile, Profile Brian's Brain on Penrose rhombs; While it runs, and a link to the Desktop background settings; the list of profiles, and the new profile Brian's Brain on Penrose rhombs open in the editor; the world now in the Aurora palette, and the status bar's note that the strobe guard is softening its flashes" width="700">
 
 Now *View → Screensaver mode* (F12), or *Start the screensaver* at the top of the pane, fills the
 screen with your profile. (*Show → The current world* runs whatever world is open instead.)
