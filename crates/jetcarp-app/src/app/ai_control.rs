@@ -207,6 +207,13 @@ impl jetcarp_api::world::Host for JetcarpApp {
         &self.world
     }
     fn exec(&mut self, cmd: Command) -> Result<Applied, String> {
+        // The strobe guard holds steps from AI control as it holds the person's (#293).
+        if matches!(cmd, Command::Step { .. }) && !self.step_allowed() {
+            return Err(
+                "the strobe guard is holding steps back while this scene flashes; try again in a moment, or step more generations at once"
+                    .into(),
+            );
+        }
         self.try_exec(cmd)
     }
     fn replace(&mut self, scene: Scene) -> Result<(), String> {
