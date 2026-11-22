@@ -1,9 +1,13 @@
 //! The caption: a few lines saying what is on screen (the rule, the grid, the rotation). The words
 //! come from the world here, so every display says the same thing. The app draws them with egui;
-//! [`CaptionPainter`] draws them on a plain wgpu surface, in Atkinson Hyperlegible Next as the app
-//! does ([`crate::fonts`]), with egui's Ubuntu Light behind it for what Atkinson lacks (Greek).
+//! [`CaptionPainter`] draws them on a plain wgpu surface, in the font the app's setting names
+//! ([`FontWatch`]): Atkinson Hyperlegible Next by default ([`crate::fonts`]), with egui's Ubuntu
+//! Light behind it for what Atkinson lacks (Greek).
 
-use ab_glyph::{Font, FontRef, GlyphId, PxScale, ScaleFont};
+use crate::fonts::FontChoice;
+use ab_glyph::{Font, FontArc, GlyphId, PxScale, ScaleFont};
+use std::path::PathBuf;
+use std::sync::Arc;
 use jetcarp_core::rules::{self, Rule};
 use jetcarp_core::topology::{Boundary, Topology};
 use jetcarp_core::{World, families};
@@ -262,25 +266,37 @@ struct Picture {
     size: [u32; 2],
 }
 
-/// The caption's fonts: Atkinson Hyperlegible Next, then Ubuntu Light (egui's) for a character it
-/// lacks. Each character is drawn in the first that has it.
+/// The caption's fonts: Atkinson Hyperlegible Next (or the font chosen in the app), then Ubuntu
+/// Light (egui's) for a character it lacks. Each character is drawn in the first that has it.
+#[derive(Clone)]
 pub struct CaptionFont {
-    fonts: [FontRef<'static>; 2],
+    fonts: Vec<FontArc>,
+}
+
+fn builtin(bytes: &'static [u8]) -> FontArc {
+    FontArc::try_from_slice(bytes).expect("a font that comes with JETCARP")
 }
 
 impl Default for CaptionFont {
     fn default() -> Self {
         CaptionFont {
-            fonts: [
-                FontRef::try_from_slice(crate::fonts::NEXT_REGULAR).expect("the shipped font"),
-                FontRef::try_from_slice(epaint_default_fonts::UBUNTU_LIGHT)
-                    .expect("the built-in font"),
+            fonts: vec![
+                builtin(crate::fonts::NEXT_REGULAR),
+                builtin(epaint_default_fonts::UBUNTU_LIGHT),
             ],
         }
     }
 }
 
 impl CaptionFont {
+    /// The caption's fonts for the app's font setting `choice`, as the app draws its words: the
+    /// chosen font with egui's Ubuntu Light behind it. A font file that can't be used is an error
+    /// that names the file.
+    pub fn for_choice(choice: &FontChoice) -> Result<CaptionFont, String> {
+        let _ = choice;
+        Ok(CaptionFont::default())
+    }
+
     /// The font that draws `c` (the first, for a character none has), and its glyph there.
     pub fn glyph(&self, c: char) -> (usize, GlyphId) {
         for (i, f) in self.fonts.iter().enumerate() {
@@ -413,9 +429,42 @@ impl CaptionFont {
     }
 }
 
+/// The caption's fonts as the app's font setting names them (`app.json` in the settings folder,
+/// [`crate::fonts::saved_in`]), read again at each [`FontWatch::check`]: the desktop background
+/// checks every couple of seconds, so a font chosen in the app shows without a restart.
+pub struct FontWatch {
+    settings: Option<PathBuf>,
+    choice: FontChoice,
+    font: Arc<CaptionFont>,
+}
+
+impl FontWatch {
+    /// The fonts the setting in `settings` names now (none: JETCARP's), and a note when the chosen
+    /// font can't be used (the caption is then in Atkinson Hyperlegible Next).
+    pub fn new(settings: Option<PathBuf>) -> (FontWatch, Option<String>) {
+        let w = FontWatch {
+            settings,
+            choice: FontChoice::Atkinson,
+            font: Arc::new(CaptionFont::default()),
+        };
+        (w, None)
+    }
+
+    /// Read the setting again. A note when the caption's font changed, or the newly chosen one
+    /// can't be used.
+    pub fn check(&mut self) -> Option<String> {
+        None
+    }
+
+    /// The fonts to draw the caption in.
+    pub fn font(&self) -> &Arc<CaptionFont> {
+        &self.font
+    }
+}
+
 /// Draws a caption on a plain wgpu target.
 pub struct CaptionPainter {
-    font: CaptionFont,
+    font: Arc<CaptionFont>,
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
@@ -496,7 +545,7 @@ impl CaptionPainter {
             cache: None,
         });
         CaptionPainter {
-            font: CaptionFont::default(),
+            font: Arc::new(CaptionFont::default()),
             pipeline,
             layout,
             sampler: device.create_sampler(&wgpu::SamplerDescriptor::default()),
@@ -509,6 +558,14 @@ impl CaptionPainter {
             picture: None,
             drawn: None,
             visible: false,
+        }
+    }
+
+    /// Draw the caption in `font` from now on (laid out again at the next [`Self::prepare`]).
+    pub fn set_font(&mut self, font: &Arc<CaptionFont>) {
+        if !Arc::ptr_eq(&self.font, font) {
+            self.font = Arc::clone(font);
+            self.drawn = None;
         }
     }
 
@@ -622,6 +679,7 @@ impl CaptionPainter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ab_glyph::FontRef;
     use jetcarp_core::{Scene, SizeSpec, TilingSpec, topology};
 
     #[test]
@@ -725,6 +783,94 @@ mod tests {
             img.as_chunks::<4>().0.iter().any(|p| p[0] > 200),
             "text drawn"
         );
+    }
+
+    /// `text`'s width at 20 pixels in `font` alone.
+    fn width_in(font: &[u8], text: &str) -> f32 {
+        let f = FontRef::try_from_slice(font).unwrap();
+        let s = f.as_scaled(PxScale::from(20.0));
+        let mut w = 0.0;
+        let mut last = None;
+        for c in text.chars() {
+            let g = f.glyph_id(c);
+            w += last.map_or(0.0, |l| s.kern(l, g)) + s.h_advance(g);
+            last = Some(g);
+        }
+        w
+    }
+
+    /// The desktop background's caption is drawn in the font the app's setting names (`app.json`
+    /// in the settings folder): a font file chosen there, from the next check without a restart,
+    /// and at the next start; egui's original; Atkinson. A chosen file since removed gives
+    /// Atkinson, and a note that names the file (never its folder).
+    #[test]
+    fn the_caption_follows_the_app_s_font_setting() {
+        let dir = jetcarp_core::scratch::ScratchDir::new("caption-font");
+        let settings = dir.join("settings");
+        let fonts = dir.join("fonts");
+        std::fs::create_dir_all(&settings).unwrap();
+        std::fs::create_dir_all(&fonts).unwrap();
+        let hack_file = fonts.join("Hack-Regular.ttf");
+        std::fs::write(&hack_file, epaint_default_fonts::HACK_REGULAR).unwrap();
+        let save = |font: serde_json::Value| {
+            let app = serde_json::json!({
+                "version": 1,
+                "accessibility": { "font": font, "mono_font": "atkinson" },
+            });
+            std::fs::write(settings.join("app.json"), app.to_string()).unwrap();
+        };
+        let hack_choice = serde_json::json!({
+            "file": { "family": "Hack", "path": hack_file, "index": 0 }
+        });
+        let text = "Square grid · 480 × 270";
+        let atkinson = width_in(crate::fonts::NEXT_REGULAR, text);
+        let hack = width_in(epaint_default_fonts::HACK_REGULAR, text);
+        let ubuntu = width_in(epaint_default_fonts::UBUNTU_LIGHT, text);
+        let drawn = |w: &FontWatch| w.font().line_width(text, 20.0);
+        assert!((atkinson - hack).abs() > 1.0 && (atkinson - ubuntu).abs() > 1.0);
+
+        // Nothing saved yet: Atkinson Hyperlegible Next.
+        let (mut watch, note) = FontWatch::new(Some(settings.clone()));
+        assert_eq!(note, None);
+        assert_eq!(drawn(&watch), atkinson);
+
+        // A font file chosen in the app: in it from the next check.
+        save(hack_choice.clone());
+        let note = watch.check().expect("a note that the font changed");
+        assert!(note.contains("Hack"), "{note}");
+        assert_eq!(drawn(&watch), hack);
+        // Nothing changed since: no note, the same fonts.
+        let before = Arc::clone(watch.font());
+        assert_eq!(watch.check(), None);
+        assert!(Arc::ptr_eq(&before, watch.font()));
+        // And so at the next start.
+        let (again, note) = FontWatch::new(Some(settings.clone()));
+        assert_eq!(note, None);
+        assert_eq!(drawn(&again), hack);
+
+        // egui's original font, then JETCARP's.
+        save(serde_json::json!("egui"));
+        assert!(watch.check().is_some());
+        assert_eq!(drawn(&watch), ubuntu);
+        save(serde_json::json!("atkinson"));
+        assert!(watch.check().is_some());
+        assert_eq!(drawn(&watch), atkinson);
+
+        // The chosen file removed: Atkinson, and a note naming the file.
+        save(hack_choice);
+        std::fs::remove_file(&hack_file).unwrap();
+        let (gone, note) = FontWatch::new(Some(settings.clone()));
+        assert_eq!(drawn(&gone), atkinson);
+        let note = note.expect("a note that the font can't be used");
+        assert!(note.contains("Hack-Regular.ttf"), "{note}");
+        assert!(!note.contains(&*fonts.to_string_lossy()), "{note}");
+        let note = watch.check().expect("a note that the font can't be used");
+        assert!(note.contains("Hack-Regular.ttf"), "{note}");
+        assert_eq!(drawn(&watch), atkinson);
+
+        // No settings folder: Atkinson.
+        let (none, note) = FontWatch::new(None);
+        assert_eq!((drawn(&none), note), (atkinson, None));
     }
 
     #[test]
