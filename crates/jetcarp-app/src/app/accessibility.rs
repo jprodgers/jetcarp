@@ -108,6 +108,9 @@ pub(super) struct FontsRt {
     pub scanner: crate::fonts::Scanner,
     /// Why the last font chosen couldn't be used, shown in the window until another is chosen.
     pub refused: Option<String>,
+    /// The installed fonts a character no font in place has is drawn in, read when the app
+    /// starts.
+    pub fallback: crate::fonts::FallbackScan,
 }
 
 impl Default for A11yRt {
@@ -134,8 +137,9 @@ impl Default for A11yRt {
             // The app starts with JETCARP's fonts in place (`JetcarpApp::new`).
             fonts: FontsRt {
                 applied: Some((FontChoice::Atkinson, FontChoice::Atkinson)),
-                scanner: crate::fonts::Scanner::new(font_dirs),
+                scanner: crate::fonts::Scanner::new(font_dirs.clone()),
                 refused: None,
+                fallback: crate::fonts::FallbackScan::new(font_dirs),
             },
         }
     }
@@ -190,6 +194,8 @@ impl JetcarpApp {
     /// the next frame). A font file that can't be used is refused: the setting goes back to
     /// JETCARP's font, and the window and the status line say why.
     pub(super) fn fonts_frame(&mut self, ctx: &egui::Context) {
+        // The installed fonts that draw what no font in place has, once read.
+        self.a11y.fonts.fallback.poll(ctx);
         let s = &mut self.a11y.settings;
         let want = (s.font.clone(), s.mono_font.clone());
         if self.a11y.fonts.applied.as_ref() == Some(&want) {

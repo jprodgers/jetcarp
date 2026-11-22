@@ -131,24 +131,52 @@ pub fn load(path: &Path, index: Option<u32>) -> Result<Loaded, String> {
 /// file is read whole the first time one of its characters is drawn, and kept.
 pub struct SystemFallback {
     fonts: Arc<Fallbacks>,
+    /// The files read so far (None: one that couldn't be).
+    read: std::sync::Mutex<std::collections::HashMap<PathBuf, Option<Arc<Vec<u8>>>>>,
 }
+
+/// Larger files are not read for one character.
+const MAX_FALLBACK_FILE: u64 = 256 << 20;
 
 impl SystemFallback {
     pub fn new(fonts: Arc<Fallbacks>) -> SystemFallback {
-        SystemFallback { fonts }
+        SystemFallback {
+            fonts,
+            read: Default::default(),
+        }
+    }
+
+    fn bytes(&self, path: &Path) -> Option<Arc<Vec<u8>>> {
+        let mut read = self.read.lock().unwrap_or_else(|e| e.into_inner());
+        read.entry(path.to_path_buf())
+            .or_insert_with(|| {
+                std::fs::metadata(path)
+                    .ok()
+                    .filter(|m| m.is_file() && m.len() <= MAX_FALLBACK_FILE)
+                    .and_then(|_| std::fs::read(path).ok())
+                    .map(Arc::new)
+            })
+            .clone()
     }
 }
 
 impl egui::FontProvider for SystemFallback {
     fn font_for(&self, request: &egui::FallbackRequest<'_>) -> Option<egui::FontInsert> {
-        let _ = (request, &self.fonts);
-        None
+        let c = request.cluster.chars().next()?;
+        let f = self.fonts.for_char(c)?;
+        let bytes = self.bytes(&f.path)?;
+        let file = f.path.file_name().unwrap_or_default().to_string_lossy();
+        Some(egui::FontInsert::new(
+            &format!("installed: {} ({file}, face {})", f.family, f.index),
+            FontData::from_blob(bytes, f.index),
+            vec![],
+        ))
     }
 }
 
 /// Ask `fonts` for characters no font in place has, in `ctx` from its next frame.
 pub fn install_fallback(ctx: &egui::Context, fonts: Arc<Fallbacks>) {
-    let _ = (ctx, fonts);
+    ctx.add_font_provider(Arc::new(SystemFallback::new(fonts)));
 }
 
 /// The installed fonts' character maps, read once on a thread of their own when the app starts,
@@ -174,13 +202,41 @@ impl FallbackScan {
 
     /// Start reading, unless there is nothing to read or it has started.
     pub fn start(&mut self, ctx: &egui::Context) {
-        let _ = ctx;
+        if self.dirs.is_empty() || self.rx.is_some() || self.found.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let dirs = self.dirs.clone();
+        let ctx = ctx.clone();
+        let spawned = std::thread::Builder::new()
+            .name("font fallback scan".into())
+            .spawn(move || {
+                let t0 = std::time::Instant::now();
+                let found = Fallbacks::find(&dirs);
+                if tx.send((found, t0.elapsed())).is_ok() {
+                    ctx.request_repaint();
+                }
+            });
+        if spawned.is_ok() {
+            self.rx = Some(rx);
+        }
     }
 
     /// Put the fonts in place once they are read. True when it did, this frame.
     pub fn poll(&mut self, ctx: &egui::Context) -> bool {
-        let _ = ctx;
-        false
+        let Some(rx) = &self.rx else {
+            return false;
+        };
+        let Ok((fonts, took)) = rx.try_recv() else {
+            return false;
+        };
+        self.rx = None;
+        self.found = Some((fonts.len(), took));
+        if fonts.is_empty() {
+            return false;
+        }
+        install_fallback(ctx, Arc::new(fonts));
+        true
     }
 }
 
@@ -435,7 +491,11 @@ pub(crate) mod tests {
         let dir = scratch("fallback");
         std::fs::create_dir_all(&*dir).unwrap();
         let symbols = format!("{NEVER_DRAWN}→中文");
-        std::fs::write(dir.join("KeySymbols.ttf"), stand_in(&symbols, "Key Symbols")).unwrap();
+        std::fs::write(
+            dir.join("KeySymbols.ttf"),
+            stand_in(&symbols, "Key Symbols"),
+        )
+        .unwrap();
         let found = Arc::new(Fallbacks::find(&[dir.to_path_buf()]));
         assert_eq!(found.len(), 1);
         for ctx in [&atkinson, &original] {
@@ -476,7 +536,11 @@ pub(crate) mod tests {
     fn the_fallback_is_found_off_the_main_thread() {
         let dir = scratch("fallback-scan");
         std::fs::create_dir_all(&*dir).unwrap();
-        std::fs::write(dir.join("KeySymbols.ttf"), stand_in(NEVER_DRAWN, "Key Symbols")).unwrap();
+        std::fs::write(
+            dir.join("KeySymbols.ttf"),
+            stand_in(NEVER_DRAWN, "Key Symbols"),
+        )
+        .unwrap();
         let ctx = ctx_with(&Face::Atkinson, &Face::Atkinson);
         let draws = |c| ctx.fonts_mut(|f| f.has_glyph(&egui::FontId::proportional(14.0), c));
         assert!(!draws('⌘'));

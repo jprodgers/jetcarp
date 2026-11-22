@@ -263,10 +263,7 @@ const MAX_DEPTH: usize = 12;
 pub fn scan(dirs: &[PathBuf]) -> Vec<Installed> {
     // Family (folded) → (how far from upright regular, the face).
     let mut best: std::collections::BTreeMap<String, (u32, Installed)> = Default::default();
-    for face in font_files(dirs)
-        .iter()
-        .flat_map(|p| faces_in(p, false))
-    {
+    for face in font_files(dirs).iter().flat_map(|p| faces_in(p, false)) {
         if !face.latin || face.family.starts_with('.') {
             continue;
         }
@@ -617,7 +614,11 @@ pub mod stand_in {
     /// that `base` (a TrueType font) draws for `like`. Its other tables are `base`'s.
     pub fn font_with(base: &[u8], chars: &str, like: char, family: &str) -> Vec<u8> {
         let font = skrifa::FontRef::new(base).expect("a font");
-        let glyph = font.charmap().map(like).expect("the base font has it").to_u32();
+        let glyph = font
+            .charmap()
+            .map(like)
+            .expect("the base font has it")
+            .to_u32();
         let mut cps: Vec<u32> = chars.chars().map(u32::from).collect();
         cps.sort_unstable();
         cps.dedup();
@@ -627,7 +628,15 @@ pub mod stand_in {
             .iter()
             .map(|r| r.tag().to_be_bytes())
             .filter(|t| t != b"cmap" && t != b"name")
-            .map(|t| (t, font.table_data(skrifa::Tag::new(&t)).unwrap().as_bytes().to_vec()))
+            .map(|t| {
+                (
+                    t,
+                    font.table_data(skrifa::Tag::new(&t))
+                        .unwrap()
+                        .as_bytes()
+                        .to_vec(),
+                )
+            })
             .collect();
         tables.push((*b"cmap", cmap12(&cps, glyph)));
         tables.push((*b"name", name(family)));
@@ -659,8 +668,17 @@ pub mod stand_in {
     /// A naming table giving the family and "Regular", in Windows' US English.
     fn name(family: &str) -> Vec<u8> {
         let strings: [(u16, Vec<u8>); 2] = [
-            (1, family.encode_utf16().flat_map(u16::to_be_bytes).collect()),
-            (2, "Regular".encode_utf16().flat_map(u16::to_be_bytes).collect()),
+            (
+                1,
+                family.encode_utf16().flat_map(u16::to_be_bytes).collect(),
+            ),
+            (
+                2,
+                "Regular"
+                    .encode_utf16()
+                    .flat_map(u16::to_be_bytes)
+                    .collect(),
+            ),
         ];
         let mut t = vec![];
         t.extend(0u16.to_be_bytes()); // format 0
@@ -777,12 +795,56 @@ mod tests {
         }
         assert_eq!(f.for_char('中').unwrap().family, "Big CJK");
         assert_eq!(f.for_char('文').unwrap().family, "Big CJK");
-        assert!(f.for_char('⏰').is_none(), "only LastResort and the hidden font have it");
+        assert!(
+            f.for_char('⏰').is_none(),
+            "only LastResort and the hidden font have it"
+        );
         assert!(f.for_char('A').is_none(), "no font found maps it");
         // A stand-in parses as the font it says it is.
         let parsed = skrifa::FontRef::new(&small).unwrap();
         assert!(parsed.charmap().map('⌘').is_some());
         assert!(parsed.charmap().map('A').is_none());
         assert!(Fallbacks::find(&[]).is_empty());
+    }
+
+    /// How long reading the installed fonts' character maps takes, here (`--ignored`): the
+    /// system's folders, or those in `JETCARP_FONT_DIRS` (separated as `PATH` is).
+    #[test]
+    #[ignore = "a measurement of this machine's installed fonts"]
+    fn time_the_fallback_scan() {
+        let dirs: Vec<PathBuf> = match std::env::var_os("JETCARP_FONT_DIRS") {
+            Some(v) => std::env::split_paths(&v).collect(),
+            None => system_dirs(),
+        };
+        let files = font_files(&dirs).len();
+        for run in ["first", "second"] {
+            let t0 = std::time::Instant::now();
+            let f = Fallbacks::find(&dirs);
+            let took = t0.elapsed();
+            let ranges: usize = f.faces.iter().map(|(r, _)| r.len()).sum();
+            eprintln!(
+                "{run} run: {files} files, {} faces, {ranges} ranges, {took:?}",
+                f.len()
+            );
+        }
+        let f = Fallbacks::find(&dirs);
+        for c in "⌃⌘⌥⌦⌫★中한".chars() {
+            let got = f
+                .for_char(c)
+                .map(|f| (f.family.clone(), file_name(&f.path)));
+            eprintln!("{c}: {got:?}");
+        }
+        let t0 = std::time::Instant::now();
+        let families = scan(&dirs).len();
+        eprintln!(
+            "the settings' scan: {families} families, {:?}",
+            t0.elapsed()
+        );
+        // What the app's start waits for: the thread that reads them being started.
+        let t0 = std::time::Instant::now();
+        let thread = std::thread::spawn(move || Fallbacks::find(&dirs).len());
+        let started = t0.elapsed();
+        let n = thread.join().unwrap();
+        eprintln!("starting the thread: {started:?} ({n} faces found on it)");
     }
 }

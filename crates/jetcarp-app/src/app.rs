@@ -355,6 +355,9 @@ impl JetcarpApp {
         app.machine_suggestion();
         // Reduced motion and the theme, before the first scene opens or the first frame draws.
         app.a11y_frame(&cc.egui_ctx);
+        // The installed fonts' character maps, for characters no font in place has, read on a
+        // thread of their own so the first frame doesn't wait (`crate::fonts::FallbackScan`).
+        app.a11y.fonts.fallback.start(&cc.egui_ctx);
         let mut app = app.with_autoshot(&cc.egui_ctx);
         // The photosensitive seizure warning comes first (#96): until it has been answered, the
         // launch waits.

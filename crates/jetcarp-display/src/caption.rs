@@ -6,12 +6,12 @@
 
 use crate::fonts::FontChoice;
 use ab_glyph::{Font, FontArc, GlyphId, PxScale, ScaleFont};
-use std::path::PathBuf;
-use std::sync::Arc;
 use jetcarp_core::rules::{self, Rule};
 use jetcarp_core::topology::{Boundary, Topology};
 use jetcarp_core::{World, families};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Corner {
