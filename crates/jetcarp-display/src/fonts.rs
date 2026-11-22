@@ -552,7 +552,13 @@ impl Fallbacks {
     /// placeholder for every character (macOS's LastResort), hidden ones (named with a leading
     /// dot), and bitmap and colour fonts with no outlines are left out.
     pub fn find(dirs: &[PathBuf]) -> Fallbacks {
-        let mut faces: Vec<FaceInfo> = font_files(dirs)
+        Self::of_files(&font_files(dirs))
+    }
+
+    /// The faces of the font files `files` that can stand in for a missing character, as
+    /// [`Fallbacks::find`] leaves them.
+    pub fn of_files(files: &[PathBuf]) -> Fallbacks {
+        let mut faces: Vec<FaceInfo> = files
             .iter()
             .flat_map(|p| faces_in(p, true))
             .filter(|f| {

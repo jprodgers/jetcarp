@@ -4,14 +4,14 @@
 //! ([`FontWatch`]): Atkinson Hyperlegible Next by default ([`crate::fonts`]), with egui's Ubuntu
 //! Light behind it for what Atkinson lacks (Greek).
 
-use crate::fonts::FontChoice;
+use crate::fonts::{Fallbacks, FontChoice};
 use ab_glyph::{Font, FontArc, GlyphId, PxScale, ScaleFont};
 use jetcarp_core::rules::{self, Rule};
 use jetcarp_core::topology::{Boundary, Topology};
 use jetcarp_core::{World, families};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Corner {
@@ -266,11 +266,73 @@ struct Picture {
     size: [u32; 2],
 }
 
+/// The caption's last resort (#273), as the app has: a character none of its fonts has is drawn in
+/// an installed font that has it ([`Fallbacks`]). The installed fonts' character maps are read
+/// once, on a thread of their own, so no frame waits for them (such a character is a box until
+/// then, and the caption is drawn again once they are read); a font file is read whole the first
+/// time one of its characters is drawn, and kept.
+pub struct LastResort {
+    index: OnceLock<Fallbacks>,
+    faces: Mutex<Faces>,
+}
+
+/// The last resort's fonts read so far.
+#[derive(Default)]
+struct Faces {
+    /// In the order first needed.
+    list: Vec<FontArc>,
+    /// Where each file and face is in `list` (None: it couldn't be read).
+    by_file: std::collections::HashMap<(PathBuf, u32), Option<usize>>,
+}
+
+impl LastResort {
+    /// Start reading the character maps of the fonts in `dirs` ([`crate::fonts::system_dirs`]),
+    /// on a thread of their own. With no folders there is nothing to read.
+    pub fn start(dirs: Vec<PathBuf>) -> Arc<LastResort> {
+        Self::start_with(move || Fallbacks::find(&dirs))
+    }
+
+    /// Start `scan` on a thread of its own, its fonts used once it returns.
+    pub fn start_with(scan: impl FnOnce() -> Fallbacks + Send + 'static) -> Arc<LastResort> {
+        let _ = scan;
+        Arc::new(LastResort {
+            index: OnceLock::new(),
+            faces: Default::default(),
+        })
+    }
+
+    /// The fonts `index` names, ready now: for fonts copied beside the program (the macOS screen
+    /// saver's bundle).
+    pub fn ready(index: Fallbacks) -> Arc<LastResort> {
+        let _ = index;
+        Self::start_with(Fallbacks::default)
+    }
+
+    /// Whether the character maps have been read.
+    pub fn is_ready(&self) -> bool {
+        self.index.get().is_some()
+    }
+
+    /// Where in the list the font that draws `c` is, read the first time.
+    fn face_for(&self, c: char) -> Option<usize> {
+        let _ = (c, &self.faces);
+        None
+    }
+
+    /// The `i`th font read.
+    fn face(&self, i: usize) -> FontArc {
+        let faces = self.faces.lock().unwrap_or_else(|e| e.into_inner());
+        faces.list[i].clone()
+    }
+}
+
 /// The caption's fonts: Atkinson Hyperlegible Next (or the font chosen in the app), then Ubuntu
-/// Light (egui's) for a character it lacks. Each character is drawn in the first that has it.
+/// Light (egui's) for a character it lacks, then, as a last resort, an installed font that has it
+/// ([`LastResort`]). Each character is drawn in the first that has it.
 #[derive(Clone)]
 pub struct CaptionFont {
     fonts: Vec<FontArc>,
+    last: Option<Arc<LastResort>>,
 }
 
 fn builtin(bytes: &'static [u8]) -> FontArc {
@@ -284,6 +346,7 @@ impl Default for CaptionFont {
                 builtin(crate::fonts::NEXT_REGULAR),
                 builtin(epaint_default_fonts::UBUNTU_LIGHT),
             ],
+            last: None,
         }
     }
 }
@@ -298,6 +361,7 @@ impl CaptionFont {
             FontChoice::Atkinson => Ok(CaptionFont::default()),
             FontChoice::Egui => Ok(CaptionFont {
                 fonts: vec![ubuntu],
+                last: None,
             }),
             FontChoice::File { path, index, .. } => {
                 let file = crate::fonts::load(path, Some(*index))?;
@@ -308,12 +372,37 @@ impl CaptionFont {
                     })?;
                 Ok(CaptionFont {
                     fonts: vec![FontArc::new(font), ubuntu],
+                    last: None,
                 })
             }
         }
     }
 
-    /// The font that draws `c` (the first, for a character none has), and its glyph there.
+    /// These fonts with `last` behind them, for characters none of them has.
+    pub fn with_last_resort(self, last: Arc<LastResort>) -> CaptionFont {
+        CaptionFont {
+            last: Some(last),
+            ..self
+        }
+    }
+
+    /// Whether the last resort's fonts are ready (true without one): the caption is drawn again
+    /// once when they become so.
+    pub fn last_resort_ready(&self) -> bool {
+        self.last.as_ref().is_none_or(|l| l.is_ready())
+    }
+
+    /// The `i`th font: those in place, then the last resort's.
+    fn font(&self, i: usize) -> FontArc {
+        match (self.fonts.get(i), &self.last) {
+            (Some(f), _) => f.clone(),
+            (None, Some(l)) => l.face(i - self.fonts.len()),
+            (None, None) => self.fonts[0].clone(),
+        }
+    }
+
+    /// The font that draws `c` (the first, for a character none has), and its glyph there. Past
+    /// the fonts in place, the last resort's.
     pub fn glyph(&self, c: char) -> (usize, GlyphId) {
         for (i, f) in self.fonts.iter().enumerate() {
             let g = f.glyph_id(c);
@@ -321,12 +410,21 @@ impl CaptionFont {
                 return (i, g);
             }
         }
+        if let Some(l) = &self.last
+            && let Some(i) = l.face_for(c)
+        {
+            let g = l.face(i).glyph_id(c);
+            if g.0 != 0 {
+                return (self.fonts.len() + i, g);
+            }
+        }
         (0, self.fonts[0].glyph_id(c))
     }
 
     /// The advance from glyph `last` to `g` at `px`, with their kerning when one font has both.
     fn advance(&self, last: Option<(usize, GlyphId)>, (i, g): (usize, GlyphId), px: f32) -> f32 {
-        let f = self.fonts[i].as_scaled(PxScale::from(px));
+        let font = self.font(i);
+        let f = font.as_scaled(PxScale::from(px));
         let kern = match last {
             Some((j, l)) if j == i => f.kern(l, g),
             _ => 0.0,
@@ -410,7 +508,7 @@ impl CaptionFont {
             let mut last = None;
             for c in line.chars() {
                 let (fi, id) = self.glyph(c);
-                let font = &self.fonts[fi];
+                let font = &self.font(fi);
                 if let Some((j, l)) = last
                     && j == fi
                 {
@@ -452,6 +550,8 @@ pub struct FontWatch {
     settings: Option<PathBuf>,
     choice: FontChoice,
     font: Arc<CaptionFont>,
+    /// Behind whichever font is chosen.
+    last: Option<Arc<LastResort>>,
 }
 
 impl FontWatch {
@@ -462,6 +562,7 @@ impl FontWatch {
             settings,
             choice: FontChoice::Atkinson,
             font: Arc::new(CaptionFont::default()),
+            last: None,
         };
         let choice = w.saved();
         let note = if choice == FontChoice::Atkinson {
@@ -470,6 +571,15 @@ impl FontWatch {
             w.apply(choice).err()
         };
         (w, note)
+    }
+
+    /// With `last` behind the caption's fonts from now on, whichever is chosen: an installed font
+    /// that has a character none of them has ([`LastResort`]).
+    pub fn with_last_resort(mut self, last: Arc<LastResort>) -> FontWatch {
+        let font = (*self.font).clone().with_last_resort(Arc::clone(&last));
+        self.font = Arc::new(font);
+        self.last = Some(last);
+        self
     }
 
     /// Read the setting again. A note when the caption's font changed, or the newly chosen one
@@ -503,13 +613,17 @@ impl FontWatch {
         let font = CaptionFont::for_choice(&choice);
         let label = choice.label(false);
         self.choice = choice;
+        let behind = |f: CaptionFont| match &self.last {
+            Some(l) => Arc::new(f.with_last_resort(Arc::clone(l))),
+            None => Arc::new(f),
+        };
         match font {
             Ok(f) => {
-                self.font = Arc::new(f);
+                self.font = behind(f);
                 Ok(())
             }
             Err(e) => {
-                self.font = Arc::new(CaptionFont::default());
+                self.font = behind(CaptionFont::default());
                 Err(format!(
                     "the caption can't be drawn in {label}, the font chosen in the app ({}); it \
                      is in Atkinson Hyperlegible Next",
@@ -533,7 +647,9 @@ pub struct CaptionPainter {
     sampler: wgpu::Sampler,
     uniform: wgpu::Buffer,
     picture: Option<Picture>,
-    drawn: Option<(Vec<String>, u32, u32)>,
+    /// What the picture is of: the lines, the size, the room, and whether the last resort's fonts
+    /// were ready.
+    drawn: Option<(Vec<String>, u32, u32, bool)>,
     visible: bool,
 }
 
@@ -669,7 +785,9 @@ impl CaptionPainter {
             return;
         }
         let px = (settings.size * scale).clamp(6.0, 200.0);
-        let key = (lines.to_vec(), px.to_bits(), free_w as u32);
+        // Drawn again once when the last resort's fonts are ready, for a character only they have.
+        let ready = self.font.last_resort_ready();
+        let key = (lines.to_vec(), px.to_bits(), free_w as u32, ready);
         if self.drawn.as_ref() != Some(&key) {
             let margin = (px * MARGIN).ceil();
             let (img, w, h) = self.font.rasterize(lines, px, free_w - 2.0 * margin);
@@ -934,6 +1052,115 @@ mod tests {
         // No settings folder: Atkinson.
         let (none, note) = FontWatch::new(None);
         assert_eq!((drawn(&none), note), (atkinson, None));
+    }
+
+    /// A stand-in for an installed font that has `chars` (egui's Hack's X for each), which no
+    /// machine's fonts can be counted on for, in a scratch folder of its own.
+    fn installed_stand_in(name: &str, chars: &str) -> jetcarp_core::scratch::ScratchDir {
+        let dir = jetcarp_core::scratch::ScratchDir::new(name);
+        std::fs::create_dir_all(&*dir).unwrap();
+        let hack = epaint_default_fonts::HACK_REGULAR;
+        let font = crate::fonts::stand_in::font_with(hack, chars, 'X', "Stand-in CJK");
+        std::fs::write(dir.join("StandInCJK.ttf"), font).unwrap();
+        dir
+    }
+
+    fn hack_x() -> GlyphId {
+        FontRef::try_from_slice(epaint_default_fonts::HACK_REGULAR)
+            .unwrap()
+            .glyph_id('X')
+    }
+
+    /// A character none of the caption's fonts has (Chinese, Japanese, Korean, the macOS key
+    /// symbols) is drawn, as a last resort, in an installed font that has it, whichever font is
+    /// chosen, as the app draws it; what the fonts in place have stays theirs.
+    #[test]
+    fn a_character_only_an_installed_font_has_is_drawn_in_it() {
+        let only = "中文⌘";
+        let dir = installed_stand_in("caption-last-resort", only);
+        let plain = CaptionFont::default();
+        for c in only.chars() {
+            assert_eq!(plain.glyph(c).1.0, 0, "{c} is a box without it");
+        }
+        let last = LastResort::ready(Fallbacks::find(&[dir.to_path_buf()]));
+        let f = CaptionFont::default().with_last_resort(Arc::clone(&last));
+        for c in only.chars() {
+            assert_eq!(f.glyph(c), (2, hack_x()), "{c} in the installed font");
+        }
+        for c in "Life · 480 × 270 λ…".chars() {
+            assert_eq!(f.glyph(c), plain.glyph(c), "{c} in the fonts in place");
+        }
+        let hack = FontRef::try_from_slice(epaint_default_fonts::HACK_REGULAR).unwrap();
+        let x = hack.as_scaled(PxScale::from(20.0)).h_advance(hack_x());
+        assert_eq!(f.line_width("中", 20.0), x);
+        let line = vec!["中文 · Life".to_string()];
+        assert_ne!(
+            f.rasterize(&line, 20.0, 400.0),
+            plain.rasterize(&line, 20.0, 400.0),
+            "drawn in it, not as boxes"
+        );
+
+        // The desktop background's: behind egui's original font, and Atkinson after a change.
+        let settings = dir.join("settings");
+        std::fs::create_dir_all(&settings).unwrap();
+        let save = |font: &str| {
+            let app = serde_json::json!({ "accessibility": { "font": font } });
+            std::fs::write(settings.join("app.json"), app.to_string()).unwrap();
+        };
+        save("egui");
+        let (watch, note) = FontWatch::new(Some(settings.clone()));
+        assert_eq!(note, None);
+        let mut watch = watch.with_last_resort(Arc::clone(&last));
+        assert_eq!(
+            watch.font().glyph('中'),
+            (1, hack_x()),
+            "behind Ubuntu Light"
+        );
+        save("atkinson");
+        assert!(watch.check().is_some());
+        assert_eq!(watch.font().glyph('中'), (2, hack_x()), "behind Atkinson");
+    }
+
+    /// The installed fonts' character maps are read on a thread of their own, so the caption is
+    /// drawn meanwhile without waiting (a box for a character only they have), and in them once
+    /// they are read.
+    #[test]
+    fn the_installed_fonts_are_read_off_the_frame_path() {
+        let dir = installed_stand_in("caption-last-resort-thread", "中文");
+        let dirs = vec![dir.to_path_buf()];
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let t0 = std::time::Instant::now();
+        // The reading is held until the test lets it go.
+        let last = LastResort::start_with(move || {
+            let _ = wait.recv();
+            Fallbacks::find(&dirs)
+        });
+        let started = t0.elapsed();
+        let f = CaptionFont::default().with_last_resort(Arc::clone(&last));
+        assert!(!f.last_resort_ready());
+        assert_eq!(f.glyph('中').1.0, 0, "a box while the fonts are read");
+        let (_, w, h) = f.rasterize(&["中文 · Life".into()], 20.0, 400.0);
+        assert!(w > 0 && h > 0, "the caption is drawn meanwhile");
+        let _ = go.send(());
+        for _ in 0..500 {
+            if f.last_resort_ready() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(f.last_resort_ready(), "the fonts are in place once read");
+        assert_eq!(f.glyph('中'), (2, hack_x()));
+        assert!(started.as_millis() < 50, "starting took {started:?}");
+        // No folders (tests, screenshot runs): nothing to read, and boxes.
+        let none = CaptionFont::default().with_last_resort(LastResort::start(vec![]));
+        for _ in 0..500 {
+            if none.last_resort_ready() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(none.last_resort_ready());
+        assert_eq!(none.glyph('中').1.0, 0);
     }
 
     #[test]

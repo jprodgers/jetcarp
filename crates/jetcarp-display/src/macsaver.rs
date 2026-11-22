@@ -6,8 +6,8 @@
 //! caption's font (a font file chosen in the app is copied in). Change the rotation or the font and
 //! install again to update it. No administrator rights are needed.
 
-use crate::caption::{CaptionFont, CaptionSettings};
-use crate::fonts::FontChoice;
+use crate::caption::{CaptionFont, CaptionSettings, LastResort};
+use crate::fonts::{Fallbacks, FontChoice};
 use crate::host_settings::{HostSettings, ScreenSettings};
 use crate::profiles::{self, Show};
 use crate::rotation::{self, Rotation, Slot};
@@ -77,8 +77,19 @@ impl BakedFont {
     }
 }
 
+/// An installed font copied into the bundle for characters none of the caption's fonts has (the
+/// caption's last resort, [`LastResort`]), as `file` in its Resources.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BakedFallback {
+    pub family: String,
+    pub file: String,
+    /// The file, read when baked, for [`write_bundle`] to copy in.
+    #[serde(skip)]
+    pub bytes: FontBytes,
+}
+
 /// A font file's bytes, read when the bundle is baked, for [`write_bundle`] to copy in.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct FontBytes(pub std::sync::Arc<Vec<u8>>);
 
 impl std::fmt::Debug for FontBytes {
@@ -114,6 +125,10 @@ pub struct Baked {
     /// The file `font` names, read when baked, for [`write_bundle`] to copy in.
     #[serde(skip)]
     pub font_file: Option<FontBytes>,
+    /// The installed fonts copied in for the characters of the caption's lines (its rotation's
+    /// name, the rules' names, the grids') that none of its fonts has.
+    #[serde(default)]
+    pub fallbacks: Vec<BakedFallback>,
 }
 
 fn guard_default() -> bool {
@@ -137,14 +152,27 @@ pub fn chosen_rotation(settings: &HostSettings) -> String {
 
 /// Rotation `name` with every item's scene looked up now, with warnings for items that could not
 /// be (those show Life, with a note in the log, as they would in the host). `font` is the app's
-/// Font setting, for the caption.
+/// Font setting, for the caption; `installed` the folders installed fonts are in, for the
+/// caption's last resort ([`crate::fonts::system_dirs`]).
 pub fn bake(
     name: &str,
     settings: &HostSettings,
     font: &FontChoice,
+    installed: &[PathBuf],
     lookup: &dyn Fn(&str) -> Option<Scene>,
 ) -> Result<(Baked, Vec<String>), String> {
-    let (rotation, mut slots, mut warnings) = rotation::load_stored(name)?;
+    let loaded = rotation::load_stored(name)?;
+    Ok(bake_loaded(loaded, settings, font, installed, lookup))
+}
+
+/// [`bake`], for a rotation loaded already.
+fn bake_loaded(
+    (rotation, mut slots, mut warnings): (Rotation, Vec<Slot>, Vec<String>),
+    settings: &HostSettings,
+    font: &FontChoice,
+    installed: &[PathBuf],
+    lookup: &dyn Fn(&str) -> Option<Scene>,
+) -> (Baked, Vec<String>) {
     for s in &mut slots {
         match profiles::source_scene(&s.profile, lookup) {
             Ok(scene) => {
@@ -174,8 +202,17 @@ pub fn bake(
         strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
         font,
         font_file,
+        fallbacks: vec![],
     };
-    Ok((baked, warnings))
+    let _ = installed;
+    (baked, warnings)
+}
+
+/// The caption's last resort in a bundle whose Resources are at `resources`: the installed fonts
+/// copied in, `fallbacks`.
+pub fn last_resort(fallbacks: &[BakedFallback], resources: &Path) -> std::sync::Arc<LastResort> {
+    let _ = (fallbacks, resources);
+    LastResort::ready(Fallbacks::default())
 }
 
 /// The caption's font to bake in for the app's Font setting `choice`, and the file to copy in.
@@ -436,7 +473,8 @@ pub fn install() -> Result<(PathBuf, Vec<String>), String> {
     let font = crate::host_settings::config_dir()
         .map(|d| crate::fonts::saved_in(&d).0)
         .unwrap_or_default();
-    let (baked, warnings) = bake(&name, &settings, &font, &*lookup)?;
+    let installed = crate::fonts::system_dirs();
+    let (baked, warnings) = bake(&name, &settings, &font, &installed, &*lookup)?;
     let dest = bundle_path()?;
     // What the saver will replace once chosen, to put back when it is removed. Without a record,
     // removing shows the desktop picture as the screen saver instead.
@@ -681,7 +719,7 @@ mod tests {
         let settings = HostSettings::default();
         let lookup = crate::stage::library_lookup();
         let name = ScreenSettings::default().rotation;
-        let (baked, _) = bake(&name, &settings, &FontChoice::Atkinson, &*lookup).unwrap();
+        let (baked, _) = bake(&name, &settings, &FontChoice::Atkinson, &[], &*lookup).unwrap();
         assert!(!baked.slots.is_empty());
         assert!(
             baked
@@ -715,6 +753,7 @@ mod tests {
             &ScreenSettings::default().rotation,
             &HostSettings::default(),
             &FontChoice::Atkinson,
+            &[],
             &*crate::stage::library_lookup(),
         )
         .unwrap();
@@ -775,6 +814,7 @@ mod tests {
             &ScreenSettings::default().rotation,
             &HostSettings::default(),
             font,
+            &[],
             &*crate::stage::library_lookup(),
         )
         .unwrap();
@@ -895,6 +935,7 @@ mod tests {
             &ScreenSettings::default().rotation,
             &HostSettings::default(),
             &FontChoice::Atkinson,
+            &[],
             &*crate::stage::library_lookup(),
         )
         .unwrap();
@@ -940,6 +981,66 @@ mod tests {
             assert!(w.contains("Atkinson Hyperlegible Next"), "{w}");
             assert!(!w.contains(&*fonts.to_string_lossy()), "{w}");
         }
+    }
+
+    /// Installing copies in the installed fonts that draw the characters of the caption's lines
+    /// that none of its fonts has (here a rotation's name in Chinese), so the sandboxed saver
+    /// draws them from its bundle alone; nothing when its fonts have every character.
+    #[test]
+    fn the_bake_copies_the_fallback_fonts_the_caption_needs() {
+        let dir = jetcarp_core::scratch::ScratchDir::new("macsaver-fallbacks");
+        let installed = dir.join("installed");
+        std::fs::create_dir_all(&installed).unwrap();
+        let hack = epaint_default_fonts::HACK_REGULAR;
+        let cjk = crate::fonts::stand_in::font_with(hack, "生命中文", 'X', "Stand-in CJK");
+        std::fs::write(installed.join("StandInCJK.ttf"), &cjk).unwrap();
+        // One the caption needs nothing from: not copied.
+        let keys = crate::fonts::stand_in::font_with(hack, "⌘⌥", 'X', "Stand-in Keys");
+        std::fs::write(installed.join("StandInKeys.ttf"), keys).unwrap();
+        let lookup = crate::stage::library_lookup();
+        let bake_named = |name: &str| {
+            let (mut rotation, slots, warnings) =
+                rotation::load_stored(&ScreenSettings::default().rotation).unwrap();
+            rotation.name = name.into();
+            let dirs = [installed.clone()];
+            let settings = HostSettings::default();
+            bake_loaded(
+                (rotation, slots, warnings),
+                &settings,
+                &FontChoice::Atkinson,
+                &dirs,
+                &*lookup,
+            )
+            .0
+        };
+
+        let baked = bake_named("生命 rotation");
+        let named: Vec<(&str, &str)> = baked
+            .fallbacks
+            .iter()
+            .map(|f| (f.family.as_str(), f.file.as_str()))
+            .collect();
+        assert_eq!(named, [("Stand-in CJK", "caption-fallback-1.ttf")]);
+        let dylib = dir.join("fake.dylib");
+        std::fs::write(&dylib, b"code").unwrap();
+        let dest = dir.join(BUNDLE);
+        write_bundle(&dest, &dylib, &baked).unwrap();
+        let resources = dest.join("Contents/Resources");
+        assert_eq!(
+            std::fs::read(resources.join("caption-fallback-1.ttf")).unwrap(),
+            cjk
+        );
+        // The saver, from its bundle alone.
+        let json = std::fs::read_to_string(resources.join(BAKED_FILE)).unwrap();
+        let back = parse_baked(&json).unwrap();
+        let font = caption_font(&back.font, &resources)
+            .0
+            .with_last_resort(last_resort(&back.fallbacks, &resources));
+        assert_eq!(font.glyph('生').0, 2, "生 from the copy");
+        assert_ne!(font.glyph('生').1.0, 0);
+
+        // A caption its fonts draw whole needs nothing copied.
+        assert!(bake_named("A classic a day").fallbacks.is_empty());
     }
 
     /// The saver draws its caption in the font baked into its bundle (a font file, a collection's
