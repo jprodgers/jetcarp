@@ -1382,50 +1382,67 @@ fn child_tab_reaches_the_script_editor_s_code_box() {
     if !child() {
         return;
     }
-    let mut k = Kb::with_life();
     // A script long enough to scroll, so the scroll bars are drawn.
     let long = crate::scripts_ui::EXAMPLES
         .iter()
         .map(|e| e.1)
         .max_by_key(|s| s.len())
         .unwrap();
-    k.app
-        .scripts
-        .set_text_for_test(&format!("{long}\n{long}\n{long}"));
-    k.app.scripts.tab = crate::scripts_ui::Tab::Script;
-    k.app.set_tool_open(menu::ToolWin::Scripts, true);
-    k.frames(4);
-    let ws = k.focusable();
-    let (code, layer) = ws
-        .iter()
-        .find(|w| {
-            k.nodes
-                .get(&w.0.accesskit_id())
-                .is_some_and(|n| n.role == accesskit::Role::MultilineTextInput)
-        })
-        .map(|w| (w.0, w.1))
-        .expect("the code box is drawn");
-    let chrome = k.app.kb_chrome(&k.ctx);
-    assert!(
-        !chrome.contains(&code),
-        "the code box is taken for a mouse-only widget"
-    );
-    let first = ws
-        .iter()
-        .find(|w| w.1 == layer && !chrome.contains(&w.0))
-        .unwrap()
-        .0;
-    k.ctx.memory_mut(|m| m.request_focus(first));
-    k.frames(2);
-    let mut reached = k.focused() == Some(code);
-    for _ in 0..ws.len() + 5 {
-        if reached {
-            break;
+    let mut failures = vec![];
+    for (w, h) in [(1280.0, 800.0), (1000.0, 700.0), (800.0, 600.0)] {
+        let mut k = Kb::with_life();
+        k.size = egui::vec2(w, h);
+        k.app
+            .scripts
+            .set_text_for_test(&format!("{long}\n{long}\n{long}"));
+        k.app.scripts.tab = crate::scripts_ui::Tab::Script;
+        k.app.set_tool_open(menu::ToolWin::Scripts, true);
+        k.frames(4);
+        let ws = k.focusable();
+        let (code, layer) = ws
+            .iter()
+            .find(|w| {
+                k.nodes
+                    .get(&w.0.accesskit_id())
+                    .is_some_and(|n| n.role == accesskit::Role::MultilineTextInput)
+            })
+            .map(|w| (w.0, w.1))
+            .expect("the code box is drawn");
+        let chrome = k.app.kb_chrome(&k.ctx);
+        if chrome.contains(&code) {
+            failures.push(format!(
+                "{w}x{h}: the code box is taken for a mouse-only widget"
+            ));
         }
-        k.key(Key::Tab);
-        k.frames(1);
-        reached = k.focused() == Some(code);
+        let first = ws
+            .iter()
+            .find(|w| w.1 == layer && !chrome.contains(&w.0))
+            .unwrap()
+            .0;
+        k.ctx.memory_mut(|m| m.request_focus(first));
+        k.frames(2);
+        let mut reached = k.focused() == Some(code);
+        for _ in 0..ws.len() + 5 {
+            if reached {
+                break;
+            }
+            k.key(Key::Tab);
+            k.frames(1);
+            reached = k.focused() == Some(code);
+        }
+        if !reached {
+            failures.push(format!("{w}x{h}: Tab never reached the code box"));
+            continue;
+        }
+        // The ring shows round the part of the box in view, not round the whole scrolled text.
+        k.frames(2);
+        let (_, visible) = k.focused_rects().unwrap();
+        if !k.ring_round(visible, 2.0) {
+            failures.push(format!(
+                "{w}x{h}: no focus ring round the code box in view ({visible:?})"
+            ));
+        }
     }
-    assert!(reached, "Tab never reached the code box");
+    assert!(failures.is_empty(), "{failures:#?}");
     done();
 }
