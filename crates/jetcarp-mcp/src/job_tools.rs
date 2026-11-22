@@ -196,7 +196,32 @@ fn wait_for(c: &Call, job: i64, wait_s: f64, finds: Option<usize>) -> Res {
     let StatusOut::One(v) = JobsStatus::run(ctx(), a, &c.callbacks()).map_err(err)? else {
         return Err(format!("no job {job}"));
     };
-    Ok(job_output(&v))
+    let mut o = job_output(&v);
+    if wait_s > 0.0 && crate::stopping::is_stopping() && v.status == "running" {
+        // The server is stopping (#278): the wait ends now, and the job keeps what the stop
+        // gives it.
+        let what = if v.here {
+            format!(
+                "Job {job} runs on this server's own threads: it stops at its next checkpoint, \
+                 paused, and search_start {{\"resume\": {job}}} carries it on once the server \
+                 runs again"
+            )
+        } else {
+            format!(
+                "Job {job} runs on in a process of its own: follow it with job_status once the \
+                 server runs again"
+            )
+        };
+        o.content.insert(
+            0,
+            json!({"type": "text", "text": format!(
+                "{}, so this wait ended early. {what}.",
+                crate::stopping::STOPPING_WORDS
+            )}),
+        );
+        o.is_error = true;
+    }
+    Ok(o)
 }
 
 fn number(a: &Value, k: &str) -> Result<Option<f64>, String> {

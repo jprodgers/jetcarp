@@ -10,6 +10,10 @@ see [Driving JETCARP from an AI assistant](../tutorials/mcp.md).
 
 The server runs over standard input and output: the assistant starts `jetcarp mcp` and talks to it
 as long as it runs. A client that connects to a URL instead uses the server [over HTTP](#over-http).
+When the assistant closes the session, the searches running on the server's own threads stop at
+their next checkpoint, paused and resumable, and the server exits. On Linux and macOS, SIGTERM
+(what `kill` sends, and a session as it ends), SIGHUP and Ctrl-C stop it the same way; a second
+signal ends it at once. A call still running when a signal stops it [is cut short](#calls-cut-short).
 
 - **Claude Code:** `claude mcp add --scope user jetcarp -- jetcarp mcp` (for every folder; check
   it with `/mcp`, remove it with `claude mcp remove jetcarp`)
@@ -47,8 +51,21 @@ as long as it runs. A client that connects to a URL instead uses the server [ove
 `jetcarp mcp --http [PORT]` serves the same tools over MCP's Streamable HTTP transport, for clients
 that connect to a URL rather than start a program (Postman, web-based tools, remote setups). It runs
 until Ctrl-C, which stops it as a closed stdio session does: its searches at their next checkpoint,
-paused and resumable. The app serves the same endpoint for the world in its window, from its AI
+paused and resumable, and its `mcp-http-endpoint.json` removed. On Linux and macOS, SIGTERM (what
+`kill` sends, and a session as it ends) and SIGHUP stop it the same way; a second signal ends it at
+once. The app serves the same endpoint for the world in its window, from its AI
 control window ([Over HTTP](../tutorials/mcp.md#over-http) in the tutorial).
+
+<a id="calls-cut-short"></a>**Calls cut short.** The server answers one call at a time, so a call
+still running would hold up its stop: a `job_status` with `wait_s` may wait ten minutes. So when
+Ctrl-C or a signal stops `jetcarp mcp`, over HTTP or stdio, every call still running is cancelled,
+as the client's own cancel would cancel it, and its answer is an error that begins `the server is
+stopping`. A wait
+for a job says what becomes of it: a job on the server's own threads stops at its next checkpoint,
+and `search_start {"resume": JOB}` carries it on; a job in a process of its own runs on, and
+`job_status` follows it once a server runs again. The calls have 2 seconds to answer, and a
+stopping HTTP server gives its callers up to a second more to read the answers. A call that does
+not stop in time is left without an answer, and the server ends as it would have after it.
 
 | | |
 | --- | --- |
