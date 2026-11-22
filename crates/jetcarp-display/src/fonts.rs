@@ -607,6 +607,109 @@ impl Fallbacks {
     }
 }
 
+/// Font files made for tests, which can't count on any font being installed: one that maps only
+/// the characters a test names, so it stands in for a system font that has them.
+#[doc(hidden)]
+pub mod stand_in {
+    use skrifa::MetadataProvider as _;
+
+    /// A TrueType font named `family` that maps each of `chars`, and nothing else, to the glyph
+    /// that `base` (a TrueType font) draws for `like`. Its other tables are `base`'s.
+    pub fn font_with(base: &[u8], chars: &str, like: char, family: &str) -> Vec<u8> {
+        let font = skrifa::FontRef::new(base).expect("a font");
+        let glyph = font.charmap().map(like).expect("the base font has it").to_u32();
+        let mut cps: Vec<u32> = chars.chars().map(u32::from).collect();
+        cps.sort_unstable();
+        cps.dedup();
+        let mut tables: Vec<([u8; 4], Vec<u8>)> = font
+            .table_directory()
+            .table_records()
+            .iter()
+            .map(|r| r.tag().to_be_bytes())
+            .filter(|t| t != b"cmap" && t != b"name")
+            .map(|t| (t, font.table_data(skrifa::Tag::new(&t)).unwrap().as_bytes().to_vec()))
+            .collect();
+        tables.push((*b"cmap", cmap12(&cps, glyph)));
+        tables.push((*b"name", name(family)));
+        sfnt(tables)
+    }
+
+    /// A character map of one Windows full-Unicode subtable (format 12), `cps` to `glyph`.
+    fn cmap12(cps: &[u32], glyph: u32) -> Vec<u8> {
+        let mut t = vec![];
+        let n = cps.len() as u32;
+        t.extend(0u16.to_be_bytes()); // version
+        t.extend(1u16.to_be_bytes()); // one subtable
+        t.extend(3u16.to_be_bytes()); // Windows
+        t.extend(10u16.to_be_bytes()); // full Unicode
+        t.extend(12u32.to_be_bytes()); // offset
+        t.extend(12u16.to_be_bytes()); // format 12
+        t.extend(0u16.to_be_bytes());
+        t.extend((16 + 12 * n).to_be_bytes());
+        t.extend(0u32.to_be_bytes()); // language
+        t.extend(n.to_be_bytes());
+        for &c in cps {
+            t.extend(c.to_be_bytes());
+            t.extend(c.to_be_bytes());
+            t.extend(glyph.to_be_bytes());
+        }
+        t
+    }
+
+    /// A naming table giving the family and "Regular", in Windows' US English.
+    fn name(family: &str) -> Vec<u8> {
+        let strings: [(u16, Vec<u8>); 2] = [
+            (1, family.encode_utf16().flat_map(u16::to_be_bytes).collect()),
+            (2, "Regular".encode_utf16().flat_map(u16::to_be_bytes).collect()),
+        ];
+        let mut t = vec![];
+        t.extend(0u16.to_be_bytes()); // format 0
+        t.extend((strings.len() as u16).to_be_bytes());
+        t.extend((6 + 12 * strings.len() as u16).to_be_bytes());
+        let mut at = 0u16;
+        for (id, bytes) in &strings {
+            for v in [3u16, 1, 0x409, *id, bytes.len() as u16, at] {
+                t.extend(v.to_be_bytes());
+            }
+            at += bytes.len() as u16;
+        }
+        for (_, bytes) in &strings {
+            t.extend(bytes);
+        }
+        t
+    }
+
+    /// A font file of `tables`, each four-byte aligned with its checksum.
+    fn sfnt(mut tables: Vec<([u8; 4], Vec<u8>)>) -> Vec<u8> {
+        tables.sort_by_key(|(t, _)| *t);
+        let n = tables.len() as u16;
+        let pow = 1u16 << (15 - n.leading_zeros() as u16).min(15);
+        let mut out = vec![];
+        out.extend(0x0001_0000u32.to_be_bytes());
+        for v in [n, pow * 16, pow.trailing_zeros() as u16, n * 16 - pow * 16] {
+            out.extend(v.to_be_bytes());
+        }
+        let mut offset = 12 + 16 * u32::from(n);
+        let mut data = vec![];
+        for (tag, bytes) in &tables {
+            let mut padded = bytes.clone();
+            padded.resize(bytes.len().div_ceil(4) * 4, 0);
+            let sum = padded
+                .chunks(4)
+                .map(|w| u32::from_be_bytes(w.try_into().unwrap()))
+                .fold(0u32, u32::wrapping_add);
+            out.extend(tag);
+            out.extend(sum.to_be_bytes());
+            out.extend(offset.to_be_bytes());
+            out.extend((bytes.len() as u32).to_be_bytes());
+            offset += padded.len() as u32;
+            data.extend(padded);
+        }
+        out.extend(data);
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -641,5 +744,45 @@ mod tests {
                 assert_ne!(f.glyph_id(c).0, 0, "{c:?}");
             }
         }
+    }
+
+    /// The last-resort fonts are found by character: upright regular first, then the smallest
+    /// file, so the answer is the same every time; LastResort, hidden fonts and symbol fonts
+    /// are left out.
+    #[test]
+    fn fallbacks_are_found_by_character() {
+        let dir = jetcarp_core::scratch::ScratchDir::new("fonts-fallbacks");
+        std::fs::create_dir_all(dir.join("more")).unwrap();
+        let hack = epaint_default_fonts::HACK_REGULAR;
+        let keys = "⌃⌘⌥⌦⌫";
+        let small = stand_in::font_with(hack, keys, 'X', "Key Symbols");
+        // The same characters in a larger file: found second.
+        let mut big = stand_in::font_with(hack, "⌘中文", 'O', "Big CJK");
+        big.extend(vec![0; 4096]);
+        std::fs::write(dir.join("KeySymbols.ttf"), &small).unwrap();
+        std::fs::write(dir.join("more/BigCJK.otf"), &big).unwrap();
+        // Left out: a placeholder for everything, a hidden font, a file that is no font.
+        let all: String = ('\u{2300}'..='\u{23FF}').chain('一'..='龥').collect();
+        let last = stand_in::font_with(hack, &all, 'X', "LastResort");
+        std::fs::write(dir.join("LastResort.otf"), last).unwrap();
+        let hidden = stand_in::font_with(hack, &all, 'X', ".Hidden UI");
+        std::fs::write(dir.join("Hidden.ttf"), hidden).unwrap();
+        std::fs::write(dir.join("junk.ttf"), b"not a font").unwrap();
+        let f = Fallbacks::find(&[dir.join(""), dir.join("nowhere")]);
+        assert_eq!(f.len(), 2);
+        for c in keys.chars() {
+            let got = f.for_char(c).unwrap_or_else(|| panic!("{c}"));
+            assert_eq!(got.family, "Key Symbols", "{c}");
+            assert!(got.path.ends_with("KeySymbols.ttf"));
+        }
+        assert_eq!(f.for_char('中').unwrap().family, "Big CJK");
+        assert_eq!(f.for_char('文').unwrap().family, "Big CJK");
+        assert!(f.for_char('⏰').is_none(), "only LastResort and the hidden font have it");
+        assert!(f.for_char('A').is_none(), "no font found maps it");
+        // A stand-in parses as the font it says it is.
+        let parsed = skrifa::FontRef::new(&small).unwrap();
+        assert!(parsed.charmap().map('⌘').is_some());
+        assert!(parsed.charmap().map('A').is_none());
+        assert!(Fallbacks::find(&[]).is_empty());
     }
 }

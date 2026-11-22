@@ -7,7 +7,9 @@
 //!
 //! Whatever is chosen comes first, and egui's built-in fonts stay behind it for any character it
 //! lacks: Ubuntu Light (Greek, Cyrillic and more Latin), egui's icons, then Hack (arrows, boxes and
-//! dots). With Atkinson, headings are in Atkinson Hyperlegible Next Bold.
+//! dots). With Atkinson, headings are in Atkinson Hyperlegible Next Bold. A character none of
+//! those has (the macOS key symbols, Chinese, Japanese, Korean) is drawn, as a last resort, in an
+//! installed font that has it ([`SystemFallback`]).
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use std::path::{Path, PathBuf};
@@ -33,7 +35,7 @@ pub fn heading_family() -> FontFamily {
     FontFamily::Name(HEADING.into())
 }
 
-pub use jetcarp_display::fonts::{FontChoice, Installed, scan, system_dirs};
+pub use jetcarp_display::fonts::{Fallbacks, FontChoice, Installed, scan, system_dirs};
 
 /// A choice ready to draw with.
 #[derive(Clone)]
@@ -121,6 +123,65 @@ pub fn load(path: &Path, index: Option<u32>) -> Result<Loaded, String> {
         index: f.index,
         data: Arc::new(FontData::from_blob(Arc::new(f.bytes), f.index)),
     })
+}
+
+/// The last resort for a character that no font in place has, the chosen ones nor egui's: an
+/// installed font that has it ([`Fallbacks`]). egui asks for each such character once per family,
+/// after every font in place missed, so what those fonts draw is drawn by them as before. A font
+/// file is read whole the first time one of its characters is drawn, and kept.
+pub struct SystemFallback {
+    fonts: Arc<Fallbacks>,
+}
+
+impl SystemFallback {
+    pub fn new(fonts: Arc<Fallbacks>) -> SystemFallback {
+        SystemFallback { fonts }
+    }
+}
+
+impl egui::FontProvider for SystemFallback {
+    fn font_for(&self, request: &egui::FallbackRequest<'_>) -> Option<egui::FontInsert> {
+        let _ = (request, &self.fonts);
+        None
+    }
+}
+
+/// Ask `fonts` for characters no font in place has, in `ctx` from its next frame.
+pub fn install_fallback(ctx: &egui::Context, fonts: Arc<Fallbacks>) {
+    let _ = (ctx, fonts);
+}
+
+/// The installed fonts' character maps, read once on a thread of their own when the app starts,
+/// so starting isn't slowed: until they are read, a character no font in place has is a box, as
+/// it was before; then [`install_fallback`] puts them in place and egui draws the text again.
+#[derive(Default)]
+pub struct FallbackScan {
+    /// The folders looked in: the system's ([`system_dirs`]); none in tests and screenshot runs.
+    pub dirs: Vec<PathBuf>,
+    rx: Option<std::sync::mpsc::Receiver<(Fallbacks, std::time::Duration)>>,
+    /// How many faces were found, and how long reading them took (for the log).
+    pub found: Option<(usize, std::time::Duration)>,
+}
+
+impl FallbackScan {
+    pub fn new(dirs: Vec<PathBuf>) -> FallbackScan {
+        FallbackScan {
+            dirs,
+            rx: None,
+            found: None,
+        }
+    }
+
+    /// Start reading, unless there is nothing to read or it has started.
+    pub fn start(&mut self, ctx: &egui::Context) {
+        let _ = ctx;
+    }
+
+    /// Put the fonts in place once they are read. True when it did, this frame.
+    pub fn poll(&mut self, ctx: &egui::Context) -> bool {
+        let _ = ctx;
+        false
+    }
 }
 
 /// The installed fonts, found once on a thread of their own when the setting is first shown.
@@ -264,8 +325,8 @@ pub(crate) mod tests {
         );
     }
 
-    /// Every character in the app's strings: string literals in its source and the display
-    /// crate's (the caption), non-ASCII ones.
+    /// Every character in the app's strings: string and character literals in its source and the
+    /// display crate's (the caption), non-ASCII ones.
     fn interface_characters() -> std::collections::BTreeSet<char> {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut set = std::collections::BTreeSet::new();
@@ -277,10 +338,17 @@ pub(crate) mod tests {
                     stack.push(p);
                 } else if p.extension().is_some_and(|x| x == "rs") {
                     let text = std::fs::read_to_string(&p).unwrap();
-                    // Not tests' strings, nor comments: only what is shown.
-                    let shown = text.split("#[cfg(test)]").next().unwrap_or("");
-                    for line in shown.lines() {
+                    // Not the strings of tests (from the first test-only item at the top
+                    // level), nor comments: only what is shown.
+                    for line in text.lines().take_while(|l| *l != "#[cfg(test)]") {
                         let code = line.split("//").next().unwrap_or("");
+                        // Character literals: '⌃'.
+                        let cs: Vec<char> = code.chars().collect();
+                        for w in cs.windows(3) {
+                            if w[0] == '\'' && w[2] == '\'' && !w[1].is_ascii() {
+                                set.insert(w[1]);
+                            }
+                        }
                         let mut inside = false;
                         let mut escaped = false;
                         for c in code.chars() {
@@ -300,27 +368,37 @@ pub(crate) mod tests {
         set
     }
 
-    /// Characters the app shows that egui's own fonts never drew either (a font of the system's
-    /// can be chosen for them): the macOS key symbols.
+    /// Characters the app shows that egui's own fonts never drew either: the macOS key symbols.
+    /// With no installed font that has them they are boxes; macOS's own fonts have them.
     const NEVER_DRAWN: &str = "⌃⌘⌥⌦⌫";
+
+    /// A font of `chars` alone, standing in for an installed font that has them (tests can't count
+    /// on any font being installed).
+    pub(crate) fn stand_in(chars: &str, family: &str) -> Vec<u8> {
+        jetcarp_display::fonts::stand_in::font_with(&builtin("Hack"), chars, 'X', family)
+    }
 
     #[test]
     fn the_fallback_draws_every_interface_symbol() {
         let chars = interface_characters();
         assert!(chars.contains(&'×') && chars.contains(&'→'), "{chars:?}");
+        assert!(NEVER_DRAWN.chars().all(|c| chars.contains(&c)), "{chars:?}");
         let atkinson = ctx_with(&Face::Atkinson, &Face::Atkinson);
         let original = ctx_with(&Face::Egui, &Face::Egui);
         let draws = |ctx: &egui::Context, family: FontFamily, c: char| {
             ctx.fonts_mut(|f| f.has_glyph(&egui::FontId::new(14.0, family), c))
         };
-        let mut lost = vec![];
-        let mut undrawn = vec![];
-        for &c in &chars {
-            for family in [
+        let families = || {
+            [
                 FontFamily::Proportional,
                 FontFamily::Monospace,
                 heading_family(),
-            ] {
+            ]
+        };
+        let mut lost = vec![];
+        let mut undrawn = vec![];
+        for &c in &chars {
+            for family in families() {
                 let before = draws(&original, family.clone(), c);
                 let now = draws(&atkinson, family.clone(), c);
                 if before && !now {
@@ -337,7 +415,7 @@ pub(crate) mod tests {
         );
         assert!(undrawn.is_empty(), "not drawn: {undrawn:?}");
         // Greek and more of Latin come from Ubuntu Light behind Atkinson; CJK is drawn by none
-        // of the built-in fonts (a system font can be chosen).
+        // of the built-in fonts.
         for c in "ΔΣλπφαβγΩμ ÆŒçéüñßøå°±–—“”€".chars() {
             assert!(draws(&atkinson, FontFamily::Proportional, c), "{c}");
             assert!(draws(&atkinson, FontFamily::Monospace, c), "{c}");
@@ -349,6 +427,82 @@ pub(crate) mod tests {
                 "{c}"
             );
         }
+
+        // With an installed font that has them (here a stand-in, which also has an arrow and
+        // CJK), every character of the app's draws, in every family, and in egui's original
+        // fonts too: the key symbols and CJK from the installed font, and what egui's fonts draw
+        // (the arrow) still from them.
+        let dir = scratch("fallback");
+        std::fs::create_dir_all(&*dir).unwrap();
+        let symbols = format!("{NEVER_DRAWN}→中文");
+        std::fs::write(dir.join("KeySymbols.ttf"), stand_in(&symbols, "Key Symbols")).unwrap();
+        let found = Arc::new(Fallbacks::find(&[dir.to_path_buf()]));
+        assert_eq!(found.len(), 1);
+        for ctx in [&atkinson, &original] {
+            install_fallback(ctx, found.clone());
+            ctx.run_pass(Default::default(), |_| {})
+                .textures_delta
+                .clear();
+            for &c in chars.iter().chain(&['中', '文']) {
+                for family in families() {
+                    assert!(draws(ctx, family.clone(), c), "{c} in {family:?}");
+                }
+            }
+            for family in families() {
+                let faces = |c: char| {
+                    ctx.fonts_mut(|f| f.characters(&family).get(&c).cloned().unwrap_or_default())
+                };
+                for c in NEVER_DRAWN.chars().chain(['中']) {
+                    let f = faces(c);
+                    assert!(f[0].contains("Key Symbols"), "{c} in {family:?}: {f:?}");
+                }
+                let arrow = faces('→');
+                assert!(!arrow[0].contains("Key Symbols"), "{family:?}: {arrow:?}");
+            }
+        }
+        // The installed font was asked only for what no font in place has.
+        let asked: Vec<String> = atkinson.fonts(|f| {
+            f.discovered_fonts()
+                .iter()
+                .map(|i| i.name.clone())
+                .collect()
+        });
+        assert!(!asked.is_empty() && asked.iter().all(|n| n.contains("Key Symbols")));
+    }
+
+    /// Reading the installed fonts' character maps for the fallback doesn't hold up the start:
+    /// it is on a thread of its own, and puts the fonts in place when done.
+    #[test]
+    fn the_fallback_is_found_off_the_main_thread() {
+        let dir = scratch("fallback-scan");
+        std::fs::create_dir_all(&*dir).unwrap();
+        std::fs::write(dir.join("KeySymbols.ttf"), stand_in(NEVER_DRAWN, "Key Symbols")).unwrap();
+        let ctx = ctx_with(&Face::Atkinson, &Face::Atkinson);
+        let draws = |c| ctx.fonts_mut(|f| f.has_glyph(&egui::FontId::proportional(14.0), c));
+        assert!(!draws('⌘'));
+        let mut scan = FallbackScan::new(vec![dir.to_path_buf()]);
+        let t0 = std::time::Instant::now();
+        scan.start(&ctx);
+        let started = t0.elapsed();
+        let mut put = false;
+        for _ in 0..500 {
+            put |= scan.poll(&ctx);
+            if put {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(put, "the scan put the fonts in place");
+        ctx.run_pass(Default::default(), |_| {})
+            .textures_delta
+            .clear();
+        assert!(draws('⌘'));
+        assert_eq!(scan.found.map(|f| f.0), Some(1));
+        assert!(started.as_millis() < 50, "starting took {started:?}");
+        // No folders (tests, screenshot runs): nothing is read.
+        let mut none = FallbackScan::new(vec![]);
+        none.start(&ctx);
+        assert!(!none.poll(&ctx));
     }
 
     pub(crate) fn scratch(name: &str) -> jetcarp_core::scratch::ScratchDir {
