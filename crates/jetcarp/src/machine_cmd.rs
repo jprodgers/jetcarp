@@ -67,10 +67,12 @@ pub fn score(cx: &Ctx, a: ScoreArgs, json: bool) -> Result<()> {
     if !json {
         eprintln!("{HEAVY_WARNING}\n");
     }
-    // Ctrl-C: the rest of JETCARP carries on at once, rather than once the hold goes stale.
-    let _ = ctrlc::set_handler(|| {
+    // Ctrl-C, SIGTERM or SIGHUP: the rest of JETCARP carries on at once, rather than once the
+    // hold goes stale, and the score ends as a shell expects a program the signal ended to (#278's
+    // shared signal handling: `ctrlc` is Windows-only now).
+    let _ = crate::stop_signal::on_stop(|sig| {
         jetcarp_core::machine::quiet::end_now();
-        jetcarp_core::machine::pool::exit(130);
+        jetcarp_core::machine::pool::exit(crate::stop_signal::status(sig));
     });
     let mut before = Before::check(a.quick);
     if before.busy() {
