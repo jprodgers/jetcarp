@@ -162,7 +162,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   is gone or isn't a font must give Atkinson and a warning that names the file and no folder; a
   bundle of format 1, from before, must still load, in Atkinson, and a newer format be refused;
   and the saver's loader must draw in the font copied in, and in Atkinson with a note when the
-  copy is broken or gone (`jetcarp-display/src/macsaver.rs`). The clip-rating page and the website export's page must
+  copy is broken or gone (`jetcarp-display/src/macsaver.rs`). The caption's last resort must draw
+  a character only an installed font has (the stand-in's CJK and key symbols) in it, behind
+  Atkinson and behind egui's original, on the desktop background too, while what the fonts in place
+  have stays theirs; the installed fonts must be read on a thread of their own, the caption drawn
+  meanwhile with the reading held back (a box for such a character), starting it taking under
+  50 ms, and the font used once read (`caption.rs`). Installing the macOS saver with a rotation
+  named in Chinese must copy in the stand-in installed font that has those characters, and not
+  one the caption needs nothing from, and the saver must draw them from its bundle alone; a
+  rotation its fonts draw whole copies none (`macsaver.rs`). The clip-rating page and the website export's page must
   carry Atkinson Hyperlegible Next (and the rating page Mono) inside them, the files those the
   fonts' README names by SHA-256, and fetch nothing from elsewhere
   (`jetcarp-core/src/web_fonts.rs`, `jetcarp-api/tests/explore.rs`, `jetcarp-store/tests/website.rs`).

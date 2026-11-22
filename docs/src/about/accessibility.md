@@ -147,10 +147,11 @@ These are known, and each is tracked:
   ([#219](https://github.com/jprodgers/jetcarp/issues/219)).
 - **Characters no font on the computer has.** The fonts that come with the app draw Latin, Greek
   and Cyrillic, arrows and common symbols, but not Chinese, Japanese or Korean, nor the macOS key
-  symbols (⌘, ⌥). The app draws those in an installed font that has them (macOS's own fonts have
-  the key symbols); with none installed, they are drawn as boxes. The caption on the desktop
-  background has no such last resort: a rotation named in Chinese, Japanese or Korean is drawn
-  there with boxes unless the font chosen in *Settings → Accessibility* has them.
+  symbols (⌘, ⌥). The app, and the caption on the desktop background and the screen savers, draw
+  those in an installed font that has them (macOS's own fonts have the key symbols). A character
+  that no font installed on the computer has is still drawn as a box; so is one the macOS screen
+  saver's caption needs that came into its rotation after it was installed, until it is installed
+  again.
 - **Not yet tested by hand** with screen readers (Narrator, NVDA, VoiceOver and Orca) or with
   keyboard-only use, though the program's tests drive the whole app with key presses and read
   what it offers screen readers ([#219](https://github.com/jprodgers/jetcarp/issues/219)); nor by

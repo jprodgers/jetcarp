@@ -157,7 +157,9 @@ day later (0.4.2: 17 November here, 18 November there).
   it, so install it again after changing the font. egui's fonts stay
   behind whichever font is chosen, for any character it lacks; a character none of them has, such
   as the macOS key symbols (⌘, ⌥) or Chinese, Japanese and Korean, is drawn in an installed font
-  that has it, found when the app starts without holding it up; and a file that isn't a font, or a
+  that has it, found when the app starts without holding it up, and so it is in the desktop
+  background's caption (the macOS screen saver has those its caption needs copied in); and a file
+  that isn't a font, or a
   font without basic Latin letters and digits, is refused with a sentence saying so. A preset of
   your own in the Reseed pane is marked with `*`, which every font has, rather than a star. The
   fonts ship unmodified under the SIL Open Font License 1.1. Tests check the default fonts, that
@@ -165,7 +167,8 @@ day later (0.4.2: 17 November here, 18 November there).
   symbols too, that an installed font chosen is used, saved and put back at the next start, that
   the desktop background's caption follows the setting and goes back to Atkinson when the chosen
   font file is gone, that installing the macOS screen saver copies the chosen font in and a saver
-  installed before still loads, that a bad file is refused, and that screen readers are told the same names
+  installed before still loads, that the caption draws a character only an installed font has
+  without waiting for the installed fonts to be read, that a bad file is refused, and that screen readers are told the same names
   in every font. Every picture of the app in the book is drawn again.
   ([Accessibility settings](../guides/accessibility-settings.md#font))
 - **Copy as RLE.** *Edit → Copy as RLE* copies the world's pattern, and *Copy as RLE* on a library
