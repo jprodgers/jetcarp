@@ -50,6 +50,8 @@ pub(crate) use settings::saved_gpu_choice;
 mod shell;
 #[cfg(test)]
 mod shots;
+#[cfg(test)]
+mod size_tests;
 mod start_screen;
 mod strobe;
 mod tiling_ui;
@@ -134,6 +136,9 @@ pub struct JetcarpApp {
     zoom: f64,
     fit_pending: bool,
     view_size: egui::Vec2,
+    /// The grid view could not draw every cell in view last frame (too many, under a pixel):
+    /// how it thinned them, said in the status line (#300).
+    thinned: Option<jetcarp_display::view::Thinned>,
     // Tools
     tool: Tool,
     draw_target: Option<u32>,
@@ -288,6 +293,7 @@ impl JetcarpApp {
             zoom: 8.0,
             fit_pending: true,
             view_size: egui::vec2(1000.0, 800.0),
+            thinned: None,
             tool: Tool::Pan,
             draw_target: None,
             draw_value: 1,
@@ -463,6 +469,12 @@ impl JetcarpApp {
         self.jaca_text.clear();
         self.script_edit = self.world.script.clone();
         self.script_dirty = false;
+        self.tiling_ui_from_world();
+    }
+
+    /// The Tiling pane's family, edges and size, as the world on screen has them (a new tiling,
+    /// or a change of them not built).
+    fn tiling_ui_from_world(&mut self) {
         let spec = &self.world.topo.spec;
         self.t_family = spec.family.clone();
         self.t_boundary = if self.world.topo.wraps() {

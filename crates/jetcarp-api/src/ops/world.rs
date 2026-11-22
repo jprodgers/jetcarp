@@ -68,6 +68,22 @@ fn grouped(n: u64) -> String {
     out
 }
 
+/// Where a cell, side or level limit comes from, said after its refusal: the MCP tools' limits
+/// are an AI's share of this machine's, which the person can raise (`. It is an AI's share, small,
+/// of this machine's limits: ...`). Other callers' limits say nothing more.
+fn limit_origin(l: &Limits) -> String {
+    if l.world_memory != crate::ctx::WorldMemory::Ai {
+        return String::new();
+    }
+    let share = jetcarp_core::machine::current()
+        .get(jetcarp_core::machine::Id::AiShare)
+        .text();
+    format!(
+        ". It is an AI's share, {share}, of this machine's limits: Tools → This computer…, or \
+         `jetcarp limits`"
+    )
+}
+
 /// A grid of width x height unit cells against the cell limit. The cells are counted as the
 /// world will have them: trihex, the k-uniform tilings and others have several tiles in each
 /// unit cell, so the sides alone say too little. A grid over the limit is refused naming both
@@ -99,10 +115,11 @@ pub fn check_grid_cells(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
         String::new()
     };
     Err(ApiError::limit(format!(
-        "{w} x {h} on {} is {} cells{each}, over the limit of {} cells (try {fw} x {fh})",
+        "{w} x {h} on {} is {} cells{each}, over the limit of {} cells (try {fw} x {fh}){}",
         spec.family,
         grouped(n),
-        grouped(l.max_cells)
+        grouped(l.max_cells),
+        limit_origin(l)
     )))
 }
 
@@ -161,26 +178,46 @@ pub fn world_cost(w: &World) -> u64 {
 pub fn check_tiling_size(spec: &TilingSpec, l: &Limits) -> Result<(), ApiError> {
     match spec.size {
         Some(SizeSpec::Rect { w, h }) => {
-            if w < 8 || h < 8 || w > l.max_grid_side || h > l.max_grid_side {
-                return Err(ApiError::invalid(format!(
-                    "width and height must be 8 to {}, got {w} x {h}",
-                    l.max_grid_side
-                )));
+            let text = format!(
+                "width and height must be 8 to {}, got {w} x {h}",
+                l.max_grid_side
+            );
+            if w < 8 || h < 8 {
+                return Err(ApiError::invalid(text));
+            }
+            if w > l.max_grid_side || h > l.max_grid_side {
+                return Err(ApiError::limit(text + &limit_origin(l)));
             }
             check_grid_cells(spec, l)?;
         }
         Some(SizeSpec::Cells(n)) if n as u64 > l.max_cells => {
-            return Err(ApiError::limit(format!("at most {} cells", l.max_cells)));
+            return Err(ApiError::limit(format!(
+                "at most {} cells{}",
+                l.max_cells,
+                limit_origin(l)
+            )));
         }
         Some(SizeSpec::Level(lv)) => {
             let hi = max_level(&spec.family, l.max_cells);
             if !(1..=hi).contains(&lv) {
-                return Err(ApiError::invalid(format!("level must be 1 to {hi}")));
+                return Err(level_refused(&spec.family, lv as Int, hi, l));
             }
         }
         _ => {}
     }
     Ok(())
+}
+
+/// A level outside 1 to `hi` (the largest within the cell limit): over the limit when the family
+/// has the level, saying where the limit comes from; else not a level.
+fn level_refused(family: &str, lv: Int, hi: u32, l: &Limits) -> ApiError {
+    let text = format!("level must be 1 to {hi}");
+    let top = jetcarp_core::aperiodic::level_range(family).1 as Int;
+    if lv > hi as Int && lv <= top {
+        ApiError::limit(text + &limit_origin(l))
+    } else {
+        ApiError::invalid(text)
+    }
 }
 
 /// `gens` generations of `w` against the limits.
@@ -675,10 +712,14 @@ pub fn tiling_of(a: &NewWorldIn, l: &Limits) -> Result<TilingSpec, ApiError> {
             )));
         }
         (Some(w), Some(h), None, _) => {
-            if !(8..=side).contains(&w) || !(8..=side).contains(&h) {
-                return Err(ApiError::invalid(format!(
-                    "width and height must be 8 to {side}, got {w} x {h}"
-                )));
+            // Never made smaller to fit: a side past the limit is refused, saying where the
+            // limit comes from (#300).
+            let text = format!("width and height must be 8 to {side}, got {w} x {h}");
+            if w < 8 || h < 8 {
+                return Err(ApiError::invalid(text));
+            }
+            if w > side || h > side {
+                return Err(ApiError::limit(text + &limit_origin(l)));
             }
             Some(SizeSpec::Rect {
                 w: w as u32,
@@ -686,12 +727,22 @@ pub fn tiling_of(a: &NewWorldIn, l: &Limits) -> Result<TilingSpec, ApiError> {
             })
         }
         (None, None, Some(c), _) => {
-            if !(64..=max_cells).contains(&c) {
-                return Err(ApiError::invalid(format!(
-                    "cells must be 64 to {max_cells}"
-                )));
+            let text = format!("cells must be 64 to {max_cells}");
+            if c < 64 {
+                return Err(ApiError::invalid(text));
             }
-            Some(SizeSpec::Cells(c.min(u32::MAX as Int) as u32))
+            if c > max_cells {
+                return Err(ApiError::limit(text + &limit_origin(l)));
+            }
+            // Refused past what JETCARP can number, never cut down to it (#300).
+            let Ok(c) = u32::try_from(c) else {
+                return Err(ApiError::invalid(format!(
+                    "{} cells is more than the {} JETCARP can number",
+                    grouped(c as u64),
+                    grouped(jetcarp_core::topology::MAX_CELLS)
+                )));
+            };
+            Some(SizeSpec::Cells(c))
         }
         (None, None, None, Some(lv)) => {
             if !aperiodic {
@@ -700,9 +751,9 @@ pub fn tiling_of(a: &NewWorldIn, l: &Limits) -> Result<TilingSpec, ApiError> {
                     fam.id
                 )));
             }
-            let hi = max_level(fam.id, l.max_cells) as Int;
-            if !(1..=hi).contains(&lv) {
-                return Err(ApiError::invalid(format!("level must be 1 to {hi}")));
+            let hi = max_level(fam.id, l.max_cells);
+            if !(1..=hi as Int).contains(&lv) {
+                return Err(level_refused(fam.id, lv, hi, l));
             }
             Some(SizeSpec::Level(lv as u32))
         }

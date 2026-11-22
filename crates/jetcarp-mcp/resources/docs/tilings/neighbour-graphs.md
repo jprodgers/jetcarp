@@ -84,11 +84,12 @@ overlaps and gaps.
 
 A periodic world is a rectangle of whole unit cells, given either as a number of cells (roughly
 square) or as a width and height in unit cells (in the app, the *Tiling* pane's *Size*: *About …*
-or *Width × height*). Its edges can be *dead* (cells beyond count as empty),
-*wrapped* (a torus, so the tiling has no edges at all) or *live* (cells beyond count as alive). An
-aperiodic world is a patch of a chosen *level*, from 10 tiles at level 1 to about 35,000 at level 5 and
-about 18 million at level 8, always the tiles nearest a fixed centre, so smaller patches sit inside
-larger ones. Aperiodic patches have dead edges.
+or *Width × height*, which takes any size: one too big for this computer is
+[asked about](../guides/this-computer.md#over-a-limit), never made smaller). Its edges can be
+*dead* (cells beyond count as empty), *wrapped* (a torus, so the tiling has no edges at all) or
+*live* (cells beyond count as alive). An aperiodic world is a patch of a chosen *level*, from 10
+tiles at level 1 to about 35,000 at level 5 and about 18 million at level 8, always the tiles nearest
+a fixed centre, so smaller patches sit inside larger ones. Aperiodic patches have dead edges.
 
 ### Different tilings, same rule
 

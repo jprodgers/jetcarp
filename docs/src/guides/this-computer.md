@@ -145,8 +145,12 @@ The app asks first, with what the world needs, the limit and where the limit cam
 
 <img src="../images/guides/this-computer-over-limit.webp" alt="A dialog over a running world: this world needs 122 MB; this machine's limit is 100 MB (your own value), with Build anyway, Cancel and This computer… buttons" width="700">
 
-**Build anyway** builds it, up to the code's ceilings; **Cancel** builds nothing. The command line,
-scripts and the MCP tools refuse instead, until the limit is raised:
+**Build anyway** builds it, up to the code's ceilings; **Cancel** builds nothing, and the *Tiling*
+pane shows the world on screen again. The app asks wherever a world's size is given: the *Tiling*
+pane's *Size* (its *Width × height* fields take any number of unit cells, so 100,000 × 100,000
+squares, about 75 GB, is asked about as typed), a scene opened, a tile's JSON, the tile editor, the
+catalog and the isohedral shapes. The command line, scripts and the MCP tools refuse instead, until
+the limit is raised:
 
 ```text
 Error: this world needs 31 GB; this machine's limit is 24 GB (half of the 48 GB reserved for
@@ -156,6 +160,20 @@ background 7 GB, jetcarp run 200 MB): close something, or reserve more for JETCA
 computer…, or `jetcarp limits`)
 ```
 
+### Bigger than the view can draw
+
+A world within the limit is built at the size asked, however large. When the grid has more cells in
+view than it can draw one by one (they are under a pixel, as when a 20,000 × 20,000 grid is fitted
+to the window), it draws one in every few across and down, larger, and the status line says so:
+
+```text
+The view cannot draw every cell at this zoom: it shows one in every 15 × 15. Zoom in to see them all.
+```
+
+An aperiodic patch draws one tile in 16 then (*it shows one in 16*). The world itself is whole and
+every cell of it runs; only the picture is thinned. With the status bar off, the line sits in the
+grid's lower right corner.
+
 ### An AI's share
 
 The MCP tools (and the scripts they run) work within **an AI's share** of JETCARP's limits. It is
@@ -163,7 +181,13 @@ The MCP tools (and the scripts they run) work within **an AI's share** of JETCAR
 up to **all of it**, when an AI should check on a massive grid; the MCP server takes a new share
 when it next starts (`jetcarp mcp`, or the app for its AI control). The tools' descriptions are
 written from the live values, and `reference {"what": "machine"}` shows an AI this computer, its
-score, its limits and its own. An AI can read the score; it can never run the benchmark.
+score, its limits and its own. An AI can read the score; it can never run the benchmark. A world
+past an AI's sides, cells or level is refused saying so, never made smaller:
+
+```text
+width and height must be 8 to 4096, got 100000 x 100000. It is an AI's share, small, of this
+machine's limits: Tools → This computer…, or `jetcarp limits`
+```
 
 ## The benchmark and the score
 

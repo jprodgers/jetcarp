@@ -369,6 +369,14 @@ impl JetcarpApp {
                 )),
             );
             ui.separator();
+            if let Some(t) = self.thinned {
+                ui.label(
+                    RichText::new(thinned_note(t))
+                        .color(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xd8, 0x90))),
+                )
+                .on_hover_text(THINNED_HOVER);
+                ui.separator();
+            }
             if let Some(s) = self.scripts.status() {
                 ui.label(
                     RichText::new(s)
@@ -382,6 +390,26 @@ impl JetcarpApp {
             }
         });
         self.shell.status_w = widths;
+    }
+
+    /// With the status bar off, the grid says itself when it cannot draw every cell in view.
+    pub(super) fn thinned_overlay(&self, ui: &egui::Ui, rect: egui::Rect) {
+        if self.shell.status_bar || self.saver_active() || self.outputs_active() {
+            return;
+        }
+        let Some(t) = self.thinned else { return };
+        let font = egui::FontId::proportional(13.0);
+        let galley = ui.painter().layout(
+            thinned_note(t),
+            font,
+            Color32::from_rgb(0xff, 0xd8, 0x90),
+            rect.width() - 40.0,
+        );
+        let at = rect.right_bottom() - galley.size() - egui::vec2(12.0, 12.0);
+        let bg = egui::Rect::from_min_size(at, galley.size()).expand(6.0);
+        ui.painter()
+            .rect_filled(bg, 4.0, Color32::from_black_alpha(180));
+        ui.painter().galley(at, galley, Color32::WHITE);
     }
 
     /// With the status bar off, the grid shows a new message for a few seconds.
@@ -490,6 +518,26 @@ fn run_status(playing: bool, status: &Status) -> String {
         (false, s) => format!("Paused · {s}"),
     }
 }
+
+/// The status line's note when the grid view cannot draw every cell in view (#300).
+fn thinned_note(t: jetcarp_display::view::Thinned) -> String {
+    use jetcarp_display::view::Thinned;
+    match t {
+        Thinned::Lattice(n) => format!(
+            "The view cannot draw every cell at this zoom: it shows one in every {n} × {n}. \
+             Zoom in to see them all."
+        ),
+        Thinned::Patch(n) => format!(
+            "The view cannot draw every tile at this zoom: it shows one in {n}. Zoom in to see \
+             them all."
+        ),
+    }
+}
+
+/// The note's longer form, on hover.
+const THINNED_HOVER: &str = "The cells are under a pixel here, more than the view draws one by \
+    one. The world is whole, at the size it was made, and every cell of it runs; only the picture \
+    is thinned.";
 
 #[cfg(test)]
 mod tests {
