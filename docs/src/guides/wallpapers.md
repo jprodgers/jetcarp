@@ -663,7 +663,7 @@ with the strobe guard on, the first time this version of JETCARP runs (see below
   out different, on a thread of its own in the app and the desktop background. A Quick Start entry
   the rotation shows is looked up again in the library whenever the bundle is built, but a change to
   the entry alone isn't watched for. A screen saver already showing keeps what it had until it next
-  starts. If a rebuild fails, the old bundle stays as it was, and the app (under *Install* in the
+  starts, and System Settings keeps the one its preview loaded until it is quit and opened again. If a rebuild fails, the old bundle stays as it was, and the app (under *Install* in the
   *Screensaver* pane, and on the status line), `jetcarp host saver status` and `jetcarp doctor` say
   why; it is tried again at the next change, or install it again. What the bundle was built from is
   recorded in `screen-saver-state.json` in the settings folder.
