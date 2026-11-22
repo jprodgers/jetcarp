@@ -5,10 +5,12 @@
 //! rule run at twice the frame rate shows the same phase in every frame and does not flash, and a
 //! slow rule drawn with a bright palette can. Every drawn frame is reduced to a coarse map of
 //! *tiles* of [`TILE`] by [`TILE`] pixels ([`frame::TileMap`]): each tile's mean relative
-//! luminance, and its mean red measure. Where frames are drawn on the GPU the reduction runs there
-//! (`jetcarp_display::strobe_gpu`); everywhere else ([`frame::reduce`]) on the processor. Both
-//! give the same map, and everything after the map is this module's, so one implementation
-//! decides for every output.
+//! luminance, and its mean red measure, and its *fine pattern* ([`frame::Fine`]): which of its
+//! 4-pixel windows are clearly lighter or darker than its mean, so that a checkerboard of squares
+//! smaller than a tile, which keeps the tile's mean when it reverses, is seen reversing (#269).
+//! Where frames are drawn on the GPU the reduction runs there (`jetcarp_display::strobe_gpu`);
+//! everywhere else ([`frame::reduce`]) on the processor. Both give the same map, and everything
+//! after the map is this module's, so one implementation decides for every output.
 //!
 //! **The definitions** are WCAG 2.3.1's, as the Trace Center's PEAT and EA's IRIS apply them:
 //!
@@ -22,8 +24,13 @@
 //!   [`RED_DELTA`].
 //! - More than three flashes in any one second fail: more than [`MAX_TRANSITIONS`] transitions
 //!   in a sliding one-second window. [`WARN_TRANSITIONS`] (two flashes a second) is a warning, and
-//!   a warning that lasts four seconds out of five is the *extended* failure IRIS reports
-//!   (Harding's guidance on sustained flashing).
+//!   a warning that lasts four seconds out of five is the *extended* failure IRIS reports (the
+//!   broadcasting guidance, ITU-R BT.1702-3 and Ofcom's, notes that flashing for more than five
+//!   seconds may be a risk even within the limits).
+//! - **Fine patterns:** a pattern of squares of 0.1° or more that turns into its own negative
+//!   makes every pixel of it change by the squares' difference, so it is a transition wherever it
+//!   is, though no tile's mean changes; finer patterns are exempt, as WCAG says ([`frame`],
+//!   [`flash`]).
 //! - **The area rule:** flashes are harmful only where the flashing areas together cover more than
 //!   [`AREA_SHARE`] of any 10° field of vision. The size of that field in pixels depends on the
 //!   screen and on how far away it is watched, which JETCARP cannot know, so it assumes a
@@ -37,12 +44,12 @@
 //! would count on a recording of the screen is counted here too ([`flash::FlashMeter`]).
 //!
 //! **Stripes** ([`pattern`]): regular high-contrast stripes can trigger seizures as flashes can
-//! (ITU-R BT.1702, the Harding guidance). They are measured on a half-resolution luminance image
-//! of the frame ([`frame::LumImage`]).
+//! (ITU-R BT.1702-3; Ofcom's guidance on flashing images and regular patterns). They are measured
+//! on a half-resolution luminance image of the frame ([`frame::LumImage`]).
 //!
 //! **The guard** ([`guard`]) acts on the readings, in order: it *softens* (each tile's brightness
-//! may change only so fast, so a flip becomes a fade, and strong stripes lose their contrast),
-//! then *caps the pace*, then *pauses* with a note saying why. It never changes what a world
+//! may change only so fast, so a flip becomes a fade, and strong stripes and reversing fine
+//! patterns lose their contrast), then *caps the pace*, then *pauses* with a note saying why. It never changes what a world
 //! computes, only what is drawn and how fast generations are shown.
 //!
 //! The guard reduces the risk; it does not make JETCARP safe for someone with photosensitive

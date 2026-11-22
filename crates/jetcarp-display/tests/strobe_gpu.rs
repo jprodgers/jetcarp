@@ -15,7 +15,7 @@
 //! `JETCARP_REQUIRE_GPU=1` ([`jetcarp_gpu::no_gpu`]). `gpu_cost` (ignored; run with
 //! `-- --ignored --nocapture`) times the pass at common screen sizes.
 
-use jetcarp_core::strobe::frame::{reduce, reduce_both};
+use jetcarp_core::strobe::frame::{TileMap, reduce, reduce_both};
 use jetcarp_core::strobe::soften::{Plan, Softener};
 use jetcarp_display::strobe_gpu::{Shown, StrobeGpu};
 
@@ -213,6 +213,71 @@ const LUM_SUMS: f32 = 2e-5;
 /// And of the red measure.
 const RED_SUMS: f32 = 1e-2;
 
+/// The fine patterns of two maps (#269) agree: the light and dark parts to `lum` and `red` (the
+/// order of their sums), and every window's bits, clear and above the tile's mean. A window whose
+/// mean is exactly the threshold away from the tile's (in exact arithmetic, as in a frame made of
+/// a few colours it can be) is clear or not by rounding: where `frame` (the RGBA frame measured,
+/// and its width) is given, a bit may differ only for such a window; else every bit must agree.
+fn same_fine(
+    gpu: &TileMap,
+    cpu: &TileMap,
+    frame: Option<(&[u8], u32)>,
+    lum: f32,
+    red: f32,
+    what: &str,
+) {
+    use jetcarp_core::strobe::frame::{FINE_SIG, window_devs};
+    use jetcarp_core::strobe::{TILE, luminance, red_measure};
+    let mut ties = 0;
+    for t in 0..cpu.len() {
+        for (g, c, tol, which) in [
+            (gpu.fine[t], cpu.fine[t], lum, 0),
+            (gpu.red_fine[t], cpu.red_fine[t], red, 1),
+        ] {
+            let name = ["luminance", "red"][which];
+            assert!(
+                (g.light - c.light).abs() < tol && (g.dark - c.dark).abs() < tol,
+                "{what} tile {t}, {name}: {g:?} vs {c:?}"
+            );
+            let differ = (g.sig ^ c.sig) | (g.sign ^ c.sign);
+            if differ == 0 {
+                continue;
+            }
+            let Some((rgba, w)) = frame else {
+                panic!("{what} tile {t}, {name}: {g:?} vs {c:?}");
+            };
+            let (x0, y0) = ((t as u32 % cpu.cols) * TILE, (t as u32 / cpu.cols) * TILE);
+            let (tw, th) = ((w - x0).min(TILE), (cpu.height - y0).min(TILE));
+            let value = |x: usize, y: usize| {
+                let i = (((y0 as usize + y) * w as usize) + x0 as usize + x) * 4;
+                let p = [rgba[i], rgba[i + 1], rgba[i + 2]];
+                if which == 0 {
+                    luminance(p)
+                } else {
+                    red_measure(p)
+                }
+            };
+            let mean = if which == 0 { cpu.lum[t] } else { cpu.red[t] };
+            let devs = window_devs(tw as usize, th as usize, mean, value);
+            let threshold = FINE_SIG * c.contrast();
+            for (k, dev) in devs.iter().enumerate() {
+                if differ & (1 << k) != 0 {
+                    let d = dev.expect("a window inside the tile");
+                    assert!(
+                        (d.abs() - threshold).abs() <= 1e-4 * (1.0 + threshold),
+                        "{what} tile {t}, {name}, window {k}: {d} from the mean, threshold \
+                         {threshold}: {g:?} vs {c:?}"
+                    );
+                    ties += 1;
+                }
+            }
+        }
+    }
+    if ties > 0 {
+        eprintln!("{what}: {ties} windows exactly at the threshold, clear by rounding");
+    }
+}
+
 #[test]
 fn the_gpu_measures_what_the_processor_measures() {
     let Some(g) = gpu() else { return };
@@ -245,6 +310,14 @@ fn the_gpu_measures_what_the_processor_measures() {
             );
         }
         eprintln!("{w}x{h}: tiles differ by up to {wl:e} in luminance, {wr:e} in red");
+        same_fine(
+            &r.input,
+            &cpu,
+            Some((&f, w)),
+            LUM_SUMS,
+            RED_SUMS,
+            &format!("{w}x{h}"),
+        );
         assert_eq!(r.input, r.output);
         let gh = r.half.expect("asked for");
         assert_eq!((gh.width, gh.height), (half.width, half.height));
@@ -312,6 +385,24 @@ fn the_gpu_softens_as_the_processor_does() {
                 c.output.red[t]
             );
         }
+        same_fine(
+            &r.input,
+            &c.input,
+            Some((f, w)),
+            LUM_SUMS,
+            RED_SUMS,
+            &format!("frame {k} as drawn"),
+        );
+        // As shown: a 16-bit step of the softened state moves a pixel's luminance by a 65535th,
+        // and its red measure by up to 320 at the saturation test (see above).
+        same_fine(
+            &r.output,
+            &c.output,
+            None,
+            LUM_SUMS + 2.0 / 65535.0,
+            2.0,
+            &format!("frame {k} as shown"),
+        );
         let pixels = g.read(s.softened_texture().expect("softened"));
         let want = c.shown.expect("softened");
         let worst = pixels
@@ -352,6 +443,8 @@ fn gpu_cost() {
             ("soften", soft.clone(), false),
         ] {
             let mut times = vec![];
+            // The processor's side: mapping the readings and reading them into tile maps.
+            let mut reads = vec![];
             for k in 0..60 {
                 let qs = g.timestamps.then(|| {
                     g.device.create_query_set(&wgpu::QuerySetDescriptor {
@@ -396,7 +489,10 @@ fn gpu_cost() {
                 s.after_submit();
                 g.wait();
                 let wall = t0.elapsed().as_secs_f64() * 1e3;
-                let _ = s.take(&g.device);
+                let t1 = std::time::Instant::now();
+                let got = s.take(&g.device);
+                let read = t1.elapsed().as_secs_f64() * 1e3;
+                assert_eq!(got.len(), 1);
                 let ms = if qs.is_some() {
                     rb.slice(..).map_async(wgpu::MapMode::Read, |_| {});
                     g.wait();
@@ -408,16 +504,19 @@ fn gpu_cost() {
                 };
                 if k >= 10 {
                     times.push(ms);
+                    reads.push(read);
                 }
             }
             times.sort_by(f64::total_cmp);
+            reads.sort_by(f64::total_cmp);
             let med = times[times.len() / 2];
             let bytes = (w * h * 4) as f64;
             println!(
-                "{w} x {h}, {name}: median {med:.3} ms ({:.1}% of a 60 Hz frame), {:.1} GB/s of the frame read{}",
+                "{w} x {h}, {name}: median {med:.3} ms ({:.1}% of a 60 Hz frame), {:.1} GB/s of the frame read{}; reading back {:.3} ms",
                 med / (1000.0 / 60.0) * 100.0,
                 bytes / (med / 1e3) / 1e9,
-                if g.timestamps { "" } else { " (wall clock)" }
+                if g.timestamps { "" } else { " (wall clock)" },
+                reads[reads.len() / 2]
             );
         }
     }
@@ -453,6 +552,15 @@ fn the_gpu_measure_counts_a_small_reversing_checkerboard() {
                 let f = board(sq, p);
                 let tex = g.texture(&f, w, h);
                 let (_, r) = g.frame(&mut s, &tex, &Plan::none_for(w, h), 0.016, p as f64, false);
+                let what = format!("{sq}-pixel squares, phase {p}");
+                same_fine(
+                    &r.input,
+                    &reduce(&f, w, h),
+                    Some((&f, w)),
+                    LUM_SUMS,
+                    RED_SUMS,
+                    &what,
+                );
                 r.input
             })
             .collect();
@@ -464,10 +572,118 @@ fn the_gpu_measure_counts_a_small_reversing_checkerboard() {
             worst = worst.max(r.level);
         }
         if worst.fails() != fails {
-            wrong.push(format!("{sq}-pixel squares: {worst:?}, should fail: {fails}"));
+            wrong.push(format!(
+                "{sq}-pixel squares: {worst:?}, should fail: {fails}"
+            ));
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The guard on the GPU, as every GPU output runs it ([`GuardedGpu`]), keeps a small reversing
+/// checkerboard (#269) under the limit on screen: what it shows, read back from the GPU and
+/// measured pixel by pixel as WCAG defines a flash (no tiles), never fails, and it is the guard
+/// that keeps it so (unguarded, the same board fails). The board reverses every generation, its
+/// generations held back by the guard's pace cap; drawn and measured offscreen only.
+#[test]
+fn the_gpu_guard_keeps_a_small_reversing_checkerboard_under_the_limit() {
+    use jetcarp_core::strobe::flash::{COUNT_CAP, EPSILON, Tracker};
+    use jetcarp_core::strobe::guard::Pace;
+    use jetcarp_core::strobe::{DARK_LIMIT, FLASH_DELTA, Viewing, luminance};
+    use jetcarp_display::strobe_gpu::GuardedGpu;
+    let Some(g) = gpu() else { return };
+    let (w, h) = (640u32, 480u32);
+    let (x0, y0, side) = (240u32, 160u32, 160u32);
+    let board = |sq: u32, phase: u32| {
+        let mut v = Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let inside = (x0..x0 + side).contains(&x) && (y0..y0 + side).contains(&y);
+                let on = inside && ((x + 1) / sq + (y + 3) / sq + phase) % 2 == 1;
+                let c = if on { 255 } else { 0 };
+                v.extend_from_slice(&[c, c, c, 255]);
+            }
+        }
+        v
+    };
+    // The most transitions in the last second that more than a quarter of a 10° field made,
+    // pixel by pixel over the board and a margin (the board is smaller than the field).
+    let allowed = Viewing::screen(1.0).flash_area();
+    let (rx, ry, rw) = (x0 - 8, y0 - 8, side + 16);
+    let measure = |px: &mut Vec<Tracker>, rgba: &[u8], t: f64| {
+        let mut at_least = [0usize; COUNT_CAP as usize + 2];
+        for (i, tr) in px.iter_mut().enumerate() {
+            let (x, y) = (rx + i as u32 % rw, ry + i as u32 / rw);
+            let p = &rgba[((y * w + x) * 4) as usize..];
+            tr.update(
+                luminance([p[0], p[1], p[2]]),
+                t,
+                FLASH_DELTA,
+                EPSILON,
+                Some(DARK_LIMIT),
+            );
+            at_least[tr.count(t) as usize] += 1;
+        }
+        for k in (0..=COUNT_CAP as usize).rev() {
+            at_least[k] += at_least[k + 1];
+        }
+        (1..=COUNT_CAP)
+            .rev()
+            .find(|&k| at_least[k as usize] as f64 > allowed)
+            .unwrap_or(0)
+    };
+    for (sq, speed) in [(4u32, 10.0f64), (8, 30.0)] {
+        let frames = [0, 1].map(|p| board(sq, p));
+        let tex = [0, 1].map(|p| g.texture(&frames[p], w, h));
+        for on in [false, true] {
+            let mut gg = GuardedGpu::new(&g.device, Viewing::screen(1.0), None, on);
+            let mut px = vec![Tracker::default(); (rw * rw) as usize];
+            let (mut due, mut gen_no, mut most) = (0.0f64, 0u64, 0);
+            for k in 0..(60 * 6) as u32 {
+                let t = k as f64 / 60.0;
+                let pace = gg.guard.cap().map_or(speed, |c| (c as f64).min(speed));
+                gg.update(
+                    &g.device,
+                    Pace {
+                        speed: speed as f32,
+                        reached: Some(pace as f32),
+                        frame_rate: 60.0,
+                    },
+                );
+                if k > 0 && gg.guard.paused().is_none() {
+                    due += pace / 60.0;
+                    gen_no = (due + 1e-9).floor() as u64;
+                }
+                let phase = (gen_no % 2) as usize;
+                let mut enc = g.device.create_command_encoder(&Default::default());
+                let shown = gg.frame(&g.device, &g.queue, &mut enc, Some(&tex[phase]), t);
+                g.queue.submit([enc.finish()]);
+                gg.gpu.after_submit();
+                g.wait();
+                let out = match shown {
+                    Shown::Softened => g.read(gg.gpu.softened_texture().expect("softened")),
+                    Shown::Drawn => frames[phase].clone(),
+                };
+                most = most.max(measure(&mut px, &out, t));
+            }
+            eprintln!(
+                "{sq}-pixel squares at {speed} gen/s, guard {}: {most} transitions a second \
+                 shown, pixel by pixel",
+                if on { "on" } else { "off" }
+            );
+            if on {
+                // Under the limit with room: two flashes a second at most.
+                assert!(
+                    most <= 4,
+                    "{sq}-pixel squares at {speed} generations a second: {most} transitions a \
+                     second shown ({:?})",
+                    gg.guard.report()
+                );
+            } else {
+                assert!(most > 6, "{sq}-pixel squares unguarded: {most}");
+            }
+        }
+    }
 }
 
 /// Write-only features are missing on some adapters: the pass itself must build on whatever runs

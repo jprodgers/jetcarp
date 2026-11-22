@@ -13,11 +13,13 @@
 //! - **The guard** must keep what is shown under the limit, measured pixel by pixel, as WCAG
 //!   defines a flash, by a meter that knows nothing of tiles.
 
+use jetcarp_core::render::{ViewOptions, render_view};
 use jetcarp_core::strobe::flash::{COUNT_CAP, EPSILON, FlashMeter, FlashReading, Level, Tracker};
 use jetcarp_core::strobe::frame::{TileMap, reduce};
 use jetcarp_core::strobe::guard::{Frame, Guard, Pace};
 use jetcarp_core::strobe::soften::Softener;
 use jetcarp_core::strobe::{DARK_LIMIT, FLASH_DELTA, Viewing, linear, luminance_linear};
+use jetcarp_core::{Scene, World};
 use std::collections::VecDeque;
 
 /// Half a 1080p screen, so a quarter of the screen (129,600 pixels) is far more than a quarter of
@@ -63,13 +65,7 @@ fn board(
 
 /// The two phases of the board, as tile maps.
 fn phases(sq: u32, off: [u32; 2], colours: [u8; 3]) -> [TileMap; 2] {
-    [0, 1].map(|p| {
-        reduce(
-            &board(W, H, [X0, Y0, SIDE], sq, off, p, colours),
-            W,
-            H,
-        )
-    })
+    [0, 1].map(|p| reduce(&board(W, H, [X0, Y0, SIDE], sq, off, p, colours), W, H))
 }
 
 /// The worst reading of `secs` seconds at 60 frames a second, the board reversing `rate` times a
@@ -92,7 +88,11 @@ const BW: [u8; 3] = [0, 255, 0];
 /// The level `rate` reversals a second should read for 3 seconds: 4 to 6 transitions (two or
 /// three flashes) are a warning, more fail.
 fn level_for(rate: u32) -> Level {
-    if rate > 6 { Level::Fail } else { Level::Warning }
+    if rate > 6 {
+        Level::Fail
+    } else {
+        Level::Warning
+    }
 }
 
 #[test]
@@ -134,7 +134,9 @@ fn a_small_reversing_checkerboard_flashes() {
 fn a_grey_checkerboard_flashes_by_its_contrast() {
     let lum = |b: u8| luminance_linear(linear(b), linear(b), linear(b));
     let lo = 90u8;
-    let over = (lo..=255).find(|&g| lum(g) - lum(lo) >= FLASH_DELTA + 0.01).unwrap();
+    let over = (lo..=255)
+        .find(|&g| lum(g) - lum(lo) >= FLASH_DELTA + 0.01)
+        .unwrap();
     let under = (lo..=255)
         .rev()
         .find(|&g| lum(g) - lum(lo) < FLASH_DELTA - 0.01)
@@ -273,11 +275,238 @@ fn the_guard_keeps_a_small_reversing_checkerboard_under_the_limit() {
                 );
             }
         }
+        eprintln!(
+            "{sq}-pixel squares at {speed} gen/s: unguarded {most_raw}, guarded {most} \
+             transitions a second, pixel by pixel; {:?}, cap {:?}",
+            guard.report().action,
+            guard.cap()
+        );
+        // Under the limit with room: two flashes a second at most, before the pace cap holds.
         assert!(
-            most <= 6,
+            most <= 4,
             "{sq}-pixel squares at {speed} generations a second: {most} transitions a second \
              shown ({:?})",
             guard.report()
+        );
+    }
+}
+
+/// An ordinary scene: its name, its world, its generations a second, and how many pixels a cell.
+struct Ordinary {
+    name: String,
+    world: World,
+    speed: f64,
+    cell_px: f64,
+}
+
+/// A square world `w` by `h` cells, wrapping, of `rule` with `seed` (a seed's JSON).
+fn world(w: u32, h: u32, rule: &str, seed: &str, rng: u64) -> World {
+    let json = format!(
+        r#"{{"name": "ordinary", "tiling": {{"family": "square", "size": {{"rect": {{"w": {w}, "h": {h}}}}}, "boundary": "wrap"}}, "rng_state": {rng}, "cas": [{{"rule": "{rule}", "seed": {seed}}}]}}"#
+    );
+    let scene: Scene = serde_json::from_str(&json).unwrap();
+    World::from_scene(&scene).unwrap()
+}
+
+/// Cells at the `(x, y)` offsets of `shape`, repeated every `every` cells over a `w` by `h` world.
+fn tiled(w: u32, h: u32, every: u32, shape: &[(u32, u32)]) -> String {
+    let mut cells = vec![];
+    for by in (0..h.saturating_sub(every)).step_by(every as usize) {
+        for bx in (0..w.saturating_sub(every)).step_by(every as usize) {
+            for &(x, y) in shape {
+                cells.push(format!("[{}, 1]", (by + y) * w + bx + x));
+            }
+        }
+    }
+    format!(r#"{{"cells": {{"cells": [{}]}}}}"#, cells.join(", "))
+}
+
+/// Ordinary scenes for a `vw` by `vh` view: Life soups at common cell sizes, at 30 generations a
+/// second; a soup left to settle into its ash (still lifes and blinkers), slow and fast; and
+/// fields of still lifes, of gliders, and of blinkers, slow and fast.
+fn ordinary(vw: u32, vh: u32, sizes: &[f64]) -> Vec<Ordinary> {
+    let mut out = vec![];
+    let cells = |px: f64| {
+        (
+            (vw as f64 / px).ceil() as u32 + 2,
+            (vh as f64 / px).ceil() as u32 + 2,
+        )
+    };
+    for &px in sizes {
+        let (w, h) = cells(px);
+        out.push(Ordinary {
+            name: format!("Life soup, {px} px a cell"),
+            world: world(w, h, "B3/S23", r#"{"random": {"density": 0.35}}"#, 7),
+            speed: 30.0,
+            cell_px: px,
+        });
+    }
+    let px = 6.0;
+    let (w, h) = cells(px);
+    let mut ash = world(w, h, "B3/S23", r#"{"random": {"density": 0.35}}"#, 11);
+    for _ in 0..1500 {
+        ash.step();
+    }
+    for speed in [4.0, 30.0] {
+        out.push(Ordinary {
+            name: format!("Life ash (still lifes, blinkers), {px} px a cell, {speed} gen/s"),
+            world: ash.clone(),
+            speed,
+            cell_px: px,
+        });
+    }
+    let block = [(0, 0), (1, 0), (0, 1), (1, 1)];
+    let glider = [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)];
+    let blinker = [(0, 1), (1, 1), (2, 1)];
+    for (what, shape, every, speed) in [
+        ("blocks", &block[..], 4, 30.0),
+        ("gliders", &glider[..], 8, 30.0),
+        ("blinkers", &blinker[..], 5, 2.0),
+        ("blinkers", &blinker[..], 5, 30.0),
+    ] {
+        out.push(Ordinary {
+            name: format!("a field of {what}, {px} px a cell, {speed} gen/s"),
+            world: world(w, h, "B3/S23", &tiled(w, h, every, shape), 1),
+            speed,
+            cell_px: px,
+        });
+    }
+    out
+}
+
+/// The scene's frames, `secs` seconds at 60 frames a second.
+fn frames(o: &Ordinary, vw: u32, vh: u32, secs: f64) -> Vec<Vec<u8>> {
+    let mut world = o.world.clone();
+    let b = world.topo.bounds;
+    let center = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
+    let start = world.generation;
+    (0..(secs * 60.0) as u32)
+        .map(|k| {
+            let due = (k as f64 * o.speed / 60.0 + 1e-9).floor() as u64;
+            while world.generation - start < due {
+                world.step();
+            }
+            render_view(&world, vw, vh, center, o.cell_px, &ViewOptions::default()).rgba
+        })
+        .collect()
+}
+
+/// The worst reading of the maps, with the tiles' fine patterns and without them (the meter as it
+/// was before #269), and the most transitions the fine patterns made over the area rule.
+fn readings(maps: &[TileMap]) -> (FlashReading, FlashReading, u32) {
+    let mut with = FlashMeter::new(Viewing::screen(1.0), None);
+    let mut without = FlashMeter::new(Viewing::screen(1.0), None);
+    let (mut a, mut b, mut fine) = (FlashReading::default(), FlashReading::default(), 0);
+    let worse = |x: &FlashReading, y: &FlashReading| (y.worst(), y.most()) > (x.worst(), x.most());
+    for (k, m) in maps.iter().enumerate() {
+        let t = k as f64 / 60.0;
+        let r = with.update(m, t);
+        fine = fine.max(r.fine_transitions);
+        if worse(&a, &r) {
+            a = r;
+        }
+        let mut plain = m.clone();
+        plain.fine.clear();
+        plain.red_fine.clear();
+        let r = without.update(&plain, t);
+        if worse(&b, &r) {
+            b = r;
+        }
+    }
+    (a, b, fine)
+}
+
+/// Ordinary scenes do not flash by their fine patterns: a soup's cells change a few at a time,
+/// still lifes and gliders keep their shapes, and a blinker's two phases are not each other's
+/// negative. The meter reads every one as it did before #269.
+#[test]
+fn ordinary_scenes_are_read_as_before() {
+    let (vw, vh) = (320, 240);
+    let mut moved = vec![];
+    for o in ordinary(vw, vh, &[2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0]) {
+        let maps: Vec<TileMap> = frames(&o, vw, vh, 3.0)
+            .iter()
+            .map(|f| reduce(f, vw, vh))
+            .collect();
+        let (with, without, fine) = readings(&maps);
+        if fine > 0 || (with.worst(), with.most()) != (without.worst(), without.most()) {
+            moved.push(format!(
+                "{}: {:?} ({} transitions, {fine} by fine patterns), before {:?} ({})",
+                o.name,
+                with.worst(),
+                with.most(),
+                without.worst(),
+                without.most()
+            ));
+        }
+    }
+    assert!(moved.is_empty(), "readings moved:\n{}", moved.join("\n"));
+}
+
+/// The numbers behind the ordinary scenes, on half a 1080p screen (ignored; run with `--ignored
+/// --nocapture`): each scene's worst reading with the fine patterns and without; and, by the
+/// letter of WCAG, pixel by pixel (each pixel's own transitions: no tiles, no coherence, no
+/// exemption for fine patterns), the most transitions in a second that more than a quarter of
+/// some 10° field made. That last is where random soups are a grey area.
+#[test]
+#[ignore]
+fn ordinary_scenes_by_the_numbers() {
+    let (vw, vh) = (W, H);
+    let side = Viewing::screen(1.0).field_area().sqrt().round() as usize;
+    let allowed = Viewing::screen(1.0).flash_area();
+    for o in ordinary(vw, vh, &[1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0]) {
+        let fr = frames(&o, vw, vh, 4.0);
+        let maps: Vec<TileMap> = fr.iter().map(|f| reduce(f, vw, vh)).collect();
+        let (with, without, fine) = readings(&maps);
+        // Pixel by pixel.
+        let mut px = vec![Tracker::default(); (vw * vh) as usize];
+        let mut letter = 0;
+        let (w, h) = (vw as usize, vh as usize);
+        for (k, f) in fr.iter().enumerate() {
+            let t = k as f64 / 60.0;
+            for (i, p) in px.iter_mut().enumerate() {
+                let c = &f[i * 4..i * 4 + 3];
+                let l = luminance_linear(linear(c[0]), linear(c[1]), linear(c[2]));
+                p.update(l, t, FLASH_DELTA, EPSILON, Some(DARK_LIMIT));
+            }
+            if k % 6 != 5 {
+                continue;
+            }
+            let counts: Vec<u32> = px.iter().map(|p| p.count(t)).collect();
+            for kk in (letter + 1)..=COUNT_CAP {
+                // The most pixels with at least `kk` in any field-sized square, every 4 pixels.
+                let mut sat = vec![0u32; (w + 1) * (h + 1)];
+                for y in 0..h {
+                    let mut run = 0;
+                    for x in 0..w {
+                        run += (counts[y * w + x] >= kk) as u32;
+                        sat[(y + 1) * (w + 1) + x + 1] = sat[y * (w + 1) + x + 1] + run;
+                    }
+                }
+                let s = side.min(w).min(h);
+                let at = |x: usize, y: usize| sat[y * (w + 1) + x];
+                let mut most = 0;
+                for y0 in (0..=h - s).step_by(4) {
+                    for x0 in (0..=w - s).step_by(4) {
+                        let v = at(x0 + s, y0 + s) + at(x0, y0) - at(x0, y0 + s) - at(x0 + s, y0);
+                        most = most.max(v);
+                    }
+                }
+                if most as f64 > allowed {
+                    letter = kk;
+                } else {
+                    break;
+                }
+            }
+        }
+        println!(
+            "{}: with fine patterns {:?} ({} transitions, {fine} by fine patterns); before {:?} \
+             ({}); pixel by pixel {letter}",
+            o.name,
+            with.worst(),
+            with.most(),
+            without.worst(),
+            without.most()
         );
     }
 }

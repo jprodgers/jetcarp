@@ -125,7 +125,10 @@ const CASES: &[Case] = &[
     case("tron-field", 60.0, 3.0, Some(128), Fail, Pass, SPass),
     // Stripes.
     case("stripes-still", 10.0, 2.0, None, Pass, Pass, SFail),
-    case("tron-checkerboard", 30.0, 2.0, None, Pass, Pass, SFail),
+    // A checkerboard of 8-pixel squares reversing 15 times a second: every tile's mean stays put,
+    // but every pixel flashes, and the squares are over 0.1°, so WCAG counts it (#269), as the
+    // tiles' fine patterns do. IRIS, which takes the frame's mean, does not.
+    case("tron-checkerboard", 30.0, 2.0, None, Fail, Pass, SFail),
     // Ordinary scenes.
     // Ordinary scenes, which the at-risk rule counts as similar parts: the soups and the waves
     // (IRIS fails the waves), Brian's Brain and the maze's corridors for less than half a second at
@@ -312,11 +315,12 @@ fn the_corpus_verdicts_are_pinned() {
         );
         if print {
             eprintln!(
-                "{label}: flash {:?} ({} transitions: area {}, screen {}, share {:.2}); red {:?} ({}); stripes {:?} (share {:.2}, contrast {:.2}, period {:.1} px); at risk {:?} ({} similar parts)",
+                "{label}: flash {:?} ({} transitions: area {}, screen {}, fine patterns {}, share {:.2}); red {:?} ({}); stripes {:?} (share {:.2}, contrast {:.2}, period {:.1} px); at risk {:?} ({} similar parts)",
                 flash.level,
                 flash.transitions,
                 flash.area_transitions,
                 flash.screen_transitions,
+                flash.fine_transitions,
                 flash.share,
                 red.red_level,
                 red.red_transitions,
