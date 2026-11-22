@@ -1814,16 +1814,38 @@ fn setup_s_what_it_searches_choices_keep_the_keyboard() {
     in_scratch("app::keyboard_tests::child_setup_s_what_it_searches_choices_keep_the_keyboard");
 }
 
-/// Setup's *What it searches* (#309): from *All*, ↓ and Tab go through every choice in turn and ↑
-/// and Shift+Tab come back through them, the keyboard on a choice all the way, ringed; Space ticks
-/// the one with the keyboard, and the title reads *Custom*. ↑ and Tab lost the keyboard.
+/// Setup's *What it searches* (#309): from its header, ↓ and Tab go through every choice in turn
+/// and ↑ and Shift+Tab come back through them, the keyboard on a choice all the way, ringed; ↑
+/// from the header leaves the keyboard in the window; Space ticks the one with the keyboard, and
+/// the title reads *Custom*. ↓ passed most choices by, and ↑ took the keyboard out of the window.
 #[test]
 #[ignore = "started by setup_s_what_it_searches_choices_keep_the_keyboard, in a scratch process"]
 fn child_setup_s_what_it_searches_choices_keep_the_keyboard() {
     if !child() {
         return;
     }
-    let mut k = Kb::with_life();
+    let mut failures = vec![];
+    // The window as it was found (a Framework laptop's screen at 200 %), and two others.
+    for (w, h) in [(1128.0, 752.0), (1280.0, 800.0), (900.0, 640.0)] {
+        for f in what_it_searches_from_the_keyboard(w, h) {
+            failures.push(format!("{w}x{h}: {f}"));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    done();
+}
+
+/// [`child_setup_s_what_it_searches_choices_keep_the_keyboard`] in a window of `w` × `h` points:
+/// what went wrong.
+fn what_it_searches_from_the_keyboard(w: f32, h: f32) -> Vec<String> {
+    let mut k = Kb::sized(w, h);
+    let scene = Scene::from_json(
+        r#"{"name": "Keyboard test", "tiling": {"family": "square", "size": {"rect": {"w": 40, "h": 30}}, "boundary": "wrap"}, "rng_state": 3, "cas": [{"rule": "B3/S23", "seed": "empty"}]}"#,
+    )
+    .unwrap();
+    k.app.load_scene(&scene);
+    k.app.playing = false;
+    k.frames(4);
     k.app.setup.show_again();
     let t = std::time::Instant::now();
     while k.focused_name() != "Next" && t.elapsed().as_secs() < 20 {
@@ -1906,6 +1928,28 @@ fn child_setup_s_what_it_searches_choices_keep_the_keyboard() {
             failures.push(format!("{keys}: {}; went {path:?}", problems.join("; ")));
         }
     }
+    // ↑ from the header and on: the keyboard stays in the setup window (egui's arrows took it
+    // to the main window's controls behind it, where its ring couldn't be seen).
+    k.focus_named("What it searches: All");
+    let header = k.focused().unwrap();
+    let layer_of = |k: &Kb, id: egui::Id| {
+        k.ctx
+            .viewport(|v| v.prev_pass.widgets.get(id).map(|w| w.layer_id))
+    };
+    let window = layer_of(&k, header);
+    for i in 0..8 {
+        k.key(Key::ArrowUp);
+        k.frames(1);
+        let f = k.focused();
+        if f.is_none() || layer_of(&k, f.unwrap()) != window {
+            failures.push(format!(
+                "↑ {} from the header took the keyboard out of the setup window, to {:?}",
+                i + 1,
+                k.focused_name()
+            ));
+            break;
+        }
+    }
     // Space ticks the one with the keyboard: All becomes Custom.
     k.focus_named(&choices[2]);
     let was = k.app.setup.groups[1].1;
@@ -1924,8 +1968,7 @@ fn child_setup_s_what_it_searches_choices_keep_the_keyboard() {
             choices[2]
         ));
     }
-    assert!(failures.is_empty(), "{failures:#?}");
-    done();
+    failures
 }
 
 #[test]
