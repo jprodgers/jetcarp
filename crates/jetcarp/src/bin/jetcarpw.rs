@@ -8,11 +8,18 @@
 //! Copied as `JETCARP.scr`, it is the screen saver: Windows starts it with `/s`, `/p <hwnd>` or
 //! `/c`, and it runs `jetcarp.exe host scr <those arguments>`.
 //!
-//! It finds `jetcarp.exe` beside itself, else in the folder of the recorded host command
-//! (`<settings>/host-program`, written by the host and by `jetcarp host saver install`). Only the
+//! Copied into a folder of JETCARP's own by `jetcarp launcher install`, it is what the Start menu
+//! entry starts, so the entry outlives an upgrade that moves the program (#105).
+//!
+//! It finds `jetcarp.exe` beside itself; else as the record beside it names it (the Start menu's
+//! copy); else in the folder of the recorded host command (`<settings>/host-program`, written by
+//! the host and by `jetcarp host saver install`); else on the `PATH` (`launcher_find.rs`). Only the
 //! standard library is used, so it stays small.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
+
+#[path = "../../launcher_find.rs"]
+mod launcher_find;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -26,14 +33,11 @@ fn settings_dir() -> Option<PathBuf> {
 }
 
 fn find_jetcarp(me: &Path) -> Option<PathBuf> {
-    let beside = me.with_file_name("jetcarp.exe");
-    if beside.exists() {
-        return Some(beside);
-    }
-    let text = std::fs::read_to_string(settings_dir()?.join("host-program")).ok()?;
-    let recorded = PathBuf::from(text.lines().next()?.trim());
-    let main = recorded.with_file_name("jetcarp.exe");
-    main.exists().then_some(main)
+    launcher_find::find(
+        me,
+        settings_dir().as_deref(),
+        std::env::var_os("PATH").as_deref(),
+    )
 }
 
 #[cfg(windows)]

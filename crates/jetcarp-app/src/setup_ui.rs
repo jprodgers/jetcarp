@@ -11,8 +11,9 @@
 //!    them, and (Researcher, Everything) packs from a folder.
 //! 5. **Desktop** (Desktop art, Everything): the live wallpaper, login and the screen saver,
 //!    all off until turned on.
-//! 6. **Summary**, then **Progress**: the jobs `setup.apply` started, followed until they end,
-//!    with *Continue in the background*.
+//! 6. **Summary**, with a box to add JETCARP to the system's apps (ticked when it isn't there
+//!    yet, for every profile), then **Progress**: the jobs `setup.apply` started, followed until
+//!    they end, with *Continue in the background*.
 //!
 //! Every catalog and file read runs on a worker thread (`setup.status`, `setup.apply`, the job
 //! polls); the UI thread only checks a folder the user typed or picked. What the desktop offers
@@ -75,6 +76,8 @@ pub trait Desktop: Send {
     fn wallpaper_waits_for_login(&self) -> bool {
         false
     }
+    /// JETCARP is among the system's apps already ([`Offer::Launcher`]).
+    fn launcher_installed(&self) -> bool;
 }
 
 /// This computer's desktop ([`crate::desktop_offers`]).
@@ -86,6 +89,9 @@ impl Desktop for RealDesktop {
     }
     fn accept(&mut self, o: Offer) -> Result<String, String> {
         o.accept()
+    }
+    fn launcher_installed(&self) -> bool {
+        jetcarp_display::launcher::installed()
     }
     fn wallpaper_waits_for_login(&self) -> bool {
         cfg!(target_os = "linux")
@@ -149,6 +155,12 @@ pub struct Wizard {
     /// What the measuring says while it runs.
     measuring: Arc<std::sync::Mutex<Option<(f32, String)>>>,
     pub offers: BTreeMap<&'static str, bool>,
+    /// Add JETCARP to the system's apps (`jetcarp launcher install`), for every profile: ticked
+    /// when it isn't there yet.
+    pub launcher_on: bool,
+    /// JETCARP was among the system's apps when the window last looked: then there is no box to
+    /// tick.
+    pub launcher_there: bool,
     status: Option<SetupStatus>,
     loading: Option<Receiver<SetupStatus>>,
     applying: Option<Receiver<Result<Applied, String>>>,
@@ -174,6 +186,7 @@ fn offer_key(o: Offer) -> &'static str {
         Offer::Wallpaper => "wallpaper",
         Offer::Login => "login",
         Offer::Saver => "saver",
+        Offer::Launcher => "launcher",
     }
 }
 
@@ -181,6 +194,7 @@ impl Wizard {
     /// A closed wizard whose operations run with `make_ctx`'s context and whose desktop offers
     /// go to `desktop`.
     pub fn new(make_ctx: MakeCtx, desktop: Box<dyn Desktop>) -> Wizard {
+        let launcher_there = desktop.launcher_installed();
         Wizard {
             open: false,
             page: Page::Welcome,
@@ -204,6 +218,8 @@ impl Wizard {
             measure_on: true,
             measuring: Default::default(),
             offers: Offer::ALL.iter().map(|o| (offer_key(*o), false)).collect(),
+            launcher_on: !launcher_there,
+            launcher_there,
             status: None,
             loading: None,
             applying: None,
@@ -240,6 +256,9 @@ impl Wizard {
         self.open = true;
         self.keyed = None;
         self.refresh();
+        // Added or removed since the window last looked.
+        self.launcher_there = self.desktop.launcher_installed();
+        self.launcher_on = !self.launcher_there;
         let unfinished = self
             .status
             .as_ref()
@@ -573,17 +592,36 @@ impl Wizard {
             .collect()
     }
 
+    /// What applying does on the desktop, in order: the Desktop page's offers turned on, then
+    /// adding JETCARP to the system's apps when that is ticked and it isn't there.
+    pub fn desktop_steps(&self) -> Vec<Offer> {
+        let mut v = self.offers_on();
+        if self.launcher_on && !self.launcher_there {
+            v.push(Offer::Launcher);
+        }
+        v
+    }
+
+    /// Does [`Wizard::desktop_steps`], each result kept for the progress page.
+    fn run_desktop_steps(&mut self) {
+        self.desktop_done.clear();
+        for o in self.desktop_steps() {
+            let r = self.desktop.accept(o);
+            if o == Offer::Launcher && r.is_ok() {
+                self.launcher_there = true;
+                self.launcher_on = false;
+            }
+            self.desktop_done.push((o, r));
+        }
+    }
+
     /// Apply: the desktop offers turned on, then `setup.apply` on a worker thread; on to the
     /// progress page.
     pub fn apply(&mut self) {
         let Some(input) = self.apply_input() else {
             return;
         };
-        self.desktop_done.clear();
-        for o in self.offers_on() {
-            let r = self.desktop.accept(o);
-            self.desktop_done.push((o, r));
-        }
+        self.run_desktop_steps();
         self.log_out_once = wants_log_out(&self.desktop_done, || {
             self.desktop.wallpaper_waits_for_login()
         });
@@ -1330,6 +1368,13 @@ impl Wizard {
                 ui.label(RichText::new("This computer").strong());
                 ui.checkbox(&mut self.measure_on, "Measured first (about a minute)");
                 ui.end_row();
+                // For every profile, once: JETCARP opens from its icon like the other apps.
+                if !self.launcher_there {
+                    ui.label(RichText::new("Your apps").strong());
+                    ui.checkbox(&mut self.launcher_on, Offer::Launcher.title())
+                        .on_hover_text(Offer::Launcher.detail());
+                    ui.end_row();
+                }
                 ui.label(RichText::new("Quick Start").strong());
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
@@ -1700,6 +1745,79 @@ mod tests {
         assert!(LOG_OUT_ONCE.starts_with("Log out and back in once"));
     }
 
+    /// A desktop that records what it is asked to do, with JETCARP among its apps or not.
+    struct StandIn {
+        there: bool,
+        asked: Arc<std::sync::Mutex<Vec<Offer>>>,
+    }
+
+    impl Desktop for StandIn {
+        fn available(&self, _: Offer) -> Result<(), String> {
+            Ok(())
+        }
+        fn accept(&mut self, o: Offer) -> Result<String, String> {
+            self.asked.lock().unwrap().push(o);
+            Ok("done".into())
+        }
+        fn launcher_installed(&self) -> bool {
+            self.there
+        }
+    }
+
+    /// Setup's summary offers to add JETCARP to the system's apps, for every profile, ticked
+    /// when it isn't there yet; applying does it once, after the desktop offers, and reports it
+    /// with them (#105). When it is there already, there is nothing to tick and nothing is done.
+    #[test]
+    fn setup_adds_jetcarp_to_the_apps_when_it_is_not_there() {
+        let mk: MakeCtx = Arc::new(Ctx::new);
+        for p in [
+            Profile::DesktopArt,
+            Profile::Explorer,
+            Profile::Researcher,
+            Profile::Everything,
+            Profile::BlankSlate,
+        ] {
+            let asked = Arc::new(std::sync::Mutex::new(vec![]));
+            let desk = StandIn {
+                there: false,
+                asked: asked.clone(),
+            };
+            let mut w = Wizard::new(mk.clone(), Box::new(desk));
+            w.choose(p);
+            assert!(!w.launcher_there && w.launcher_on, "{p:?}: ticked");
+            if p.desktop_offers() {
+                w.offers.insert("wallpaper", true);
+            }
+            let steps = w.desktop_steps();
+            assert_eq!(steps.last(), Some(&Offer::Launcher), "{p:?}: {steps:?}");
+            assert_eq!(steps.len(), if p.desktop_offers() { 2 } else { 1 });
+            w.run_desktop_steps();
+            assert_eq!(*asked.lock().unwrap(), steps);
+            assert_eq!(w.desktop_done.last().map(|d| d.0), Some(Offer::Launcher));
+            // Unticked: not done.
+            w.launcher_on = false;
+            assert!(!w.desktop_steps().contains(&Offer::Launcher));
+        }
+        let asked = Arc::new(std::sync::Mutex::new(vec![]));
+        let desk = StandIn {
+            there: true,
+            asked: asked.clone(),
+        };
+        let mut w = Wizard::new(mk, Box::new(desk));
+        w.choose(Profile::Explorer);
+        assert!(
+            w.launcher_there && !w.launcher_on,
+            "already there: no box, not ticked"
+        );
+        w.launcher_on = true;
+        assert!(
+            w.desktop_steps().is_empty(),
+            "never done again when it is there"
+        );
+        w.run_desktop_steps();
+        assert!(asked.lock().unwrap().is_empty());
+    }
+
     /// A wizard open at its first page, with this status.
     fn fresh_wizard(mk: &MakeCtx, status: &SetupStatus) -> Wizard {
         let mut w = Wizard::new(mk.clone(), Box::new(RealDesktop));
@@ -1751,6 +1869,9 @@ mod tests {
         // The limits it shows come from the test's reference machine (16 GB), not this one.
         w.go_to(Page::Measure);
         shot(&mut o, &mut w, &dir, "setup-5b-measure");
+        // As on a computer where JETCARP is not among the apps yet, whatever this one has.
+        w.launcher_there = false;
+        w.launcher_on = true;
         w.go_to(Page::Summary);
         shot(&mut o, &mut w, &dir, "setup-6-summary");
     }
@@ -1767,8 +1888,10 @@ mod tests {
         let mut w = fresh_wizard(&mk, &status);
         w.choose(Profile::Explorer);
         w.minutes = 1.0;
-        // The build's pages, without the minute of measuring first.
+        // The build's pages, without the minute of measuring first, and without adding JETCARP
+        // to this computer's apps.
         w.measure_on = false;
+        w.launcher_on = false;
         w.go_to(Page::Summary);
         w.next();
         let t = std::time::Instant::now();

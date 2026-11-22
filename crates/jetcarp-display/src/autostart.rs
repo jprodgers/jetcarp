@@ -298,7 +298,7 @@ pub fn spawn_detached(path: &Path, args: &[&str]) -> Result<(), String> {
 
 /// One `Exec` argument of a desktop entry, quoted as the Desktop Entry spec asks: inside quotes
 /// these four take a backslash, and `%` is doubled.
-fn desktop_quote(s: &str) -> String {
+pub(crate) fn desktop_quote(s: &str) -> String {
     let mut out = String::from("\"");
     for c in s.chars() {
         match c {

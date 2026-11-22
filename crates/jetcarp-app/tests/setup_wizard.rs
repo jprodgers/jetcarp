@@ -25,6 +25,11 @@ impl Desktop for Mock {
         self.0.lock().unwrap().push(o);
         Ok("done".into())
     }
+    /// JETCARP is among this stand-in's apps already, so setup offers no launcher here (the
+    /// launcher's box has its own test, in `setup_ui.rs`).
+    fn launcher_installed(&self) -> bool {
+        true
+    }
 }
 
 fn scratch(name: &str) -> PathBuf {

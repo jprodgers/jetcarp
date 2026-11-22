@@ -79,11 +79,14 @@ fn data_of_jetcarps(d: &Path) {
         "searches/0f8b6a52-3c1e-4d7a-9b2f-5e6d7c8b9a01/manifest.json",
         "searches/0f8b6a52-3c1e-4d7a-9b2f-5e6d7c8b9a01/runs/part-000001.parquet",
         "explore/runs.sqlite",
-        // On Windows the data folder is also the runtime folder and the screen saver's.
+        // On Windows the data folder is also the runtime folder, the screen saver's and the Start
+        // menu entry's launcher's.
         "host.lock",
         "host-endpoint.json",
         ".host-endpoint.json.4242.tmp",
         "JETCARP.scr",
+        "launcher/jetcarpw.exe",
+        "launcher/jetcarp-program",
         "mcp-http-endpoint.json",
         "app-http-endpoint.json",
         "memory/4242.json",

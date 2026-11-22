@@ -1,10 +1,10 @@
 //! What this program knows about the machine that `jetcarp-api` cannot reach itself: the
 //! graphics adapters and the GPU simulator (`jetcarp-gpu`), and the desktop integration (the
-//! background host, start at login, the GNOME Shell extension, the screen savers). The
-//! operations `system.doctor`, `system.uninstall`, and `scene.run` (with `gpu`) ask for them
-//! through [`jetcarp_api::Platform`]; so do `search.start` with `gpu` (the GPU soup hunter for
-//! hunts, the GPU batch stepper for explore searches) and with `detach` (a job in a process of
-//! its own, `jetcarp jobs resume JOB`).
+//! background host, start at login, the GNOME Shell extension, the screen savers, the
+//! launcher). The operations `system.doctor`, `system.uninstall`, and `scene.run` (with `gpu`)
+//! ask for them through [`jetcarp_api::Platform`]; so do `search.start` with `gpu` (the GPU soup
+//! hunter for hunts, the GPU batch stepper for explore searches) and with `detach` (a job in a
+//! process of its own, `jetcarp jobs resume JOB`).
 
 use clap::Args;
 use jetcarp_api::ctx::{Desktop, GpuAdapter, GpuMode, GpuPolicy, GpuStepper, UndoStep};
@@ -13,7 +13,7 @@ use jetcarp_core::World;
 use jetcarp_core::explore::batch::Backend;
 use jetcarp_core::hunt::soup::SoupBatcher;
 use jetcarp_display::host_settings::HostSettings;
-use jetcarp_display::{autostart, desktop_picture, gnome, saver};
+use jetcarp_display::{autostart, desktop_picture, gnome, launcher, saver};
 use jetcarp_mcp::link::{host_call, host_gone};
 use serde_json::json;
 use std::path::Path;
@@ -94,6 +94,7 @@ impl Platform for Machine {
             starts_at_login: autostart::enabled(),
             gnome_extension: cfg!(target_os = "linux").then(|| gnome::state().describe()),
             screen_saver: cfg!(any(windows, target_os = "macos")).then(saver::describe),
+            launcher: Some(launcher::describe()),
         }
     }
 
@@ -146,6 +147,13 @@ impl Platform for Machine {
             steps.push(step(
                 "remove the macOS screen saver",
                 Box::new(|| saver::remove().map(|_| ())),
+            ));
+        }
+        // The menu entry and icons, JETCARP.app, or the Start menu entry (#105).
+        if launcher::installed() {
+            steps.push(step(
+                &launcher::undo_what(),
+                Box::new(|| launcher::remove().map(|_| ())),
             ));
         }
         steps

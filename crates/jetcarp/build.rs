@@ -1,9 +1,10 @@
 //! Windows (MSVC): embeds `windows.manifest` (layered child windows need the Windows 8+
 //! compatibility entry), and gives `jetcarp.exe` and `jetcarpw.exe` a version resource, so
 //! Windows shows the program's name, version and licence in its Properties, Details, and Windows
-//! Error Reporting names its version. The resource is written by `version_res.rs`, in plain Rust;
-//! the linker compiles it into the program. macOS: embeds an `Info.plist` naming the program
-//! JETCARP ([`mac_info_plist`]).
+//! Error Reporting names its version, and JETCARP's icon (`jetcarp.ico`, a copy of
+//! `packaging/icons/jetcarp.ico`), which Explorer, the taskbar and shortcuts show (#105). The
+//! resources are written by `version_res.rs`, in plain Rust; the linker compiles them into the
+//! program. macOS: embeds an `Info.plist` naming the program JETCARP ([`mac_info_plist`]).
 
 #[path = "version_res.rs"]
 mod version_res;
@@ -33,6 +34,7 @@ fn mac_info_plist() {
 fn main() {
     println!("cargo:rerun-if-changed=windows.manifest");
     println!("cargo:rerun-if-changed=version_res.rs");
+    println!("cargo:rerun-if-changed=jetcarp.ico");
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     if os == "macos" {
@@ -50,6 +52,7 @@ fn main() {
         path.display()
     );
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let icon = std::fs::read(std::path::Path::new(&dir).join("jetcarp.ico")).expect("jetcarp.ico");
     let number = |part: &str| -> u16 {
         std::env::var(format!("CARGO_PKG_VERSION_{part}"))
             .ok()
@@ -74,6 +77,7 @@ fn main() {
             company: "Jimmie Rodgers",
             copyright: "Jimmie Rodgers. Free to use under the Unlicense or the MIT licence",
             file_name: &file_name,
+            icon: Some(&icon),
         };
         let res = out.join(format!("{bin}-version.res"));
         std::fs::write(&res, version_res::res_file(&info)).unwrap();

@@ -4,9 +4,13 @@
 //! with `host start`, `host login on`, `host saver install`), so the setup wizard and `jetcarp
 //! setup` share them. Nothing here runs unless someone accepts an offer: the setup operations
 //! themselves never touch the desktop.
+//!
+//! One more, for every profile and not in [`Offer::ALL`]: JETCARP among the system's apps
+//! ([`Offer::Launcher`], `jetcarp launcher install`), ticked on setup's summary when it isn't there
+//! yet (#105).
 
 use jetcarp_display::host_settings::{HostSettings, Place};
-use jetcarp_display::{autostart, gnome, saver};
+use jetcarp_display::{autostart, gnome, launcher, saver};
 use jetcarp_mcp::link::host_call;
 use serde_json::json;
 
@@ -19,9 +23,12 @@ pub enum Offer {
     Login,
     /// Add JETCARP to the system's screen savers (Windows and macOS).
     Saver,
+    /// Add JETCARP, with its icon, to the system's apps: the Start menu, Launchpad, the apps menu.
+    Launcher,
 }
 
 impl Offer {
+    /// The Desktop page's offers (Desktop art, Everything).
     pub const ALL: [Offer; 3] = [Offer::Wallpaper, Offer::Login, Offer::Saver];
 
     /// What it does, as a choice.
@@ -30,6 +37,9 @@ impl Offer {
             Offer::Wallpaper => "Show a live wallpaper on the desktop",
             Offer::Login => "Start the live wallpaper when you log in",
             Offer::Saver => "Use JETCARP as the screen saver",
+            Offer::Launcher if cfg!(windows) => "Add JETCARP to the Start menu",
+            Offer::Launcher if cfg!(target_os = "macos") => "Add JETCARP to Launchpad",
+            Offer::Launcher => "Add JETCARP to the apps menu",
         }
     }
 
@@ -53,6 +63,10 @@ impl Offer {
             Offer::Saver => {
                 "On Windows and macOS, adds JETCARP to the system's screen savers.".into()
             }
+            Offer::Launcher if cfg!(target_os = "macos") => {
+                "Makes JETCARP.app in your Applications folder, with JETCARP's icon, so Launchpad, Spotlight and the Dock open it.".into()
+            }
+            Offer::Launcher => "So JETCARP opens from its icon, like your other apps.".into(),
         }
     }
 
@@ -62,6 +76,7 @@ impl Offer {
             Offer::Wallpaper => "jetcarp host wallpaper on && jetcarp host start",
             Offer::Login => "jetcarp host login on",
             Offer::Saver => "jetcarp host saver install",
+            Offer::Launcher => "jetcarp launcher install",
         }
     }
 
@@ -94,6 +109,7 @@ impl Offer {
                 }
                 Ok(s)
             }
+            Offer::Launcher => launcher::install().map(|i| i.said),
         }
     }
 }

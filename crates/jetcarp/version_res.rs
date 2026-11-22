@@ -9,7 +9,8 @@
 //! type (0 binary, 1 text), its key in UTF-16, then its value and its children, each aligned to
 //! four bytes. See Microsoft's documentation of `RESOURCEHEADER`, `VS_VERSIONINFO`,
 //! `VS_FIXEDFILEINFO`, `StringFileInfo` and `VarFileInfo`. A string table (string 1, the product
-//! name) follows, for the screen saver list.
+//! name) follows, for the screen saver list, then the program's icon (#105), from a `.ico` file
+//! (`RT_ICON` and `RT_GROUP_ICON`; see `GRPICONDIR`).
 
 /// What the resource says.
 pub struct VersionInfo<'a> {
@@ -25,6 +26,8 @@ pub struct VersionInfo<'a> {
     pub copyright: &'a str,
     /// The program's file name (`jetcarp.exe`).
     pub file_name: &'a str,
+    /// The program's icon: a `.ico` file, whose images become its icon resources (#105).
+    pub icon: Option<&'a [u8]>,
 }
 
 /// US English, Unicode: the string table's language and code page.
@@ -44,7 +47,7 @@ fn put32(b: &mut Vec<u8>, v: u32) {
 }
 
 fn align4(b: &mut Vec<u8>) {
-    while b.len() % 4 != 0 {
+    while !b.len().is_multiple_of(4) {
         b.push(0);
     }
 }
@@ -186,7 +189,7 @@ pub fn string_block_1(text: &str) -> Vec<u8> {
 /// A `.res` file holding the version resource (`RT_VERSION`, number 1) and string 1 of the
 /// string table (`RT_STRING`, block 1), the product's name: Windows lists a screen saver by its
 /// string 1, and `JETCARP.scr` is a copy of `jetcarpw.exe` (without it, the list says
-/// "Jetcarp", from the file's name).
+/// "Jetcarp", from the file's name). With an icon, its resources follow ([`icon_entries`]).
 pub fn res_file(v: &VersionInfo) -> Vec<u8> {
     const RT_STRING: u16 = 6;
     const RT_VERSION: u16 = 16;
@@ -206,5 +209,65 @@ pub fn res_file(v: &VersionInfo) -> Vec<u8> {
         LANGUAGE,
         &string_block_1(v.product),
     );
+    if let Some(ico) = v.icon {
+        icon_entries(&mut out, ico);
+    }
     out
+}
+
+/// An image of a `.ico` file: the first 12 bytes of its `ICONDIRENTRY` (width, height, colours,
+/// reserved, planes, bits per pixel, size) and the image itself.
+pub type IcoImage<'a> = ([u8; 12], &'a [u8]);
+
+/// The images of a `.ico` file. The file is `ICONDIR` (reserved, type 1, count), one 16-byte entry
+/// per image (the 12 bytes of [`IcoImage`] and the image's offset), then the images.
+pub fn ico_images(ico: &[u8]) -> Result<Vec<IcoImage<'_>>, String> {
+    let u16_at = |at: usize| {
+        ico.get(at..at + 2)
+            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+    };
+    if u16_at(0) != Some(0) || u16_at(2) != Some(1) {
+        return Err("not a .ico file".into());
+    }
+    let count = u16_at(4).unwrap_or(0) as usize;
+    (0..count)
+        .map(|i| {
+            let dir = ico
+                .get(6 + 16 * i..6 + 16 * (i + 1))
+                .ok_or("the .ico file's directory is cut short")?;
+            let size = u32::from_le_bytes([dir[8], dir[9], dir[10], dir[11]]) as usize;
+            let offset = u32::from_le_bytes([dir[12], dir[13], dir[14], dir[15]]) as usize;
+            let image = ico
+                .get(offset..offset + size)
+                .ok_or("an image of the .ico file is cut short")?;
+            let mut head = [0u8; 12];
+            head.copy_from_slice(&dir[..12]);
+            Ok((head, image))
+        })
+        .collect()
+}
+
+/// The program's icon, as the resource compiler lays out `1 ICON file.ico`: each image an icon
+/// resource (`RT_ICON`, numbered from 1) holding it as it is in the file, and icon group 1
+/// (`RT_GROUP_ICON`) listing them: `GRPICONDIR` (reserved, type 1, count), then a 14-byte
+/// `GRPICONDIRENTRY` per image, its `ICONDIRENTRY`'s first 12 bytes and its resource's number.
+/// Explorer, the taskbar and shortcuts show the program's first icon group.
+fn icon_entries(out: &mut Vec<u8>, ico: &[u8]) {
+    const RT_ICON: u16 = 3;
+    const RT_GROUP_ICON: u16 = 14;
+    // MOVEABLE | DISCARDABLE, and the group PURE as well, as the resource compiler marks them.
+    const ICON_FLAGS: u16 = 0x1010;
+    const GROUP_FLAGS: u16 = 0x1030;
+    let images = ico_images(ico).unwrap_or_else(|e| panic!("the icon: {e}"));
+    let mut group = vec![];
+    put16(&mut group, 0);
+    put16(&mut group, 1);
+    put16(&mut group, images.len() as u16);
+    for (i, (head, image)) in images.iter().enumerate() {
+        let id = i as u16 + 1;
+        entry(out, RT_ICON, id, ICON_FLAGS, LANGUAGE, image);
+        group.extend_from_slice(head);
+        put16(&mut group, id);
+    }
+    entry(out, RT_GROUP_ICON, 1, GROUP_FLAGS, LANGUAGE, &group);
 }

@@ -300,6 +300,22 @@ day later (0.4.2: 17 November here, 18 November there).
   cells: in the app's view, pictures, desktop pictures, exported animations, sandpile exports and
   the HashLife view. Everywhere else they are as before; no picture in this book changed.
   ([The strobe guard](../guides/strobe-guard.md#what-it-measures))
+- **An app icon, and JETCARP among your apps on every system.** JETCARP has an icon, a carp with
+  jet engines (a first drawing, to be redrawn): the app's windows show it, and on Windows
+  `jetcarp.exe` and `jetcarpw.exe` carry it, written into them by the build in plain Rust with no
+  resource compiler. `jetcarp launcher install` puts JETCARP, with the icon, in the applications
+  menu on Linux (`jetcarp.desktop` and the icon theme's sizes in `~/.local/share`), in
+  `~/Applications` as *JETCARP.app* on macOS (a launcher that starts the program, signed ad hoc on
+  the Mac, as the screen saver is, so no Developer ID is needed), and in the Start menu on Windows,
+  where the entry starts a copy of `jetcarpw.exe` in `%LOCALAPPDATA%\jetcarp\launcher` that finds
+  the program after a winget or Scoop upgrade too. The installers run it for you (`--no-launcher`
+  and `-NoLauncher` leave it out) and take it out again with `--uninstall`; setup's summary offers
+  it for every profile, ticked when it isn't there yet (`jetcarp setup --no-launcher` leaves it
+  out); `jetcarp doctor` says where it is; `jetcarp uninstall` removes it with the rest. One of the
+  same name that JETCARP did not make is left alone. `packaging/gen-icons.py` makes every PNG, the
+  `.ico` and the `.icns` from one SVG (and a simpler one for the small sizes, if one is added),
+  and CI checks them against it. ([Open the app](../getting-started/installing.md#open-the-app),
+  [#105](https://github.com/jprodgers/jetcarp/issues/105))
 
 ### Changed
 
@@ -368,6 +384,10 @@ day later (0.4.2: 17 November here, 18 November there).
   [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
 ### Fixed
+
+- **The Windows installer's `-Uninstall` leaves the user PATH alone when JETCARP's folder isn't on
+  it.** It wrote the PATH back whatever it held, tidied (empty entries dropped), so a PATH could
+  change even after `-NoModifyPath`. Found by the installer test's new uninstall case.
 
 - **Animated WebP exports keep white.** The WebP encoder's colour cache started at the value that
   is opaque white, so a frame, or the part of a frame that changed, beginning with white pixels

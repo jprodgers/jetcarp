@@ -54,7 +54,8 @@ Or `pipx install jetcarp` (or `uv tool install jetcarp`); `brew tap jprodgers/je
 `brew install jetcarp`; `scoop bucket add jetcarp https://github.com/jprodgers/scoop-jetcarp` then
 `scoop install jetcarp`; or `cargo install jetcarp`. Every way, and what to know on each system, is
 in [Installing JETCARP](https://jprodgers.github.io/jetcarp/getting-started/installing.html).
-Then run `jetcarp` in a terminal to open the app.
+Then open JETCARP from your applications menu, Launchpad or the Start menu, where the installers put
+it (`jetcarp launcher install` does after any other way), or run `jetcarp` in a terminal.
 
 **No telemetry.** JETCARP makes no network connections: it does not check for updates, report
 crashes or collect statistics, and never sends anything anywhere. See

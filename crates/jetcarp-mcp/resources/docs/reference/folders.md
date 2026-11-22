@@ -162,6 +162,16 @@ one running; `JETCARP_RUNTIME_DIR` gives a copy a runtime folder of its own. `je
 data folder holds these files beside the library; setup still takes it as a new data folder when
 they are all it holds, and `jetcarp uninstall --data` counts them as JETCARP's.
 
+On Windows the same folder, `%LOCALAPPDATA%\jetcarp`, also holds `JETCARP.scr`, the screen saver,
+and `launcher\`: a copy of `jetcarpw.exe` that the Start menu entry starts, and `jetcarp-program`,
+which names the `jetcarp.exe` it starts. `jetcarp launcher install` puts them there, outside the
+program's own folder, because winget's and Scoop's folders name the version and an upgrade
+replaces them. If the program named in `jetcarp-program` has gone, the copy finds JETCARP on your
+`PATH`, and the next run of `jetcarp` puts its own path in the file; a file naming a program that is
+still there is left as it is, so a second copy of JETCARP never takes the entry over (see
+[Open the app](../getting-started/installing.md#open-the-app)). `jetcarp launcher remove` and
+`jetcarp uninstall` remove both files.
+
 To remove what JETCARP set up outside these folders, and optionally the folders themselves, see
 [Uninstalling](../guides/uninstalling.md).
 

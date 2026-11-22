@@ -1,7 +1,8 @@
 # First run and setup
 
-To open the app, run `jetcarp` with no arguments in a terminal, on any system. On Windows, the
-*JETCARP* entry that Scoop adds to the Start menu opens it too (see
+To open the app, run `jetcarp` with no arguments in a terminal, on any system, or open JETCARP from
+its icon in your applications menu, Launchpad or the Start menu, where the installers put it
+(`jetcarp launcher install` puts it there after any other way of installing; see
 [Installing](installing.md#open-the-app)).
 
 The first time you open the app, before anything else, it shows the
@@ -111,6 +112,13 @@ minute to 600. It also shows whether the
 build runs on the GPU, and roughly what it all takes. **Start** begins; for a profile with nothing to
 import or build the button says **Finish**.
 
+**Your apps** (every profile), when JETCARP isn't among them yet: **Add JETCARP to the Start menu**
+on Windows, **Add JETCARP to Launchpad** on macOS (as *JETCARP.app* in your Applications folder) or
+**Add JETCARP to the apps menu** on Linux, ticked, so that JETCARP opens from its icon like your
+other apps. It does what `jetcarp launcher install` does (see
+[Open the app](installing.md#open-the-app)), and the next page says how it went. The installers
+have done it already, so after them the box isn't there.
+
 Under the build, *What it searches* reads **All**: every group of tilings and every rule family,
 isotropic rules too. Open it for an *All* box, which ticks or clears every one, and a box for each
 group of tilings (square, hexagon, triangle, pentagon, Archimedean, k-uniform, isohedral,
@@ -118,7 +126,7 @@ aperiodic) and each rule family. Untick any and it reads **Custom**, and the bui
 what's ticked. `jetcarp setup` builds the same *All* search. A search of your own choosing later is
 in [Searching](../guides/searching.md#choosing-what-to-search).
 
-<img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, This computer measured first, and a ten-minute search on the GPU, with What it searches: All closed under it; about 83 MB and 11 minutes" width="600">
+<img src="../images/getting-started/setup-6-summary.png" alt="The summary for Explorer: the data folder, the starter pack, This computer measured first, Your apps: Add JETCARP to the apps menu, and a ten-minute search on the GPU with What it searches: All closed under it; about 83 MB and 11 minutes" width="600">
 
 **Setting up.** Each job with its progress; each import says who signed the pack and what your
 library knew of their key, with a new key marked again below it. They run in the background, so **Continue in the
@@ -171,12 +179,14 @@ setting up JETCARP as Explorer:
   1. record the profile Explorer in /home/ada/.config/jetcarp/setup.json
   2. import JETCARP starter pack (26 patterns, 79 Quick Start entries, 8 ant runs, 1.5 MB)
   3. search for 1 minute on the GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), then add its best runs to the Quick Start
+and add JETCARP to the apps menu (`jetcarp launcher install`)
 pack import job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 explore search job 2 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
 pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs (done)
 Quick Start build (explore 2): 873 atlas entries published (873 new, 0 updated, 0 removed); 9,980 runs (115/s), 2,994 elites in 1,664 niches (122 of them confirmed), 13 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
 recorded Explorer in /home/ada/.config/jetcarp/setup.json
+added JETCARP to the applications menu (/home/ada/.local/share/applications/jetcarp.desktop), with its icon in /home/ada/.local/share/icons/hicolor
 Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
 ```
 
@@ -189,7 +199,8 @@ The outputs on this page come from Linux; on macOS and Windows the folders in th
 | `--data-dir DIR` | Keep JETCARP's data in this folder from now on (empty, or already a JETCARP data folder) |
 | `--quickstart-minutes N` | The build's minutes instead of the profile's; `0` for none |
 | `--packs DIR` | Import the packs in this folder too (repeatable) |
-| `--yes` | Ask nothing. The desktop offers are only printed, as the commands that do them |
+| `--yes` | Ask nothing. The desktop offers are only printed, as the commands that do them; JETCARP is added to the system's apps, if it isn't there yet, as the app's setup does by default |
+| `--no-launcher` | Leave JETCARP out of the Start menu, Launchpad or the apps menu (asked in a terminal otherwise, when it isn't there yet) |
 | `--seizure-warning ANSWER` | Answer the [photosensitive seizure warning](photosensitivity.md) without being asked: `no-disorder` (you don't have epilepsy or a seizure disorder) or `at-risk` (you have, or may have, one, and go on at your own risk). `--yes` needs it the first time; with `--yes` and no `--profile`, only the answer is saved |
 | `--no-gpu` | Build on the processor even when there is a GPU |
 | `--status` | Only show where things stand (below) |

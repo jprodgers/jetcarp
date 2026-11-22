@@ -3,6 +3,9 @@
 *.png
 !/docs/**/*.png
 !/crates/jetcarp-pack/tests/golden/**/*.png
+# The app icon (packaging/gen-icons.py makes them from packaging/icons/jetcarp.svg).
+!/packaging/icons/*.png
+!/crates/jetcarp-display/icons/*.png
 .DS_Store
 __pycache__/
 .claude/

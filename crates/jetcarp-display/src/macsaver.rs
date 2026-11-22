@@ -226,7 +226,7 @@ pub fn thumbnails(baked: &Baked) -> Option<[Vec<u8>; 2]> {
 
 /// Signs the bundle for this machine only (ad hoc), which Apple silicon needs before it runs code.
 #[cfg(feature = "library")]
-fn sign(bundle: &Path) -> Result<(), String> {
+pub(crate) fn sign(bundle: &Path) -> Result<(), String> {
     let out = Command::new("codesign")
         .args(["--force", "--sign", "-"])
         .arg(bundle)

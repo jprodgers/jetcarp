@@ -16,6 +16,7 @@ mod demo_cmd;
 mod hashlife_cmd;
 mod host_cmd;
 mod jobs_cmd;
+mod launcher_cmd;
 mod library;
 mod machine_cmd;
 mod media_cmd;
@@ -191,10 +192,18 @@ enum Cmd {
         #[arg(long, value_name = "WHERE", num_args = 0..=1, default_missing_value = "both")]
         on: Option<String>,
     },
+    /// JETCARP among the system's apps, with its icon: `install` puts it in the applications menu
+    /// (Linux), Applications (macOS, as JETCARP.app) or the Start menu (Windows), starting this
+    /// program; `remove` takes it out; `status` says whether it is there. The installers run
+    /// `install`, and `jetcarp uninstall` removes it.
+    Launcher {
+        #[arg(value_enum)]
+        action: launcher_cmd::LauncherAction,
+    },
     /// Undo what JETCARP set up outside its folders (the host and its still on the desktop,
-    /// login entry, GNOME extension, screen saver), and optionally delete its settings and data.
-    /// Shows the plan unless --yes. The program itself stays; this ends with the command that
-    /// removes it.
+    /// login entry, GNOME extension, screen saver, launcher), and optionally delete its settings
+    /// and data. Shows the plan unless --yes. The program itself stays; this ends with the
+    /// command that removes it.
     Uninstall(platform::UninstallArgs),
     /// Print the settings, data, output, and runtime folders JETCARP uses (environment overrides
     /// included), and the folder of packs that came with the program.
@@ -451,6 +460,10 @@ fn main() -> Result<()> {
     // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
     // command was writing.
     broken_pipe::install();
+    // Windows: the Start menu entry's launcher starts this program from now on if the program it
+    // started has gone (an upgrade moves it, for winget and Scoop); never in place of another
+    // that is still there (#105).
+    jetcarp_display::launcher::heal();
     // This machine's limits (its memory, and the person's own values in limits.json), never the
     // reference machine's that the crates' tests use.
     let (_, note) = jetcarp_core::machine::use_this_machine();
@@ -651,6 +664,7 @@ fn run() -> Result<()> {
                 json,
             )?,
         },
+        Cmd::Launcher { action } => launcher_cmd::run(action, json)?,
         Cmd::Uninstall(a) => {
             let a = system::UninstallIn {
                 yes: a.yes,

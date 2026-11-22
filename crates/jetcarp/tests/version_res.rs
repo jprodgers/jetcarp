@@ -45,6 +45,7 @@ fn the_resource_file_names_the_product_in_string_1() {
         company: "Jimmie Rodgers",
         copyright: "Jimmie Rodgers",
         file_name: "jetcarpw.exe",
+        icon: None,
     };
     let e = entries(&version_res::res_file(&info));
     assert_eq!(e.len(), 3);
@@ -63,4 +64,56 @@ fn the_resource_file_names_the_product_in_string_1() {
     assert_eq!(String::from_utf16(&name).unwrap(), "JETCARP");
     assert_eq!(b.len(), 2 * 16 + 2 * 7);
     assert!((18..b.len()).step_by(2).all(|i| u16_at(b, i) == 0));
+}
+
+/// With the icon (#105): each image of the `.ico` file is an icon resource (`RT_ICON`, numbered
+/// from 1) holding the image as it is, and icon group 1 (`RT_GROUP_ICON`) lists them, as the
+/// resource compiler lays out `1 ICON jetcarp.ico`. Explorer, the taskbar and shortcuts show the
+/// first group.
+#[test]
+fn the_icon_is_an_icon_group_of_the_ico_files_images() {
+    let ico: &[u8] = include_bytes!("../jetcarp.ico");
+    let info = version_res::VersionInfo {
+        numbers: [0, 4, 3, 0],
+        version: "0.4.3",
+        prerelease: false,
+        product: "JETCARP",
+        description: "JETCARP",
+        company: "Jimmie Rodgers",
+        copyright: "Jimmie Rodgers",
+        file_name: "jetcarp.exe",
+        icon: Some(ico),
+    };
+    let e = entries(&version_res::res_file(&info));
+    // The .ico file's own directory: an entry of 16 bytes for each image, after 6.
+    let count = u16_at(ico, 4) as usize;
+    assert_eq!(count, 7, "16, 24, 32, 48, 64, 128 and 256 px");
+    let kinds: Vec<(u16, u16)> = e.iter().map(|x| (x.0, x.1)).collect();
+    assert_eq!(e.len(), 3 + count + 1, "{kinds:?}");
+    let group = e.iter().find(|x| x.0 == 14).expect("an RT_GROUP_ICON");
+    assert_eq!(group.1, 1, "icon group 1");
+    let g = &group.2;
+    assert_eq!((u16_at(g, 0), u16_at(g, 2)), (0, 1));
+    assert_eq!(u16_at(g, 4) as usize, count);
+    assert_eq!(g.len(), 6 + 14 * count);
+    for i in 0..count {
+        let dir = &ico[6 + 16 * i..6 + 16 * (i + 1)];
+        let (size, offset) = (u32_at(dir, 8) as usize, u32_at(dir, 12) as usize);
+        let image = &ico[offset..offset + size];
+        let entry = &g[6 + 14 * i..6 + 14 * (i + 1)];
+        // Width, height, colours, reserved, planes, bits and size, as the file has them; then the
+        // number of the icon resource that holds the image.
+        assert_eq!(&entry[..12], &dir[..12], "image {i}");
+        let id = u16_at(entry, 12);
+        assert_eq!(id as usize, i + 1);
+        let icon = e
+            .iter()
+            .find(|x| x.0 == 3 && x.1 == id)
+            .expect("an RT_ICON");
+        assert_eq!(icon.2, image, "image {i}, as it is in the file");
+        assert_eq!(&image[..8], b"\x89PNG\r\n\x1a\n");
+    }
+    // The smallest first; 256 px is written as 0.
+    assert_eq!(g[6], 16);
+    assert_eq!(g[6 + 14 * (count - 1)], 0);
 }

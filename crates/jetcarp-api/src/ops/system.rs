@@ -472,6 +472,9 @@ impl Report for DoctorReport {
         for line in [&d.gnome_extension, &d.screen_saver].into_iter().flatten() {
             let _ = writeln!(s, "  {line}");
         }
+        if let Some(l) = &d.launcher {
+            let _ = writeln!(s, "  launcher: {l}");
+        }
         if !self.environment.is_empty() {
             s.push_str("\nEnvironment\n");
             for (k, v) in &self.environment {
@@ -1139,19 +1142,28 @@ const DATA_FILES: &[&str] = &[
 /// The folders JETCARP keeps in a data folder: the library's job locks, its media
 /// (`media/ab/<sha256>.<ext>`), its searches (`searches/<uuid>/`), the search databases'
 /// folder ([`jetcarp_core::paths::explore_dir`]), and, on Windows, where the data folder is also
-/// the runtime folder, the memory pool's records (`memory/<pid>.json`).
+/// the runtime folder, the memory pool's records (`memory/<pid>.json`) and the Start menu entry's
+/// launcher (`launcher/`, `jetcarp_display::launcher::stable_dir`).
 const DATA_FOLDERS: &[(&str, Inside)] = &[
     ("library.sqlite-jobs", Inside::Files),
     ("media", Inside::HexFolders),
     ("searches", Inside::UuidFolders),
     ("explore", Inside::Anything),
     (jetcarp_core::machine::pool::DIR, Inside::Files),
+    (LAUNCHER_DIR, Inside::Named(LAUNCHER_FILES)),
 ];
+
+/// Windows: the folder beside the runtime files where `jetcarp launcher install` keeps the copy of
+/// the windowless launcher that the Start menu entry starts, and the record of the program it
+/// starts (#105).
+const LAUNCHER_DIR: &str = "launcher";
+const LAUNCHER_FILES: &[&str] = &["jetcarpw.exe", "jetcarp-program"];
 
 /// Whether `name`, at the top of the runtime folder, is something JETCARP's running programs keep
 /// there: the host's and the tuner's locks, the app's and the host's endpoint files, the HTTP
 /// endpoints' files (as in [`DATA_FILES`]), the memory pool's records, and on Windows (where the
-/// runtime folder is also the data folder and the screen saver's) `JETCARP.scr`.
+/// runtime folder is also the data folder, the screen saver's and the Start menu entry's)
+/// `JETCARP.scr` and the launcher's folder.
 pub(crate) fn runtime_entry(name: &str) -> bool {
     matches!(
         name,
@@ -1163,6 +1175,7 @@ pub(crate) fn runtime_entry(name: &str) -> bool {
             | "app-http-endpoint.json"
             | "JETCARP.scr"
     ) || name == jetcarp_core::machine::pool::DIR
+        || name == LAUNCHER_DIR
 }
 
 /// The files JETCARP keeps at the top of the settings folder: the app's, the host's and setup's
@@ -1532,7 +1545,7 @@ fn remove_unheld_lock(lock: &Path, keep: &[PathBuf]) -> Result<Option<String>, S
 pub struct SystemUninstall;
 impl Op for SystemUninstall {
     const NAME: &'static str = "system.uninstall";
-    const SUMMARY: &'static str = "Undo what JETCARP set up outside its folders (the host, its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings (keeping the picture the desktop shows) and data; only lists the steps unless `yes`.";
+    const SUMMARY: &'static str = "Undo what JETCARP set up outside its folders (the host, its still on the desktop, login entry, GNOME extension, screen saver, launcher), and optionally delete its settings (keeping the picture the desktop shows) and data; only lists the steps unless `yes`.";
     const READ_ONLY: bool = false;
     type In = UninstallIn;
     type Out = UninstallReport;

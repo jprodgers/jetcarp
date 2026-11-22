@@ -374,6 +374,7 @@ impl JetcarpApp {
         let builder = egui::ViewportBuilder::default()
             .with_title(crate::popout::os_title("Grid mirror"))
             .with_app_id("jetcarp")
+            .with_icon(crate::icon::window_icon())
             .with_inner_size([640.0, 420.0]);
         let (cam, zoom) = (self.cam, self.zoom);
         let stage = self.stage_color();

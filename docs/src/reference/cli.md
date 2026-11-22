@@ -56,7 +56,8 @@ Commands:
   score       Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for the JETCARP Hardware Score and its parts. Kept in machine.json; `--report FILE` also writes a report. It never runs by itself
   limits      This machine's limits (the largest world, the desktop background's, HashLife's, an AI's share...): each your own value if you set one, else the machine's suggestion from its memory, never above a ceiling. `set NAME VALUE`, `reset [NAME]`
   guard       The strobe guard's switches: on for the app and for the desktop background and screen saver unless turned off in the app (Settings → Safety). `--on` turns them back on; nothing here turns them off
-  uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes. The program itself stays; this ends with the command that removes it
+  launcher    JETCARP among the system's apps, with its icon: `install` puts it in the applications menu (Linux), Applications (macOS, as JETCARP.app) or the Start menu (Windows), starting this program; `remove` takes it out; `status` says whether it is there. The installers run `install`, and `jetcarp uninstall` removes it
+  uninstall   Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver, launcher), and optionally delete its settings and data. Shows the plan unless --yes. The program itself stays; this ends with the command that removes it
   paths       Print the settings, data, output, and runtime folders JETCARP uses (environment overrides included), and the folder of packs that came with the program
   setup       First-run setup: choose a profile (desktop-art, explorer, researcher, everything, blank-slate), and JETCARP imports its packs and builds Quick Start entries of its own, as jobs. Asks in a terminal, the photosensitive seizure warning first; `--profile NAME --yes` asks nothing (`--seizure-warning` answers the warning the first time). `--status` shows where things stand
   isohedral   List Kaplan's isohedral types (IH01-IH93), or draw them all on a contact sheet
@@ -132,7 +133,7 @@ App options (with no subcommand):
 - **Scripts**: [`script`](#jetcarp-script). See [Scripting (Rhai) API](scripting.md), [Scripting a rule sweep](../tutorials/scripting-a-sweep.md).
 - **The app, the background host and AI assistants**: [`app`](#jetcarp-app), [`shortcuts`](#jetcarp-shortcuts), [`host`](#jetcarp-host), [`mcp`](#jetcarp-mcp). See [Wallpapers, screensavers and the background host](../guides/wallpapers.md), [Using the app from the keyboard](../guides/keyboard.md), [Driving JETCARP from an AI assistant](../tutorials/mcp.md), [MCP tools](mcp.md).
 - **Lists**: [`rules`](#jetcarp-rules), [`tilings`](#jetcarp-tilings), [`isohedral`](#jetcarp-isohedral), [`palettes`](#jetcarp-palettes). See [Named rule catalogue](../automata/named-rules.md), [Rule notation](rule-notation.md), [Tiling catalogue](../tilings/catalogue.md), [Palettes](palettes.md).
-- **Setup and upkeep**: [`setup`](#jetcarp-setup), [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`score`](#jetcarp-score), [`limits`](#jetcarp-limits), [`guard`](#jetcarp-guard), [`uninstall`](#jetcarp-uninstall). See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [This computer: the score and the limits](../guides/this-computer.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
+- **Setup and upkeep**: [`setup`](#jetcarp-setup), [`launcher`](#jetcarp-launcher), [`paths`](#jetcarp-paths), [`doctor`](#jetcarp-doctor), [`score`](#jetcarp-score), [`limits`](#jetcarp-limits), [`guard`](#jetcarp-guard), [`uninstall`](#jetcarp-uninstall). See [First run and setup](../getting-started/first-run.md), [Open the app](../getting-started/installing.md#open-the-app), [Folders and environment variables](folders.md), [This computer: the score and the limits](../guides/this-computer.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
 
 ## Worlds and scenes
 
@@ -2955,7 +2956,7 @@ Options:
 
 ## Setup and upkeep
 
-Set JETCARP up for what you want it for, where it keeps its files, what it sees on this machine, its score and limits, the strobe guard's switches, and how to take it off again. See [First run and setup](../getting-started/first-run.md), [Folders and environment variables](folders.md), [This computer: the score and the limits](../guides/this-computer.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
+Set JETCARP up for what you want it for, put it among your apps, where it keeps its files, what it sees on this machine, its score and limits, the strobe guard's switches, and how to take it off again. See [First run and setup](../getting-started/first-run.md), [Open the app](../getting-started/installing.md#open-the-app), [Folders and environment variables](folders.md), [This computer: the score and the limits](../guides/this-computer.md), [The strobe guard](../guides/strobe-guard.md), [Uninstalling](../guides/uninstalling.md).
 
 ### `jetcarp setup`
 
@@ -3004,6 +3005,31 @@ Options:
 
       --no-measure
           Do not measure this computer (the JETCARP Hardware Score, about a minute, which setup does first unless told not to: asked in a terminal, done with --yes)
+
+      --no-launcher
+          Do not add JETCARP to the system's apps (the Start menu, Launchpad, the apps menu), which setup does when it isn't there yet unless told not to: asked in a terminal, done with --yes (`jetcarp launcher install`)
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+
+### `jetcarp launcher`
+
+```text
+JETCARP among the system's apps, with its icon: `install` puts it in the applications menu (Linux), Applications (macOS, as JETCARP.app) or the Start menu (Windows), starting this program; `remove` takes it out; `status` says whether it is there. The installers run `install`, and `jetcarp uninstall` removes it
+
+Usage: jetcarp launcher [OPTIONS] <ACTION>
+
+Arguments:
+  <ACTION>
+          Possible values:
+          - install: Add it, or make it again for this program: on Linux a menu entry and the icon in ~/.local/share; on macOS JETCARP.app in ~/Applications, signed ad hoc on the Mac; on Windows a Start menu entry
+          - remove:  Take it out again
+          - status:  Say whether it is there
+
+Options:
+      --json
+          Print the result as JSON instead of text (commands that report a result)
 
   -h, --help
           Print help (see a summary with '-h')
@@ -3114,7 +3140,7 @@ Options:
 ### `jetcarp uninstall`
 
 ```text
-Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver), and optionally delete its settings and data. Shows the plan unless --yes. The program itself stays; this ends with the command that removes it
+Undo what JETCARP set up outside its folders (the host and its still on the desktop, login entry, GNOME extension, screen saver, launcher), and optionally delete its settings and data. Shows the plan unless --yes. The program itself stays; this ends with the command that removes it
 
 Usage: jetcarp uninstall [OPTIONS]
 

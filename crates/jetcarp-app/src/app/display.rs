@@ -609,7 +609,8 @@ impl JetcarpApp {
             let title = crate::popout::os_title(&format!("Output {}", k + 1));
             let mut builder = egui::ViewportBuilder::default()
                 .with_title(title)
-                .with_app_id("jetcarp");
+                .with_app_id("jetcarp")
+                .with_icon(crate::icon::window_icon());
             builder = match spec.window {
                 Some(w) => {
                     let ppp = ctx.pixels_per_point();
@@ -671,6 +672,7 @@ impl JetcarpApp {
             let builder = egui::ViewportBuilder::default()
                 .with_title(crate::popout::os_title(&format!("Monitor {index}")))
                 .with_app_id("jetcarp")
+                .with_icon(crate::icon::window_icon())
                 .with_decorations(false)
                 .with_monitor(index);
             let slot = Arc::new(Mutex::new(OutSlot {

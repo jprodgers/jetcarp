@@ -145,6 +145,7 @@ pub fn show<R>(
         let builder = ViewportBuilder::default()
             .with_title(os_title(spec.title))
             .with_app_id("jetcarp")
+            .with_icon(crate::icon::window_icon())
             .with_inner_size(size)
             .with_min_inner_size([220.0, 120.0]);
         let dockable = spec.dockable;
