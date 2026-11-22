@@ -1364,6 +1364,9 @@ fn child_screen_reader_names_are_the_same_in_every_font() {
     }
     assert!(differ.is_empty(), "{}", differ.join("\n"));
     assert!(atkinson.iter().all(|(_, v)| !v.is_empty()));
+    done();
+}
+
 /// The status line keeps one line's height whatever it holds (#291): a message too long for the
 /// window is cut short, not wrapped onto a second line, so nothing above the bar moves as its
 /// contents come and go. (Brian's Brain on Penrose made it grow and shrink in a loop, moving the
@@ -1376,19 +1379,6 @@ fn the_status_line_stays_one_line() {
 #[test]
 #[ignore = "started by the_status_line_stays_one_line, in a scratch process"]
 fn child_the_status_line_stays_one_line() {
-/// Steps obey the strobe guard as a run does (#293): with the guard's cap in place, steps held
-/// down come no faster than the cap; while it holds a pause, no faster than its slowest pace; a
-/// calm scene steps at any rate, and the steps' rate is the pace the guard is told. (Holding S on a
-/// flashing scene stepped it at the key's repeat rate, past the cap and the pause, and now and then
-/// a flash reached the screen.)
-#[test]
-fn steps_obey_the_strobe_guard() {
-    in_scratch("app::keyboard_tests::child_steps_obey_the_strobe_guard");
-}
-
-#[test]
-#[ignore = "started by steps_obey_the_strobe_guard, in a scratch process"]
-fn child_steps_obey_the_strobe_guard() {
     if !child() {
         return;
     }
@@ -1416,6 +1406,27 @@ fn child_steps_obey_the_strobe_guard() {
     assert!(
         grids.windows(2).all(|w| w[0] == w[1]),
         "the grid moved as the status line's message changed: {grids:?}"
+    );
+    done();
+}
+
+/// Steps obey the strobe guard as a run does (#293): with the guard's cap in place, steps held
+/// down come no faster than the cap; while it holds a pause, no faster than its slowest pace; a
+/// calm scene steps at any rate, and the steps' rate is the pace the guard is told. (Holding S on a
+/// flashing scene stepped it at the key's repeat rate, past the cap and the pause, and now and then
+/// a flash reached the screen.)
+#[test]
+fn steps_obey_the_strobe_guard() {
+    in_scratch("app::keyboard_tests::child_steps_obey_the_strobe_guard");
+}
+
+#[test]
+#[ignore = "started by steps_obey_the_strobe_guard, in a scratch process"]
+fn child_steps_obey_the_strobe_guard() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
     // What the grid's guard said this frame, stood in (the test has no GPU to measure with).
     fn guard_says(k: &mut Kb, cap: Option<f32>, paused: Option<&str>) {
         let now = k.app.started.elapsed().as_secs_f64();
