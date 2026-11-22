@@ -2825,7 +2825,7 @@ Usage: jetcarp host saver [OPTIONS] <ACTION>
 Arguments:
   <ACTION>
           Possible values:
-          - install: Windows: copy JETCARP to a `.scr` file and open Screen Saver Settings with it selected. macOS: build `JETCARP.saver` with the rotation inside it and open System Settings
+          - install: Windows: copy JETCARP to a `.scr` file and open Screen Saver Settings with it selected. macOS: build `JETCARP.saver` with the rotation and the caption's font inside it and open System Settings
           - remove:  Delete it (Windows: and stop Windows from running it; close Screen Saver Settings first)
           - status:  Say whether it is installed (Windows: and selected)
 
