@@ -152,7 +152,9 @@ day later (0.4.2: 17 November here, 18 November there).
   fonts, every font installed on the computer, or a font file. The choice applies at once and is
   saved, and the caption on the desktop background and the Windows screen saver follows it: the
   desktop background reads the setting every couple of seconds, so a font chosen in the app shows
-  there without a restart (Atkinson when the chosen font can't be loaded). egui's fonts stay
+  there without a restart (Atkinson when the chosen font can't be loaded). The macOS screen saver,
+  which can't read the setting, takes the font when it is installed: the font file is copied into
+  it, so install it again after changing the font. egui's fonts stay
   behind whichever font is chosen, for any character it lacks; a character none of them has, such
   as the macOS key symbols (⌘, ⌥) or Chinese, Japanese and Korean, is drawn in an installed font
   that has it, found when the app starts without holding it up; and a file that isn't a font, or a
@@ -162,7 +164,8 @@ day later (0.4.2: 17 November here, 18 November there).
   every symbol the interface uses is still drawn, and with an installed font that has them the key
   symbols too, that an installed font chosen is used, saved and put back at the next start, that
   the desktop background's caption follows the setting and goes back to Atkinson when the chosen
-  font file is gone, that a bad file is refused, and that screen readers are told the same names
+  font file is gone, that installing the macOS screen saver copies the chosen font in and a saver
+  installed before still loads, that a bad file is refused, and that screen readers are told the same names
   in every font. Every picture of the app in the book is drawn again.
   ([Accessibility settings](../guides/accessibility-settings.md#font))
 - **Copy as RLE.** *Edit → Copy as RLE* copies the world's pattern, and *Copy as RLE* on a library

@@ -645,9 +645,10 @@ as it was built until it is installed again.
   `remove` says so and changes nothing.
 - **macOS.** macOS runs screen savers in a sandbox that cannot read JETCARP's settings, so installing
   builds `~/Library/Screen Savers/JETCARP.saver` with the rotation and every item's scene copied
-  inside it, signs it for this machine, and opens System Settings where screen savers are chosen
-  (*System Settings, Wallpaper, Screen Saver…* on macOS 27). Install it again after changing the
-  rotation. It needs `libjetcarp_saver.dylib` beside the `jetcarp` program; a build from source makes
+  inside it, and the caption's font (a font file chosen in *Settings → Accessibility* is copied in
+  whole; see [Font](accessibility-settings.md#font)), signs it for this machine, and opens System
+  Settings where screen savers are chosen (*System Settings, Wallpaper, Screen Saver…* on
+  macOS 27). Install it again after changing the rotation or the font. It needs `libjetcarp_saver.dylib` beside the `jetcarp` program; a build from source makes
   it with `cargo build --release -p jetcarp-saver`. macOS prepares the saver's full-screen views ahead
   of time, as soon as it is chosen and after each run; they hold their first picture, and the scene
   starts moving only once the screen saver has really started. The preview in System Settings always

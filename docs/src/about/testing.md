@@ -156,7 +156,13 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   the app's font setting in `app.json`: a font file chosen there from the next check without a
   restart and at the next start, egui's original, then Atkinson again; and with the chosen file
   removed, Atkinson, with a note that names the file and no folder
-  (`jetcarp-display/src/caption.rs`). The clip-rating page and the website export's page must
+  (`jetcarp-display/src/caption.rs`). Installing the macOS screen saver, in a scratch folder on any
+  system, must record the font chosen and copy its file whole into the bundle's Resources (a
+  collection with its face), and copy nothing for Atkinson or egui's original; a chosen font that
+  is gone or isn't a font must give Atkinson and a warning that names the file and no folder; a
+  bundle of format 1, from before, must still load, in Atkinson, and a newer format be refused;
+  and the saver's loader must draw in the font copied in, and in Atkinson with a note when the
+  copy is broken or gone (`jetcarp-display/src/macsaver.rs`). The clip-rating page and the website export's page must
   carry Atkinson Hyperlegible Next (and the rating page Mono) inside them, the files those the
   fonts' README names by SHA-256, and fetch nothing from elsewhere
   (`jetcarp-core/src/web_fonts.rs`, `jetcarp-api/tests/explore.rs`, `jetcarp-store/tests/website.rs`).

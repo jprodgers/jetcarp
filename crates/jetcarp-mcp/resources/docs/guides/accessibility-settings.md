@@ -144,8 +144,17 @@ chosen in the app shows on the desktop without a restart. Behind the chosen font
 has Ubuntu Light, as the app has; with egui's original choice it is drawn in Ubuntu Light alone.
 If the chosen font can't be loaded there (a file since removed), the caption is drawn in
 Atkinson Hyperlegible Next and the desktop background's log says why. The Windows screen saver
-reads the setting when it starts. The macOS screen saver, which runs apart from the rest of
-JETCARP, keeps Atkinson Hyperlegible Next.
+reads the setting when it starts.
+
+**The macOS screen saver takes the font when it is installed.** macOS runs it in a sandbox that
+can't read JETCARP's settings, nor be counted on to read your font folders, so installing it
+(`jetcarp host saver install`, or *Install* in the *Screensaver* pane) copies the chosen font file
+into the saver, as it copies the rotation; Atkinson Hyperlegible Next and egui's original fonts
+are in the saver already. Install it again after changing the font. A font that can't be read at
+install is left out and the saver's caption is in Atkinson Hyperlegible Next, and the install
+says why; so does the saver's log if its copy is later missing or broken. The font file is copied
+whole: a few hundred kilobytes for most fonts, but a collection of Chinese, Japanese and Korean
+faces can be tens of megabytes.
 
 A file that isn't a font JETCARP can read, or a font with no basic Latin letters and digits, is
 refused with a sentence saying so, and the setting stays as it was. If a font chosen earlier has
