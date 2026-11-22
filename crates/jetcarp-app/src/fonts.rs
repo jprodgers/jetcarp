@@ -395,8 +395,11 @@ pub(crate) mod tests {
                 } else if p.extension().is_some_and(|x| x == "rs") {
                     let text = std::fs::read_to_string(&p).unwrap();
                     // Not the strings of tests (from the first test-only item at the top
-                    // level), nor comments: only what is shown.
-                    for line in text.lines().take_while(|l| *l != "#[cfg(test)]") {
+                    // level: `#[cfg(test)]`, or `#[cfg(all(test, …))]` as macsaver's), nor
+                    // comments: only what is shown.
+                    let test_only =
+                        |l: &str| l == "#[cfg(test)]" || l.starts_with("#[cfg(all(test,");
+                    for line in text.lines().take_while(|l| !test_only(l)) {
                         let code = line.split("//").next().unwrap_or("");
                         // Character literals: '⌃'.
                         let cs: Vec<char> = code.chars().collect();
