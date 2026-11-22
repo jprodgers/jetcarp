@@ -453,6 +453,12 @@ day later (0.4.2: 17 November here, 18 November there).
   scene, and now and then a flash reached the screen. Steps by hand and from AI control now count
   as the scene's pace, the cap drops a step that comes too soon, and while the guard holds a pause,
   steps come no faster than one every two seconds.
+- **The script editor's code box takes the keyboard in plain sight** (#295). Once it scrolled, its
+  whole rectangle ran far past its view and held the window's other controls, so the keyboard's
+  pass over mouse-only widgets took it for a dragged background: Tab went past it, and the focus
+  ring, drawn round the whole scrolled text, showed nowhere. A control in view now counts only
+  inside the part of a background in view, a thin bar (a scroll bar) never makes a widget a
+  background, and the ring of a large widget goes round the part of it in view.
 - **The strobe guard counts a reversing checkerboard of squares smaller than its tiles as
   flashing, as WCAG does.** A board of squares smaller than the guard's 16-pixel tiles keeps every
   tile's mean brightness when it reverses, though every pixel of it changes, so the guard did not

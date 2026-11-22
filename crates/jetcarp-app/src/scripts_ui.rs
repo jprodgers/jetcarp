@@ -94,6 +94,14 @@ pub struct ScriptsWindow {
     pub autorun: Option<u32>,
 }
 
+impl ScriptsWindow {
+    /// The script in the editor (tests).
+    #[cfg(test)]
+    pub fn set_text_for_test(&mut self, text: &str) {
+        self.text = text.into();
+    }
+}
+
 impl Default for ScriptsWindow {
     fn default() -> Self {
         let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
