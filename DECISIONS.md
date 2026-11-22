@@ -229,6 +229,22 @@ is dated more closely than that.
   the parity sets in the test records.
 - **Stands.**
 
+### D-45. The explore search may differ from computer to computer, and says so
+
+- **Decided:** Jimmie, 21 November 2026.
+- **The decision:** "If it's only the Explore search, and it's due to how fast of a computer you
+  have, then that's fine. We can have the Explore search be non-reproducable, but warn the user
+  about that."
+- **What it covers:** every world, scene, script and run stays reproducible on every computer, on
+  the processor and the GPU (D-14), and so does every other search. Which runs an explore search
+  tries depends on the computer's speed, threads and GPU; each run it finds replays exactly.
+- **How it's kept:** an explore search says so as it starts: on the command line, in the *Hunts*
+  window and to an MCP client (#268).
+- **Claude's part:** explained where the explore search's results depend on the computer, and
+  what making it reproducible would take (fixed-size generations, draws blind to the device), when
+  isotropic rules moved to the GPU (#268).
+- **Stands.** It narrows D-14 for this one search.
+
 ### D-15. Nothing is catalogued unverified, and nothing is claimed that we have not checked
 
 - **Decided:** Jimmie. Written down 18 November 2026.

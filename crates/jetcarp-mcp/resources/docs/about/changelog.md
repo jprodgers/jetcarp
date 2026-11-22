@@ -335,7 +335,7 @@ day later (0.4.2: 17 November here, 18 November there).
   and `jetcarp quickstart build` print it (unless `--quiet`), the *Hunts* window's explore form
   shows it, and MCP's description of the strategy says it. What it finds depends on the computer
   (its speed, threads and GPU); each run it finds replays exactly. Every other search is
-  reproducible. ([The exploratory search](../guides/searching.md#the-exploratory-search))
+  reproducible (D-45 in `DECISIONS.md`). ([The exploratory search](../guides/searching.md#the-exploratory-search))
 
 - **Tab moves the keyboard; F9 hides the panes.** Tab and Shift+Tab move between controls, as in
   other apps, so *View → Hide all panes* moves from Tab to F9, and *View → Auto-hide menu bar* from
