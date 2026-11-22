@@ -1780,6 +1780,43 @@ fn child_each_tool_window_and_dialog_closes_from_the_keyboard() {
         open(&mut k, false);
         k.frames(2);
     }
+    // Opened from the menu bar with the keyboard (F10, the arrows, Enter), as in the live sitting:
+    // the window has the keyboard, so Esc closes it straight away.
+    for (menu_title, item, t) in [
+        ("Settings", "Accessibility…", menu::ToolWin::Accessibility),
+        ("Tools", "Scripts and sweeps…", menu::ToolWin::Scripts),
+        ("Tools", "Hunts…", menu::ToolWin::Hunts),
+        ("Tools", "This computer…", menu::ToolWin::Machine),
+    ] {
+        k.key(Key::F10);
+        k.frames(1);
+        for _ in 0..10 {
+            if k.focused_name() == menu_title {
+                break;
+            }
+            k.key(Key::ArrowRight);
+        }
+        for _ in 0..20 {
+            if k.focused_name() == item {
+                break;
+            }
+            k.key(Key::ArrowDown);
+        }
+        assert_eq!(k.focused_name(), item, "the {menu_title} menu");
+        k.key(Key::Enter);
+        k.frames(3);
+        assert!(k.app.tool_open(t), "Enter opened {item}");
+        let on = k.focused_name();
+        k.key(Key::Escape);
+        k.frames(1);
+        if k.app.tool_open(t) {
+            failures.push(format!(
+                "{item} opened from the menu bar: Esc left it open (the keyboard was on {on:?})"
+            ));
+            k.app.set_tool_open(t, false);
+        }
+        k.frames(2);
+    }
     // Esc on a control of a docked pane: the keyboard goes back to the grid, the pane stays.
     let grid = k.grid_widget();
     let (pane, control) = crate::a11y::last_regions(&k.ctx)
