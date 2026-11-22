@@ -298,6 +298,99 @@ fn guarded(c: &Case, at_risk: bool) -> (u32, Level, PatternLevel) {
     (most, level, stripes)
 }
 
+/// How often each scene's tiles' fine patterns reverse (#269), as drawn (ignored; run with
+/// `--ignored --nocapture`): the most tiles at once with a counted reversal in the last second,
+/// with two, and the most transitions the fine patterns made by the area rule.
+#[test]
+#[ignore]
+fn fine_patterns_in_the_corpus() {
+    for c in CASES {
+        let mut world = World::from_scene(&scene(c.scene)).unwrap();
+        let mut meter = FlashMeter::new(Viewing::screen(1.0), None);
+        let (mut one, mut two, mut area) = (0, 0, 0);
+        for k in 0..(c.secs * FPS) as u32 {
+            let due = (k as f64 * c.speed / FPS + 1e-9).floor();
+            while (world.generation as f64) < due {
+                world.step();
+            }
+            let (map, _) = reduce_both(&draw(&world, c), W, H);
+            let r = meter.update(&map, k as f64 / FPS);
+            let f = meter.tile_fine_counts();
+            one = one.max(f.iter().filter(|&&n| n >= 1).count());
+            two = two.max(f.iter().filter(|&&n| n >= 2).count());
+            area = area.max(r.fine_transitions);
+        }
+        println!(
+            "{} at {} gen/s{}: tiles reversing {one}, twice {two}, by the area rule {area} (of {} tiles)",
+            c.scene,
+            c.speed,
+            c.cell_px
+                .map_or(String::new(), |p| format!(", {p} px a cell")),
+            (W / 16) * (H / 16)
+        );
+    }
+}
+
+/// The same through the guard as a screen shows it (ignored; `--ignored --nocapture`): the most
+/// tiles with a counted fine-pattern reversal, as drawn and as shown, and the most transitions in
+/// a second shown.
+#[test]
+#[ignore]
+fn fine_patterns_in_the_corpus_guarded() {
+    for c in CASES {
+        let mut world = World::from_scene(&scene(c.scene)).unwrap();
+        let mut guard = Guard::new(Viewing::screen(1.0), None, true);
+        let mut soft = Softener::new();
+        let mut drawn = FlashMeter::new(Viewing::screen(1.0), None);
+        let mut shown = FlashMeter::new(Viewing::screen(1.0), None);
+        let mut queue = VecDeque::new();
+        let (mut due, mut d1, mut s1, mut most, mut veiled) = (0.0f64, 0, 0, 0, 0);
+        for k in 0..(c.secs * FPS) as u32 {
+            let t = k as f64 / FPS;
+            let pace = guard.cap().map_or(c.speed, |cap| (cap as f64).min(c.speed));
+            if k > 0 && guard.paused().is_none() {
+                due += pace / FPS;
+                while (world.generation as f64) < (due + 1e-9).floor() {
+                    world.step();
+                }
+            }
+            let px = draw(&world, c);
+            let s = soft.apply(&px, W, H, &guard.plan().clone(), (1.0 / FPS) as f32);
+            drawn.update(&s.input, t);
+            let r = shown.update(&s.output, t);
+            most = most.max(r.most());
+            d1 = d1.max(drawn.tile_fine_counts().iter().filter(|&&n| n > 0).count());
+            s1 = s1.max(shown.tile_fine_counts().iter().filter(|&&n| n > 0).count());
+            veiled = veiled.max(guard.plan().veil.iter().filter(|v| v[0] > 0.0).count());
+            let half = guard.wants_half(t).then(|| reduce_both(&px, W, H).1);
+            queue.push_back((t, s.input, s.output, half));
+            while queue.len() > 2 {
+                let (t, i, o, h) = queue.pop_front().unwrap();
+                guard.observe(
+                    Frame {
+                        time: t,
+                        input: &i,
+                        output: &o,
+                        half: h.as_ref(),
+                    },
+                    Pace {
+                        speed: c.speed as f32,
+                        reached: Some(pace as f32),
+                        frame_rate: FPS as f32,
+                    },
+                );
+            }
+        }
+        println!(
+            "{} at {} gen/s: reversing tiles drawn {d1}, shown {s1}; tiles veiled {veiled}; most \
+             shown {most}; cap {:?}",
+            c.scene,
+            c.speed,
+            guard.cap()
+        );
+    }
+}
+
 #[test]
 fn the_corpus_verdicts_are_pinned() {
     let print = std::env::var_os("JETCARP_STROBE_PRINT").is_some();
