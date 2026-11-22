@@ -176,15 +176,17 @@ It prints:
 saved your answer to the photosensitive seizure warning: no epilepsy or seizure disorder
 
 setting up JETCARP as Explorer:
-  1. record the profile Explorer in /home/ada/.config/jetcarp/setup.json
-  2. import JETCARP starter pack (26 patterns, 79 Quick Start entries, 8 ant runs, 1.5 MB)
-  3. search for 1 minute on the GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), then add its best runs to the Quick Start
+  1. measure this computer: about a minute of JETCARP's own work, for its JETCARP Hardware Score and limits that fit it
+  2. record the profile Explorer in /home/ada/.config/jetcarp/setup.json
+  3. import JETCARP starter pack (26 patterns, 79 Quick Start entries, 8 ant runs, 1.5 MB), signed by Jimmie Rodgers, key SHA256:0J4+ipNwh5xr…; the pack came with JETCARP
+  4. search for 1 minute on the GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), then add its best runs to the Quick Start
 and add JETCARP to the apps menu (`jetcarp launcher install`)
 pack import job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 explore search job 2 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
-pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs (done)
-Quick Start build (explore 2): 873 atlas entries published (873 new, 0 updated, 0 removed); 9,980 runs (115/s), 2,994 elites in 1,664 niches (122 of them confirmed), 13 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
+pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs; signed by Jimmie Rodgers, key SHA256:0J4+ipNwh5xrxnEAhZzMqa2apSMLHd/KtJbgFGAQCW0; the pack came with JETCARP (done)
+Quick Start build (explore 2): 781 atlas entries published (781 new, 0 updated, 0 removed); 15,396 runs (222/s), 4,864 elites in 2,707 niches (189 of them confirmed), 13 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
+this computer's JETCARP Hardware Score: 27,632
 recorded Explorer in /home/ada/.config/jetcarp/setup.json
 added JETCARP to the applications menu (/home/ada/.local/share/applications/jetcarp.desktop), with its icon in /home/ada/.local/share/icons/hicolor
 Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
@@ -202,6 +204,7 @@ The outputs on this page come from Linux; on macOS and Windows the folders in th
 | `--yes` | Ask nothing. The desktop offers are only printed, as the commands that do them; JETCARP is added to the system's apps, if it isn't there yet, as the app's setup does by default |
 | `--no-launcher` | Leave JETCARP out of the Start menu, Launchpad or the apps menu (asked in a terminal otherwise, when it isn't there yet) |
 | `--seizure-warning ANSWER` | Answer the [photosensitive seizure warning](photosensitivity.md) without being asked: `no-disorder` (you don't have epilepsy or a seizure disorder) or `at-risk` (you have, or may have, one, and go on at your own risk). `--yes` needs it the first time; with `--yes` and no `--profile`, only the answer is saved |
+| `--no-measure` | Don't measure the computer first (asked in a terminal otherwise; measured with `--yes`) |
 | `--no-gpu` | Build on the processor even when there is a GPU |
 | `--status` | Only show where things stand (below) |
 
@@ -217,19 +220,20 @@ jetcarp setup --status
 It prints:
 
 ```text
-setup: Explorer on 2026-11-12 11:57 UTC (JETCARP 0.4.0)
+setup: Explorer on 2026-11-22 00:55 UTC (JETCARP 0.4.3)
   settings: /home/ada/.config/jetcarp
-  data:     /home/ada/.local/share/jetcarp, 7.4 TB free
+  data:     /home/ada/.local/share/jetcarp, 6.8 TB free
   library:  /home/ada/.local/share/jetcarp/library.sqlite
   output:   /home/ada/Pictures/JETCARP
   bundled:  /home/ada/.local/lib/jetcarp/packs
 packs that came with JETCARP:
   JETCARP starter pack (jetcarp-starter/jetcarp-starter): 26 patterns, 79 Quick Start entries, 8 ant runs, 1.5 MB; the starter pack, imported
+    signed by Jimmie Rodgers, key SHA256:0J4+ipNwh5xr…; the pack came with JETCARP
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (a Quick Start build runs on it)
-library: 26 patterns, 8 ant runs, 24 jobs; Quick Start entries: 364 built in, 79 from packs, 873 from searches
+library: 26 patterns, 8 ant runs, 23 jobs; Quick Start entries: 371 built in, 79 from packs, 781 from searches
 setup's jobs:
-  pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs (done)
-  Quick Start build (explore 2): 873 atlas entries published (873 new, 0 updated, 0 removed); … (done)
+  pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs; signed by Jimmie Rodgers, key SHA256:0J4+ipNwh5xrxnEAhZzMqa2apSMLHd/KtJbgFGAQCW0; the pack came with JETCARP (done)
+  Quick Start build (explore 2): 781 atlas entries published (781 new, 0 updated, 0 removed); … (done)
 profiles:
   desktop-art  Desktop art: Moving pictures for your desktop: … (no extra disk space or time)
   explorer     Explorer: The built-in examples and the starter pack's patterns, and a ten-minute search … (about 80 MB and 11 minutes)

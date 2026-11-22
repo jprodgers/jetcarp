@@ -47,7 +47,8 @@ the current states of itself and its neighbours, all at once.
 
 A *rule* says how a cell's next state follows from its own state and its neighbours'. Rules come in
 *families*, each with its own [notation](../reference/rule-notation.md): Life-like rules written as
-birth and survival counts (`B3/S23` is Life), Generations rules with dying states (`B2/S/C3`), Larger
+birth and survival counts (`B3/S23` is Life), isotropic rules that also tell apart the arrangements
+of those neighbours (`B2-a/S12`), Generations rules with dying states (`B2/S/C3`), Larger
 than Life with a larger range, Langton's ant and the turmites, which are agents that walk and turn
 (`Ant RL`), the cyclic and excitable rules, sandpiles, Lenia, priority tables, rule tables, and others.
 Two families are, to our knowledge, new in JETCARP, both Jimmie Rodgers's:
