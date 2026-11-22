@@ -21,6 +21,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   state hash, generation, status and command log as the CPU, over every family the GPU runs, every
   kind of edge, and runs from 1 to 180 generations; hunts with and without the GPU must leave the same
   catalogue. A GPU that cannot run something must fall back to the CPU, never run it differently.
+  The explore search's batch kernel must give every run the processor would, cell for cell: for
+  isotropic rules, 17 rules for each of eight square grids (wrapped, dead and live edges, down to
+  8 by 8) and both neighbourhoods, random over all 102 letters and near Life, two-state, B0 and
+  Generations, each run as written canonically and as read back from a shuffled notation (counts
+  and letters in any order, a count's letters listed or left out with `-`), every cell of every
+  generation up to 40 on random soups, and in batches beside B/S, JACA blasts and Larger than Life
+  (`isotropic_rules_match_cell_for_cell`, `jetcarp-gpu/tests/batch.rs`). With one letter of every
+  rule read wrong (birth on `4e`) it fails at the first generation, and the GPU self-test, whose
+  explore batches run isotropic rules too, refuses the adapter.
 - **Searches survive interruption.** Every kind of job but the exploratory search, stopped and
   resumed (on the same runner or another), must end with exactly the results of one that ran through;
   the exploratory search continues from its saved archive instead
@@ -32,8 +41,16 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   ticks with Space, reading their names from the screen-reader tree). Isotropic rules must come
   only when named. The tiling list, catalogue rules and first candidates of an older search, and
   of one that chooses nothing, are pinned as 0.4.2's code made them (`an_old_spec_replays_as_before`,
-  `jetcarp-search/src/explore/job.rs`): with isotropic rules in the default schedule, or an older
-  search's tiling list cut to its families' grids, it fails.
+  `jetcarp-search/src/explore/job.rs`): with isotropic rules in the default schedule, an older
+  search's tiling list cut to its families' grids, or one more random draw in a GPU round, it
+  fails. With a GPU, a search that names isotropic rules must run every one of them, screened and
+  confirming, in the GPU's batches, and the processor none: a stand-in GPU counts them
+  (`isotropic_rules_run_on_the_gpu_when_there_is_one`), and on a real GPU an explore job's
+  isotropic runs must all be the GPU's and match the processor's own loop run for run
+  (`jetcarp-search/tests/gpu_explore.rs`); before they went to the GPU, 116 of 116 were the
+  processor's. On the processor alone such a search must draw as it did when only the processor
+  ran them, pinned as that code made them; with isotropic rules moved to the end of the
+  processor's list it fails.
 - **Exact verification.** Every object a hunt keeps is run again alone and compared cell by cell.
 - **Golly agrees.** [Golly](https://golly.sourceforge.io/)'s command-line program, `bgolly`, reads
   the RLE JETCARP writes as the same cells, and writes it back as JETCARP reads it. It runs the

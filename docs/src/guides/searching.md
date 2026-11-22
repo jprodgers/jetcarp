@@ -245,7 +245,7 @@ jetcarp search explore --minutes 60 --skip-tiling-groups aperiodic --skip-famili
   `greenberg_hastings`, `hodgepodge`, `priority`, `wireworld`, `spectre_glider`, `turmite`,
   `layered`, `wolfram`, `hex_wolfram`, `hex_tri`, `margolus`, `lenia`, `forest_fire`, `sandpile`,
   `table`, `ltl` and `isotropic`. [Isotropic rules](../automata/isotropic.md) are searched only
-  when named here, and on the processor: the GPU's batches don't run them yet.
+  when named here, on the GPU when there is one and on the processor when there is not.
 - **Leaving some out.** `--skip-tilings`, `--skip-tiling-groups` and `--skip-families` take the
   same names and leave those out of what the others chose.
 - **Families tied to one grid.** Isotropic rules, the elementary rules (`wolfram`), Margolus blocks
