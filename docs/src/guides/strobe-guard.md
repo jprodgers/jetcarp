@@ -82,12 +82,12 @@ When at least nine in ten of the windows clear in this frame and in the tile's l
 changed sides, its pattern has turned into its own negative, and if its light and dark pixels
 differ by at least 0.1 (the darker below 0.8), every pixel of it has made a transition: the tile
 makes one, counted with its other transitions, where neighbouring tiles reverse together, by the
-same area rule. A reversal counts once however fast it is, even as a fade. The same is done for
+same area rule. A reversal counts once, whether sudden or a fade. The same is done for
 "redness". So a board of squares from 3 pixels up, larger squares half a tile off the tiles' grid
 (whose tiles straddle squares evenly), and a stripe pattern that reverses, count as flashing
 wherever they cover a quarter of a 10° field, long before they cover a quarter of the screen. A
 soup's cells change a few at a time, so its tiles' patterns never turn into their negatives: Life
-soups from 2 to 16 pixels a cell, still lifes, gliders and blinkers are read as before.
+soups from 1 to 16 pixels a cell, still lifes, gliders and blinkers are read as before.
 
 **Stripes.** Regular high-contrast stripes can trigger seizures as flashes can (ITU-R BT.1702,
 [ITU-R 2023](../research/bibliography.md#itu2023bt1702); Ofcom's guidance on flashing images and
