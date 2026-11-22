@@ -70,6 +70,26 @@ fn texts(k: &Kb) -> Vec<String> {
         .collect()
 }
 
+/// The window's text as a screen reader reads it out: row by row, left to right, so a line the
+/// status bar wraps (a label's lines are runs of their own) reads whole.
+fn read_out(k: &Kb) -> String {
+    let mut runs: Vec<(i64, f32, String)> = k
+        .nodes
+        .values()
+        .filter_map(|n| {
+            let b = n.bounds?;
+            let t = n.label.clone().or(n.value.clone())?;
+            Some(((b.center().y / 6.0).round() as i64, b.min.x, t))
+        })
+        .collect();
+    runs.sort_by(|a, b| (a.0, a.1).partial_cmp(&(b.0, b.1)).unwrap());
+    let all: Vec<String> = runs.into_iter().map(|r| r.2).collect();
+    all.join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[test]
 fn sides_typed_over_the_limit_are_asked_about_never_made_smaller() {
     in_scratch(
@@ -164,18 +184,22 @@ fn child_a_world_too_big_to_draw_whole_is_built_as_asked_and_the_view_says_so() 
     if sides(&k) != (20_000, 1_000) {
         wrong.push(format!("built {:?}, not the 20000 x 1000 typed", sides(&k)));
     }
-    let says = |k: &Kb| texts(k).into_iter().find(|t| t.contains("Zoom in to see"));
-    match says(&k) {
-        Some(t) if t.contains("cannot draw every cell") => {}
-        other => wrong.push(format!(
-            "the status line does not say the view cannot show every cell: {other:?}"
-        )),
+    let says = |k: &Kb| {
+        let t = read_out(k);
+        let cannot =
+            t.contains("The view cannot draw every cell at this zoom: it shows one in every");
+        (cannot && t.contains("Zoom in to see them all."), t)
+    };
+    if let (false, t) = says(&k) {
+        wrong.push(format!(
+            "the status line does not say the view cannot show every cell: {t:?}"
+        ));
     }
     // Zoomed in: every cell in view is drawn.
     k.app.pixel_zoom(4.0);
     k.frames(3);
-    if let Some(t) = says(&k) {
-        wrong.push(format!("still says so at 4 px a cell: {t}"));
+    if let (true, t) = says(&k) {
+        wrong.push(format!("still says so at 4 px a cell: {t:?}"));
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
     done();
