@@ -356,7 +356,7 @@ has the details.
 
 ## Open the app
 
-<img src="../images/jetcarp-icon.png" alt="JETCARP's icon: a black line drawing of a koi carp with jet engines, curled inside a white rounded square with a black outline" width="128">
+<img src="../images/jetcarp-icon.png" alt="JETCARP's icon for now: a glider, five black squares on a three-by-three grid, inside a white rounded square with a black outline" width="128">
 
 With JETCARP installed, run `jetcarp` with no arguments in a terminal. This opens the app, on Linux,
 macOS and Windows alike:
