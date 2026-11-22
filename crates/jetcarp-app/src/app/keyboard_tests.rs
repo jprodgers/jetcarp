@@ -1886,7 +1886,7 @@ fn child_setup_s_what_it_searches_choices_keep_the_keyboard() {
         return;
     }
     let mut failures = vec![];
-    // The window as it was found (a Framework laptop's screen at 200 %), and two others.
+    // A Framework 13's screen at 200 %, and two other sizes.
     for (w, h) in [(1128.0, 752.0), (1280.0, 800.0), (900.0, 640.0)] {
         for f in what_it_searches_from_the_keyboard(w, h) {
             failures.push(format!("{w}x{h}: {f}"));
