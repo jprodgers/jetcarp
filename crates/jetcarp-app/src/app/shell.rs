@@ -36,8 +36,10 @@ pub(super) struct ShellState {
     /// A message, and when it appeared (the grid shows it a while when the status bar is off).
     seen_message: Option<String>,
     message_at: f64,
-    /// The strobe guard's note, and when it appeared (the same, for the guard's own note).
-    seen_guard: Option<String>,
+    /// What the strobe guard's note is about (what it does, and whether it is on), and when that
+    /// changed: the grid shows the note a while too. Its wording follows its readings (*over 40%
+    /// of the view*), which would bring it back each time they change.
+    seen_guard: Option<(jetcarp_core::strobe::guard::Action, bool)>,
     guard_at: f64,
     /// The widths the status bar's items have reached in this world (and the world they were
     /// reached in), so a count that loses a digit keeps its space and the items after it stay put.
@@ -111,7 +113,12 @@ impl JetcarpApp {
             self.shell.seen_message = self.message.as_ref().map(|m| m.0.clone());
             self.shell.message_at = now;
         }
-        let guard = self.guard_status().map(|g| g.0);
+        let guard = self
+            .strobe
+            .report
+            .as_ref()
+            .filter(|r| r.note.is_some())
+            .map(|r| (r.action, r.on));
         if guard != self.shell.seen_guard {
             if guard.is_some() {
                 self.shell.guard_at = now;
