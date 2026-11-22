@@ -1380,6 +1380,12 @@ fn child_measuring_pauses_the_world_and_resumes_it_after() {
     if !child() {
         return;
     }
+    // The test machine is busy with other tests: the load is taken as quiet here, so the window
+    // measures at once rather than waiting for the processor to go quiet.
+    jetcarp_core::machine::quiet::sample_with(|_| jetcarp_core::machine::quiet::Load {
+        cpu: Some(0.0),
+        gpu: None,
+    });
     let mut k = Kb::with_life();
     k.app.set_tool_open(menu::ToolWin::Machine, true);
     k.app.playing = true;
