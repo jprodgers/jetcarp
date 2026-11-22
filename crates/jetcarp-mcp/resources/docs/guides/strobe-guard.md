@@ -348,8 +348,8 @@ texture and copied to the screen.
   ash some rules settle into (Walled Cities and 3-4 Life at 4 pixels a cell) can show a second or
   so of flashing before the scene is slowed. Since the windows' part of a tile is counted 30%
   larger than they show, a sparser field of small cells flipping in part can read as flashing
-  where WCAG would pass it (a blinker every 4 cells at 7 to 10 pixels a cell, a fifth of it
-  flipping): stricter than WCAG. Cells of 1 and 2 pixels, under 0.1°, are mostly not seen in part,
+  where WCAG would pass it (a blinker every 4 cells at 7 to 10 pixels a cell, or every 5 cells at
+  3 to 6, a fifth or a sixth of it flipping): stricter than WCAG. Cells of 1 and 2 pixels, under 0.1°, are mostly not seen in part,
   as WCAG's exception for a fine, balanced pattern allows.
 - It counts the area of flashes occurring together, as WCAG words it. Counting each pixel's own
   transitions over a second, whenever they came, counts more of a soup's flicker: by that measure a
