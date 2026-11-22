@@ -55,9 +55,11 @@ rather than running the world: press Esc first, and Space runs and pauses again.
 
 ### Panes and tool windows
 
-Each floating tool window and pane has a close button, ×, at the right of its title bar: the last
-control Tab reaches in the window, named *Close* and the window's title (*Close Accessibility*)
-for screen readers. Esc and Ctrl+W close the window as it does.
+A tool window opened from the menus, or by its key (F1 for *Keyboard shortcuts…*), opens with the
+keyboard on its first control, so Tab goes on through it and Esc closes it. Each floating tool
+window and pane has a close button, ×, at the right of its title bar: the last control Tab reaches
+in the window, named *Close* and the window's title (*Close Accessibility*) for screen readers. Esc
+and Ctrl+W close the window as it does.
 
 A pane's tab takes the keyboard like a button: Space or Enter shows its pane. The buttons at the
 right of each group of tabs hide the pane, pop it out to a window of its own, or float it. Every

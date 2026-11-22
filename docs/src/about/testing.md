@@ -128,7 +128,8 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   and each floating window, and Shift+F6 go back; F10, the arrows, Enter and Esc must work the
   menus and close dialogs and tool windows; every tool window and dialog, and a floating pane, must
   close with Esc, with Ctrl+W and through its *Close* button, the last control Tab reaches in it,
-  and Esc in a docked pane must take the keyboard back to the grid; in the setup window's *What it
+  every tool window opened from its menu item must close with Esc at once, and Esc in a docked
+  pane must take the keyboard back to the grid; in the setup window's *What it
   searches*, at three window sizes, ↓ and ↑, Tab and Shift+Tab must go through every choice and
   back, an arrow must never take the keyboard out of the window, and Space must tick the choice
   with the keyboard; *Tools → Start an explore search…*, chosen with F10, the arrows and Enter, must

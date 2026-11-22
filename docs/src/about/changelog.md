@@ -475,11 +475,13 @@ day later (0.4.2: 17 November here, 18 November there).
   ring, drawn round the whole scrolled text, showed nowhere. A control in view now counts only
   inside the part of a background in view, a thin bar (a scroll bar) never makes a widget a
   background, and the ring of a large widget goes round the part of it in view.
-- **Every tool window and dialog closes from the keyboard** (#308). Once Esc had left a text box,
-  nothing held the keyboard and Esc did nothing more; a floating pane didn't close with Esc at all;
-  and the title bar's ×, egui's own, came first in Tab's order, named only "Close window". Esc now
-  closes the tool window or floating pane whose control has the keyboard (from a text box, a second
-  Esc), the × is the window's own last control, named *Close* and the window's title, and
+- **Every tool window and dialog closes from the keyboard** (#308). A tool window opened from the
+  menu bar with the keyboard left the keyboard nowhere, so Esc did nothing; once Esc had left a
+  text box, Esc did nothing more; a floating pane didn't close with Esc at all; and the title
+  bar's ×, egui's own, came first in Tab's order, named only "Close window". A tool window opened
+  from the menus or by its key now has the keyboard on its first control, Esc closes the tool
+  window or floating pane whose control has the keyboard (from a text box, a second Esc), the × is
+  the window's own last control, named *Close* and the window's title, and
   **Ctrl+W** (⌘W on macOS) closes the tool window or dialog that has the keyboard, or brings a
   popped-out one back into the main window. In a docked pane, Esc takes the keyboard back to the
   grid, and Esc is *Cancel* in *Over this machine's limit*.
