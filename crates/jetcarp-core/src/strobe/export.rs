@@ -222,7 +222,9 @@ pub fn soften(frames: &[Image], delay_ms: u32, at_risk: bool) -> Vec<Image> {
     for (k, i) in looped(frames.len(), delay_ms).enumerate() {
         let t = k as f64 * dt;
         let (map, half) = reduce_both(&frames[i].rgba, w, h);
-        flash.update(&map, t);
+        // Fine patterns that flash by the area rule themselves are veiled as well, as the guard
+        // veils them: softening a tile's mean cannot calm them.
+        let fine_flashing = flash.update(&map, t).fine_transitions >= 2;
         let (cols, rows) = flash.tiles();
         for (j, ((&c, &r), &fine)) in flash
             .tile_counts()
@@ -232,9 +234,7 @@ pub fn soften(frames: &[Image], delay_ms: u32, at_risk: bool) -> Vec<Image> {
             .enumerate()
         {
             if c >= 2 || r >= 2 {
-                // A fine pattern that reverses is veiled as well: softening a tile's mean cannot
-                // calm it.
-                let veil = (fine > 0).then(|| fine_veil(&map, j));
+                let veil = (fine_flashing && fine > 0).then(|| fine_veil(&map, j));
                 let (x, y) = ((j as u32 % cols) as i64, (j as u32 / cols) as i64);
                 for dy in -1..=1 {
                     for dx in -1..=1 {

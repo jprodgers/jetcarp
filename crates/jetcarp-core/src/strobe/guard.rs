@@ -24,9 +24,11 @@
 //!
 //! **Fine patterns that reverse** (#269), a checkerboard of squares smaller than a tile, flash
 //! without moving any tile's mean, so softening (which limits how fast a tile's mean may change)
-//! cannot calm them. Where they flash, those tiles and the tiles around them are veiled as well
-//! ([`fine_veil`]), at once rather than at [`VEIL_RATE`]: coming on, a veil makes each pixel one
-//! transition, as the next reversal would have. It goes, and holds, as a veil for stripes does.
+//! cannot calm them. Where they flash by the area rule on their own (over a quarter of a 10°
+//! field), the tiles that reverse and the tiles around them are veiled as well ([`fine_veil`]), at
+//! once rather than at [`VEIL_RATE`]: coming on, a veil makes each pixel one transition, as the
+//! next reversal would have. It goes, and holds, as a veil for stripes does. A few tiles reversing
+//! now and then (moving waves, Hodgepodge's swings) are left to the softening and the pace cap.
 //!
 //! The guard changes only what is shown and how fast generations are shown; a world computes the
 //! same generations either way. Switched off, it still measures, so the status can say a scene
@@ -418,12 +420,14 @@ impl Guard {
                 }
             }
         }
-        // 2b. Veil fine patterns that reverse, and the tiles around them: their flashing leaves
-        // the tiles' means alone, so softening cannot calm it. The veil comes on at once (the
-        // change it makes is one transition of each pixel, as the next reversal would be) and
-        // goes as any veil does.
+        // 2b. Veil fine patterns that reverse, and the tiles around them, when they flash by the
+        // area rule themselves: their flashing leaves the tiles' means alone, so softening cannot
+        // calm it. (A few tiles reversing now and then, as in a scene of moving waves, are left
+        // to the softening.) The veil comes on at once (the change it makes is one transition of
+        // each pixel, as the next reversal would be) and goes as any veil does.
         let mut at_once = vec![false; self.veil_target.len()];
-        if flashing && self.can_soften {
+        let fine_flashing = drawn.fine_transitions >= threshold;
+        if fine_flashing && self.can_soften {
             let n = self.veil_target.len();
             for (i, _) in self.input.tile_fine_counts()[..]
                 .iter()
