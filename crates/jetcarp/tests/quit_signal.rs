@@ -6,6 +6,12 @@
 //! folder, which before were left behind. A second signal ends either at once, for one that does
 //! not stop.
 //!
+//! The same signals stop `jetcarp mcp` over stdio as stdin closing does, a foreground `jetcarp
+//! search` at its next checkpoint (so `--resume` carries it on), and `jetcarp script` at its next
+//! step, each removing its memory record. A call still running when the MCP server stops (a
+//! `job_status` waiting for a job to end) is cut short with an answer that says so, and the server
+//! ends within a few seconds instead of waiting for it.
+//!
 //! Each test runs the real program, with every folder a scratch one under the target folder, and
 //! signals only the process it started. The host runs headless, as on a machine with no desktop:
 //! headless, `jetcarp host stop` leaves no still picture on the desktop (only a host showing a
@@ -438,4 +444,279 @@ fn a_second_signal_ends_mcp_over_http_at_once() {
     );
     // The waiting call's connection closed with the server.
     let _ = waiting.join();
+}
+
+/// A `job_status` call waiting for `job` to end (up to two minutes), as JSON-RPC request `id`.
+fn waiting_call(id: i64, job: i64) -> Value {
+    json!({"jsonrpc": "2.0", "id": id, "method": "tools/call",
+           "params": {"name": "job_status", "arguments": {"job": job, "wait_s": 120}}})
+}
+
+/// The first text of a `tools/call` answer.
+fn answer_text(answer: &Value) -> &str {
+    answer["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or("")
+}
+
+/// SIGTERM cuts a call still running short: a `job_status` waiting up to two minutes for a hunt
+/// to end answers at once that the server is stopping, and the server ends within a few seconds,
+/// with 0, its endpoint file and memory record gone. Before, the server waited for the call to
+/// return, up to the 600 s a wait may take, longer than a session gives its programs at logout.
+#[test]
+fn sigterm_cuts_a_waiting_call_short_and_mcp_over_http_ends_soon() {
+    let home = Home::new("mcp-call");
+    let file = home.runtime().join("mcp-http-endpoint.json");
+    let mut server = home.mcp_http();
+    let record = home.record(server.pid());
+    server.wait_until("endpoint file and memory record", || {
+        file.exists() && record.exists()
+    });
+    let (port, token) = endpoint(&file);
+    let (sid, job) = session_with_a_hunt(port, &token);
+    let waiting = std::thread::spawn(move || post(port, &token, Some(&sid), &waiting_call(3, job)));
+    // The server takes the call in and waits on it.
+    std::thread::sleep(Duration::from_secs(1));
+
+    let t0 = Instant::now();
+    server.signal("TERM");
+    let status = server.ended_within(Duration::from_secs(10));
+    let took = t0.elapsed();
+    std::thread::sleep(Duration::from_millis(100));
+    let err = server.stderr();
+    let status = status.unwrap_or_else(|| {
+        panic!("still running 10 s after SIGTERM, held by the waiting call; its stderr:\n{err}")
+    });
+    assert!(
+        took < Duration::from_secs(3),
+        "the server took {took:?} to end after SIGTERM; its stderr:\n{err}"
+    );
+    assert!(
+        status.success(),
+        "the server ends with 0: {status:?}; its stderr:\n{err}"
+    );
+    assert!(
+        !file.exists(),
+        "the server left {} behind; its stderr:\n{err}",
+        file.display()
+    );
+    assert!(
+        !record.exists(),
+        "the server left its memory record {}; its stderr:\n{err}",
+        record.display()
+    );
+    let (_, answer) = waiting.join().expect("the waiting call has its answer");
+    assert!(
+        answer_text(&answer).contains("the server is stopping"),
+        "the waiting call is told the server is stopping: {answer}"
+    );
+    assert_eq!(answer["result"]["isError"], true, "{answer}");
+}
+
+/// SIGTERM stops `jetcarp mcp` over stdio as stdin closing does: a call still running is cut
+/// short with an answer that says the server is stopping, the hunt it runs on its own threads
+/// stops at its next checkpoint, paused and resumable, and it ends with 0, its memory record
+/// gone. Before, it ended at once, the hunt left marked running with nothing running it.
+#[test]
+fn sigterm_stops_mcp_over_stdio_as_stdin_closing_does() {
+    let home = Home::new("mcp-stdio");
+    let mut c = home.jetcarp(&["mcp"]);
+    c.stdin(Stdio::piped()).stdout(Stdio::piped());
+    let mut server = Running::start(c);
+    let record = home.record(server.pid());
+    let mut stdin = server.child.stdin.take().unwrap();
+    let out = server.child.stdout.take().unwrap();
+    let (tx, replies) = channel::<Value>();
+    std::thread::spawn(move || {
+        for l in BufReader::new(out).lines().map_while(Result::ok) {
+            if let Ok(v) = serde_json::from_str::<Value>(&l) {
+                let _ = tx.send(v);
+            }
+        }
+    });
+    let reply = |id: i64| loop {
+        let v = replies
+            .recv_timeout(Duration::from_secs(60))
+            .unwrap_or_else(|_| panic!("no answer to request {id}"));
+        if v["id"] == id {
+            return v;
+        }
+    };
+    let mut send = |v: Value| {
+        writeln!(stdin, "{v}").unwrap();
+        stdin.flush().unwrap();
+    };
+    send(json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                           "clientInfo": {"name": "quit-signal-test", "version": "1"}}}));
+    assert_eq!(reply(1)["result"]["serverInfo"]["name"], "jetcarp");
+    send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+    send(json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                "params": {"name": "search_start", "arguments":
+                    {"hunt": {"rules": ["B3/S23"], "soups": 0}, "label": "until-stopped"}}}));
+    let started = reply(2);
+    let job = serde_json::from_str::<Value>(answer_text(&started)).unwrap_or(Value::Null)["job"]
+        .as_i64()
+        .unwrap_or_else(|| panic!("a job: {started}"));
+    send(waiting_call(3, job));
+    server.wait_until("memory record", || record.exists());
+    // The server takes the call in and waits on it.
+    std::thread::sleep(Duration::from_secs(1));
+
+    let t0 = Instant::now();
+    server.signal("TERM");
+    let status = server.ended_within(Duration::from_secs(10));
+    let took = t0.elapsed();
+    std::thread::sleep(Duration::from_millis(100));
+    let err = server.stderr();
+    let status =
+        status.unwrap_or_else(|| panic!("still running 10 s after SIGTERM; its stderr:\n{err}"));
+    assert!(
+        status.success(),
+        "the server ends as stdin closing ends it, with 0: {status:?}; its stderr:\n{err}"
+    );
+    assert!(
+        took < Duration::from_secs(3),
+        "the server took {took:?} to end after SIGTERM; its stderr:\n{err}"
+    );
+    assert!(
+        !record.exists(),
+        "the server left its memory record {}; its stderr:\n{err}",
+        record.display()
+    );
+    assert!(
+        err.contains(&format!("job {job} is paused")),
+        "its hunt stops at a checkpoint, paused: its stderr:\n{err}"
+    );
+    let answer = reply(3);
+    assert!(
+        answer_text(&answer).contains("the server is stopping"),
+        "the waiting call is told the server is stopping: {answer}"
+    );
+}
+
+/// `jetcarp jobs status JOB --json` in `home`.
+fn job_view(home: &Home, job: i64) -> Value {
+    let job = job.to_string();
+    let out = home
+        .jetcarp(&["jobs", "status", &job, "--json"])
+        .stdout(Stdio::piped())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "jobs status {job}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    serde_json::from_slice(&out.stdout).unwrap()
+}
+
+/// SIGTERM stops a foreground `jetcarp search` as Ctrl-C does: its job stops at its next
+/// checkpoint, paused and resumable, and it ends with 0, its memory record gone. `--resume` then
+/// carries the job on from that checkpoint. Before, it ended at once, the job left marked running
+/// with nothing running it.
+#[test]
+fn sigterm_stops_a_search_at_its_checkpoint_and_resume_carries_it_on() {
+    let home = Home::new("search");
+    let mut search = Running::start(home.jetcarp(&[
+        "search",
+        "hunt",
+        "--forever",
+        "--label",
+        "until-stopped",
+        "--threads",
+        "2",
+    ]));
+    let record = home.record(search.pid());
+    assert!(
+        search.wait_for_line("hunt job 1 in", Duration::from_secs(60)),
+        "the hunt did not start; its stderr:\n{}",
+        search.stderr()
+    );
+    search.wait_until("memory record", || record.exists());
+    search.wait_until("a checkpoint", || {
+        job_view(&home, 1)["done"].as_u64().unwrap_or(0) > 0
+    });
+
+    let (status, err) = search.terminate();
+    assert!(
+        status.success(),
+        "the search ends as Ctrl-C ends it, with 0: {status:?}; its stderr:\n{err}"
+    );
+    assert!(
+        err.contains("SIGTERM: stopping at the next checkpoint"),
+        "it says it is stopping; its stderr:\n{err}"
+    );
+    assert!(
+        !record.exists(),
+        "the search left its memory record {}; its stderr:\n{err}",
+        record.display()
+    );
+    let v = job_view(&home, 1);
+    assert_eq!(v["status"], "paused", "the job is paused: {v}");
+    assert_eq!(v["stale"], false, "{v}");
+    assert_eq!(v["resumable"], true, "{v}");
+    let done = v["done"].as_u64().unwrap();
+    assert!(done > 0, "{v}");
+
+    let resumed = home
+        .jetcarp(&[
+            "search", "hunt", "--resume", "1", "--limit", "300", "--quiet",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        resumed.status.success(),
+        "--resume: {}",
+        String::from_utf8_lossy(&resumed.stderr)
+    );
+    let v = job_view(&home, 1);
+    let after = v["done"].as_u64().unwrap();
+    assert!(
+        after >= done + 300,
+        "--resume carries on from the checkpoint's {done} soups: {after} after 300 more: {v}"
+    );
+}
+
+/// SIGTERM stops `jetcarp script` at its next step, as Ctrl-C does: it says it stopped, and ends
+/// with 128 + the signal's number (130 for Ctrl-C, as before), its memory record gone. Before, it
+/// ended at once.
+#[test]
+fn sigterm_stops_a_script_at_its_next_step() {
+    let home = Home::new("script");
+    let file = home.0.join("until-stopped.rhai");
+    std::fs::write(
+        &file,
+        "let w = world(#{ tiling: \"square\", size: [64, 64], boundary: \"wrap\" });\n\
+         w.add_ca(\"B3/S23\", #{ seed: \"random:0.4\" });\n\
+         print(\"stepping\");\n\
+         loop { w.step(1); }\n",
+    )
+    .unwrap();
+    // --json: the script's own lines go to standard error, with the rest.
+    let mut script = Running::start(home.jetcarp(&["script", file.to_str().unwrap(), "--json"]));
+    let record = home.record(script.pid());
+    assert!(
+        script.wait_for_line("stepping", Duration::from_secs(60)),
+        "the script did not start; its stderr:\n{}",
+        script.stderr()
+    );
+    script.wait_until("memory record", || record.exists());
+
+    let (status, err) = script.terminate();
+    assert_eq!(
+        status.code(),
+        Some(128 + 15),
+        "the script ends as Ctrl-C ends it, with 128 + the signal's number: {status:?}; its \
+         stderr:\n{err}"
+    );
+    assert!(
+        err.contains("SIGTERM: stopping") && err.contains("cancelled after"),
+        "it says it stopped; its stderr:\n{err}"
+    );
+    assert!(
+        !record.exists(),
+        "the script left its memory record {}; its stderr:\n{err}",
+        record.display()
+    );
 }
