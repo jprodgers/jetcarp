@@ -58,9 +58,10 @@ finds more.
 Open the app (or go back to its Quick Start screen) and set *Source* to *Atlas* to see only your
 build's entries:
 
-<img src="../images/tutorials/quickstart-atlas.webp" alt="The Quick Start screen with Source set to Atlas: 948 of 1329 entries, counted by category (Waves & spirals 91, Oscillators 203, Turbulence 165, Fractals & rows 126 and more), and cards of Greenberg-Hastings waves, hodgepodge, turmites and elementary rules running" width="700">
+<img src="../images/tutorials/quickstart-atlas.webp" alt="The Quick Start screen with Source set to Atlas: 914 of 1285 entries, counted by category (Waves & spirals 131, Oscillators 202, Turbulence 142, Fractals & rows 49 and more), and cards of Lenia, forest fires, Greenberg-Hastings and rock-paper-scissors waves, a turmite, JACA battles and Larger than Life turbulence running" width="700">
 
-Your atlas will differ: every build searches from a starting point of its own.
+Your atlas will differ: every build searches from a starting point of its own. (The picture is of
+a later three-minute build than the output above: it published 914 entries.)
 
 **Stopping and carrying on.** Ctrl-C stops a build. `jetcarp jobs resume 22` carries it on to the
 end of its minutes and then publishes. `--detach` runs it in the background, and `--no-gpu` keeps

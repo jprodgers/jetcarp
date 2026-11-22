@@ -28,7 +28,7 @@ which suits a wallpaper, and here it runs on the aperiodic Penrose tiling of thi
 
 In the *CAs* pane, open the list after *Palette* (it says *Prism*) and choose *Aurora*:
 
-<img src="../images/tutorials/wallpaper-palette-list.webp" alt="Brian's Brain on Penrose rhombs running in orange and blue, with the CAs pane's palette list open: Ember, Tide, Prism (chosen), Ink, Mono, Aurora (under the pointer), Synthwave, Moss, Candy; the Scene pane and the status bar carry the strobe guard's note that it is softening the scene's flashes" width="700">
+<img src="../images/tutorials/wallpaper-palette-list.webp" alt="Brian's Brain on Penrose rhombs running in orange and blue, with the CAs pane's palette list open: Ember, Tide, Prism (chosen), Ink, Mono, Aurora (under the pointer), Synthwave and Moss; the Scene pane and the status bar carry the strobe guard's note that it is softening the scene's flashes" width="700">
 
 The world turns mint and violet at once. *CA → Palettes…* opens the palette window, which shows
 every palette, applies one to every automaton at once, and makes palettes of your own (see

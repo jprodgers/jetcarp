@@ -9,7 +9,7 @@ you make in your system's settings shows within a moment, without a restart. The
 from the keyboard alone and with a screen reader: see
 [Using the app from the keyboard](keyboard.md).
 
-<img src="../images/guides/accessibility-window.webp" alt="The Accessibility window: Reduced motion, with Follow the system chosen; Theme, with Follow the system, High contrast and Standard, and Light or dark; and Palettes for scenes that name none, with a button that uses the palettes chosen for colour-vision deficiency and a palette list for most rules, JACA's +1 cells and JACA's −1 cells" width="520">
+<img src="../images/guides/accessibility-window.webp" alt="The Accessibility window: Reduced motion, with Follow the system chosen; Theme, with Follow the system, High contrast and Standard, and Light or dark; Font, with Atkinson Hyperlegible Next chosen for the font and Atkinson Hyperlegible Mono for the monospace font; and Palettes for scenes that name none, with a button that uses the palettes chosen for colour-vision deficiency and a palette list for most rules, JACA's +1 cells and JACA's −1 cells" width="520">
 
 The settings are saved with the app's other settings (the `accessibility` section of `app.json`
 in the [settings folder](../reference/folders.md)). They are separate from the strobe guard, which
@@ -58,7 +58,7 @@ and the screen savers have their own settings (see
 The high-contrast theme draws the app's controls in black and white, in a dark or a light form:
 
 <figure class="pair">
-<div><img src="../images/guides/accessibility-high-contrast-dark.webp" alt="The app in the dark high-contrast theme: white text on black panes and menus, white outlines round every button and field, and a JACA world on the Cairo tiling in blue and orange" width="480"></div>
+<div><img src="../images/guides/accessibility-high-contrast-dark.webp" alt="The app in the dark high-contrast theme: white text on black panes and menus, white outlines round every button and field, the Accessibility window open with its Font section, and a JACA world on the Cairo tiling in blue and orange" width="480"></div>
 <div><img src="../images/guides/accessibility-high-contrast-light.webp" alt="The same app in the light high-contrast theme: black text on white panes and menus, black outlines round every button and field" width="480"></div>
 <figcaption>The high-contrast theme, dark and light, with the Accessibility window open over a JACA
 world drawn in Cobalt and Saffron, the palettes chosen for colour-vision deficiency. Scene

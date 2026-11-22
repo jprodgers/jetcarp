@@ -26,7 +26,7 @@ once, on shared or separate cell fields. It has a graphical app, a command line,
 language, and a Model Context Protocol (MCP) server, plus tools that search for spaceships,
 oscillators and other patterns and keep verified catalogues of what they find.
 
-<img src="https://raw.githubusercontent.com/jprodgers/jetcarp/main/docs/src/images/getting-started/tour-quick-start.webp" width="906" alt="The JETCARP app's Quick Start: a grid of running examples (JACA battles on Penrose rhombs, cyclic and rock-paper-scissors spirals, a WireWorld adder, forest fire, Lenia, Hodgepodge, turmites and layered rules), with a sidebar of categories, sources, tilings and rule families, a search box and a count of 1,249 entries.">
+<img src="https://raw.githubusercontent.com/jprodgers/jetcarp/main/docs/src/images/getting-started/tour-quick-start.webp" width="906" alt="The JETCARP app's Quick Start: a grid of running examples (spaceships from the starter pack, forest fires, a layered rule's fractal, a turmite, JACA battles, worms and rainbows, Hodgepodge and Greenberg-Hastings waves, a cyclic labyrinth and a sandpile on Cairo pentagons), with a sidebar of categories, sources, tilings and rule families, a search box and a count of 1,292 entries.">
 
 *The app opens on the Quick Start: 364 running examples built in, and over a thousand once it has
 built its own on your machine, by category, tiling and rule family. The [book](https://jprodgers.github.io/jetcarp/) has the guides, tutorials and
