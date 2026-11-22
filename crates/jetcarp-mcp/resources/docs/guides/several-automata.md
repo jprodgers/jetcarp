@@ -23,8 +23,8 @@ Every rule needs a certain kind of field:
 
 | Field | Rules |
 | --- | --- |
-| Binary (live or dead, with ages) | Life-like rules, two-state Larger than Life, elementary rules, two-state hexagonal row and layered rules, Margolus rules, and ants and turmites with two colours |
-| Multi-state (a state number, with a given number of states) | Generations, cyclic, Greenberg–Hastings, rock-paper-scissors, Hodgepodge, forest fire, WireWorld, JACA, the Spectre glider and other priority tables, rule tables, von Neumann's automaton, and turmites with more than two colours |
+| Binary (live or dead, with ages) | Life-like rules, two-state isotropic rules, two-state Larger than Life, elementary rules, two-state hexagonal row and layered rules, Margolus rules, and ants and turmites with two colours |
+| Multi-state (a state number, with a given number of states) | Generations (isotropic ones too), cyclic, Greenberg–Hastings, rock-paper-scissors, Hodgepodge, forest fire, WireWorld, JACA, the Spectre glider and other priority tables, rule tables, von Neumann's automaton, and turmites with more than two colours |
 | Height | The sandpile |
 | Continuous (a value between 0 and 1) | Lenia |
 

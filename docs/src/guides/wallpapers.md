@@ -241,7 +241,7 @@ the app or with `jetcarp setup`. Meanwhile `start`, `wallpaper on`, `login on`, 
 | `jetcarp host battery on\|off` | Pause while the computer runs on battery (default on) |
 | `jetcarp host scene [--screen N] [--save FILE]` | The scene a screen shows, its grid's size included, as a scene file |
 | `jetcarp host busy PERCENT` | Pause while the whole processor stays at least this busy, as during a long search (default 80; 0 never). It carries on once the load is 20 points lower |
-| `jetcarp host tune [--cpu-limit P] [--gpu-limit P] [--fps N]` | Fit the desktop background to this computer, in about ten seconds (see [below](#fit-to-this-computer)) |
+| `jetcarp host tune [--cpu-limit P] [--gpu-limit P] [--fps N]` | Fit the desktop background to this computer, in a few seconds (see [below](#fit-to-this-computer)) |
 | `jetcarp host wallpaper`, `still`, `lock`, `gnome`, `saver`, `login` | See the sections below |
 
 The settings are saved in `host.json` in the settings folder. The app and the command line both write

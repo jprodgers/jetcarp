@@ -228,7 +228,7 @@ full; ids may be shortened to a unique prefix, or given as a name:
 ```text
 LWSS (6dd55e69689ba784aff448b7dbbc9328)
 verified in: B3/S23
-works in: B3/S23 to B3468/S2378 (32 B/S rules)
+works in: B3/S23 to B3468/S2378 (32 B/S rules); B3aij/S2eik3aijnr to B2kn345-a67e8/S1e234-aw5-jy6-kn78 (2^74 isotropic rules)
 sightings: B3/S23 x52 (job 1)
 moves per period by paste orientation: 0: (-2, 0), 1: (2, 0), 2: (2, 0), 3: (0, 2), ...
 phase 0:
@@ -238,7 +238,9 @@ O....
 .O..O
 ```
 
-`works in` is the range of B/S rules the LWSS runs identically in, 32 of them. To watch it fly, the assistant opens it on a grid sized for it, or pastes it into a world of its own
+`works in` gives the rules the LWSS runs identically in: 32 B/S rules, and 2^74 of the
+[isotropic rules](../automata/isotropic.md#searches-and-the-library), which tell apart the
+arrangements of the live neighbours. To watch it fly, the assistant opens it on a grid sized for it, or pastes it into a world of its own
 with `world_edit {"paste": {"id": "LWSS"}}`:
 
 ```json
@@ -362,6 +364,8 @@ The tools are made so that an assistant cannot do much harm by mistake, and cann
   (under `jetcarp mcp`); `job_stop` stops any job, wherever it runs.
 - **What it cannot do.** It cannot make your pack-signing key or record anyone's consent to publish
   their ratings: those are for you, at a command line (`jetcarp pack key`, `jetcarp pack rater`).
+  Nor can it measure the computer or change its limits (`jetcarp score`, `jetcarp limits`): it
+  reads them, and the share they give an AI.
   Removing records (`library_curate` with `remove`) is allowed; a careful assistant asks first.
 - **AI control and HTTP.** Switch them on only while you use them. The HTTP endpoint, from
   `jetcarp mcp --http` or the app, answers only on `127.0.0.1` and only with its token, and refuses

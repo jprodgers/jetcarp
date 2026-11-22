@@ -947,8 +947,9 @@ fn shots_new_tiling() {
     h.run(0.5, 0.05, |_| false);
     h.click("k2-007  ");
     h.built();
-    // About 10,000 cells, so the world is the same on any screen.
-    h.click("Fill the view");
+    // About 10,000 cells, so the world is the same on any screen. The Size list is named "Size"
+    // for screen readers (#219), as its label is: the list is the widget right of the label.
+    h.click_right_of("Size");
     h.click("About 10,000");
     h.built();
     h.run(0.5, 0.05, |_| false);

@@ -31,8 +31,9 @@ Synthwave palette. Drawn by the app's offscreen test (see <code>docs/tools/rende
   the world status, or `--compare` on the command line.
 - **Limits:** jumps of up to 2<sup>62</sup> generations, and up to 65,536 different states per site
   (the number of states raised to the number of tile types in the unit cell). Memory is kept in check
-  by a cap on the number of stored blocks (48 million by default, about 2 GB), beyond which unused
-  blocks are cleared out; that never changes the result.
+  by a cap on the number of stored blocks (by default this computer's `hashlife-nodes` limit: 48
+  million, about 2 GB, on a 16 GB computer, more on a bigger one), beyond which unused blocks are
+  cleared out; that never changes the result.
 
 ## Two ways to jump
 
