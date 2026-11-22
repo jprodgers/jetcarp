@@ -173,11 +173,12 @@ fn the_runtime_folder_is_emptied_and_removed_once_nothing_runs_from_it() {
         assert!(runtime.join(f).exists(), "only listed: {f}");
     }
 
-    // ---- The app and a host are running: what they use is kept, and said to be.
+    // ---- The app and a host are running: what they use is kept, and said to be. The app is a
+    // new one (process 4244), so the file that process 4242 left half-written goes.
     let app = TcpListener::bind("127.0.0.1:0").unwrap();
     write(
         &runtime.join("app-endpoint.json"),
-        &endpoint(app.local_addr().unwrap().port()),
+        &endpoint(app.local_addr().unwrap().port()).replace("4242", "4244"),
     );
     write(&runtime.join("memory/4244.json"), &record(4244, 0));
     let held = std::fs::OpenOptions::new()

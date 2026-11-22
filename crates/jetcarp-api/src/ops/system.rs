@@ -1163,18 +1163,13 @@ const LAUNCHER_FILES: &[&str] = &["jetcarpw.exe", "jetcarp-program"];
 /// there: the host's and the tuner's locks, the app's and the host's endpoint files, the HTTP
 /// endpoints' files (as in [`DATA_FILES`]), the memory pool's records, and on Windows (where the
 /// runtime folder is also the data folder, the screen saver's and the Start menu entry's)
-/// `JETCARP.scr` and the launcher's folder.
+/// `JETCARP.scr` and the launcher's folder. `uninstall` removes the first ones
+/// ([`RUNTIME_LOCKS`], [`RUNTIME_ENDPOINTS`], [`POOL_DIR`]) once their programs have gone.
 pub(crate) fn runtime_entry(name: &str) -> bool {
-    matches!(
-        name,
-        "host.lock"
-            | "tune.lock"
-            | "host-endpoint.json"
-            | "app-endpoint.json"
-            | "mcp-http-endpoint.json"
-            | "app-http-endpoint.json"
-            | "JETCARP.scr"
-    ) || name == jetcarp_core::machine::pool::DIR
+    RUNTIME_LOCKS.contains(&name)
+        || RUNTIME_ENDPOINTS.contains(&name)
+        || name == "JETCARP.scr"
+        || name == POOL_DIR
         || name == LAUNCHER_DIR
 }
 
@@ -1505,40 +1500,266 @@ fn refuse(refused: &[Refused]) -> ApiError {
         .hint(format!("{mistakes}{gone} {without}"))
 }
 
-/// Deletes the host's lock file once no host holds it (waiting a little for a host that is
-/// stopping), then its folder if that is left empty and is JETCARP's own runtime folder (not the
-/// settings or data folder, as on Windows, where they are one).
-fn remove_unheld_lock(lock: &Path, keep: &[PathBuf]) -> Result<Option<String>, String> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+// What `uninstall` removes from the runtime folder (#135): the files JETCARP's running programs
+// keep there ([`runtime_entry`]), once the programs that keep them have gone, and then the folder
+// itself when that empties it. On the Mac an app ended with SIGTERM left its `app-endpoint.json`
+// in `~/.cache/jetcarp`, which `uninstall` neither listed nor removed. The screen saver and the
+// Start menu entry's launcher, which share the folder on Windows, are their own steps' to remove.
+
+/// The locks JETCARP's programs take in the runtime folder: the host's single-instance lock, and
+/// *Fit to this computer*'s (one fit at a time, `jetcarp_host::tune`).
+const RUNTIME_LOCKS: &[&str] = &["host.lock", "tune.lock"];
+
+/// The files JETCARP's programs record their port and token in while they listen: the app's and
+/// the host's (`jetcarp_mcp::link`), and the HTTP endpoints' (`jetcarp_mcp::http`'s
+/// `CLI_ENDPOINT` and `APP_ENDPOINT`), which this crate cannot see: the names must stay in step,
+/// as in [`DATA_FILES`].
+const RUNTIME_ENDPOINTS: &[&str] = &[
+    "app-endpoint.json",
+    "host-endpoint.json",
+    "mcp-http-endpoint.json",
+    "app-http-endpoint.json",
+];
+
+/// The memory pool's records' folder in the runtime folder (`memory/`).
+const POOL_DIR: &str = jetcarp_core::machine::pool::DIR;
+
+/// The program that keeps runtime file `name` while it runs, in words.
+fn runtime_owner(name: &str) -> &'static str {
+    match name {
+        "host.lock" => "a host",
+        "tune.lock" => "a fit to this computer",
+        "host-endpoint.json" => "the background host",
+        "mcp-http-endpoint.json" => "jetcarp mcp --http",
+        _ => "the JETCARP app",
+    }
+}
+
+/// The process whose memory record `name` (in `memory/`) is: `<pid>.json`, or `<pid>.json.tmp`
+/// while it is written.
+fn pool_record(name: &str) -> Option<u32> {
+    name.strip_suffix(".json.tmp")
+        .or_else(|| name.strip_suffix(".json"))
+        .filter(|pid| !pid.is_empty() && pid.bytes().all(|c| c.is_ascii_digit()))
+        .and_then(|pid| pid.parse().ok())
+}
+
+/// JETCARP's files in the runtime folder `dir`, as names inside it, sorted: the locks, the
+/// endpoint files (with any left half-written), then the memory pool's records and, last, their
+/// folder (`memory/`) when it is there. Only files of their own count; a link is never followed.
+fn runtime_leftovers(dir: &Path) -> Vec<String> {
+    let files = |d: &Path| -> Vec<String> {
+        let Ok(rd) = std::fs::read_dir(d) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = rd
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    };
+    let mut out: Vec<String> = files(dir)
+        .into_iter()
+        .filter(|n| {
+            RUNTIME_LOCKS.contains(&n.as_str())
+                || RUNTIME_ENDPOINTS.contains(&n.as_str())
+                || being_written(n, RUNTIME_ENDPOINTS)
+        })
+        .collect();
+    let pool = dir.join(POOL_DIR);
+    if real_dir(&pool) {
+        out.extend(
+            files(&pool)
+                .into_iter()
+                .filter(|n| pool_record(n).is_some())
+                .map(|n| format!("{POOL_DIR}/{n}")),
+        );
+        out.push(format!("{POOL_DIR}/"));
+    }
+    out
+}
+
+/// [`runtime_leftovers`] in words, for the step: the files at the top, then `memory/` with how
+/// many records it holds.
+fn runtime_list(found: &[String]) -> String {
+    let records = found
+        .iter()
+        .filter(|n| n.starts_with(POOL_DIR) && !n.ends_with('/'))
+        .count();
+    let pool = found
+        .iter()
+        .any(|n| n.ends_with('/'))
+        .then(|| match records {
+            0 => format!("{POOL_DIR}/"),
+            1 => format!("{POOL_DIR}/ (1 record)"),
+            n => format!("{POOL_DIR}/ ({n} records)"),
+        });
+    found
+        .iter()
+        .filter(|n| !n.starts_with(POOL_DIR))
+        .cloned()
+        .chain(pool)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Whether the runtime folder `dir` may go once it is empty: it is JETCARP's own (named
+/// `jetcarp`, as the system's runtime folders are), not a link, and none of the folders the
+/// uninstall keeps or deletes on its own (`keep`): on Windows it is the default data folder.
+fn runtime_folder_goes(dir: &Path, keep: &[PathBuf]) -> bool {
+    dir.file_name()
+        .is_some_and(|n| n == jetcarp_core::paths::APP_DIR)
+        && !is_link(dir)
+        && !keep
+            .iter()
+            .any(|k| k == dir || canonical(k) == canonical(dir))
+}
+
+/// Whether the lock file `lock` is held, waiting up to `wait` for its holder to let it go (a
+/// host that is stopping). Closed again, and so unlocked, before it returns, which deleting it
+/// on Windows needs.
+fn lock_held(lock: &Path, wait: std::time::Duration) -> Result<bool, String> {
+    let deadline = std::time::Instant::now() + wait;
     loop {
         let f = match std::fs::OpenOptions::new().write(true).open(lock) {
             Ok(f) => f,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
             Err(e) => return Err(e.to_string()),
         };
         match f.try_lock() {
-            Ok(()) => break,
+            Ok(()) => return Ok(false),
             Err(std::fs::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
-            Err(std::fs::TryLockError::WouldBlock) => {
-                return Ok(Some("kept: a host is running and holds it".into()));
-            }
+            Err(std::fs::TryLockError::WouldBlock) => return Ok(true),
             Err(std::fs::TryLockError::Error(e)) => return Err(e.to_string()),
         }
     }
-    // Closed (and so unlocked) before it is deleted, which Windows needs.
-    std::fs::remove_file(lock).map_err(|e| e.to_string())?;
-    if let Some(dir) = lock.parent()
-        && dir
-            .file_name()
-            .is_some_and(|n| n == jetcarp_core::paths::APP_DIR)
-        && !keep.iter().any(|k| k == dir)
-        && dir_is_empty(dir)
-    {
-        let _ = std::fs::remove_dir(dir);
+}
+
+/// What the endpoint file `p` records, if something accepts connections on the port it names:
+/// its program is running (or another has taken its port, and the file is kept all the same). A
+/// file with no port, such as one left half-written, leads nowhere. The same test as
+/// `jetcarp_mcp::link::host_gone`, which this crate cannot see.
+fn endpoint_answers(p: &Path) -> Option<serde_json::Value> {
+    use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(p).ok()?).ok()?;
+    let port = u16::try_from(v.get("port")?.as_u64()?)
+        .ok()
+        .filter(|&port| port != 0)?;
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(500))
+        .is_ok()
+        .then_some(v)
+}
+
+/// The program whose memory record `name` in the records' folder `pool` is still fresh
+/// (refreshed within `jetcarp_core::machine::pool::STALE_SECS`, so it is running), in words;
+/// none for a record of a program that has gone, or one that cannot be read. A record being
+/// written counts as its program's record does.
+fn record_fresh(pool: &Path, name: &str) -> Option<String> {
+    use jetcarp_core::machine::pool::{STALE_SECS, Use};
+    let pid = pool_record(name)?;
+    let u: Use =
+        serde_json::from_slice(&std::fs::read(pool.join(format!("{pid}.json"))).ok()?).ok()?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    (now.saturating_sub(u.at_ms) <= STALE_SECS * 1000).then_some(u.program)
+}
+
+/// Removes JETCARP's files from the runtime folder `dir` ([`runtime_leftovers`]), each once the
+/// program that keeps it has gone: a lock once nothing holds it (waiting a little for a host
+/// that is stopping), an endpoint file once nothing answers on its port, a memory record once
+/// its program stops refreshing it. Then `memory/` and the folder itself, if that empties them
+/// and the folder may go ([`runtime_folder_goes`]). A file still in use is kept, and the note
+/// says which and why.
+fn clear_runtime(dir: &Path, keep: &[PathBuf]) -> Result<Option<String>, String> {
+    // This program's own record goes first: it is uninstalling, and records no more.
+    let pool = dir.join(POOL_DIR);
+    if pool.join(format!("{}.json", std::process::id())).exists() {
+        jetcarp_core::machine::pool::stop();
     }
-    Ok(None)
+    let (mut kept, mut failed) = (Vec::new(), Vec::new());
+    for name in runtime_leftovers(dir) {
+        if name.ends_with('/') {
+            continue;
+        }
+        let p = dir.join(&name);
+        let in_use = if RUNTIME_LOCKS.contains(&name.as_str()) {
+            let wait = if name == "host.lock" { 5 } else { 0 };
+            match lock_held(&p, std::time::Duration::from_secs(wait)) {
+                Ok(held) => {
+                    held.then(|| format!("{} is running and holds it", runtime_owner(&name)))
+                }
+                Err(e) => {
+                    failed.push(format!("{name}: {e}"));
+                    continue;
+                }
+            }
+        } else if let Some(record) = name.strip_prefix(&format!("{POOL_DIR}/")) {
+            record_fresh(&pool, record).map(|program| format!("{program} is running"))
+        } else {
+            let file = RUNTIME_ENDPOINTS
+                .iter()
+                .copied()
+                .find(|e| name == *e || being_written(&name, &[e]))
+                .unwrap_or_default();
+            let answers = endpoint_answers(&dir.join(file));
+            if name == file {
+                answers.map(|_| format!("{} is running", runtime_owner(file)))
+            } else {
+                // One being written (`.app-endpoint.json.<pid>.tmp`, renamed into place at
+                // once) is in use only while the process named in it is the one that answers;
+                // any other was left by a program that ended as it wrote it.
+                let writer = name
+                    .rsplit('.')
+                    .nth(1)
+                    .and_then(|pid| pid.parse::<u64>().ok());
+                answers
+                    .filter(|v| writer.is_some() && v["pid"].as_u64() == writer)
+                    .map(|_| format!("{} is running and writing it", runtime_owner(file)))
+            }
+        };
+        if let Some(why) = in_use {
+            kept.push(format!("{name} ({why})"));
+            continue;
+        }
+        match std::fs::remove_file(&p) {
+            Ok(()) => {}
+            // Gone already: its program removed it as it quit.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => failed.push(format!("{name}: {e}")),
+        }
+    }
+    if real_dir(&pool) && dir_is_empty(&pool) {
+        let _ = std::fs::remove_dir(&pool);
+    }
+    let goes = runtime_folder_goes(dir, keep);
+    if goes && dir_is_empty(dir) {
+        match std::fs::remove_dir(dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => failed.push(format!("the folder: {e}")),
+        }
+    }
+    if !failed.is_empty() {
+        return Err(failed.join("; "));
+    }
+    Ok(if !kept.is_empty() {
+        Some(format!(
+            "kept {}; quit {} and uninstall again to remove the rest",
+            kept.join(", "),
+            if kept.len() == 1 { "it" } else { "them" }
+        ))
+    } else if goes && dir.exists() {
+        Some("kept the folder, which holds files JETCARP did not put there".into())
+    } else {
+        None
+    })
 }
 
 /// `system.uninstall`.
@@ -1591,19 +1812,37 @@ impl Op for SystemUninstall {
                 (s.what, Box::new(move || run().map(|()| None)) as Run)
             })
             .collect();
-        // What the host and the job runners leave behind once nothing holds them: the host's
-        // single-instance lock, and the empty folder of job locks beside the catalog.
-        if let Some(lock) = jetcarp_core::paths::runtime_file("host.lock").filter(|p| p.is_file()) {
+        // What JETCARP's programs leave behind once none of them is running: their files in the
+        // runtime folder (#135), after the host was stopped above, and the empty folder of job
+        // locks beside the catalog.
+        if let Some(dir) = paths.runtime.clone().filter(|d| d.is_dir()) {
             let keep: Vec<PathBuf> = paths
                 .settings
                 .iter()
                 .cloned()
-                .chain([paths.data.clone()])
+                .chain([paths.data.clone(), paths.output.clone()])
                 .collect();
-            steps.push((
-                format!("remove the host's lock file {}", lock.display()),
-                Box::new(move || remove_unheld_lock(&lock, &keep)),
-            ));
+            let found = runtime_leftovers(&dir);
+            let goes = runtime_folder_goes(&dir, &keep);
+            let what = if !found.is_empty() {
+                Some(format!(
+                    "remove what JETCARP's programs left in the runtime folder {}: {}{}",
+                    dir.display(),
+                    runtime_list(&found),
+                    if goes {
+                        ", then the folder if that empties it"
+                    } else {
+                        ""
+                    }
+                ))
+            } else if goes && dir_is_empty(&dir) {
+                Some(format!("remove the empty runtime folder {}", dir.display()))
+            } else {
+                None
+            };
+            if let Some(what) = what {
+                steps.push((what, Box::new(move || clear_runtime(&dir, &keep))));
+            }
         }
         let jobs = jobs_folder(&cx.library_path_now());
         if jobs.is_dir() && dir_is_empty(&jobs) {

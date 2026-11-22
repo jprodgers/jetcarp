@@ -505,11 +505,15 @@ fn program_name(cmd: &Option<Cmd>) -> String {
 fn run() -> Result<()> {
     let cli = Cli::parse_from(args());
     // Every JETCARP program records the memory it holds, so each sees what the others leave of
-    // the one pool reserved for JETCARP (`jetcarp_core::machine::pool`).
-    jetcarp_core::machine::pool::start(
-        &program_name(&cli.cmd),
-        jetcarp_search::jobs::explore::memory_bytes,
-    );
+    // the one pool reserved for JETCARP (`jetcarp_core::machine::pool`). All but `uninstall`,
+    // which builds nothing and removes the records' folder and the runtime folder it is in
+    // (#135): its own record would make them again.
+    if !matches!(cli.cmd, Some(Cmd::Uninstall(_))) {
+        jetcarp_core::machine::pool::start(
+            &program_name(&cli.cmd),
+            jetcarp_search::jobs::explore::memory_bytes,
+        );
+    }
     let Some(cmd) = cli.cmd else {
         return jetcarp_app::run(cli.app).map_err(|e| anyhow::anyhow!(e));
     };
