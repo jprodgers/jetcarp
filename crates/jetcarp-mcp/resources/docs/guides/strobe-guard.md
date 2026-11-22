@@ -114,9 +114,9 @@ still lifes, gliders and Life's ash are read as before.
 
 <a id="restless-change"></a>**Restless change.** Some rules settle into dense ash that keeps
 changing in part of each tile without coming back: Walled Cities, 34 Life and Long Life, and soups
-that stay chaotic, such as Seeds, Replicator and Fredkin, change a fifth to two thirds of their
+that stay chaotic, such as Seeds, Replicator and Fredkin, change two fifths to two thirds of their
 cells every generation. Counted pixel by pixel, WCAG counts such ash as flashing, and concurrently:
-in each frame the pixels changing, each of them more than three times in the last second, cover
+in each frame the pixels changing, each flashing more than three times in the last second, cover
 more than a quarter of a 10° field. IRIS, which takes the mean of the whole frame, does not, since
 its mean hardly moves. So a tile's windows' changes also count apart, oscillating or not, where its
 mean moved much less than they did and neighbouring tiles changed too, each window's over the
@@ -185,8 +185,8 @@ changes with its neighbours in turn (large cells, one tile up as the next goes d
 softened. Either way the scene is slowed, and the veil lets go once it no longer flashes.
 [Restless change](#restless-change) is veiled the same way, at once, where it flashes on its own
 twice a second over a quarter of a 10° field, well before the seven transitions that fail: before,
-it was only softened, which holds a tile's mean and not its pixels, and up to a second and a half
-of flashing reached the screen before the scene was slowed. A Life soup and Brian's Brain at 30
+it was only softened, which holds a tile's mean and not its pixels, and up to 2.7 seconds of
+flashing reached the screen before the scene was slowed. A Life soup and Brian's Brain at 30
 generations a second count 3 at most this way, so they are left to the softening.
 
 The guard changes only what is shown and how fast generations are shown. A world computes the same
@@ -349,10 +349,10 @@ whole screen changes in part of every tile, every frame, until the scene is slow
 tile's windows with the frame before ([Change in part of a tile](#partial-change)) doubled these,
 from 0.5, 0.35 and 1.5 ms; keeping a second of each tile's windows' changes, for
 [restless change](#restless-change), added about a tenth, and a quarter to the frames that change
-everywhere every frame, and takes about 28 MB more a meter at 3840 × 2160. Softening costs more, 0.15 ms a frame at 1080p on the same GPU,
-but only while it acts. The stripe check takes about 3 ms of one processor core for a 1080p frame,
-four times a second. On a surface the guard cannot read in place, each frame is drawn into a
-texture and copied to the screen.
+everywhere every frame, and takes about 28 MB more a meter at 3840 × 2160. Softening costs more,
+0.15 ms a frame at 1080p on the same GPU, but only while it acts. The stripe check takes about
+3 ms of one processor core for a 1080p frame, four times a second. On a surface the guard cannot
+read in place, each frame is drawn into a texture and copied to the screen.
 
 ## What it cannot do
 

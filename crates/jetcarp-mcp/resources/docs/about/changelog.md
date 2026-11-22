@@ -469,7 +469,7 @@ day later (0.4.2: 17 November here, 18 November there).
   [#275](https://github.com/jprodgers/jetcarp/issues/275))
 - **The strobe guard veils dense restless ash at once.** Ash that keeps changing in part of each
   tile without coming back (Walled Cities, 34 Life, Long Life, a Seeds soup) was softened and
-  slowed, but up to a second and a half of flashing reached the screen first; such change now
+  slowed, but up to 2.7 seconds of flashing reached the screen first; such change now
   counts where it flashes on its own and is veiled at once, while Brian's Brain and Life soups,
   which WCAG counted pixel by pixel does not count as flashing together, are left alone.
   ([Restless change](../guides/strobe-guard.md#restless-change),
