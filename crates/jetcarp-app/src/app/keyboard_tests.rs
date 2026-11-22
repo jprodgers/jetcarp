@@ -1291,3 +1291,64 @@ fn child_changes_are_announced_to_a_screen_reader() {
     );
     done();
 }
+
+/// Steps obey the strobe guard as a run does (#293): with the guard's cap in place, steps held
+/// down come no faster than the cap; while it holds a pause, no faster than its slowest pace; a
+/// calm scene steps at any rate, and the steps' rate is the pace the guard is told. (Holding S on a
+/// flashing scene stepped it at the key's repeat rate, past the cap and the pause, and now and then
+/// a flash reached the screen.)
+#[test]
+fn steps_obey_the_strobe_guard() {
+    in_scratch("app::keyboard_tests::child_steps_obey_the_strobe_guard");
+}
+
+#[test]
+#[ignore = "started by steps_obey_the_strobe_guard, in a scratch process"]
+fn child_steps_obey_the_strobe_guard() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
+    // What the grid's guard said this frame, stood in (the test has no GPU to measure with).
+    fn guard_says(k: &mut Kb, cap: Option<f32>, paused: Option<&str>) {
+        let now = k.app.started.elapsed().as_secs_f64();
+        let mut out = k.app.strobe.out.lock().unwrap();
+        let v = out.views.entry(super::view::TILE_VIEW).or_default();
+        v.at = now;
+        v.cap = cap;
+        v.paused = paused.map(String::from);
+    }
+    // 30 presses of S, a frame each, as a key held down; the generations they made, and how long
+    // they took.
+    fn hold_s(k: &mut Kb, cap: Option<f32>, paused: Option<&str>) -> (u64, f64) {
+        let (g0, t0) = (k.app.world.generation, std::time::Instant::now());
+        for _ in 0..30 {
+            guard_says(k, cap, paused);
+            k.key(Key::S);
+        }
+        (k.app.world.generation - g0, t0.elapsed().as_secs_f64())
+    }
+    let (made, secs) = hold_s(&mut k, None, None);
+    assert_eq!(made, 30, "a calm scene steps at any rate");
+    assert!(
+        k.app.strobe.reached.is_some_and(|r| r >= 1.0),
+        "the steps' rate is the pace the guard is told: {:?}",
+        k.app.strobe.reached
+    );
+    let _ = secs;
+    let cap = 2.0;
+    let (made, secs) = hold_s(&mut k, Some(cap), None);
+    let most = 1 + (secs * cap as f64).floor() as u64;
+    assert!(
+        made <= most,
+        "with a cap of {cap} a second, {made} steps in {secs:.2} s (at most {most})"
+    );
+    let pace = jetcarp_core::strobe::guard::MIN_PACE;
+    let (made, secs) = hold_s(&mut k, None, Some("test"));
+    let most = 1 + (secs * pace as f64).floor() as u64;
+    assert!(
+        made <= most,
+        "while the guard holds a pause, {made} steps in {secs:.2} s (at most {most})"
+    );
+    done();
+}
