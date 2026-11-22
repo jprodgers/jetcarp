@@ -31,15 +31,22 @@ menu is open.
 
 **Space** or **Enter** presses the button, ticks the box, chooses the item, or opens the list that
 has the keyboard; in an open list, the arrows move and Enter chooses. On a slider the arrows
-change its value; a number box takes typing once it has the keyboard.
+change its value; a number box takes typing once it has the keyboard. Elsewhere the arrows go to
+the nearest control that way, and stay in the window they start in: at the top of a floating
+window, ↑ leaves the keyboard where it is. In a list of check boxes, such as the setup window's
+*What it searches*, ↓ and ↑ go through the boxes one by one, as Tab and Shift+Tab do.
 
 **Esc** leaves a text box, closes a menu or a list, closes *Export animation* and the two
-confirmations, and closes the tool window whose control has the keyboard (Esc in one of its text
-boxes only leaves the box), the setup window among them. **Enter** confirms: *Export animation*
-opens with *Export…* holding the keyboard, each page of the setup window with its main button
-(*Next*, *Start*, *Close*), and each confirmation with its safe choice (*Keep it on*, *Save the
-softened version*). The photosensitive seizure warning waits for an answer: neither Esc nor Enter
-answers it for you.
+confirmations, and closes the tool window or floating pane whose control has the keyboard, the
+setup window among them. In one of its text boxes, the first Esc leaves the box and a second
+closes the window. In a docked pane, Esc takes the keyboard back to the grid. **Ctrl+W** (⌘W on
+macOS) closes the tool window or dialog that has the keyboard, from a text box too; in a window
+popped out to a window of its own, it brings it back into the main window, as closing it does.
+
+**Enter** confirms: *Export animation* opens with *Export…* holding the keyboard, each page of the
+setup window with its main button (*Next*, *Start*, *Close*), and each confirmation with its safe
+choice (*Keep it on*, *Save the softened version*). The photosensitive seizure warning waits for
+an answer: neither Esc nor Enter answers it for you.
 
 **The single-key shortcuts** (R, F, S, + and −) act whatever has the keyboard, except while you
 are typing in a text box; the function keys (F1, F6, F9 to F12) act even then. Space, Enter, Tab
@@ -47,6 +54,10 @@ and the arrows belong to the control that has the keyboard, so while one has it,
 rather than running the world: press Esc first, and Space runs and pauses again.
 
 ### Panes and tool windows
+
+Each floating tool window and pane has a close button, ×, at the right of its title bar: the last
+control Tab reaches in the window, named *Close* and the window's title (*Close Accessibility*)
+for screen readers. Esc and Ctrl+W close the window as it does.
 
 A pane's tab takes the keyboard like a button: Space or Enter shows its pane. The buttons at the
 right of each group of tabs hide the pane, pop it out to a window of its own, or float it. Every
@@ -113,7 +124,8 @@ a control); the function keys act everywhere.
 | <kbd>F10</kbd> | <kbd>F10</kbd> | The menu bar: opens File. ← and → move along it, ↓ goes into a menu, ← comes back out, Enter chooses, Esc closes |
 | <kbd>Space</kbd>, <kbd>Enter</kbd> | <kbd>Space</kbd>, <kbd>Return</kbd> | Press the button, tick the box, choose the item, open the list that has the keyboard |
 | <kbd>Arrow keys</kbd> | <kbd>Arrow keys</kbd> | Between controls; in a menu or list, between its items; on a slider, its value |
-| <kbd>Esc</kbd> | <kbd>Esc</kbd> | Leave a text box; close a menu, a list, a dialog, or the tool window that has the keyboard |
+| <kbd>Esc</kbd> | <kbd>Esc</kbd> | Leave a text box; close a menu, a list, a dialog, or the tool window that has the keyboard (from a text box, Esc twice); in a docked pane, back to the grid |
+| <kbd>Ctrl+W</kbd> | <kbd>⌘W</kbd> | Close the tool window or dialog that has the keyboard (a popped-out one goes back to the main window) |
 | <kbd>Shift+F10</kbd> | <kbd>⇧F10</kbd> | A Quick Start card's menu: rate it, hide it |
 | <kbd>Alt (held)</kbd> | <kbd>⌥ (held)</kbd> | Show the auto-hidden menu bar |
 

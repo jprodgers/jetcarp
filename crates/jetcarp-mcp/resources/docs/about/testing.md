@@ -126,8 +126,14 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   Quick Start, scroll each into view and draw the focus ring round it, in the standard and the
   high-contrast theme; F6 must visit the menu bar, each group of panes, the grid, the status line
   and each floating window, and Shift+F6 go back; F10, the arrows, Enter and Esc must work the
-  menus and close dialogs and tool windows; the grid's cell cursor must draw, erase, select and
-  move a pattern. In every window, every control must have a role, a name that says something and
+  menus and close dialogs and tool windows; every tool window and dialog, and a floating pane, must
+  close with Esc, with Ctrl+W and through its *Close* button, the last control Tab reaches in it,
+  and Esc in a docked pane must take the keyboard back to the grid; in the setup window's *What it
+  searches*, at three window sizes, ↓ and ↑, Tab and Shift+Tab must go through every choice and
+  back, an arrow must never take the keyboard out of the window, and Space must tick the choice
+  with the keyboard; *Tools → Start an explore search…*, chosen with F10, the arrows and Enter, must
+  open the explore form with the keyboard on its first box; the grid's cell cursor must draw,
+  erase, select and move a pattern. In every window, every control must have a role, a name that says something and
   a value that reads, and the status line must be a live region. Each runs in a process of its
   own with scratch folders (`crates/jetcarp-app/src/app/keyboard_tests.rs`); the cell cursor's
   next cell is checked on thirteen tilings (`cell_cursor.rs`), and an ignored test reads the tree

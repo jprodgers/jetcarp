@@ -326,11 +326,12 @@ stores replays exactly, wherever it is replayed.
 ## In the app
 
 *Tools → Hunts…* starts, watches, stops and resumes searches, and lists every job with its progress
-and finds. Its *Start an explore search…* has a checkbox for each group of tilings and each rule
-family, with *All*, *None* and (for the families) *Default* beside them, and the search's minutes,
-seed, GPU and threads. It opens with everything but isotropic rules ticked, which is the default
-search; untick boxes to search narrowly. Tab reaches every box, and screen readers name each one by
-its words. *Tools → Ants and turmites…* and *Tools → Large sandpile…* do the same for their
+and finds. *Tools → Start an explore search…* opens it at the explore search's form, with the
+keyboard on the form's first box; the *Hunts* window's own *Start an explore search…* button opens
+the same form. The form has a checkbox for each group of tilings and each rule family, with *All*,
+*None* and (for the families) *Default* beside them, and the search's minutes, seed, GPU and
+threads. It opens with everything but isotropic rules ticked, which is the default search; untick
+boxes to search narrowly. Tab reaches every box, and screen readers name each one by its words. *Tools → Ants and turmites…* and *Tools → Large sandpile…* do the same for their
 strategies, *Tools → Catalog tools…* runs collisions and the evolutionary search, and
 *Tools → Pattern library…* browses what all of them found. A job started in the app can be stopped
 or resumed from the command line, and the other way round. In the *Hunts* window, a job whose
