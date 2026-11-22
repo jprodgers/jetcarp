@@ -423,6 +423,53 @@ fn gpu_cost() {
     }
 }
 
+/// A checkerboard of squares smaller than a tile, reversing (#269): its tiles' means do not change,
+/// but WCAG counts it as flashing (its squares are over 0.1°), so the GPU's measure must show it
+/// as the processor's does. Drawn and measured offscreen only. Squares of 2 pixels, under 0.1°, are
+/// exempt.
+#[test]
+fn the_gpu_measure_counts_a_small_reversing_checkerboard() {
+    use jetcarp_core::strobe::Viewing;
+    use jetcarp_core::strobe::flash::{FlashMeter, Level};
+    let Some(g) = gpu() else { return };
+    let (w, h) = (640u32, 480u32);
+    let board = |sq: u32, phase: u32| {
+        let mut v = Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let inside = (200..360).contains(&x) && (150..310).contains(&y);
+                let on = inside && ((x + 1) / sq + (y + 3) / sq + phase) % 2 == 1;
+                let c = if on { 255 } else { 0 };
+                v.extend_from_slice(&[c, c, c, 255]);
+            }
+        }
+        v
+    };
+    let mut s = StrobeGpu::new(&g.device);
+    let mut wrong = vec![];
+    for (sq, fails) in [(4u32, true), (6, true), (12, true), (2, false)] {
+        let maps: Vec<_> = (0..2)
+            .map(|p| {
+                let f = board(sq, p);
+                let tex = g.texture(&f, w, h);
+                let (_, r) = g.frame(&mut s, &tex, &Plan::none_for(w, h), 0.016, p as f64, false);
+                r.input
+            })
+            .collect();
+        let mut m = FlashMeter::new(Viewing::screen(1.0), None);
+        let mut worst = Level::Pass;
+        for f in 0..120u32 {
+            // Ten reversals a second.
+            let r = m.update(&maps[((f / 6) % 2) as usize], f as f64 / 60.0);
+            worst = worst.max(r.level);
+        }
+        if worst.fails() != fails {
+            wrong.push(format!("{sq}-pixel squares: {worst:?}, should fail: {fails}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// Write-only features are missing on some adapters: the pass itself must build on whatever runs
 /// the tests (a software renderer in CI).
 #[test]
