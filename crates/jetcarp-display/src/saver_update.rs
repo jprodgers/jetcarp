@@ -128,8 +128,11 @@ pub fn build(target: &Target, baked: &Baked) -> Result<(), String> {
         .parent()
         .ok_or("the screen saver's folder is unknown")?;
     std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-    // Hidden, so System Settings lists only the bundle itself.
-    let staging = parent.join(format!(".jetcarp-rebuild-{}", std::process::id()));
+    // Hidden, so System Settings lists only the bundle itself; one for each build, as a program
+    // may build twice at once (the app's Install, and its check on a thread).
+    static BUILDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = BUILDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let staging = parent.join(format!(".jetcarp-rebuild-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&staging);
     let fresh = staging.join(BUNDLE);
     let built = macsaver::write_bundle(&fresh, &target.dylib, baked)
