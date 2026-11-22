@@ -14,11 +14,27 @@ at least one target's own run, then renders packaging/about.hbs as cargo-about w
 The renderer knows the handful of handlebars forms about.hbs uses ({{name}}, {{a.b}},
 {{#each}}, {{#if}} with {{else}}), escapes as handlebars does, and removes the lines that hold only
 a block tag, as handlebars does. notices.sh checks it against cargo-about's own rendering.
+
+The page is set in Atkinson Hyperlegible Next, which it carries (#273): the line FONT_FACES in
+about.hbs's style sheet becomes @font-face rules with the WOFF2 files of crates/jetcarp-core/fonts/
+as data: addresses, as the clip-rating page carries them (jetcarp-core's web_fonts.rs), so the page
+works as one file offline. The template, which people edit by hand, keeps no encoded font.
 """
 
+import base64
+import hashlib
 import json
+import pathlib
 import re
 import sys
+
+FONT_FACES = "/* @font-face rules: filled in by packaging/notices_union.py from crates/jetcarp-core/fonts/ */"
+FONTS = pathlib.Path(__file__).resolve().parent.parent / "crates" / "jetcarp-core" / "fonts"
+# (file, weights), as web_fonts.rs gives them for text.
+FACES = [
+    ("AtkinsonHyperlegibleNext-Regular.woff2", "100 549"),
+    ("AtkinsonHyperlegibleNext-Bold.woff2", "550 900"),
+]
 
 TAG = re.compile(r"\{\{\s*([#/]?)\s*([A-Za-z_][\w.]*)?(?:\s+([\w.]+))?\s*\}\}")
 ESCAPES = {"<": "&lt;", ">": "&gt;", '"': "&quot;", "&": "&amp;", "'": "&#x27;", "`": "&#x60;", "=": "&#x3D;"}
@@ -98,6 +114,32 @@ def render(nodes, ctx):
     return "".join(out)
 
 
+def font_faces():
+    """The @font-face rules for FONT_FACES, each file the one the fonts' README names by SHA-256."""
+    readme = (FONTS / "README.md").read_text(encoding="utf-8")
+    rules = []
+    for name, weights in FACES:
+        data = (FONTS / name).read_bytes()
+        digest = hashlib.sha256(data).hexdigest()
+        if not any(name in line and digest in line for line in readme.splitlines()):
+            raise SystemExit(f"{name}'s SHA-256 is not the one crates/jetcarp-core/fonts/README.md gives")
+        rules.append(
+            '@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; '
+            f"font-weight: {weights}; font-display: swap; "
+            f'src: url("data:font/woff2;base64,{base64.b64encode(data).decode()}") format("woff2"); }}'
+        )
+    return ("\n  ").join(
+        ["/* Atkinson Hyperlegible Next (SIL Open Font License 1.1), the Braille Institute's, as JETCARP ships it. */"]
+        + rules
+    )
+
+
+def with_fonts(page):
+    if page.count(FONT_FACES) != 1:
+        raise SystemExit("about.hbs: the style sheet must hold the FONT_FACES line once")
+    return page.replace(FONT_FACES, font_faces())
+
+
 def built_ids(target_json):
     ids = set()
     for lic in target_json["licenses"]:
@@ -144,6 +186,8 @@ def main(argv):
         if dropped:
             print(f"left out, built for no release target: {', '.join(dropped)}", file=sys.stderr)
         data = keep_only(data, ids)
+        sys.stdout.write(with_fonts(render(template, data)))
+        return
     sys.stdout.write(render(template, data))
 
 

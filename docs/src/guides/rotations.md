@@ -27,7 +27,7 @@ built-in rotations, using one, and making your own.
   for that screen (see
   [The Desktop background pane](wallpapers.md#the-desktop-background-pane)).
 - **The system's screen saver:** `jetcarp host saver install --rotation NAME`, or *System screen saver
-  runs* in the *Screensaver* pane. On macOS the rotation is copied into the screen saver, so install it again after changing
+  runs* in the *Screensaver* pane. On macOS the rotation (and the caption's font) is copied into the screen saver, so install it again after changing
   the rotation (see [Wallpapers](wallpapers.md#the-systems-screen-saver)).
 
 While a rotation runs, the ◀ and ▶ buttons in the pane, *Next* and *Previous* in the host's menu,

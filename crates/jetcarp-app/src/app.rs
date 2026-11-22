@@ -255,15 +255,9 @@ impl JetcarpApp {
         };
         // The theme (standard or high contrast, light or dark) is put in place with the settings
         // below (`a11y_frame`).
-        // Ubuntu Light (the default proportional font) has few symbols; fall back to Hack for
-        // arrows, boxes, and dots in labels and buttons.
-        let mut fonts = egui::FontDefinitions::default();
-        if let Some(p) = fonts.families.get_mut(&egui::FontFamily::Proportional)
-            && !p.iter().any(|f| f == "Hack")
-        {
-            p.push("Hack".to_owned());
-        }
-        cc.egui_ctx.set_fonts(fonts);
+        // Atkinson Hyperlegible Next and Mono, egui's fonts behind them (`crate::fonts`); the
+        // font chosen in Settings → Accessibility is put in place with the settings below.
+        crate::fonts::install_default(&cc.egui_ctx);
         let world = World::new(TilingSpec::rect("square", 120, 80, Boundary::Wrap), 1)
             .expect("blank world");
         let geom = Arc::new(Geometry::build(&world.topo, 1));
@@ -361,6 +355,9 @@ impl JetcarpApp {
         app.machine_suggestion();
         // Reduced motion and the theme, before the first scene opens or the first frame draws.
         app.a11y_frame(&cc.egui_ctx);
+        // The installed fonts' character maps, for characters no font in place has, read on a
+        // thread of their own so the first frame doesn't wait (`crate::fonts::FallbackScan`).
+        app.a11y.fonts.fallback.start(&cc.egui_ctx);
         let mut app = app.with_autoshot(&cc.egui_ctx);
         // The photosensitive seizure warning comes first (#96): until it has been answered, the
         // launch waits.

@@ -44,6 +44,7 @@ pub mod caption;
 pub mod crop;
 pub mod desktop_picture;
 pub mod exit;
+pub mod fonts;
 pub mod gnome;
 pub mod gpu;
 pub mod host_settings;

@@ -383,7 +383,7 @@ picture JETCARP writes does.
 *Fit to this computer…*, in the pane's *Performance* group, or `jetcarp host tune`, finds how fine
 each screen's scenes can be on this computer, in a few seconds, and lets you choose.
 
-<img src="../images/guides/desktop-pane-cards.webp" alt="The Desktop background pane after a fit of Until it settles on a 2560 by 1440 screen. In its Performance group: Show every generation (chosen) or Low power, Up to 60 frames a second, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, a line saying the limits are for the whole desktop, with several screens each getting a share by its pixel area, Fit to this computer…, Use the scenes' own sizes, and Measure again by itself when a monitor changes. Below, Life (Quick Start rule:B3/S23), measured as the most demanding scene that steps on the GPU, has four cards, each a picture of the screen at that size: 1 px, 3,686,400 cells, processor 12%, GPU 20%, over the limits; 2 px, 921,600 cells, processor 3.4%, GPU 6.9%, within the limits and Recommended, outlined as the size it shows at; 3 px, its own size, and 4 px, both within the limits. Under the cards, a line saying the other scenes take their sizes from the scene measured on their device, by their cost, at most twice its cells unless you choose, and the other two scenes, B36/S23 and B368/S245, each at 2 px, recommended, in a menu of sizes, with the same work a cell as the measured scene" width="700">
+<img src="../images/guides/desktop-pane-cards.webp" alt="The Desktop background pane after a fit of Until it settles on a 2560 by 1440 screen. In its Performance group: Show every generation (chosen) or Low power, Up to 60 frames a second, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, a line saying the limits are for the whole desktop, with several screens each getting a share by its pixel area, Fit to this computer…, Use the scenes' own sizes, Measure again by itself when a monitor changes, and Use the recommended size for the rest. Below, Life (Quick Start rule:B3/S23), measured as the most demanding scene that steps on the GPU, has four cards, each a picture of the screen at that size: 1 px, 3,686,400 cells, processor 12%, GPU 21%, over the limits; 2 px, 921,600 cells, processor 3.3%, GPU 6.4%, within the limits and Recommended, outlined as the size it shows at; 3 px, its own size, and 6 px, both within the limits. Under the cards, a line saying the other scenes take their sizes from the scene measured on their device, by their cost, at most twice its cells unless you choose, and the other two scenes, B36/S23 and B368/S245, each at 2 px, recommended, in a menu of sizes, with the same work a cell as the measured scene" width="700">
 
 **One scene on each device.** A fit measures the most demanding scene of each screen's rotation
 that steps on the GPU, and the most demanding that steps on the processor: the one with the most
@@ -645,9 +645,10 @@ as it was built until it is installed again.
   `remove` says so and changes nothing.
 - **macOS.** macOS runs screen savers in a sandbox that cannot read JETCARP's settings, so installing
   builds `~/Library/Screen Savers/JETCARP.saver` with the rotation and every item's scene copied
-  inside it, signs it for this machine, and opens System Settings where screen savers are chosen
-  (*System Settings, Wallpaper, Screen Saver…* on macOS 27). Install it again after changing the
-  rotation. It needs `libjetcarp_saver.dylib` beside the `jetcarp` program; a build from source makes
+  inside it, and the caption's font (a font file chosen in *Settings → Accessibility* is copied in
+  whole; see [Font](accessibility-settings.md#font)), signs it for this machine, and opens System
+  Settings where screen savers are chosen (*System Settings, Wallpaper, Screen Saver…* on
+  macOS 27). Install it again after changing the rotation or the font. It needs `libjetcarp_saver.dylib` beside the `jetcarp` program; a build from source makes
   it with `cargo build --release -p jetcarp-saver`. macOS prepares the saver's full-screen views ahead
   of time, as soon as it is chosen and after each run; they hold their first picture, and the scene
   starts moving only once the screen saver has really started. The preview in System Settings always

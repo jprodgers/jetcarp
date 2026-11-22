@@ -126,7 +126,57 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   next cell is checked on thirteen tilings (`cell_cursor.rs`), and an ignored test reads the tree
   again with the starter pack's cards, patterns and ant runs in the windows
   (`screen_reader_tree_with_the_starter_pack`). What a screen reader says aloud is checked by hand
-  (see [What this testing does not cover](#what-this-testing-does-not-cover)).
+  (see [What this testing does not cover](#what-this-testing-does-not-cover)). Every pane, menu and
+  tool window must give screen readers the same roles and names in Atkinson Hyperlegible as in
+  egui's original fonts, where a font's widths and line heights move controls and their labels
+  about (`screen_reader_names_are_the_same_in_every_font`).
+- **The fonts.** The app must start in Atkinson Hyperlegible Next and Mono, with Next Bold for
+  headings, the files byte for byte those the fonts' README names by SHA-256, and egui's fonts
+  behind them in egui's order; egui's original choice must give exactly the fonts the app had
+  before. Every non-ASCII character in the app's and the display crate's strings, read from their
+  source, must be drawn in each family wherever egui's own fonts drew it, and Greek and accented
+  Latin must be drawn; the five macOS key symbols, which no built-in font has, are listed, and CJK
+  is drawn by none of them. With a stand-in installed font that has the key symbols, an arrow and
+  two CJK characters (a font file the test builds, as no machine's fonts can be counted on), every
+  one of those characters must be drawn in each family, in Atkinson and in egui's original fonts:
+  the key symbols and CJK from the installed font, the arrow still from egui's; and the installed
+  fonts' character maps must be read on a thread of their own, starting it taking under 50 ms, and
+  put in place when read. The index of installed fonts by character must give the upright regular
+  face in the smallest file, and leave out LastResort, hidden fonts and files that aren't fonts
+  (`crates/jetcarp-display/src/fonts.rs`); an ignored test times it on a machine's own fonts
+  (`time_the_fallback_scan`: 0.03 to 0.09 ms to start the thread, 9 to 94 ms for the reading on the
+  test machine's 299 font files). Installed fonts must be found by
+  family in nested folders of a scratch font folder, the upright regular face of each, with a file
+  that isn't a font, one without basic Latin and one of another type left out; a font chosen from
+  them must be in place at once, saved in `app.json` and put back by the next start; and a file
+  that isn't a font, one without basic Latin, and one that has gone must each be refused with a
+  sentence that names the file and no folder, the setting going back to Atkinson
+  (`crates/jetcarp-app/src/fonts.rs`, `app/accessibility.rs`). The caption on surfaces with no egui
+  must draw in Atkinson Hyperlegible Next, with Ubuntu Light for the Greek it lacks, and follow
+  the app's font setting in `app.json`: a font file chosen there from the next check without a
+  restart and at the next start, egui's original, then Atkinson again; and with the chosen file
+  removed, Atkinson, with a note that names the file and no folder
+  (`jetcarp-display/src/caption.rs`). Installing the macOS screen saver, in a scratch folder on any
+  system, must record the font chosen and copy its file whole into the bundle's Resources (a
+  collection with its face), and copy nothing for Atkinson or egui's original; a chosen font that
+  is gone or isn't a font must give Atkinson and a warning that names the file and no folder; a
+  bundle of format 1, from before, must still load, in Atkinson, and a newer format be refused;
+  and the saver's loader must draw in the font copied in, and in Atkinson with a note when the
+  copy is broken or gone (`jetcarp-display/src/macsaver.rs`). The caption's last resort must draw
+  a character only an installed font has (the stand-in's CJK and key symbols) in it, behind
+  Atkinson and behind egui's original, on the desktop background too, while what the fonts in place
+  have stays theirs; the installed fonts must be read on a thread of their own, the caption drawn
+  meanwhile with the reading held back (a box for such a character), starting it taking under
+  50 ms, and the font used once read (`caption.rs`). Installing the macOS saver with a rotation
+  named in Chinese must copy in the stand-in installed font that has those characters, and not
+  one the caption needs nothing from, and the saver must draw them from its bundle alone; a
+  rotation its fonts draw whole copies none (`macsaver.rs`). The clip-rating page and the website export's page must
+  carry Atkinson Hyperlegible Next (and the rating page Mono) inside them, the files those the
+  fonts' README names by SHA-256, and fetch nothing from elsewhere
+  (`jetcarp-core/src/web_fonts.rs`, `jetcarp-api/tests/explore.rs`, `jetcarp-store/tests/website.rs`);
+  so must `THIRD_PARTY_LICENSES.html`, Next's regular and bold, which `packaging/notices_union.py`
+  puts in when the page is generated (it refuses a file whose SHA-256 isn't the README's), and
+  CI's check that the page is current regenerates it so.
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the
@@ -159,7 +209,7 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
 
 About 50 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
 book's pictures of the app, and the rest time the program, run very large worlds, need a desktop
-session, or read the app's accessibility tree with the starter pack set up. (The eleven halves of
+session, or read the app's accessibility tree with the starter pack set up. (The twelve halves of
 the keyboard tests that run in a process of their own are ignored too: the suite starts them
 itself, with their scratch folders, and they do nothing when started any other way.)
 

@@ -869,7 +869,7 @@ impl JetcarpApp {
                 });
             combo.response.labelled_by(label.id);
             let tip = if jetcarp_display::saver::BAKED {
-                "Add JETCARP to macOS's screen savers. The rotation is copied in, so install again after changing it"
+                "Add JETCARP to macOS's screen savers. The rotation and the font are copied in, so install again after changing either"
             } else {
                 "Add JETCARP to Windows' list of screen savers"
             };

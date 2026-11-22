@@ -13,6 +13,7 @@ mod dash_ui;
 pub mod desktop_offers;
 mod editor;
 mod file_dialog;
+mod fonts;
 mod frametime;
 mod gpu;
 pub mod gpu_info;
@@ -126,6 +127,10 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
             .with_icon(crate::icon::window_icon())
             .with_inner_size(size)
             .with_min_inner_size([800.0, 500.0]),
+        // The app looks among the installed fonts itself, for a character no font in place has
+        // (`fonts::SystemFallback`); eframe's own provider is built only with a feature JETCARP
+        // leaves off, and would only log that it found nothing.
+        system_font_fallback: false,
         ..Default::default()
     };
     eframe::run_native(

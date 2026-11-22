@@ -45,8 +45,8 @@ kept in your library. *Hide from Quick Start* takes the entry out of the menu, a
 and website exports. `jetcarp library quickstart --hidden` lists hidden entries and `--unhide ID`
 brings one back.
 
-The pictures show the Quick Start just after an Explorer setup with a one-minute build: 1,249
-entries, 79 of them from the starter pack and 873 from the build's atlas. The other 297 are built
+The pictures show the Quick Start just after an Explorer setup with a one-minute build: 1,292
+entries, 79 of them from the starter pack and 842 from the build's atlas. The other 371 are built
 in: a built-in example whose rule an atlas entry also shows is left out, unless it is one of the
 hand-made scenes or those picked for the starter set. [Building your own Quick
 Start](../tutorials/building-quick-start.md) shows how to make more.

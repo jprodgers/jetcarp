@@ -82,7 +82,7 @@ pub enum GnomeAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum SaverAction {
     /// Windows: copy JETCARP to a `.scr` file and open Screen Saver Settings with it selected.
-    /// macOS: build `JETCARP.saver` with the rotation inside it and open System Settings.
+    /// macOS: build `JETCARP.saver` with the rotation and the caption's font inside it and open System Settings.
     Install,
     /// Delete it (Windows: and stop Windows from running it; close Screen Saver Settings first).
     Remove,
@@ -1053,7 +1053,7 @@ pub fn run(a: HostArgs) -> Result<()> {
                     }
                     if saver::BAKED {
                         println!(
-                            "written to {}; choose JETCARP in {} (opening; if it was open already, quit and reopen it to see JETCARP). Install again after changing its rotation",
+                            "written to {}; choose JETCARP in {} (opening; if it was open already, quit and reopen it to see JETCARP). Install again after changing its rotation or the app's font",
                             path.display(),
                             jetcarp_display::macsaver::settings_place()
                         );

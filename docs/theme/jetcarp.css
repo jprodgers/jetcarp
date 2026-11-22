@@ -1,4 +1,17 @@
 /* JETCARP documentation: figures, captions and wide tables. */
+
+/* Text in Atkinson Hyperlegible Next and code in Atkinson Hyperlegible Mono, fonts whose letters
+   are easier to tell apart (theme/fonts/, loaded by fonts/fonts.css), with the system's own fonts
+   behind them for a character they lack. */
+:root {
+  --mono-font: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace, monospace;
+}
+html {
+  font-family: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", Roboto,
+    "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+
 figure {
   margin: 1.5em 0;
   text-align: center;

@@ -1291,3 +1291,78 @@ fn child_changes_are_announced_to_a_screen_reader() {
     );
     done();
 }
+
+#[test]
+fn screen_reader_names_are_the_same_in_every_font() {
+    in_scratch("app::keyboard_tests::child_screen_reader_names_are_the_same_in_every_font");
+}
+
+/// What a screen reader is told doesn't depend on the font: every pane, menu and tool window gives
+/// the same roles and names in Atkinson Hyperlegible (the default) as in egui's original fonts.
+#[test]
+#[ignore]
+fn child_screen_reader_names_are_the_same_in_every_font() {
+    use crate::fonts::FontChoice;
+    if !child() {
+        return;
+    }
+    // Every (role, name) a screen reader meets in each part of the app, in this font.
+    let names = |font: FontChoice| -> (Vec<(String, Vec<String>)>, String) {
+        let mut k = Kb::with_life();
+        k.app.a11y.settings.font = font.clone();
+        k.app.a11y.settings.mono_font = font;
+        k.frames(3);
+        let mut seen = vec![];
+        let mut take = |k: &Kb, what: &str| {
+            let mut v: Vec<String> = k
+                .nodes
+                .values()
+                .map(|n| format!("{:?} {:?}", n.role, k.name(n)))
+                .collect();
+            v.sort();
+            seen.push((what.to_string(), v));
+        };
+        for p in panes::PANES {
+            k.app.run_action(&k.ctx.clone(), menu::Action::Pane(p.id));
+            k.frames(3);
+            take(&k, p.title);
+        }
+        for (title, _) in menu::MENUS {
+            k.app.shell.open_menu = Some(title.to_string());
+            k.frames(3);
+            take(&k, title);
+        }
+        k.app.shell.open_menu = None;
+        k.key(Key::Escape);
+        for t in menu::ToolWin::ALL {
+            k.app.set_tool_open(t, true);
+            k.frames(4);
+            take(&k, t.label());
+            k.app.set_tool_open(t, false);
+            k.frames(1);
+        }
+        // (Not the Quick Start: its cards are chosen at random each time.)
+        let first = k
+            .ctx
+            .fonts(|f| f.definitions().families[&egui::FontFamily::Proportional][0].clone());
+        (seen, first)
+    };
+    let (atkinson, a_font) = names(FontChoice::Atkinson);
+    let (original, o_font) = names(FontChoice::Egui);
+    // The two runs drew in different fonts.
+    assert_eq!(a_font, crate::fonts::NEXT);
+    assert_eq!(o_font, "Ubuntu-Light");
+    let mut differ = vec![];
+    for ((what, a), (_, o)) in atkinson.iter().zip(&original) {
+        let only_a: Vec<&String> = a.iter().filter(|n| !o.contains(n)).collect();
+        let only_o: Vec<&String> = o.iter().filter(|n| !a.contains(n)).collect();
+        if !only_a.is_empty() || !only_o.is_empty() {
+            differ.push(format!(
+                "{what}: only in Atkinson {only_a:?}; only in egui's {only_o:?}"
+            ));
+        }
+    }
+    assert!(differ.is_empty(), "{}", differ.join("\n"));
+    assert!(atkinson.iter().all(|(_, v)| !v.is_empty()));
+    done();
+}

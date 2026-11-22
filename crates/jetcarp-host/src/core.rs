@@ -248,6 +248,10 @@ pub struct Core {
     /// The saved answer is *at risk*: the guard's stricter stripe rule.
     desktop_at_risk: bool,
     guard_at: f64,
+    /// The caption's font, as the app's font setting names it, read again with the strobe
+    /// guard's setting (every [`GUARD_CHECK`] seconds), so a font chosen in the app shows
+    /// without a restart.
+    caption_font: jetcarp_display::caption::FontWatch,
 }
 
 /// A running screen's monitor, as a fit by itself compares it with the one it was fitted for.
@@ -454,6 +458,18 @@ impl Core {
     ) -> Result<Core, String> {
         let lookup = jetcarp_display::stage::library_lookup();
         let policy = settings.gpu_policy();
+        let (caption_font, font_note) =
+            jetcarp_display::caption::FontWatch::new(jetcarp_core::paths::config_dir());
+        // The caption's last resort, as the app's: the installed fonts' character maps, read on a
+        // thread of their own so no frame waits. Tests and screenshot runs read none of this
+        // machine's fonts, so they look the same everywhere.
+        let font_dirs = if cfg!(test) || std::env::var_os("JETCARP_SCREENSHOT").is_some() {
+            vec![]
+        } else {
+            jetcarp_display::fonts::system_dirs()
+        };
+        let caption_font =
+            caption_font.with_last_resort(jetcarp_display::caption::LastResort::start(font_dirs));
         let mut core = Core {
             settings,
             screens: vec![],
@@ -499,9 +515,13 @@ impl Core {
             desktop_guard: jetcarp_core::photosensitivity::guard_on(GuardPlace::Desktop),
             desktop_at_risk: jetcarp_core::photosensitivity::at_risk(),
             guard_at: 0.0,
+            caption_font,
         };
         if let Some(w) = warning {
             core.note(w);
+        }
+        if let Some(n) = font_note {
+            core.note(n);
         }
         core.build_screens()?;
         Ok(core)
@@ -881,6 +901,9 @@ impl Core {
                     "the strobe guard's stripe rule is the usual one"
                 });
             }
+            if let Some(n) = self.caption_font.check() {
+                self.note(n);
+            }
             if on != self.desktop_guard {
                 self.desktop_guard = on;
                 self.note(if on {
@@ -930,6 +953,11 @@ impl Core {
         for n in notes {
             self.note(n);
         }
+    }
+
+    /// The fonts the caption is drawn in: the app's font setting's.
+    pub fn caption_font(&self) -> &std::sync::Arc<jetcarp_display::caption::CaptionFont> {
+        self.caption_font.font()
     }
 
     /// Whether the strobe guard is on for the desktop background and the screen saver.

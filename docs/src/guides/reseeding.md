@@ -103,7 +103,7 @@ grid of 200 × 140 squares and scaled to the size of yours:
 | Full refresh when settled | Flip 25% of all cells when the world settles (cooldown 300) |
 
 Type a name and press *Save as preset* to keep the current policies as a preset of your own (saved in
-the app's settings and shown with a ★); *Delete…* removes one.
+the app's settings and shown with a `*` before its name); *Delete…* removes one.
 
 **Automatic policies** lists the policies, each with a checkbox that switches it on and off, its mode
 and settings, the *Sign* when a JACA field is involved, *When* (*Settled*, with *Activity below*,

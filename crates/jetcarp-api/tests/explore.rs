@@ -532,6 +532,12 @@ fn a_clips_rating_page_saves_ratings_that_reviews_read_back() {
     assert_eq!(c["page"], out.join("index.html").display().to_string());
     assert!(!page.contains("http://") && !page.contains("https://"));
     assert!(!page.contains("__"), "a slot was left unfilled");
+    // In Atkinson Hyperlegible Next and Mono, as the app is, carried in the page itself.
+    use jetcarp_core::web_fonts::{self, Faces};
+    assert!(page.contains(&web_fonts::font_faces(Faces::TextAndMono)));
+    assert!(page.contains(&web_fonts::base64(web_fonts::MONO_REGULAR)));
+    assert!(page.contains("--body: \"Atkinson Hyperlegible Next\""));
+    assert!(page.contains("--mono: \"Atkinson Hyperlegible Mono\""));
     let clips = c["clips"].as_array().unwrap();
     let uuid = cx.library().job(job).unwrap().uuid;
     assert!(page.contains(&format!("\"search\":\"{uuid}\"")));

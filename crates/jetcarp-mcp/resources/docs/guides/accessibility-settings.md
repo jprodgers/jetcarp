@@ -1,14 +1,15 @@
 # Accessibility settings
 
 *Settings → Accessibility* holds the app's settings for reduced motion, the high-contrast theme,
-light or dark, and the palettes that scenes are drawn in when they don't choose their own. Reduced
+light or dark, the fonts, and the palettes that scenes are drawn in when they don't choose their
+own. Reduced
 motion and high contrast follow your system's settings unless you choose otherwise here. The app
 reads the system's settings when it starts and every couple of seconds while it runs, so a change
 you make in your system's settings shows within a moment, without a restart. The app can be used
 from the keyboard alone and with a screen reader: see
 [Using the app from the keyboard](keyboard.md).
 
-<img src="../images/guides/accessibility-window.webp" alt="The Accessibility window: Reduced motion, with Follow the system chosen; Theme, with Follow the system, High contrast and Standard, and Light or dark; and Palettes for scenes that name none, with a button that uses the palettes chosen for colour-vision deficiency and a palette list for most rules, JACA's +1 cells and JACA's −1 cells" width="520">
+<img src="../images/guides/accessibility-window.webp" alt="The Accessibility window: Reduced motion, with Follow the system chosen; Theme, with Follow the system, High contrast and Standard, and Light or dark; Font, with Atkinson Hyperlegible Next chosen for the font and Atkinson Hyperlegible Mono for the monospace font; and Palettes for scenes that name none, with a button that uses the palettes chosen for colour-vision deficiency and a palette list for most rules, JACA's +1 cells and JACA's −1 cells" width="520">
 
 The settings are saved with the app's other settings (the `accessibility` section of `app.json`
 in the [settings folder](../reference/folders.md)). They are separate from the strobe guard, which
@@ -57,7 +58,7 @@ and the screen savers have their own settings (see
 The high-contrast theme draws the app's controls in black and white, in a dark or a light form:
 
 <figure class="pair">
-<div><img src="../images/guides/accessibility-high-contrast-dark.webp" alt="The app in the dark high-contrast theme: white text on black panes and menus, white outlines round every button and field, and a JACA world on the Cairo tiling in blue and orange" width="480"></div>
+<div><img src="../images/guides/accessibility-high-contrast-dark.webp" alt="The app in the dark high-contrast theme: white text on black panes and menus, white outlines round every button and field, the Accessibility window open with its Font section, and a JACA world on the Cairo tiling in blue and orange" width="480"></div>
 <div><img src="../images/guides/accessibility-high-contrast-light.webp" alt="The same app in the light high-contrast theme: black text on white panes and menus, black outlines round every button and field" width="480"></div>
 <figcaption>The high-contrast theme, dark and light, with the Accessibility window open over a JACA
 world drawn in Cobalt and Saffron, the palettes chosen for colour-vision deficiency. Scene
@@ -99,6 +100,73 @@ choice: on Windows and macOS, and on Linux through the desktop's settings portal
 (`org.freedesktop.appearance color-scheme`, or GNOME's own `org.gnome.desktop.interface
 color-scheme` where there is no portal). GNOME's *Light* style says no preference there, and the
 app takes it as light; a desktop it can't read at all leaves the app dark.
+
+## Font
+
+The app's words are in **Atkinson Hyperlegible Next**, and its monospaced text (rules, scripts,
+numbers in tables) in **Atkinson Hyperlegible Mono**: fonts whose letters are easier to tell
+apart, designed by the Braille Institute for low-vision readers. Headings and window titles are
+in its bold. So is this book, and so are the pages JETCARP writes for a browser (the clip-rating
+page and the website export's page) and the notices of the libraries it is built from
+(`THIRD_PARTY_LICENSES.html`), which carry the fonts inside them.
+
+Two lists choose the fonts, **Font** for the app's words and **Monospace font** for its
+monospaced text. Each offers:
+
+- **Atkinson Hyperlegible Next** (or **Mono**), JETCARP's, the default;
+- **Ubuntu Light** (or **Hack**), egui's original fonts, as JETCARP drew before 0.4.3;
+- **every font installed on this computer**, by its family name. The app looks for them when the
+  window first opens, in each system's usual folders: `/usr/share/fonts`, `/usr/local/share/fonts`,
+  `~/.local/share/fonts` and `~/.fonts` on Linux; `C:\Windows\Fonts` and
+  `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows; `/System/Library/Fonts`, `/Library/Fonts`
+  and `~/Library/Fonts` on macOS. It lists the fonts that draw basic Latin letters and digits, and
+  draws each family in its upright face nearest regular weight. Someone who reads more easily in
+  another font chooses it here once it is installed;
+- **Choose a font file…**, for a TrueType or OpenType file (`.ttf`, `.otf`, `.ttc`) that isn't
+  installed.
+
+The choice applies at once, and is saved with the other settings (`font` and `mono_font` in the
+`accessibility` section of `app.json`, the file's path among them). Whatever font is chosen,
+egui's own fonts stay behind it: a character the font lacks is drawn in Ubuntu Light (Greek,
+Cyrillic and more Latin letters), then egui's icons, then Hack (arrows, boxes and dots).
+
+A character that none of those has is drawn, as a last resort, in a font installed on the computer
+that has it: the macOS key symbols (⌘, ⌥, ⌃, ⌫, ⌦) in the keyboard window's macOS column and the
+macOS menus, which macOS's own fonts have, and Chinese, Japanese and Korean, wherever a font for
+them is installed. The app reads which characters each installed font has (from the folders
+above) when it starts, on a thread of its own so starting isn't held up; until it has, which takes
+a fraction of a second, such a character is a box. Of the fonts that have a character, it uses
+the upright regular face in the smallest file, so the same fonts give the same answer every time.
+Without a font that has it, a character is still drawn as a box.
+
+**The caption on the desktop background follows the Font setting** (its first list): the desktop
+background reads it from `app.json` when it starts and again every couple of seconds, so a font
+chosen in the app shows on the desktop without a restart. Behind the chosen font, the caption
+has Ubuntu Light, as the app has (with egui's original choice it is drawn in Ubuntu Light alone),
+and the same last resort: a character neither has, such as a rotation named in Chinese, is drawn
+in an installed font that has it. The desktop background reads which characters the installed
+fonts have when it starts, on a thread of its own so no frame waits; until it has, such a
+character is a box, and the caption is drawn again once it has.
+If the chosen font can't be loaded there (a file since removed), the caption is drawn in
+Atkinson Hyperlegible Next and the desktop background's log says why. The Windows screen saver
+reads the setting when it starts.
+
+**The macOS screen saver takes the font when it is installed.** macOS runs it in a sandbox that
+can't read JETCARP's settings, nor be counted on to read your font folders, so installing it
+(`jetcarp host saver install`, or *Install* in the *Screensaver* pane) copies the chosen font file
+into the saver, as it copies the rotation; Atkinson Hyperlegible Next and egui's original fonts are
+in the saver already. Installing also copies in the installed fonts the last resort would use for
+the characters its caption can show (the rotation's name, the rules' names and notations, the
+grids' names) that its fonts lack. Install it again after changing the font. A font that can't be
+read at install is left out and the saver's caption is in Atkinson Hyperlegible Next, and the
+install says why; so does the saver's log if its copy is later missing or broken. The font file is
+copied whole: a few hundred kilobytes for most fonts, but a collection of Chinese, Japanese and
+Korean faces can be tens of megabytes.
+
+A file that isn't a font JETCARP can read, or a font with no basic Latin letters and digits, is
+refused with a sentence saying so, and the setting stays as it was. If a font chosen earlier has
+since been removed, the app goes back to Atkinson Hyperlegible when it starts, and says why on the
+status line.
 
 ## Palettes for scenes that name none
 

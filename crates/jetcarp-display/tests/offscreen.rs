@@ -411,6 +411,17 @@ fn a_caption_draws_in_its_corner_and_nowhere_else() {
 
     let px = shot(&mut painter, &settings, 0.0);
     assert!(px.chunks_exact(4).all(|p| p[..3] == [0, 0, 0]), "invisible");
+
+    // Another font (the app's setting changed): the same words are laid out again in it.
+    let atkinson = shot(&mut painter, &settings, 1.0);
+    let egui = jetcarp_display::caption::CaptionFont::for_choice(
+        &jetcarp_display::fonts::FontChoice::Egui,
+    )
+    .unwrap();
+    painter.set_font(&std::sync::Arc::new(egui));
+    let ubuntu = shot(&mut painter, &settings, 1.0);
+    assert!(lit(&ubuntu, false, true) > 100, "text in the top right");
+    assert_ne!(atkinson, ubuntu, "drawn in the new font");
 }
 
 #[test]

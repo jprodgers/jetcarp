@@ -14,6 +14,8 @@
 # target, and packaging/notices_union.py keeps only the crates some target builds. Two checks guard
 # that step: rendering cargo-about's own data unfiltered must give exactly cargo-about's page, and
 # the crates kept must be exactly those `cargo tree` lists for the targets (JETCARP's own aside).
+# notices_union.py also puts the fonts the page is set in (crates/jetcarp-core/fonts/) into its
+# style sheet, where about.hbs has a line for them, so the template holds no encoded font.
 set -euo pipefail
 
 want=0.9.3

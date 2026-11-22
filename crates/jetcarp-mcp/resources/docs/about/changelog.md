@@ -142,6 +142,36 @@ day later (0.4.2: 17 November here, 18 November there).
   the light and high-contrast themes, where they kept the grid's dark backdrop.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
   [#220](https://github.com/jprodgers/jetcarp/issues/220))
+- **A font whose letters are easier to tell apart, and any font you like.** The app's words are
+  now in Atkinson Hyperlegible Next, its monospaced text in Atkinson Hyperlegible Mono, and its
+  headings and window titles in Atkinson Hyperlegible Next Bold: fonts whose letters are easier to
+  tell apart, designed by the Braille Institute for low-vision readers. The book is set in it, from
+  font files that come with the book, and so are the clip-rating page, the website export's
+  page and `THIRD_PARTY_LICENSES.html`, which carry the fonts inside them and still work offline
+  as one file. *Settings →
+  Accessibility* has a *Font* and a *Monospace font*: Atkinson (the default), egui's original
+  fonts, every font installed on the computer, or a font file. The choice applies at once and is
+  saved, and the caption on the desktop background and the Windows screen saver follows it: the
+  desktop background reads the setting every couple of seconds, so a font chosen in the app shows
+  there without a restart (Atkinson when the chosen font can't be loaded). The macOS screen saver,
+  which can't read the setting, takes the font when it is installed: the font file is copied into
+  it, so install it again after changing the font. egui's fonts stay
+  behind whichever font is chosen, for any character it lacks; a character none of them has, such
+  as the macOS key symbols (⌘, ⌥) or Chinese, Japanese and Korean, is drawn in an installed font
+  that has it, found when the app starts without holding it up, and so it is in the desktop
+  background's caption (the macOS screen saver has those its caption needs copied in); and a file
+  that isn't a font, or a
+  font without basic Latin letters and digits, is refused with a sentence saying so. A preset of
+  your own in the Reseed pane is marked with `*`, which every font has, rather than a star. The
+  fonts ship unmodified under the SIL Open Font License 1.1. Tests check the default fonts, that
+  every symbol the interface uses is still drawn, and with an installed font that has them the key
+  symbols too, that an installed font chosen is used, saved and put back at the next start, that
+  the desktop background's caption follows the setting and goes back to Atkinson when the chosen
+  font file is gone, that installing the macOS screen saver copies the chosen font in and a saver
+  installed before still loads, that the caption draws a character only an installed font has
+  without waiting for the installed fonts to be read, that a bad file is refused, and that screen readers are told the same names
+  in every font. Every picture of the app in the book is drawn again.
+  ([Accessibility settings](../guides/accessibility-settings.md#font))
 - **Copy as RLE.** *Edit → Copy as RLE* copies the world's pattern, and *Copy as RLE* on a library
   pattern copies that one, as the run-length text Golly and LifeViewer read, ready to post on the
   ConwayLife forums: two-state B/S rules on the square grid (Moore or von Neumann) and the hexagon
@@ -501,6 +531,14 @@ day later (0.4.2: 17 November here, 18 November there).
   on white, and is now drawn in the theme's colours.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
   [#137](https://github.com/jprodgers/jetcarp/issues/137))
+- **A list or number named by the label beside it is no longer named by one in another pane.** A
+  pane's rows scrolled out of view lie, on screen, where the pane below it is drawn, so a list in
+  the *Screensaver* pane could take its name from the *Reseed* pane's "Reseed now"; the label must
+  now be in the same pane, and both on screen or both scrolled away.
+- **The notices name the fonts a release contains.** The licence page and `THIRD_PARTY_NOTICES.md`
+  said releases bundle egui's Noto Emoji and emoji-icon-font, which JETCARP doesn't build in; they
+  now name egui's five icons, the only part of emoji-icon-font it does, and add Atkinson
+  Hyperlegible Next and Mono.
 - **A number past 32 bits is refused, not wrapped round to a small one.** A size of
   `[4294967304, 8]` made an 8 by 8 grid, a paste at index 4,294,967,301 landed on cell 5, a cell
   list's cell 4,294,967,596 (or state 257) was cell 300 (state 1) in `search.try` and scripts'

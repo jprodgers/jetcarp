@@ -61,6 +61,7 @@ pub mod topology;
 pub mod turmite;
 pub mod vonneumann;
 pub mod wallpaper;
+pub mod web_fonts;
 pub mod window;
 pub mod world;
 pub mod zomega;

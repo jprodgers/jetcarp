@@ -14,7 +14,7 @@
 //! DIR/media/quickstart/<id>/...          the same for Quick Start entries (from the seed)
 //! DIR/media/ant/<id>/...                 the same for ants (a highway's loop alone, other
 //!                                        outcomes their build-up from step 0)
-//! DIR/index.html                         a viewer page over the manifest ([`PAGE`], written by
+//! DIR/index.html                         a viewer page over the manifest ([`page`], written by
 //!                                        [`write_page`]; `jetcarp site export` does)
 //! ```
 //!
@@ -49,19 +49,30 @@ use std::path::{Path, PathBuf};
 pub const FORMAT: u32 = 1;
 
 /// A plain HTML and JavaScript page over an export: it reads `manifest.json` and shows every
-/// item's animation in a grid, with filters and a detail view (`data/site/index.html`).
+/// item's animation in a grid, with filters and a detail view (`data/site/index.html`), its
+/// `__FONTS__` slot filled by [`page`].
 pub const PAGE: &str = include_str!("../data/site/index.html");
 
-/// Write [`PAGE`] as `DIR/index.html`, unless it is there already unchanged. Returns whether it
+/// [`PAGE`] as written: with its font, Atkinson Hyperlegible Next, carried inside it
+/// ([`jetcarp_core::web_fonts`]), so it fetches no font from elsewhere.
+pub fn page() -> String {
+    PAGE.replace(
+        "__FONTS__",
+        &jetcarp_core::web_fonts::font_faces(jetcarp_core::web_fonts::Faces::Text),
+    )
+}
+
+/// Write [`page`] as `DIR/index.html`, unless it is there already unchanged. Returns whether it
 /// was written. [`export`] leaves the page alone: it is not part of the manifest. A symbolic link
 /// at `index.html` that leads out of `dir` is refused ([`inside`]).
 pub fn write_page(dir: &Path) -> Result<bool, String> {
     let p = inside(dir, "index.html")?;
-    if std::fs::read_to_string(&p).ok().as_deref() == Some(PAGE) {
+    let page = page();
+    if std::fs::read_to_string(&p).ok().as_deref() == Some(page.as_str()) {
         return Ok(false);
     }
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    std::fs::write(&p, PAGE).map_err(|e| format!("{}: {e}", p.display()))?;
+    std::fs::write(&p, page).map_err(|e| format!("{}: {e}", p.display()))?;
     Ok(true)
 }
 

@@ -2503,6 +2503,7 @@ dependencies = [
  "rhai",
  "serde",
  "serde_json",
+ "skrifa",
  "wgpu",
  "windows",
  "windows-sys 0.61.2",

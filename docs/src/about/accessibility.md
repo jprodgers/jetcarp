@@ -75,6 +75,13 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
 
 ## Seeing the screen differently
 
+- **Letters easier to tell apart.** The app's words are in Atkinson Hyperlegible Next, and its
+  monospaced text (rules, scripts, numbers in tables) in Atkinson Hyperlegible Mono: fonts whose
+  letters are easier to tell apart, designed by the Braille Institute for low-vision readers. So
+  is this book, and so are the pages JETCARP writes for a browser. Someone who reads more easily
+  in another font can choose any font installed on their computer, or a font file, in *Settings →
+  Accessibility*, and egui's original fonts are there too; the caption on the desktop background
+  follows the choice ([Accessibility settings](../guides/accessibility-settings.md#font)).
 - **Size.** In the app, you can zoom the world in and out with the + and − keys or the scroll
   wheel. On the desktop background, the caption that names the rule and the tiling has a size of
   its own.
@@ -138,6 +145,13 @@ These are known, and each is tracked:
   Only the cursor's cell of the grid is offered to a screen reader, and on Windows, Narrator and
   NVDA may announce the grid as having "0 rows"
   ([#219](https://github.com/jprodgers/jetcarp/issues/219)).
+- **Characters no font on the computer has.** The fonts that come with the app draw Latin, Greek
+  and Cyrillic, arrows and common symbols, but not Chinese, Japanese or Korean, nor the macOS key
+  symbols (⌘, ⌥). The app, and the caption on the desktop background and the screen savers, draw
+  those in an installed font that has them (macOS's own fonts have the key symbols). A character
+  that no font installed on the computer has is still drawn as a box; so is one the macOS screen
+  saver's caption needs that came into its rotation after it was installed, until it is installed
+  again.
 - **Not yet tested by hand** with screen readers (Narrator, NVDA, VoiceOver and Orca) or with
   keyboard-only use, though the program's tests drive the whole app with key presses and read
   what it offers screen readers ([#219](https://github.com/jprodgers/jetcarp/issues/219)); nor by

@@ -25,7 +25,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
-/// The page, with `__NAME__` slots filled by [`write_page`].
+/// The page, with `__NAME__` slots filled by [`write_page`]: its fonts (`__FONTS__`) are
+/// Atkinson Hyperlegible Next and Mono, carried inside it ([`jetcarp_core::web_fonts`]).
 const PAGE: &str = include_str!("rate_page.html");
 
 /// The ratings file's format.
@@ -86,7 +87,11 @@ pub(crate) fn write_page(
             &html_escape(&format!("jetcarp jobs review {job} --from FILE")),
         )
         .replace("__META__", &script_json(&meta))
-        .replace("__CLIPS__", &script_json(&clips));
+        .replace("__CLIPS__", &script_json(&clips))
+        .replace(
+            "__FONTS__",
+            &jetcarp_core::web_fonts::font_faces(jetcarp_core::web_fonts::Faces::TextAndMono),
+        );
     let page = crate::out::inside(dir, "index.html").map_err(ApiError::io)?;
     std::fs::write(&page, html)
         .map_err(|e| ApiError::io(format!("writing {}: {e}", page.display())))?;

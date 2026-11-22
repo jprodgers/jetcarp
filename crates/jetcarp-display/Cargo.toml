@@ -33,6 +33,10 @@ dirs.workspace = true
 # The caption on surfaces with no egui: glyph drawing, and the font the app already ships.
 ab_glyph = "0.2.32"
 epaint_default_fonts = "0.37.0"
+# Reading installed fonts' names and character maps, and checking a chosen font file
+# (`src/fonts.rs`), for the app and the caption alike: egui's own font parser, already in the tree
+# through epaint, so this adds no new crates.
+skrifa = { version = "0.44.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 pollster.workspace = true

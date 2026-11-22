@@ -88,7 +88,8 @@ kind (patterns, ants, Quick Start) and class, a sort order (highest score first 
 grids, and a detail view for each item.
 
 The page is plain HTML and JavaScript with no build step and nothing loaded from elsewhere, so it
-works from any static host. `--no-page` leaves it out, for instance if you've written your own
+works from any static host. It is set in Atkinson Hyperlegible Next, a font whose letters are
+easier to tell apart, as the app is, and carries the font inside it (about 68 KB of the page). `--no-page` leaves it out, for instance if you've written your own
 page over `manifest.json`. A page of your own can also read the data from another folder: the
 viewer's `DATA` constant, near the top of its script, names the folder that holds
 `manifest.json`.

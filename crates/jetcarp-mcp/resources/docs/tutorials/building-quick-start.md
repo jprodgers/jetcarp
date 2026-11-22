@@ -23,33 +23,34 @@ jetcarp quickstart build --minutes 3
 It prints:
 
 ```text
+jetcarp: An explore search isn't reproducible: what it finds depends on the computer (its speed, its threads and its GPU), so the same settings find different things on another computer or another day. Each run it finds replays exactly.
 explore search job 22 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
-Quick Start build (explore 22): 949 atlas entries published (949 new, 0 updated, 0 removed); 28,078 runs (145/s), 6,478 elites in 3,423 niches (310 of them confirmed), 25 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
-  status done, 3 min 17 s run over every session, 1,041 confirmation runs, 29,454 candidates tried, 1.22 GB of memory
+Quick Start build (explore 22): 914 atlas entries published (914 new, 0 updated, 0 removed); 29,336 runs (136/s), 7,106 elites in 3,880 niches (413 of them confirmed), 28 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
+  status done, 3 min 20 s run over every session, 1,476 confirmation runs, 30,844 candidates tried, 0.72 GB of memory (at most 0.72 GB this session)
   threads: 20 for runs on the processor and 10 for the GPU's batches, of 32 cores (2 left free)
   …
   family                     runs   mean   best  elites
-  life_like                 8,427   0.27   1.35   1,761
-  generations               6,663   0.58   2.01   1,489
-  ltl                       3,922   0.30   2.18     511
+  life_like                 9,133   0.32   1.37   2,155
+  generations               6,993   0.63   2.09   1,499
+  jaca                      3,292   0.54   1.76     897
   …
 ```
 
 The outputs on this page come from Linux; on macOS and Windows the folders in them differ (see
 [Folders](../reference/folders.md#the-three-folders)).
 
-In three minutes it ran 28,078 worlds, each a rule of one of its 21 rule families on one of the
+In three minutes it ran 29,336 worlds, each a rule of one of its 21 rule families on one of the
 tilings, from a start of its own, and scored each for how lively, varied and long-lasting it was. It
-kept the best of each kind it saw (6,478 *elites* in 3,423 *niches*), ran the best of those again
-from other starts to confirm them (310 confirmed), and published 949 of them as atlas entries, a few
+kept the best of each kind it saw (7,106 *elites* in 3,880 *niches*), ran the best of those again
+from other starts to confirm them (413 confirmed), and published 914 of them as atlas entries, a few
 per category, rule family and tiling. The table says how each rule family did; the last figure on
 the *status* line is the memory it used.
 
 **Timings.** The minutes are the search's, and it ends on time: runs still going on the processor
 when they are spent are given up, and the graphics card's last batches are sized to end with them
 (one that would run on is given up too). Publishing then takes a few seconds more, since each
-entry's run is replayed to where it is most interesting. This three-minute build took 3 minutes 18
+entry's run is replayed to where it is most interesting. This three-minute build took 3 minutes 21
 seconds from start to finish. Its progress (`jetcarp jobs status`) moves every couple of seconds,
 and it leaves two of the computer's cores free; the *threads* line says how it shared the rest.
 Three minutes see only a couple of dozen of JETCARP's 1,359 tilings; a longer build sees more and
@@ -58,7 +59,7 @@ finds more.
 Open the app (or go back to its Quick Start screen) and set *Source* to *Atlas* to see only your
 build's entries:
 
-<img src="../images/tutorials/quickstart-atlas.webp" alt="The Quick Start screen with Source set to Atlas: 948 of 1329 entries, counted by category (Waves & spirals 91, Oscillators 203, Turbulence 165, Fractals & rows 126 and more), and cards of Greenberg-Hastings waves, hodgepodge, turmites and elementary rules running" width="700">
+<img src="../images/tutorials/quickstart-atlas.webp" alt="The Quick Start screen with Source set to Atlas: 914 of 1285 entries, counted by category (Waves & spirals 131, Oscillators 202, Turbulence 142, Fractals & rows 49 and more), and cards of Lenia, forest fires, Greenberg-Hastings and rock-paper-scissors waves, a turmite, JACA battles and Larger than Life turbulence running" width="700">
 
 Your atlas will differ: every build searches from a starting point of its own.
 
@@ -105,11 +106,11 @@ jetcarp jobs runs --limit 5
 It prints:
 
 ```text
-    11856   2.60  cycle   greenberg_hastings penrose-rhomb    GH 9/2
-    17127   2.59  cycle   greenberg_hastings snubsq           GH 6/2
-    12419   2.55  cycle   greenberg_hastings catalog:k5-219   GH 11/2
-    20145   2.50  cycle   greenberg_hastings penrose-rhomb    GH 12/2
-    11455   2.45  cycle   greenberg_hastings penrose-rhomb    GH 5/2
+    15760   2.47  cycle   greenberg_hastings catalog:k6-364   GH 18/2
+    16455   2.43  cycle   greenberg_hastings catalog:k6-364   GH 11/2
+    26404   2.42  cycle   greenberg_hastings ih33             GH 16/1
+    26205   2.41  cycle   greenberg_hastings ih33             GH 17/1
+    24811   2.41  cycle   hodgepodge         cairo            Hodgepodge 166/2/1/28
 5 run(s) of explore job 22
 ```
 
@@ -120,7 +121,7 @@ rule family, its tiling and its rule. Its options choose a `--family`, a `--tili
 **A contact sheet** shows chosen runs at an eighth of the way, halfway and at the end:
 
 ```sh
-jetcarp jobs sheet --ids 11856,17127,12419,17001 --cols 3 --px 200 --png best.png
+jetcarp jobs sheet --ids 15760,26404,24811,24026 --cols 3 --px 200 --png best.png
 ```
 
 It prints:
@@ -129,7 +130,7 @@ It prints:
 4 runs, 632x928: /home/ada/best.png
 ```
 
-<img src="../images/tutorials/quickstart-sheet.webp" alt="A contact sheet of four runs, three moments each: Greenberg-Hastings spirals on a Penrose rhomb patch, labyrinthine waves on the snub square tiling, waves on the 5-uniform tiling k5-219, and rock-paper-scissors spirals on the snub square tiling" width="632">
+<img src="../images/tutorials/quickstart-sheet.webp" alt="A contact sheet of four runs, three moments each, every run labelled above in JETCARP's small dot letters with its id, tiling, score, rule and measures: Greenberg-Hastings spirals on the 6-uniform tiling k6-364, Greenberg-Hastings waves in hexagonal rings on the isohedral tiling ih33, hodgepodge spirals growing out of noise on the Cairo pentagon tiling, and rock-paper-scissors bands on the 5-uniform tiling k5-176" width="632">
 
 **Clips** animate a sample of runs from every category, to look through by eye. Each is a GIF, and
 `manifest.json` says what each one is:
@@ -142,17 +143,17 @@ It prints:
 
 ```text
 24 clips in /home/ada/clips
-categories: Living textures 6, Oscillators 5, Waves & spirals 5, Growth 4, Frozen at once 2, Quick deaths 2
+categories: Ants & turmites 2, Ash & debris 2, Battles 2, Fractals & rows 2, Gliders & ships 2, Growth 2, Frozen at once 1, Labyrinths 1, Living textures 1, Long fades 1, Oscillators 1, Quiet rows 1, Sandpiles 1, Spots & stripes 1, Static 1, Turbulence 1, Waves & spirals 1, Wildfire 1
 rating page: /home/ada/clips/index.html
 ```
 
 With `--page`, the folder also gets `index.html`, a page for rating the clips. Open it in a web
-browser: it needs no network, so it works from the folder, and it follows your system's light or
-dark setting. Each clip has *Keep*, *Maybe* and *Drop* buttons and a *★* for one you would show
-someone. The keyboard works too: ← and → move between clips, K, M and D rate the current one and
-move on, and S stars it. The browser keeps your ratings as you go, so you can close the page and
-come back. When you are done, *Save ratings* downloads them as one file, and `jobs review --from`
-records them:
+browser: it needs no network, so it works from the folder (its fonts, Atkinson Hyperlegible Next
+and Mono as in the app, are inside it), and it follows your system's light or dark setting. Each
+clip has *Keep*, *Maybe* and *Drop* buttons and a *★* for one you would show someone. The keyboard
+works too: ← and → move between clips, K, M and D rate the current one and move on, and S stars
+it. The browser keeps your ratings as you go, so you can close the page and come back. When you
+are done, *Save ratings* downloads them as one file, and `jobs review --from` records them:
 
 ```sh
 jetcarp jobs review 22 --from ~/Downloads/ratings-clips.json
@@ -171,13 +172,13 @@ records only what is new in it.
 it, with each run's verdicts (one per rater, keep first) and a ★ if it has one:
 
 ```sh
-jetcarp jobs review 22 11856 keep
+jetcarp jobs review 22 15760 keep
 ```
 
 It prints:
 
 ```text
-recorded 1 review(s); job 22 has keep 1
+recorded 1 review(s); job 22 has drop 6, keep 6, maybe 4, ★ 3
 ```
 
 Then list the runs you kept:
@@ -189,21 +190,28 @@ jetcarp jobs runs --reviewed keep
 It prints:
 
 ```text
-    11856   2.60  cycle   greenberg_hastings penrose-rhomb    GH 9/2  [keep]
-1 run(s) of explore job 22
+    15760   2.47  cycle   greenberg_hastings catalog:k6-364   GH 18/2  [keep]
+      561   0.94  froze   ltl                catalog:k6-119   R5,C2,S42-80,B54-79  [keep ★]
+     2740   0.78  running generations        hat              B1/S124/C20  [keep ★]
+     3949   0.58  cycle   generations        catalog:k6-171   B28/S79/C13  [keep ★]
+      998   0.50  running jaca               penrose-rhomb    JACA B1346/S  [keep]
+     2947   0.21  died    spectre_glider     hat              SpectreGlider  [keep]
+6 run(s) of explore job 22
 ```
 
+The first is yours; the others are the ones kept on the rating page.
+
 To watch any run in the app, save it as a scene, and open that with *File → Open scene…* or
-`jetcarp --scene snub-gh.json`:
+`jetcarp --scene cairo-spirals.json`:
 
 ```sh
-jetcarp jobs scene 22 17127 --save snub-gh.json
+jetcarp jobs scene 22 24811 --save cairo-spirals.json
 ```
 
 It prints:
 
 ```text
-run 17127 saved as a scene: /home/ada/snub-gh.json
+run 24811 saved as a scene: /home/ada/cairo-spirals.json
 ```
 
 ## 4. Keep, hide and rate
@@ -222,22 +230,22 @@ jetcarp library quickstart --source atlas
 It prints:
 
 ```text
-catalog: /home/ada/.local/share/jetcarp/library.sqlite (949 entries)
-atlas:a0e3aa0c-1077           atlas     search_run Short-lived Continuous       Lenia R=9,T=5, k6-535
-atlas:a0e3aa0c-1079           atlas     search_run Short-lived Continuous       Lenia R=10,T=1 k6-535
+catalog: /home/ada/.local/share/jetcarp/library.sqlite (914 entries)
+atlas:1d5e99fc-10207          atlas     search_run Wave RPS 8/1                 RPS 8/1        Hexagon
+atlas:1d5e99fc-11692          atlas     search_run WireWorld                    WireWorld      k6-426
 …
 ```
 
 Hide the first of them:
 
 ```sh
-jetcarp library quickstart --hide atlas:a0e3aa0c-1077
+jetcarp library quickstart --hide atlas:1d5e99fc-10207
 ```
 
 It prints:
 
 ```text
-atlas:a0e3aa0c-1077: hidden
+atlas:1d5e99fc-10207: hidden
 ```
 
 `--hidden` lists the hidden entries, `--unhide ID` shows one again, and `--remove ID` deletes it.
@@ -248,14 +256,14 @@ An atlas entry's id is `atlas:`, the start of its search's id, and the run's id.
 `jetcarp library promote` adds an entry under *My finds*. It takes a run of a search:
 
 ```sh
-jetcarp library promote --search-run 17127 --job 22 --title "Spirals on the snub square"
+jetcarp library promote --search-run 24811 --job 22 --title "Spirals on the Cairo tiling"
 ```
 
 It prints:
 
 ```text
-promoted: Spirals on the snub square
-entry:    find:run-a0e3aa0c-17127 in /home/ada/.local/share/jetcarp/library.sqlite
+promoted: Spirals on the Cairo tiling
+entry:    find:run-1d5e99fc-24811 in /home/ada/.local/share/jetcarp/library.sqlite
 It appears in the app's Quick Start under "My finds".
 ```
 
@@ -283,7 +291,7 @@ It prints:
 
 ```text
 catalog: /home/ada/.local/share/jetcarp/library.sqlite (2 entries)
-find:run-a0e3aa0c-17127       promotion search_run Spirals on the snub square   GH 6/2         3.3.4.3.4 snub square
+find:run-1d5e99fc-24811       promotion search_run Spirals on the Cairo tiling  Hodgepodge 166 Cairo pentagon
 find:scene-3eb3915ac28926d6   promotion scene      Life on k2-007               B3/S23         [3.4^2.6; 3.6.3.6] #2 (k2-007)
 ```
 
@@ -304,8 +312,8 @@ jetcarp pack key --name "Ada Example"
 It prints:
 
 ```text
-made publisher key SHA256:5JRuc87uNYZXX3f9LNs/9Yw8X7/umwbHJ102dBa+LD0
-  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC7I9X81inrgVLhrhn8hMV/B08wtjbCTviYzImkte4pF jetcarp publisher
+made publisher key SHA256:r7H7tVdScfeLIj9LyGlYS5f2cVBP0+5pSfyAyRFwERM
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILxfkgPRDPA8kH0Oke6iAfhIR+9/bTpSkkL3ozwNJzgK jetcarp publisher
   file /home/ada/.config/jetcarp/pack/publisher_ed25519
   named Ada Example
 ```
@@ -314,7 +322,7 @@ Then export the entries you choose, by their ids:
 
 ```sh
 jetcarp pack export --to my-finds-2026.11 --feed my-finds --title "My finds" --version-label 2026.11 \
-    --id find:run-a0e3aa0c-17127 --id find:scene-3eb3915ac28926d6
+    --id find:run-1d5e99fc-24811 --id find:scene-3eb3915ac28926d6
 ```
 
 It prints:
@@ -322,7 +330,7 @@ It prints:
 ```text
 publishing feed my-finds (version 1) into /home/ada/.my-finds-2026.11.store
 …
-exported sha256:e615ea6d2fdd6d1210a0bcca316c89f966ec1268586528fa8f5ef5339f6e86c1 into /home/ada/my-finds-2026.11: 15 files, 25647 bytes
+exported sha256:7bc64701cdffdb027af7ee3e49cf8a2cf8b1e2b22e0ec2a661029ea3a6dde393 into /home/ada/my-finds-2026.11: 15 files, 25694 bytes
 …
 ```
 
@@ -335,13 +343,13 @@ jetcarp pack info my-finds-2026.11
 It prints:
 
 ```text
-export sha256:e615ea6d2fdd6d1210a0bcca316c89f966ec1268586528fa8f5ef5339f6e86c1 (feed my-finds, version 2026.11)
+export sha256:7bc64701cdffdb027af7ee3e49cf8a2cf8b1e2b22e0ec2a661029ea3a6dde393 (feed my-finds, version 2026.11)
   My finds
-  publisher SHA256:5JRuc87uNYZXX3f9LNs/9Yw8X7/umwbHJ102dBa+LD0 (Ada Example), signed by its publisher; your own publisher key
-  created 2026-11-12T11:53:23Z, licence CC0-1.0
-  provenance             2 rows in 1 parts, 3860 bytes
-  quickstart             2 rows in 2 parts, 8002 bytes
-  tilings                2 rows in 1 parts, 7614 bytes
+  publisher SHA256:r7H7tVdScfeLIj9LyGlYS5f2cVBP0+5pSfyAyRFwERM (Ada Example), signed by its publisher; your own publisher key
+  created 2026-11-22T08:20:49Z, licence CC0-1.0
+  provenance             2 rows in 1 part, 3862 bytes
+  quickstart             2 rows in 2 parts, 8042 bytes
+  tilings                2 rows in 1 part, 7588 bytes
 ```
 
 The folder `my-finds-2026.11` is the pack: zip it and send it, and the other person imports it with
@@ -366,6 +374,7 @@ jetcarp search explore --gpu --minutes 1 --label longer
 It prints:
 
 ```text
+jetcarp: An explore search isn't reproducible: what it finds depends on the computer (its speed, its threads and its GPU), so the same settings find different things on another computer or another day. Each run it finds replays exactly.
 explore search job 23 in /home/ada/.local/share/jetcarp/library.sqlite
 …
 explore search 23 paused (at its budget); `jetcarp jobs resume 23` continues it from its archive (not run for run: the search is not deterministic)
@@ -380,7 +389,7 @@ jetcarp quickstart publish
 It prints:
 
 ```text
-873 atlas entries from explore job 23 (search 79d59129-7681-4f75-9a12-709a698683b3) in the Quick Start of /home/ada/.local/share/jetcarp/library.sqlite: 873 new, 0 updated, 0 removed
+714 atlas entries from explore job 23 (search e79a3798-9eeb-4e01-b263-2389ba10e162) in the Quick Start of /home/ada/.local/share/jetcarp/library.sqlite: 714 new, 0 updated, 0 removed
 ```
 
 `jetcarp quickstart publish JOB` publishes a job's atlas (the newest explore job's when no job is
