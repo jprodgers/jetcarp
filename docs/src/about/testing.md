@@ -319,7 +319,16 @@ with the guard already on.
   such a field counts it too, and its guard keeps it under the limit
   (`the_gpu_measure_counts_a_dense_period_2_field`,
   `the_gpu_guard_keeps_a_dense_period_2_field_under_the_limit`). The study's full table is an
-  ignored test (`study_table`).
+  ignored test (`study_table`). **Restless change** (#289, the same file): the settled soups of
+  Walled Cities, 34 Life and Long Life, and a Seeds soup, whose cells keep changing without coming
+  back, must be counted where the reference counts them, strictly and concurrently, and through
+  the guard show at most 6 transitions in any second from the start, before the scene is slowed
+  as after; Brian's Brain, Lava and a Life soup, which the reference does not count as flashing
+  together, must not be veiled. These were written first, and failed: 8 transitions a second
+  reached the screen for up to 77 frames. On the GPU, a Walled Cities soup's guard must show at
+  most 4 (`the_gpu_guard_keeps_restless_ash_under_the_limit`). The study's table of 15 rules at 1
+  to 16 pixels a cell, and the reference on recordings for IRIS, are ignored tests
+  (`restless_table`, `the_reference_on_recordings`).
 - **The stripe check** is tested on stripes of every orientation from 4 to 128 pixels a pair,
   checkerboards and rows of dots, which it must find; and on noise, random cells of 2 to 16 pixels,
   faint cell outlines, low contrast and bright stripes, which it must not.
@@ -518,7 +527,12 @@ differently. It was run once more for #270, with red flashes counted by WCAG 2.2
 well as WCAG 2.0's measure: every recording came out the same, byte for byte, and every verdict
 with it. The red flashes the corpus has (the Tron field in red-orange, against black, which has no
 chromaticity) are WCAG 2.0's, which IRIS counts too; by either definition JETCARP is never more
-lenient than IRIS.
+lenient than IRIS. It was run again for #289, through the guard that veils restless change: IRIS's
+verdict on every recording was as before, in every column, and the Seeds soup with the usual guard
+is now veiled, where pixel by pixel it flashed together. On dense restless ash (Walled Cities, 34
+Life, Long Life, Seeds and Replicator soups at 2 to 16 pixels a cell), which WCAG counted pixel by
+pixel fails, IRIS counts no flash at all, as drawn or through either guard, since the frame's mean
+hardly moves: a difference like the checkerboard's, and JETCARP follows WCAG.
 
 **Patterns, for someone at risk**: no misses, and with the at-risk guard on IRIS passes all 22
 recordings, the Seeds soup, the Greenberg-Hastings waves and the Paper field among them, for
