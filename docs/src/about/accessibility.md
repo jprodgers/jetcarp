@@ -107,7 +107,8 @@ The app can be used from the keyboard alone, as far as the toolkit it's built wi
   move what's selected by the tiling's own steps, so a pattern keeps its shape. Space also pastes a
   pattern chosen from the library at the cursor.
 - **Shortcuts.** Running, pausing and stepping have single keys (Space to run or pause, S or → to
-  step), and + and − zoom the world; they work unless a text box has the keyboard.
+  step), and + and − zoom the world. S, + and − work unless a text box has the keyboard; Space
+  and → press or move the control that has it, so press Esc first.
   *Help → Keyboard shortcuts…* (F1) lists every key.
 
 ## Hearing
