@@ -41,10 +41,9 @@ pub const STALE_SECS: u64 = 10;
 /// Other programs' share of the processor above which the score is taken under load: 15%.
 ///
 /// An idle desktop keeps a few percent busy (its compositor, a browser's open tabs, the
-/// system's own services), and a run to run spread of a few percent is usual for the score, so
-/// anything lower is noise. A game, a video call, a build or another simulation keeps a quarter
-/// of the processor or more busy. The score's parts on every core lose about the share others
-/// take, so at 15% the score is already well outside its usual spread.
+/// system's own services: 4% on the development desktop), so anything lower is noise. A game, a
+/// video call, a build or another simulation keeps a quarter of the processor or more busy. The
+/// parts on every core lose about the share others take, so at 15% they read about 15% low.
 pub const CPU_BUSY: f64 = 0.15;
 
 /// The GPU's busy figure above which the score is taken under load: 25%. Higher than the

@@ -177,8 +177,10 @@ enum Cmd {
     Doctor,
     /// Measure this machine: about a minute of JETCARP's own work (Life soups on five
     /// non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for
-    /// the JETCARP Hardware Score and its parts. Kept in machine.json; `--report FILE` also writes
-    /// a report. It never runs by itself.
+    /// the JETCARP Hardware Score and its parts. The rest of JETCARP holds still meanwhile; a
+    /// JETCARP program that can't, or a busy processor or GPU, is said first (asked about in a
+    /// terminal, else measured anyway and marked as taken under load). Kept in machine.json;
+    /// `--report FILE` also writes a report. It never runs by itself.
     Score(machine_cmd::ScoreArgs),
     /// This machine's limits (the largest world, the desktop background's, HashLife's, an AI's
     /// share...): each your own value if you set one, else the machine's suggestion from its
