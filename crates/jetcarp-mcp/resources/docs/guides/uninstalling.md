@@ -49,7 +49,7 @@ The outputs on this page come from Linux; on macOS and Windows the folders in th
 
 The command it names for removing the program is the one for how this copy of JETCARP was
 installed, which it tells from where the program is: the file the installers leave in its folder,
-Homebrew's `Cellar`, Scoop's `apps` folder, winget's packages, pipx's and uv's environments, any
+Homebrew's `Cellar`, Scoop's `apps` folder, pipx's and uv's environments, any
 other Python environment (pip), or cargo's `bin` folder. When it cannot tell, as with a release
 archive or a program copied by hand, it lists every way instead (step 3 has each one).
 

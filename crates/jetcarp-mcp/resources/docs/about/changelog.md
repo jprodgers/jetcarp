@@ -308,7 +308,7 @@ day later (0.4.2: 17 November here, 18 November there).
   `~/Applications` as *JETCARP.app* on macOS (a launcher that starts the program, signed ad hoc on
   the Mac, as the screen saver is, so no Developer ID is needed), and in the Start menu on Windows,
   where the entry starts a copy of `jetcarpw.exe` in `%LOCALAPPDATA%\jetcarp\launcher` that finds
-  the program after a winget or Scoop upgrade too. The installers run it for you (`--no-launcher`
+  the program after a Scoop upgrade too. The installers run it for you (`--no-launcher`
   and `-NoLauncher` leave it out) and take it out again with `--uninstall`; setup's summary offers
   it for every profile, ticked when it isn't there yet (`jetcarp setup --no-launcher` leaves it
   out); `jetcarp doctor` says where it is; `jetcarp uninstall` removes it with the rest. One of the
