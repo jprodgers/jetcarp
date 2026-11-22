@@ -311,6 +311,23 @@ fn worlds_over_the_limit_are_refused_with_the_reason_never_made_smaller() {
         ),
         "{e}"
     );
+    // A count of cells past what JETCARP can number is refused, not cut down to it.
+    let e = fails(
+        WorldNew::run(
+            &machine,
+            &mut h,
+            serde_json::from_value::<NewWorldIn>(
+                json!({"tiling": "square", "cells": 10_000_000_000u64}),
+            )
+            .unwrap(),
+            &Quiet,
+        ),
+        ErrorKind::Invalid,
+    );
+    assert_eq!(
+        e.message,
+        "10,000,000,000 cells is more than the 4,294,967,295 JETCARP can number"
+    );
     // Within the limit: 20,000 x 1,000 squares, 20 million cells (about 150 MB), built as asked.
     let out = new(&machine, &mut h, 20_000, 1_000).unwrap();
     assert_eq!(out.status.cells, 20_000_000);
