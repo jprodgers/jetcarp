@@ -46,6 +46,10 @@ pub const BAKED_FORMAT: u32 = 2;
 const EXECUTABLE: &str = "JETCARP";
 /// The copy of the caption's font in the bundle's Resources, with the file's own extension.
 const FONT_STEM: &str = "caption-font";
+/// The copies of installed fonts for its last resort, numbered from 1.
+const FALLBACK_STEM: &str = "caption-fallback";
+/// Larger files are not copied in (as the app's last resort reads none larger).
+const MAX_FALLBACK_FILE: u64 = 256 << 20;
 
 /// The caption's font in a bundle, as the app's Font setting named it at install (#273).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -183,10 +187,19 @@ fn bake_loaded(
             Err(e) => warnings.push(format!("{}: {e}", s.label)),
         }
     }
-    let (font, font_file) = bake_font(font).unwrap_or_else(|w| {
+    let choice = font;
+    let (font, font_file) = bake_font(choice).unwrap_or_else(|w| {
         warnings.push(w);
         (BakedFont::Atkinson, None)
     });
+    // The fonts the saver will draw in, for what they lack.
+    let drawn = match &font {
+        BakedFont::File { .. } => CaptionFont::for_choice(choice).unwrap_or_default(),
+        BakedFont::Egui => CaptionFont::for_choice(&FontChoice::Egui).unwrap_or_default(),
+        BakedFont::Atkinson => CaptionFont::default(),
+    };
+    let chars = caption_chars(&rotation.name, &slots);
+    let fallbacks = bake_fallbacks(&chars, &drawn, installed, &mut warnings);
     let baked = Baked {
         format: BAKED_FORMAT,
         rotation,
@@ -202,17 +215,125 @@ fn bake_loaded(
         strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
         font,
         font_file,
-        fallbacks: vec![],
+        fallbacks,
     };
-    let _ = installed;
     (baked, warnings)
 }
 
+/// Every character the caption could show for a rotation named `name` of `slots`, their scenes
+/// baked in: the name, each scene's rules (notations and names) and grid, and the words, digits
+/// and signs the caption adds ([`crate::caption::lines`]). More than it will show, never less.
+fn caption_chars(name: &str, slots: &[Slot]) -> std::collections::BTreeSet<char> {
+    use jetcarp_core::rules::{self, Rule};
+    let mut text = String::from(name);
+    text.push_str(
+        "0123456789,·×…+ No rule running Rule more Square Hexagon Triangle grid cells wraps dead \
+         live edges of generation",
+    );
+    for s in slots {
+        let Show::Scene { scene } = &s.profile.show else {
+            continue;
+        };
+        text.push_str(&scene.tiling.family);
+        if let Some(f) = jetcarp_core::families::family(&scene.tiling.family) {
+            text.push_str(f.name);
+        }
+        for ca in &scene.cas {
+            text.push_str(&ca.rule);
+            let Ok((rule, _)) = Rule::parse(&ca.rule) else {
+                continue;
+            };
+            let n = rule.notation();
+            text.push_str(&n);
+            // The catalog's names on any neighbourhood (a suffix such as H), and named rules.
+            for e in rules::catalog() {
+                let on = e.notation.strip_prefix(n.as_str());
+                if on.is_some_and(|rest| rest.chars().all(|c| c.is_ascii_alphabetic())) {
+                    text.push_str(e.name);
+                }
+            }
+            for r in rules::named_rules().iter().filter(|r| r.notation == n) {
+                text.push_str(&r.name);
+            }
+        }
+    }
+    text.chars()
+        .filter(|c| !c.is_whitespace() && !c.is_control())
+        .collect()
+}
+
+/// The installed fonts in `installed` that draw the characters of `chars` that `drawn` lacks, read
+/// to be copied in, as the app's last resort picks them (the upright regular face in the smallest
+/// file); a warning for one that can't be read. Installed fonts are looked at only when a
+/// character is missing.
+fn bake_fallbacks(
+    chars: &std::collections::BTreeSet<char>,
+    drawn: &CaptionFont,
+    installed: &[PathBuf],
+    warnings: &mut Vec<String>,
+) -> Vec<BakedFallback> {
+    let missing: Vec<char> = chars
+        .iter()
+        .copied()
+        .filter(|&c| drawn.glyph(c).1.0 == 0)
+        .collect();
+    if missing.is_empty() || installed.is_empty() {
+        return vec![];
+    }
+    let index = Fallbacks::find(installed);
+    let mut files: Vec<(PathBuf, String)> = vec![];
+    for c in missing {
+        if let Some(f) = index.for_char(c)
+            && !files.iter().any(|(p, _)| *p == f.path)
+        {
+            files.push((f.path.clone(), f.family.clone()));
+        }
+    }
+    let mut out = vec![];
+    for (path, family) in files {
+        let read = std::fs::metadata(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|m| {
+                if m.len() > MAX_FALLBACK_FILE {
+                    Err("it is too large".into())
+                } else {
+                    std::fs::read(&path).map_err(|e| e.to_string())
+                }
+            });
+        match read {
+            Ok(bytes) => out.push(BakedFallback {
+                family,
+                file: format!("{FALLBACK_STEM}-{}.{}", out.len() + 1, font_ext(&path)),
+                bytes: FontBytes(std::sync::Arc::new(bytes)),
+            }),
+            Err(e) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                warnings.push(format!(
+                    "{family} ({name}), which has characters of the caption that its font lacks, \
+                     can't be copied into the screen saver ({e}); they are boxes there"
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// A font file's type, for its copy's name: `ttf` when it has none JETCARP knows.
+fn font_ext(path: &Path) -> String {
+    path.extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .filter(|e| ["ttf", "otf", "ttc", "otc"].contains(&e.as_str()))
+        .unwrap_or_else(|| "ttf".into())
+}
+
 /// The caption's last resort in a bundle whose Resources are at `resources`: the installed fonts
-/// copied in, `fallbacks`.
+/// copied in, `fallbacks`, ready at once (their character maps are read now).
 pub fn last_resort(fallbacks: &[BakedFallback], resources: &Path) -> std::sync::Arc<LastResort> {
-    let _ = (fallbacks, resources);
-    LastResort::ready(Fallbacks::default())
+    let files: Vec<PathBuf> = fallbacks
+        .iter()
+        .map(|f| resources.join(Path::new(&f.file).file_name().unwrap_or_default()))
+        .collect();
+    LastResort::ready(Fallbacks::of_files(&files))
 }
 
 /// The caption's font to bake in for the app's Font setting `choice`, and the file to copy in.
@@ -244,14 +365,9 @@ fn bake_font(choice: &FontChoice) -> Result<(BakedFont, Option<FontBytes>), Stri
         let name = path.file_name().unwrap_or_default().to_string_lossy();
         return Err(warn(format!("{name} isn't a font JETCARP can read")));
     }
-    let ext = path
-        .extension()
-        .map(|e| e.to_string_lossy().to_ascii_lowercase())
-        .filter(|e| ["ttf", "otf", "ttc", "otc"].contains(&e.as_str()))
-        .unwrap_or_else(|| "ttf".into());
     let font = BakedFont::File {
         family: file.family,
-        file: format!("{FONT_STEM}.{ext}"),
+        file: format!("{FONT_STEM}.{}", font_ext(path)),
         index: file.index,
     };
     Ok((font, Some(FontBytes(std::sync::Arc::new(file.bytes)))))
@@ -370,6 +486,16 @@ pub fn write_bundle(dest: &Path, dylib: &Path, baked: &Baked) -> Result<(), Stri
             .ok_or_else(|| format!("{file}: the caption's font wasn't read when it was baked"))?;
         let path = resources.join(file);
         std::fs::write(&path, &*bytes.0).map_err(|e| err(&path, e))?;
+    }
+    for f in &baked.fallbacks {
+        if f.bytes.0.is_empty() {
+            return Err(format!(
+                "{}: the font wasn't read when it was baked",
+                f.file
+            ));
+        }
+        let path = resources.join(&f.file);
+        std::fs::write(&path, &*f.bytes.0).map_err(|e| err(&path, e))?;
     }
     if let Some(pictures) = thumbnails(baked) {
         for (name, png) in ["thumbnail.png", "thumbnail@2x.png"]

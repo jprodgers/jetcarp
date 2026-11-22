@@ -460,6 +460,16 @@ impl Core {
         let policy = settings.gpu_policy();
         let (caption_font, font_note) =
             jetcarp_display::caption::FontWatch::new(jetcarp_core::paths::config_dir());
+        // The caption's last resort, as the app's: the installed fonts' character maps, read on a
+        // thread of their own so no frame waits. Tests and screenshot runs read none of this
+        // machine's fonts, so they look the same everywhere.
+        let font_dirs = if cfg!(test) || std::env::var_os("JETCARP_SCREENSHOT").is_some() {
+            vec![]
+        } else {
+            jetcarp_display::fonts::system_dirs()
+        };
+        let caption_font =
+            caption_font.with_last_resort(jetcarp_display::caption::LastResort::start(font_dirs));
         let mut core = Core {
             settings,
             screens: vec![],

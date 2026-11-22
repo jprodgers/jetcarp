@@ -256,11 +256,15 @@ impl Shared {
         if let Some(n) = note {
             log(&n);
         }
+        // The installed fonts copied in for characters the caption's fonts lack.
+        let caption_font =
+            caption_font.with_last_resort(macsaver::last_resort(&baked.fallbacks, &resources));
         log(&format!(
-            "rotation {:?}, {} items, caption in {}",
+            "rotation {:?}, {} items, caption in {} ({} fonts copied in behind it)",
             baked.rotation.name,
             baked.slots.len(),
-            baked.font.label()
+            baked.font.label(),
+            baked.fallbacks.len()
         ));
         Ok(Shared {
             instance: wgpu::Instance::new(

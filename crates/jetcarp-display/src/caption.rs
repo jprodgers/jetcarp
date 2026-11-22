@@ -276,6 +276,9 @@ pub struct LastResort {
     faces: Mutex<Faces>,
 }
 
+/// Larger files are not read for one character (as the app's last resort).
+const MAX_FALLBACK_FILE: u64 = 256 << 20;
+
 /// The last resort's fonts read so far.
 #[derive(Default)]
 struct Faces {
@@ -294,18 +297,31 @@ impl LastResort {
 
     /// Start `scan` on a thread of its own, its fonts used once it returns.
     pub fn start_with(scan: impl FnOnce() -> Fallbacks + Send + 'static) -> Arc<LastResort> {
-        let _ = scan;
-        Arc::new(LastResort {
+        let last = Arc::new(LastResort {
             index: OnceLock::new(),
             faces: Default::default(),
-        })
+        });
+        let filled = Arc::clone(&last);
+        let spawned = std::thread::Builder::new()
+            .name("caption font fallback scan".into())
+            .spawn(move || {
+                let _ = filled.index.set(scan());
+            });
+        if spawned.is_err() {
+            // No thread: no last resort, rather than a wait.
+            let _ = last.index.set(Fallbacks::default());
+        }
+        last
     }
 
     /// The fonts `index` names, ready now: for fonts copied beside the program (the macOS screen
     /// saver's bundle).
     pub fn ready(index: Fallbacks) -> Arc<LastResort> {
-        let _ = index;
-        Self::start_with(Fallbacks::default)
+        let index = OnceLock::from(index);
+        Arc::new(LastResort {
+            index,
+            faces: Default::default(),
+        })
     }
 
     /// Whether the character maps have been read.
@@ -315,8 +331,23 @@ impl LastResort {
 
     /// Where in the list the font that draws `c` is, read the first time.
     fn face_for(&self, c: char) -> Option<usize> {
-        let _ = (c, &self.faces);
-        None
+        let f = self.index.get()?.for_char(c)?;
+        let mut faces = self.faces.lock().unwrap_or_else(|e| e.into_inner());
+        let key = (f.path.clone(), f.index);
+        if let Some(at) = faces.by_file.get(&key) {
+            return *at;
+        }
+        let font = std::fs::metadata(&f.path)
+            .ok()
+            .filter(|m| m.is_file() && m.len() <= MAX_FALLBACK_FILE)
+            .and_then(|_| std::fs::read(&f.path).ok())
+            .and_then(|b| ab_glyph::FontVec::try_from_vec_and_index(b, f.index).ok());
+        let at = font.map(|font| {
+            faces.list.push(FontArc::new(font));
+            faces.list.len() - 1
+        });
+        faces.by_file.insert(key, at);
+        at
     }
 
     /// The `i`th font read.
