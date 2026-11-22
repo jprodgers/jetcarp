@@ -442,7 +442,13 @@ impl Speeds {
     pub(crate) fn saved() -> Speeds {
         let file = jetcarp_display::host_settings::config_dir()
             .and_then(|d| jetcarp_core::machine::MachineFile::load(Some(&d)));
-        let Some(score) = file.and_then(|f| f.score).filter(|s| !s.quick) else {
+        Speeds::of(file.and_then(|f| f.score).as_ref())
+    }
+
+    /// From `score`: none from a short run, whose rates mean little, or from one taken under load
+    /// (#301), which would guess sizes too small for this machine.
+    pub(crate) fn of(score: Option<&jetcarp_core::machine::Score>) -> Speeds {
+        let Some(score) = score.filter(|s| !s.quick && !s.under_load()) else {
             return Speeds::default();
         };
         let threads = std::thread::available_parallelism().map_or(1, |n| n.get()) as f64;
@@ -1820,6 +1826,58 @@ pub(crate) fn p95(times: &mut [f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Fast Fit's first guesses come from a score taken with the computer quiet: one taken under
+    /// load would guess sizes too small for this machine, so it gives no guess, as a short run
+    /// doesn't (#301).
+    #[test]
+    fn a_score_taken_under_load_gives_no_first_guess() {
+        use jetcarp_core::machine::Score;
+        use jetcarp_core::machine::quiet::{Conditions, Load};
+        use jetcarp_core::machine::score::Part;
+        let score = Score {
+            benchmark: 1,
+            score: 100.0,
+            parts: vec![Part {
+                id: "core-square".into(),
+                value: 1e8,
+                correct: Some(true),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(Speeds::of(Some(&score)).cpu.is_some());
+        let quiet = Score {
+            conditions: Some(Conditions::of(
+                Load {
+                    cpu: Some(0.02),
+                    gpu: None,
+                },
+                vec!["the app".into()],
+                vec![],
+            )),
+            ..score.clone()
+        };
+        assert_eq!(Speeds::of(Some(&quiet)), Speeds::of(Some(&score)));
+        let loaded = Score {
+            conditions: Some(Conditions::of(
+                Load {
+                    cpu: Some(0.6),
+                    gpu: None,
+                },
+                vec![],
+                vec![],
+            )),
+            ..score.clone()
+        };
+        assert_eq!(Speeds::of(Some(&loaded)), Speeds::default());
+        let short = Score {
+            quick: true,
+            ..score
+        };
+        assert_eq!(Speeds::of(Some(&short)), Speeds::default());
+        assert_eq!(Speeds::of(None), Speeds::default());
+    }
 
     fn slot(label: &str, show: profiles::Show, series: Option<usize>) -> Slot {
         Slot {
