@@ -245,7 +245,7 @@ jetcarp host saver install --rotation "My wallpaper"
 
 This installs it and opens the system's screen saver settings, where you choose *JETCARP*. On
 Windows it needs `jetcarpw.exe` beside `jetcarp.exe`, which JETCARP's Windows downloads have. On
-macOS the rotation is copied into the screen saver, so install it again after changing the rotation.
+macOS the rotation is copied into the screen saver, and copied again whenever it changes.
 In the app, *System screen saver runs* in the *Screensaver* pane does the same, with an *Install*
 button. `jetcarp host saver status` says whether it is installed.
 

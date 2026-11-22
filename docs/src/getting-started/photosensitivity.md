@@ -56,9 +56,10 @@ GIF and WebP animations, videos and scene files. They don't animate anything on 
 an animation you make can flash like the scene it shows when you play it, so the strobe guard
 [checks exported animations](../guides/strobe-guard.md#exported-animations) before they are saved.
 
-A macOS screen saver installed before this warning existed keeps running as it was built, since
-macOS gives it no way to read JETCARP's settings; `jetcarp host saver install` builds it again,
-once the warning has been answered.
+A macOS screen saver installed before this warning existed, which macOS gives no way to read
+JETCARP's settings, is built again by this version the first time the app, the desktop background
+or a command runs, with the strobe guard on; and again whenever the answer or the guard's setting
+changes (see [The system's screen saver](../guides/wallpapers.md#the-systems-screen-saver)).
 
 ## Answering from the command line
 

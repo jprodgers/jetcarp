@@ -195,8 +195,9 @@ flash together. The sandpile preview changes at most four times a second, and th
 only when a jump is asked for, so neither can flash more than twice a second.
 
 macOS runs its screen saver in a sandbox that cannot read JETCARP's settings, so `jetcarp host
-saver install` bakes the switch into the bundle as it is then; install it again after changing the
-switch.
+saver install` bakes the switch, and whether the answer to the seizure warning is *at risk*, into
+the bundle; whenever either changes, JETCARP builds the bundle again with them (see
+[The system's screen saver](wallpapers.md#the-systems-screen-saver)).
 
 ## Turning it off
 
