@@ -47,7 +47,9 @@ as long as it runs. A client that connects to a URL instead uses the server [ove
 `jetcarp mcp --http [PORT]` serves the same tools over MCP's Streamable HTTP transport, for clients
 that connect to a URL rather than start a program (Postman, web-based tools, remote setups). It runs
 until Ctrl-C, which stops it as a closed stdio session does: its searches at their next checkpoint,
-paused and resumable. The app serves the same endpoint for the world in its window, from its AI
+paused and resumable, and its `mcp-http-endpoint.json` removed. On Linux and macOS, SIGTERM (what
+`kill` sends, and a session as it ends) and SIGHUP stop it the same way; a second signal ends it at
+once. The app serves the same endpoint for the world in its window, from its AI
 control window ([Over HTTP](../tutorials/mcp.md#over-http) in the tutorial).
 
 | | |

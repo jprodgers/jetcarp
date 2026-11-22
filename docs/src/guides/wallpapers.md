@@ -206,6 +206,12 @@ It prints:
 stopped
 ```
 
+On Linux and macOS, SIGTERM (what `kill` sends, launchd at logout on the Mac, and a Linux session
+as it ends), SIGHUP and Ctrl-C stop the host the same way, so a logout stops it cleanly: its port
+and token file and its memory record leave the [runtime folder](../reference/folders.md#runtime-folder),
+and the [still picture](#still-picture), if you asked for one, is left on the desktop. A second
+signal ends it at once.
+
 `status` (and every command that changes something) says what each screen shows and where (a window,
 or the desktop background on a monitor or on every monitor), how fast it draws and its scene runs
 (see [below](#frame-rate-and-speed)), what its world steps on now (`simulation: GPU (…)` with the
@@ -613,10 +619,10 @@ icons, on every Space and ignoring the mouse. The host lives in the menu bar: it
 while it shows a scene in a window.
 **Other Linux desktops** are not supported yet: the host shows a window instead.
 
-**A still picture.** With `jetcarp host still on` (*Leave a still picture when it stops*), the host
-sets a picture of its scene as the desktop's own background when it stops, and while the live one
-cannot be shown, through the system's own setting. It is the host that sets it, so a host that
-crashes or is killed leaves your own picture, not the still. On Windows and macOS each monitor gets a picture of
+<a id="still-picture"></a>**A still picture.** With `jetcarp host still on` (*Leave a still picture when it stops*), the host
+sets a picture of its scene as the desktop's own background when it stops (a logout stops it too),
+and while the live one cannot be shown, through the system's own setting. It is the host that sets
+it, so a host that crashes or is killed outright (`kill -9`) leaves your own picture, not the still. On Windows and macOS each monitor gets a picture of
 what it showed; GNOME has one background for every monitor, so there it is the primary monitor's.
 Your own picture (each monitor's) is remembered and put back when the still or the live background
 is turned off, unless you have chosen another picture in the meantime. It is off by default.
@@ -695,6 +701,10 @@ screen in a window (after `jetcarp host wallpaper off`, say) waits unseen, and w
 the host just waits in the notification area or the menu bar (on GNOME, the top bar's menu). This
 holds for the whole run; `jetcarp host stop` and `jetcarp host start` start a host that opens windows
 as usual. `jetcarp host status` lists a waiting screen as *not shown (started at login)*.
+
+At logout the system stops the host: on the Mac launchd sends it SIGTERM, and a Linux session ends
+its programs the same way. It stops as `jetcarp host stop` stops it
+([above](#the-background-host)), so the runtime folder holds nothing stale at your next login.
 
 More: [Rotations](rotations.md), [Reseeding](reseeding.md), [Folders](../reference/folders.md) and
 [Uninstalling](uninstalling.md).

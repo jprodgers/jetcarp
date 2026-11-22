@@ -739,6 +739,13 @@ day later (0.4.2: 17 November here, 18 November there).
   data folder, the library stays. On Linux and macOS the app ended with SIGTERM, SIGHUP or Ctrl-C
   closes as its window does, removing its port and token file, which SIGTERM left on the Mac.
   ([Uninstalling](../guides/uninstalling.md), [#135](https://github.com/jprodgers/jetcarp/issues/135))
+- **The background host and `jetcarp mcp --http` stop on SIGTERM as their own stop does,** where
+  they ended at once and left their port and token file and memory record in the runtime folder:
+  on Linux and macOS, SIGTERM (launchd at logout on the Mac, a Linux session as it ends), SIGHUP
+  and Ctrl-C stop the host as `jetcarp host stop` does, leaving its still picture when one is asked
+  for, and the HTTP server as Ctrl-C did, its jobs at their next checkpoint; a second signal ends
+  either at once. ([The background host](../guides/wallpapers.md#the-background-host),
+  [#278](https://github.com/jprodgers/jetcarp/issues/278))
 - **The installers' `--uninstall` names each folder it keeps and what it holds,** instead of "kept
   your settings, data and pictures" when only the pictures were left.
   ([#142](https://github.com/jprodgers/jetcarp/issues/142))

@@ -214,7 +214,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   is the data folder, the library must stay unless `--data` deletes the whole folder
   (`uninstall_runtime.rs`, `uninstall_leftovers.rs`). The whole app, headless and with AI control
   on, must end on SIGTERM as closing its window does, removing its endpoint file
-  (`crates/jetcarp-app/src/quit_signal.rs`, Linux and macOS).
+  (`crates/jetcarp-app/src/quit_signal.rs`, Linux and macOS). The background host, headless, and
+  `jetcarp mcp --http`, each in scratch folders, must stop on SIGTERM as their own stop does: a
+  clean exit, their endpoint file and memory record gone, and the HTTP server's hunt paused at its
+  checkpoint; a second SIGTERM, while the host waits for a caller to hang up or the server for a
+  call to return, must end either at once with 143 (`crates/jetcarp/tests/quit_signal.rs`). The
+  handling the three share must run a program's own stop on the first signal, end it on the second,
+  and leave a signal ignored at start (SIGHUP under `nohup`) ignored
+  (`crates/jetcarp-core/src/quit_signal.rs`). A headless host leaves no still picture, so the
+  still a host showing the desktop leaves as it stops is checked by hand, at a logout.
 - **The book.** The command-line and MCP reference pages and the keyboard page's table of keys are
   generated from the program and checked against it, and the copy of the book built into the
   program must match the book.
@@ -222,8 +230,9 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
 About 50 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
 book's pictures of the app, and the rest time the program, run very large worlds, need a desktop
 session, or read the app's accessibility tree with the starter pack set up. (The twelve halves of
-the keyboard tests that run in a process of their own are ignored too: the suite starts them
-itself, with their scratch folders, and they do nothing when started any other way.)
+the keyboard tests that run in a process of their own are ignored too, and so are those of the
+signal tests: the suite starts them itself, with their scratch folders, and they do nothing when
+started any other way.)
 
 Tests never write to your own settings, data or pictures: they run in scratch folders, and CI fails
 if a test touches the default ones.
