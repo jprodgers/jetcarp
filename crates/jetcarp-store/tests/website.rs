@@ -143,6 +143,13 @@ fn export_writes_public_items_then_only_changes() {
     assert!(website::write_page(&dir).unwrap());
     assert!(!website::write_page(&dir).unwrap());
     assert!(website::PAGE.contains("manifest.json"));
+    // In Atkinson Hyperlegible Next, as the app is, carried in the page itself: nothing fetched.
+    let page = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    assert_eq!(page, website::page());
+    let fonts = jetcarp_core::web_fonts::font_faces(jetcarp_core::web_fonts::Faces::Text);
+    assert!(page.contains(&fonts) && !page.contains("__FONTS__"));
+    assert!(page.contains("font: 15px/1.4 \"Atkinson Hyperlegible Next\""));
+    assert!(!page.contains("https://"));
 
     // One rating: exactly that item and the index.
     lib.update(

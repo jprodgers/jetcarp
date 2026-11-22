@@ -72,8 +72,10 @@ All of these licences allow redistribution under JETCARP's terms.
 ### Fonts: Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono
 
 - **Files:** `crates/jetcarp-display/fonts/` (TrueType files the app and the caption draw with,
-  embedded in the program) and `docs/theme/fonts/` (WOFF2 files the book is set in), each with
-  its family's `OFL.txt` and a README giving each file's source and SHA-256
+  embedded in the program), `crates/jetcarp-core/fonts/` (WOFF2 files embedded in the program for
+  the pages it writes for a browser, which carry them inside) and `docs/theme/fonts/` (WOFF2 files
+  the book is set in), each with its family's `OFL.txt` and a README giving each file's source and
+  SHA-256
 - **Source:** the Braille Institute's fonts, from their official repositories kept by Google
   Fonts: [atkinson-hyperlegible-next](https://github.com/googlefonts/atkinson-hyperlegible-next)
   and [atkinson-hyperlegible-next-mono](https://github.com/googlefonts/atkinson-hyperlegible-next-mono),

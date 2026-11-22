@@ -17,9 +17,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JETCARP catalog</title>
 <style>
+  /* Atkinson Hyperlegible Next (a font whose letters are easier to tell apart, as the app's),
+     carried in the page, so it fetches no font from elsewhere: */
+  __FONTS__
   :root { --bg: #101217; --card: #1d2029; --line: #2c313c; --text: #e6e8ee; --dim: #9aa0ad; --accent: #ffd27a; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 "Atkinson Hyperlegible Next", system-ui, sans-serif; }
   header { padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); }
   h1 { font-size: 20px; margin: 0 12px 0 0; }
   select, input { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }

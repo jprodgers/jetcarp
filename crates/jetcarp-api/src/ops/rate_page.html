@@ -8,14 +8,16 @@
 <style>
 /* JETCARP's clip-rating page: batches of looping clips under a sticky strip (progress, tally,
    name, save); the current clip carries a ring for keyboard rating. Everything is in this file,
-   so it works offline from the clips folder. */
+   so it works offline from the clips folder: its fonts too, Atkinson Hyperlegible Next and Mono
+   (fonts whose letters are easier to tell apart, as the app's), in the rules below. */
+__FONTS__
 :root {
   --ground: #f5f6f8; --panel: #ffffff; --line: #d3d8e1; --ink: #161a22; --dim: #5b6576;
   --keep: #0e8a70; --maybe: #a26a00; --drop: #c63a2c; --star: #7a4fcf;
   --on-keep: #ffffff; --on-maybe: #ffffff; --on-drop: #ffffff; --on-star: #ffffff;
-  --display: Georgia, "Times New Roman", serif;
-  --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --display: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --body: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
