@@ -608,6 +608,10 @@ pub struct Ctx {
     /// The folder of packs that came with the program, instead of the one looked for
     /// ([`jetcarp_core::paths::bundled_packs_dir`]; tests).
     pub bundled_dir: Option<PathBuf>,
+    /// The runtime folder instead of `$JETCARP_RUNTIME_DIR` or the system's
+    /// ([`jetcarp_core::paths::runtime_dir`]), as `system.paths` and `system.uninstall` see it
+    /// (tests). The running programs' own control files still go where their code puts them.
+    pub runtime_dir: Option<PathBuf>,
     /// The catalog, opened on first use and shared by every operation on this context (one
     /// SQLite connection instead of one per call).
     store: OnceLock<Library>,
@@ -644,6 +648,7 @@ impl Ctx {
             library: None,
             settings_dir: None,
             bundled_dir: None,
+            runtime_dir: None,
             store: OnceLock::new(),
             session: Mutex::new(None),
             registry: jetcarp_search::jobs::registry(),
@@ -725,6 +730,11 @@ impl Ctx {
         self.bundled_dir = dir;
         self
     }
+    /// Take this folder as the runtime folder ([`Ctx::runtime_dir`]).
+    pub fn with_runtime_dir(mut self, dir: Option<PathBuf>) -> Ctx {
+        self.runtime_dir = dir;
+        self
+    }
     /// Write outputs under this root instead of `$JETCARP_OUT` or `<Pictures>/JETCARP`.
     pub fn with_out_root(mut self, root: Option<PathBuf>) -> Ctx {
         self.out_root = root;
@@ -759,7 +769,10 @@ impl Ctx {
                 .bundled_dir
                 .clone()
                 .or_else(jetcarp_core::paths::bundled_packs_dir),
-            runtime: jetcarp_core::paths::runtime_dir(),
+            runtime: self
+                .runtime_dir
+                .clone()
+                .or_else(jetcarp_core::paths::runtime_dir),
         }
     }
 

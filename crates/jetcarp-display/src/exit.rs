@@ -16,12 +16,15 @@
 //! its device before ending still crashed WARP on Windows CI.) The system reclaims the memory,
 //! handles and GPU work of a process that has ended; browsers and game engines end the same way.
 
-/// Ends the process now with `code`, once standard output and error are flushed. Nothing else
+/// Ends the process now with `code`, once this program's record in JETCARP's memory pool is
+/// removed (`jetcarp_core::machine::pool::stop`, which the `jetcarp` program's `main` would
+/// otherwise do as it returns, #135) and standard output and error are flushed. Nothing else
 /// runs: no destructors, and none of the code libraries leave to run at exit (on Windows no
 /// `DLL_PROCESS_DETACH`, through `TerminateProcess`; elsewhere no `atexit` handlers, through
 /// `_exit`). Call it only when everything that must be saved is saved.
 pub fn end_process(code: i32) -> ! {
     use std::io::Write;
+    jetcarp_core::machine::pool::stop();
     let _ = std::io::stdout().flush();
     let _ = std::io::stderr().flush();
     terminate(code)
