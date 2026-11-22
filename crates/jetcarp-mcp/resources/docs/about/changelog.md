@@ -794,6 +794,29 @@ day later (0.4.2: 17 November here, 18 November there).
   over a quarter of the screen (now fixed, [#269](https://github.com/jprodgers/jetcarp/issues/269)).
   ([The strobe guard](../guides/strobe-guard.md), [Bibliography](../research/bibliography.md))
 
+- **Measuring this computer holds the rest of JETCARP still, and asks for heavy programs to be
+  closed first.** The JETCARP Hardware Score times JETCARP's own work, so measuring while the app
+  ran a large grid gave a much lower score. Now, while it measures, from setup, *This computer* or
+  `jetcarp score`, the app's world (screensaver mode's too) pauses, the desktop background, GNOME's
+  lock screen and Windows' screen saver hold still, and every search and job waits between two of
+  its steps, in whatever program runs it; each carries on as it was after (measuring from *This
+  computer* used to leave the world paused). Before measuring, each says plainly that games,
+  video, builds and other simulations lower the score, and asks for them to be closed. A JETCARP
+  program that can't hold still (`jetcarp run`, a script, another measuring) is named, and so is a
+  processor busy with something else (other programs at 15% or more of it) or, where Linux's
+  driver says, a GPU at 25% or more: the app and setup wait and measure once it has gone, with
+  *Measure anyway*; `jetcarp score` asks in a terminal whether to wait, and otherwise measures
+  anyway and says so, so scripts never wait on a question. A score measured anyway is marked as
+  taken under load, with what was found, in the result, `machine.json` and the report; the limits
+  never came from the score and are unchanged, and Fit to this computer's first guesses skip such
+  a score. ([While it measures](../guides/this-computer.md#while-it-measures),
+  [#301](https://github.com/jprodgers/jetcarp/issues/301))
+- **`jetcarp score`'s progress reads in a log.** With its output going to a file or a pipe, its
+  steps ran together on one line, ended by a terminal's erase code. Each step is now a line of its
+  own, with no escape codes; in a terminal the line is still redrawn in place. `jetcarp library
+  verify`, `reverify` and `compounds`, which shared it, write a count at most every five seconds
+  there. ([#299](https://github.com/jprodgers/jetcarp/issues/299))
+
 ## [0.4.2] – 2026-11-17
 
 ### Security

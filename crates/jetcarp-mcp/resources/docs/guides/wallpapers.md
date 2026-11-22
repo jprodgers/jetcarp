@@ -214,7 +214,8 @@ own setting`, or a world too small to be worth the GPU), the monitors, whether t
 how the screens are paced, and, while it is paused by hand, `paused: by hand`. A hold passes by
 itself, so it is told apart from a pause: `held: on battery (resumes by itself)`, and likewise while
 the processor is busy, while the desktop holds it (windows cover it, or the screen is locked or
-off), and during *Fit to this computer*. Its `note:` lines are the host's recent messages, such
+off), during *Fit to this computer*, and while JETCARP measures this computer
+([While it measures](this-computer.md#while-it-measures)). Its `note:` lines are the host's recent messages, such
 as the GPU it took. Just after `next` the new item is *starting* until its world is built. A host
 that has not opened its GPU yet (started at login, with nothing shown so far) says `GPU not opened
 yet`, not `none`. A screen kept for a monitor that isn't connected moves to the main monitor if
@@ -263,8 +264,8 @@ asleep. On macOS it holds whenever a wallpaper is wanted and none of it can be s
 locked, every display asleep (locked or not), or no wallpaper window there at all. `jetcarp host
 status --json` gives `paused` (paused by hand, or nothing in the rotation can be shown; *Resume*
 carries on) with `paused_why`, and apart from it what the host is holding for: `held` (`battery`,
-`busy`, `covered`, `dark` or `tuning`, which pass by themselves, and `warning` until the photosensitive
-seizure warning has been answered) with `held_why`, the same in words.
+`busy`, `covered`, `dark`, `tuning` or `measuring`, which pass by themselves, and `warning` until the
+photosensitive seizure warning has been answered) with `held_why`, the same in words.
 
 The host, the lock screen and the screen savers draw on the adapter driving the screen (on a laptop
 with two GPUs, the integrated one, so the discrete one can sleep), and step a world on it once it has

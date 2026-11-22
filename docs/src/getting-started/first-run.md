@@ -101,8 +101,15 @@ signed.
 **This computer** (every profile). Setup measures your computer first, unless you untick **Measure
 this computer first**: about a minute of JETCARP's own work, with nothing drawn but a progress bar,
 for the [JETCARP Hardware Score](../guides/this-computer.md) and limits that fit the computer. It
-runs before the jobs start, so they do not slow it. Without it, the limits come from the computer's
-memory alone, and **Tools → This computer…** measures it whenever you like.
+runs before the jobs start, so they do not slow it, and the rest of JETCARP holds still while it
+measures (the app's world, the desktop background, other searches and jobs), carrying on after. The
+page asks you to close other heavy programs first: games, video, builds and other simulations lower
+the score. If something would still lower it (a JETCARP program that can't hold still, or a
+processor or GPU busy with something else), the progress page says so and waits for it to go, with
+**Measure anyway** and **Skip measuring**; a score measured anyway is marked as taken under load
+([While it measures](../guides/this-computer.md#while-it-measures)). Without measuring, the limits
+come from the computer's memory alone, and **Tools → This computer…** measures it whenever you
+like.
 
 <img src="../images/getting-started/setup-5b-measure.webp" alt="The This computer page: Measure this computer first, ticked, and what the limits are without measuring: 8 GB reserved for JETCARP, worlds of up to 4 GB" width="600">
 
@@ -181,12 +188,14 @@ setting up JETCARP as Explorer:
   3. import JETCARP starter pack (26 patterns, 79 Quick Start entries, 8 ant runs, 1.5 MB), signed by Jimmie Rodgers, key SHA256:0J4+ipNwh5xr…; the pack came with JETCARP
   4. search for 1 minute on the GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), then add its best runs to the Quick Start
 and add JETCARP to the apps menu (`jetcarp launcher install`)
+
+Close other heavy programs first: games, video, builds and other simulations lower the score. JETCARP holds its own work still while it measures (the app's worlds, the desktop background, searches and jobs, the screen saver) and carries on after.
 pack import job 1 in /home/ada/.local/share/jetcarp/library.sqlite
 explore search job 2 in /home/ada/.local/share/jetcarp/library.sqlite
 GPU: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan
 pack import 1: JETCARP starter pack imported: 26 patterns new, 0 merged, 79 Quick Start entries, 8 ant runs; signed by Jimmie Rodgers, key SHA256:0J4+ipNwh5xrxnEAhZzMqa2apSMLHd/KtJbgFGAQCW0; the pack came with JETCARP (done)
 Quick Start build (explore 2): 781 atlas entries published (781 new, 0 updated, 0 removed); 15,396 runs (222/s), 4,864 elites in 2,707 niches (189 of them confirmed), 13 of 1,359 tilings; AMD Radeon 8060S Graphics (RADV STRIX_HALO) (radv), Vulkan (done)
-this computer's JETCARP Hardware Score: 27,632
+this computer's JETCARP Hardware Score: 27,632, taken with the computer quiet (other programs 3% of the processor, the GPU 1% busy)
 recorded Explorer in /home/ada/.config/jetcarp/setup.json
 added JETCARP to the applications menu (/home/ada/.local/share/applications/jetcarp.desktop), with its icon in /home/ada/.local/share/icons/hicolor
 Open the app with `jetcarp`; `jetcarp setup` again changes your mind.
