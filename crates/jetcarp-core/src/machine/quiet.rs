@@ -155,7 +155,10 @@ impl Drop for Hold {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
         let _w = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-        if HOLDS.fetch_sub(1, Ordering::SeqCst) == 1
+        let before = HOLDS
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+            .unwrap_or(0);
+        if before == 1
             && let Some(dir) = folder()
         {
             let _ = std::fs::remove_file(dir.join(format!("{}.json", std::process::id())));
@@ -164,6 +167,16 @@ impl Drop for Hold {
         if let Ok(mut c) = CACHE.lock() {
             *c = None;
         }
+    }
+}
+
+/// End this process's measuring at once, whatever holds it (Ctrl-C, as the program quits):
+/// its record goes, so the rest of JETCARP carries on now, not once the record goes stale.
+pub fn end_now() {
+    let _w = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+    HOLDS.store(0, Ordering::SeqCst);
+    if let Some(dir) = folder() {
+        let _ = std::fs::remove_file(dir.join(format!("{}.json", std::process::id())));
     }
 }
 

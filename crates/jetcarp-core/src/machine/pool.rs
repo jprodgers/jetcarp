@@ -163,6 +163,11 @@ pub fn recording() -> bool {
     ME.get().is_some()
 }
 
+/// This program in words, as its record names it (none: it does not record).
+pub fn program() -> Option<String> {
+    ME.get().map(|m| m.program.clone())
+}
+
 /// Say in this program's record whether it holds still while JETCARP measures this computer
 /// ([`super::quiet`]); recorded at once.
 pub fn set_pauses(on: bool) {

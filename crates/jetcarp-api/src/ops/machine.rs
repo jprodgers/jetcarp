@@ -12,13 +12,21 @@
 //! The limits are worked out from the hardware, read now, and the own values in this context's
 //! settings folder, so a change shows at once. After a change in the settings folder this
 //! process uses, the process's limits are read again ([`jetcarp_core::machine::reload`]).
+//!
+//! Measuring holds the rest of JETCARP still first ([`Before`], #301): the app's worlds, the
+//! desktop background, searches and jobs, the screen saver, which carry on after. What could not
+//! hold still, and the load other programs put on the processor and the GPU, are kept beside
+//! the score ([`jetcarp_core::machine::quiet::Conditions`]). The app and `jetcarp score` look
+//! first and ask, in a terminal, whether to wait or measure anyway ([`measure`]); setup measures
+//! anyway and says so.
 
 use crate::ctx::{Ctx, GpuAdapter, GpuMode};
 use crate::error::ApiError;
 use crate::op::{NoInput, Op, Progress, Report};
+use jetcarp_core::machine::quiet::{self, Conditions, Hold, Load};
 use jetcarp_core::machine::{
     self, Hardware, Id, Limits, MachineFile, Own, Score, Source, bench, bytes_text, limits,
-    pool::Pool,
+    pool::{self, Pool},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -330,6 +338,17 @@ pub fn score_text(score: Option<&Score>, stale: Option<&str>) -> String {
     for p in &sc.problems {
         let _ = writeln!(s, "  problem: {p}");
     }
+    if let Some(c) = &sc.conditions {
+        let _ = writeln!(s, "  {}", c.text());
+        if c.under_load {
+            let _ = writeln!(
+                s,
+                "  note: a score taken under load is likely lower than this computer's, and \
+                 Fast Fit's first guesses don't use it: measure again with the computer idle \
+                 (the limits come from the hardware alone, so they are as they were)"
+            );
+        }
+    }
     if let Some(why) = stale {
         let _ = writeln!(s, "  note: {why}: measure it again (`jetcarp score`)");
     }
@@ -492,83 +511,217 @@ pub fn save_report(
     Ok(vec![md, js])
 }
 
+/// What to ask before measuring (#301): the app's *This computer* and setup pages and
+/// `jetcarp score` say it first.
+pub const HEAVY_WARNING: &str = "Close other heavy programs first: games, video, builds and \
+    other simulations lower the score. JETCARP holds its own work still while it measures (the \
+    app's worlds, the desktop background, searches and jobs, the screen saver) and carries on \
+    after.";
+
+/// JETCARP made quiet for a measuring (#301): while this lives the rest of JETCARP holds still
+/// ([`Hold`]). It says what held still, the JETCARP programs that could not, and the load from
+/// other programs on the processor and the GPU.
+pub struct Before {
+    _hold: Hold,
+    /// The other JETCARP programs holding still: `the desktop background`, `a search job`.
+    pub paused: Vec<String>,
+    /// Those that could not: `jetcarp run`, `jetcarp script`.
+    pub not_paused: Vec<String>,
+    /// The load from other programs.
+    pub load: Load,
+    quick: bool,
+}
+
+impl Before {
+    /// Hold the rest of JETCARP still, give it a moment to (a job's step under way ends first),
+    /// and look at what is left: up to five seconds while the load stays over its threshold, or a
+    /// quarter of one twice for the short run (`quick`, the tests).
+    pub fn check(quick: bool) -> Before {
+        let program = pool::program().unwrap_or_else(|| "JETCARP".into());
+        let mut b = Before {
+            _hold: Hold::take(&program),
+            paused: vec![],
+            not_paused: vec![],
+            load: Load::default(),
+            quick,
+        };
+        b.look(true);
+        b
+    }
+
+    /// Look again: which JETCARP programs run, and the load. `settle`: look up to five times
+    /// while the load is over its threshold, else once (each look a second).
+    pub fn look(&mut self, settle: bool) {
+        let (secs, tries) = match (self.quick, settle) {
+            (true, true) => (0.25, 2),
+            (true, false) => (0.25, 1),
+            (false, true) => (1.0, 5),
+            (false, false) => (1.0, 1),
+        };
+        let mut load = Load::sample(secs);
+        for _ in 1..tries {
+            if load.busy().is_empty() {
+                break;
+            }
+            load = Load::sample(secs);
+        }
+        let (paused, not_paused) = quiet::others();
+        self.load = load;
+        self.paused = paused;
+        self.not_paused = not_paused;
+    }
+
+    /// Something would lower the score: a JETCARP program that cannot pause, or a busy processor
+    /// or GPU.
+    pub fn busy(&self) -> bool {
+        !self.not_paused.is_empty() || !self.load.busy().is_empty()
+    }
+
+    /// What would lower the score, in sentences (empty: nothing).
+    pub fn text(&self) -> String {
+        let mut v = vec![];
+        if !self.not_paused.is_empty() {
+            v.push(format!(
+                "Running too, and can't be paused for the measuring: {}. Wait for {} to end, or \
+                 measure anyway.",
+                quiet::and_list(&self.not_paused),
+                if self.not_paused.len() == 1 {
+                    "it"
+                } else {
+                    "them"
+                }
+            ));
+        }
+        for b in self.load.busy() {
+            v.push(format!(
+                "{}: close what keeps it busy, or measure anyway.",
+                capital(&b)
+            ));
+        }
+        if !v.is_empty() {
+            v.push("A score measured anyway is marked as taken under load.".into());
+        }
+        v.join("\n")
+    }
+
+    /// What held still, in a sentence (empty: no other JETCARP program was running).
+    pub fn paused_text(&self) -> String {
+        if self.paused.is_empty() {
+            return String::new();
+        }
+        format!(
+            "Held still while it measures: {}.",
+            quiet::and_list(&self.paused)
+        )
+    }
+
+    /// What is kept beside the score.
+    pub fn conditions(&self) -> Conditions {
+        Conditions::of(self.load, self.paused.clone(), self.not_paused.clone())
+    }
+}
+
+fn capital(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}
+
+/// `machine.score` with JETCARP already quiet (`before`, which the app and `jetcarp score` take
+/// first, to ask about what stands in the way): run the benchmark, keep the score with the
+/// conditions it was measured in, and write the report.
+pub fn measure(
+    cx: &Ctx,
+    a: ScoreIn,
+    before: &Before,
+    p: &dyn Progress,
+) -> Result<ScoreOut, ApiError> {
+    let settings = cx.paths().settings;
+    let data = cx.paths().data;
+    let hw = Hardware::read();
+    let mut gpus = vec![];
+    let want_gpu = a
+        .gpu
+        .unwrap_or_else(|| cx.platform.gpu_mode() != GpuMode::Off);
+    if want_gpu {
+        let batch = cx.platform.explore_backend().ok();
+        let world = cx.platform.gpu_stepper().ok();
+        let name = world
+            .as_ref()
+            .map(|w| w.name())
+            .or_else(|| batch.as_ref().map(|b| b.name()));
+        if let Some(name) = name {
+            gpus.push(bench::Gpu {
+                name,
+                batch,
+                world: world.map(|w| Box::new(Stepper(w)) as Box<dyn bench::WorldStepper>),
+            });
+        }
+    }
+    let opts = bench::Options {
+        quick: a.quick,
+        scratch: Some(data.clone()),
+        rss: Some(jetcarp_search::jobs::explore::memory_bytes),
+        ..Default::default()
+    };
+    let _ = std::fs::create_dir_all(&data);
+    let report = |f: f64, msg: &str| p.report((f * 1000.0) as u64, Some(1000), msg);
+    let stop = || p.cancelled();
+    let mut score = bench::run(&opts, gpus, &report, &stop).map_err(|e| {
+        if e == bench::STOPPED {
+            ApiError::conflict(e)
+        } else {
+            ApiError::engine(e)
+        }
+    })?;
+    score.date = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+    score.conditions = Some(before.conditions());
+    let (l, _, note) = table(&hw, settings.as_deref());
+    let mut machine_file = None;
+    if a.save.unwrap_or(true)
+        && let Some(dir) = settings.as_deref()
+    {
+        let f = MachineFile {
+            version: 1,
+            fingerprint: hw.fingerprint(),
+            hardware: Some(hw.clone()),
+            score: Some(score.clone()),
+            suggestions: l
+                .entries
+                .iter()
+                .map(|e| (e.name.clone(), e.suggestion))
+                .collect(),
+            suggested_for: String::new(),
+        };
+        machine_file = Some(f.save(dir).map_err(ApiError::io)?);
+    }
+    let report_files = match a.report.as_deref() {
+        Some(name) => save_report(cx, name, &score, &hw, &l)?,
+        None => vec![],
+    };
+    Ok(ScoreOut {
+        score,
+        hardware: hw,
+        limits: LimitsOut::of(l, settings.as_deref().map(Own::file), note),
+        machine_file,
+        report_files,
+    })
+}
+
 /// `machine.score`.
 pub struct MachineScore;
 impl Op for MachineScore {
     const NAME: &'static str = "machine.score";
-    const SUMMARY: &'static str = "Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked; keeps the JETCARP Hardware Score in machine.json and can write a report.";
+    const SUMMARY: &'static str = "Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, with the rest of JETCARP held still; keeps the JETCARP Hardware Score in machine.json, with the load it was measured under, and can write a report.";
     const READ_ONLY: bool = false;
     type In = ScoreIn;
     type Out = ScoreOut;
     fn run(cx: &Ctx, a: ScoreIn, p: &dyn Progress) -> Result<ScoreOut, ApiError> {
-        let settings = cx.paths().settings;
-        let data = cx.paths().data;
-        let hw = Hardware::read();
-        let mut gpus = vec![];
-        let want_gpu = a
-            .gpu
-            .unwrap_or_else(|| cx.platform.gpu_mode() != GpuMode::Off);
-        if want_gpu {
-            let batch = cx.platform.explore_backend().ok();
-            let world = cx.platform.gpu_stepper().ok();
-            let name = world
-                .as_ref()
-                .map(|w| w.name())
-                .or_else(|| batch.as_ref().map(|b| b.name()));
-            if let Some(name) = name {
-                gpus.push(bench::Gpu {
-                    name,
-                    batch,
-                    world: world.map(|w| Box::new(Stepper(w)) as Box<dyn bench::WorldStepper>),
-                });
-            }
-        }
-        let opts = bench::Options {
-            quick: a.quick,
-            scratch: Some(data.clone()),
-            rss: Some(jetcarp_search::jobs::explore::memory_bytes),
-            ..Default::default()
-        };
-        let _ = std::fs::create_dir_all(&data);
-        let report = |f: f64, msg: &str| p.report((f * 1000.0) as u64, Some(1000), msg);
-        let stop = || p.cancelled();
-        let mut score = bench::run(&opts, gpus, &report, &stop).map_err(|e| {
-            if e == bench::STOPPED {
-                ApiError::conflict(e)
-            } else {
-                ApiError::engine(e)
-            }
-        })?;
-        score.date = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
-        let (l, _, note) = table(&hw, settings.as_deref());
-        let mut machine_file = None;
-        if a.save.unwrap_or(true)
-            && let Some(dir) = settings.as_deref()
-        {
-            let f = MachineFile {
-                version: 1,
-                fingerprint: hw.fingerprint(),
-                hardware: Some(hw.clone()),
-                score: Some(score.clone()),
-                suggestions: l
-                    .entries
-                    .iter()
-                    .map(|e| (e.name.clone(), e.suggestion))
-                    .collect(),
-                suggested_for: String::new(),
-            };
-            machine_file = Some(f.save(dir).map_err(ApiError::io)?);
-        }
-        let report_files = match a.report.as_deref() {
-            Some(name) => save_report(cx, name, &score, &hw, &l)?,
-            None => vec![],
-        };
-        Ok(ScoreOut {
-            score,
-            hardware: hw,
-            limits: LimitsOut::of(l, settings.as_deref().map(Own::file), note),
-            machine_file,
-            report_files,
-        })
+        // The rest of JETCARP holds still while it measures, and carries on after; what could
+        // not is kept beside the score.
+        let before = Before::check(a.quick);
+        measure(cx, a, &before, p)
     }
 }

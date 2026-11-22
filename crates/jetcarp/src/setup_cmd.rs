@@ -170,7 +170,7 @@ fn seizure_warning(a: &SetupArgs, interactive: bool) -> Result<Warned> {
 }
 
 /// A line from the terminal, trimmed (`None` at the end of input).
-fn ask(prompt: &str) -> Option<String> {
+pub(crate) fn ask(prompt: &str) -> Option<String> {
     eprint!("{prompt}");
     let _ = std::io::stderr().flush();
     let mut s = String::new();
