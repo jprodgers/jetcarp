@@ -7,15 +7,19 @@
 //! ceilings) or *Cancel*. The command line, scripts and the MCP tools refuse instead.
 //!
 //! The benchmark runs on a thread of its own, through `machine.score` as `jetcarp score` runs
-//! it; while it runs nothing is drawn but a progress bar (the world is paused, so it does not
-//! slow the measuring either).
+//! it; while it runs nothing is drawn but a progress bar. Before it starts, the window asks for
+//! other heavy programs to be closed, and the rest of JETCARP holds still while it measures
+//! (the world here, the desktop background, searches and jobs, the screen saver), carrying on
+//! after (#301). A JETCARP program that can't hold still, or a processor or GPU busy with
+//! something else, is said first: the window waits for it, and measures as soon as it has gone,
+//! or at once with *Measure anyway*, the score then marked as taken under load.
 
 use super::*;
 use jetcarp_api::Ctx;
 use jetcarp_api::op::{NoInput, Op, Progress};
 use jetcarp_api::ops::machine::{
-    LimitResetIn, LimitSetIn, MachineInfo, MachineLimitsReset, MachineLimitsSet, MachineOut,
-    MachineScore, ScoreIn, ScoreOut, save_report,
+    Before, HEAVY_WARNING, LimitResetIn, LimitSetIn, MachineInfo, MachineLimitsReset,
+    MachineLimitsSet, MachineOut, ScoreIn, ScoreOut, measure, save_report,
 };
 use jetcarp_core::machine::{self, Id, Source, Unit, limits};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,6 +44,8 @@ pub(super) struct MachineWin {
     pub ask: Option<OverLimitAsk>,
     /// *Build anyway* was pressed: the next build is not asked about again.
     pub anyway: bool,
+    /// Measure with the short run (the tests).
+    quick: bool,
 }
 
 /// The benchmark running.
@@ -47,6 +53,10 @@ struct Run {
     progress: Arc<Mutex<(f32, String)>>,
     stop: Arc<AtomicBool>,
     rx: Receiver<Result<ScoreOut, String>>,
+    /// What stands in the way of a fair measuring, while the run waits for it to go.
+    ask: Arc<Mutex<Option<String>>>,
+    /// *Measure anyway* was pressed.
+    anyway: Arc<AtomicBool>,
 }
 
 struct RunProgress {
@@ -137,8 +147,15 @@ impl MachineWin {
         &mut self.typed.iter_mut().find(|t| t.0 == id).unwrap().1
     }
 
-    fn running(&self) -> bool {
+    pub(super) fn running(&self) -> bool {
         self.run.is_some()
+    }
+
+    /// The short run, each workload once (the tests).
+    #[cfg(test)]
+    pub(super) fn start_quick(&mut self) {
+        self.quick = true;
+        self.start();
     }
 
     /// Start the benchmark (about a minute).
@@ -146,19 +163,50 @@ impl MachineWin {
         let progress = Arc::new(Mutex::new((0.0, "Starting".to_string())));
         let stop = Arc::new(AtomicBool::new(false));
         let (tx, rx) = channel();
+        let quick = self.quick;
+        let ask = Arc::new(Mutex::new(None));
+        let anyway = Arc::new(AtomicBool::new(false));
         let p = RunProgress {
             progress: progress.clone(),
             stop: stop.clone(),
         };
+        let (asking, go) = (ask.clone(), anyway.clone());
         std::thread::Builder::new()
             .name("jetcarp-score".into())
             .spawn(move || {
-                let r = MachineScore::run(&op_ctx(), ScoreIn::default(), &p).map_err(|e| e.message);
+                // The rest of JETCARP holds still from here until the score is kept.
+                let mut b = Before::check(quick);
+                // Wait while something would lower the score, looking again each second, until
+                // it has gone, or *Measure anyway* or *Stop* is pressed.
+                while b.busy() && !go.load(Ordering::Relaxed) {
+                    if let Ok(mut a) = asking.lock() {
+                        *a = Some(b.text());
+                    }
+                    if p.stop.load(Ordering::Relaxed) {
+                        let _ = tx.send(Err("Not measured.".into()));
+                        return;
+                    }
+                    b.look(false);
+                }
+                if let Ok(mut a) = asking.lock() {
+                    *a = None;
+                }
+                let i = ScoreIn {
+                    quick,
+                    ..Default::default()
+                };
+                let r = measure(&op_ctx(), i, &b, &p).map_err(|e| e.message);
                 let _ = tx.send(r);
             })
             .ok();
         self.note = None;
-        self.run = Some(Run { progress, stop, rx });
+        self.run = Some(Run {
+            progress,
+            stop,
+            rx,
+            ask,
+            anyway,
+        });
     }
 
     /// Take the benchmark's result when it ends.
@@ -168,14 +216,22 @@ impl MachineWin {
         self.run = None;
         match out {
             Ok(s) => {
+                let taken = s
+                    .score
+                    .conditions
+                    .as_ref()
+                    .map_or(String::new(), |c| format!(", {}", c.text()));
                 self.note = Some((
                     match s.score.wrong().count() {
-                        0 => format!("Measured: JETCARP Hardware Score {}.", s.score.text()),
+                        0 => format!(
+                            "Measured: JETCARP Hardware Score {}{taken}.",
+                            s.score.text()
+                        ),
                         n => format!(
                             "Measured, with {n} wrong answers: the devices that gave them are not used for those workloads."
                         ),
                     },
-                    s.score.wrong().next().is_some(),
+                    s.score.wrong().next().is_some() || s.score.under_load(),
                 ));
                 machine::reload();
             }
@@ -273,8 +329,8 @@ impl JetcarpApp {
     /// Tools → This computer…, and the question a world over the limit gets.
     pub(super) fn machine_window(&mut self, ctx: &egui::Context) {
         self.machine.poll();
+        // The world holds still meanwhile ([`JetcarpApp::measuring_hold`]).
         if self.machine.running() {
-            self.playing = false;
             ctx.request_repaint_after(std::time::Duration::from_millis(200));
         }
         if self.machine.open && self.machine.info.is_none() {
@@ -367,6 +423,21 @@ impl JetcarpApp {
                             .weak(),
                         );
                     });
+                    if let Some(c) = &s.conditions {
+                        let t = capital(&c.text());
+                        if c.under_load {
+                            ui.colored_label(
+                                crate::theme::ink(ui, Color32::from_rgb(0xff, 0xb0, 0x60)),
+                                format!(
+                                    "{t}. It is likely lower than this computer's, and Fast \
+                                     Fit's first guesses don't use it: measure again with the \
+                                     computer idle."
+                                ),
+                            );
+                        } else {
+                            ui.label(RichText::new(format!("{t}.")).weak());
+                        }
+                    }
                     if let Some(why) = &info.stale {
                         ui.colored_label(crate::theme::ink(ui, Color32::from_rgb(0xff, 0xb0, 0x60)), format!("{why}: run it again."));
                     }
@@ -415,12 +486,36 @@ impl JetcarpApp {
                 )
                 .weak(),
             );
+            ui.label(HEAVY_WARNING);
             match &m.run {
                 Some(r) => {
-                    let (f, what) = r.progress.lock().map(|p| p.clone()).unwrap_or_default();
-                    ui.add(egui::ProgressBar::new(f).text(what));
-                    if ui.button("Stop").clicked() {
-                        r.stop.store(true, Ordering::Relaxed);
+                    let ask = r.ask.lock().ok().and_then(|a| a.clone());
+                    if let Some(t) = ask {
+                        ui.colored_label(
+                            crate::theme::ink(ui, Color32::from_rgb(0xff, 0xb0, 0x60)),
+                            t,
+                        );
+                        ui.label(
+                            RichText::new(
+                                "JETCARP waits, and measures as soon as they have gone.",
+                            )
+                            .weak(),
+                        );
+                        ui.horizontal(|ui| {
+                            if ui.button("Measure anyway").clicked() {
+                                r.anyway.store(true, Ordering::Relaxed);
+                            }
+                            if ui.button("Stop").clicked() {
+                                r.stop.store(true, Ordering::Relaxed);
+                            }
+                        });
+                    } else {
+                        let (f, what) =
+                            r.progress.lock().map(|p| p.clone()).unwrap_or_default();
+                        ui.add(egui::ProgressBar::new(f).text(what));
+                        if ui.button("Stop").clicked() {
+                            r.stop.store(true, Ordering::Relaxed);
+                        }
                     }
                 }
                 None => {
@@ -633,6 +728,30 @@ impl JetcarpApp {
                 None
             }
             None => Some(then),
+        }
+    }
+
+    /// While JETCARP measures this computer, here or in another program, the world holds still
+    /// (screensaver mode's included), so its work does not lower the score; it runs again once
+    /// the measuring has ended, if it was running (#301). Looked at before every pass, and twice
+    /// a second while held, so the end is seen with nothing else asking for a frame.
+    pub(super) fn measuring_hold(&mut self, ctx: &egui::Context) {
+        if machine::quiet::held() {
+            if self.playing {
+                self.playing = false;
+                if !self.measure_paused {
+                    self.measure_paused = true;
+                    self.message = Some((
+                        "Paused while JETCARP measures this computer: it runs again after.".into(),
+                        false,
+                    ));
+                }
+            }
+            ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        } else if std::mem::take(&mut self.measure_paused) {
+            self.playing = true;
+            self.message = Some(("Running again: the measuring has ended.".into(), false));
+            ctx.request_repaint();
         }
     }
 

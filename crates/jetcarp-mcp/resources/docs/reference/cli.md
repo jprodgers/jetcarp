@@ -53,7 +53,7 @@ Commands:
   site        Website export: the public catalog as JSON and media with a manifest and a viewer page, incrementally
   tilings     List tiling families with their neighbour counts
   doctor      What JETCARP sees on this machine: version, the hardware and its score, folders, graphics adapters, desktop integration. Include it in bug reports
-  score       Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for the JETCARP Hardware Score and its parts. Kept in machine.json; `--report FILE` also writes a report. It never runs by itself
+  score       Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for the JETCARP Hardware Score and its parts. The rest of JETCARP holds still meanwhile; a JETCARP program that can't, or a busy processor or GPU, is said first (asked about in a terminal, else measured anyway and marked as taken under load). Kept in machine.json; `--report FILE` also writes a report. It never runs by itself
   limits      This machine's limits (the largest world, the desktop background's, HashLife's, an AI's share...): each your own value if you set one, else the machine's suggestion from its memory, never above a ceiling. `set NAME VALUE`, `reset [NAME]`
   guard       The strobe guard's switches: on for the app and for the desktop background and screen saver unless turned off in the app (Settings → Safety). `--on` turns them back on; nothing here turns them off
   launcher    JETCARP among the system's apps, with its icon: `install` puts it in the applications menu (Linux), Applications (macOS, as JETCARP.app) or the Start menu (Windows), starting this program; `remove` takes it out; `status` says whether it is there. The installers run `install`, and `jetcarp uninstall` removes it
@@ -3062,7 +3062,7 @@ Options:
 ### `jetcarp score`
 
 ```text
-Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for the JETCARP Hardware Score and its parts. Kept in machine.json; `--report FILE` also writes a report. It never runs by itself
+Measure this machine: about a minute of JETCARP's own work (Life soups on five non-square tilings, one core, a hunt, the GPU, memory, the disk), each answer checked, for the JETCARP Hardware Score and its parts. The rest of JETCARP holds still meanwhile; a JETCARP program that can't, or a busy processor or GPU, is said first (asked about in a terminal, else measured anyway and marked as taken under load). Kept in machine.json; `--report FILE` also writes a report. It never runs by itself
 
 Usage: jetcarp score [OPTIONS]
 

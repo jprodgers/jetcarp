@@ -33,6 +33,7 @@ fn the_desktop_background_yields_to_the_rest_of_jetcarp() {
                 program: "the app".into(),
                 bytes: (gib_tenths << 30) / 10,
                 at_ms: now_ms(),
+                pauses: false,
             },
         )
         .unwrap();

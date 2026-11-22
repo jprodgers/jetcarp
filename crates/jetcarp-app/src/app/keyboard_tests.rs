@@ -1539,3 +1539,66 @@ fn child_tab_reaches_the_script_editor_s_code_box() {
     assert!(failures.is_empty(), "{failures:#?}");
     done();
 }
+
+#[test]
+fn measuring_pauses_the_world_and_resumes_it_after() {
+    in_scratch("app::keyboard_tests::child_measuring_pauses_the_world_and_resumes_it_after");
+}
+
+/// *Tools → This computer…* asks the person to close other heavy programs before measuring, and
+/// measuring pauses the world running in the app, which runs again once it has ended (#301).
+#[test]
+#[ignore]
+fn child_measuring_pauses_the_world_and_resumes_it_after() {
+    if !child() {
+        return;
+    }
+    // The test machine is busy with other tests: the load is taken as quiet here, so the window
+    // measures at once rather than waiting for the processor to go quiet.
+    jetcarp_core::machine::quiet::sample_with(|_| jetcarp_core::machine::quiet::Load {
+        cpu: Some(0.0),
+        gpu: None,
+    });
+    let mut k = Kb::with_life();
+    k.app.set_tool_open(menu::ToolWin::Machine, true);
+    k.app.playing = true;
+    k.frames(4);
+    let warned = |k: &Kb| {
+        k.nodes.values().any(|n| {
+            [&n.label, &n.value]
+                .into_iter()
+                .flatten()
+                .any(|t| t.contains("Close other heavy programs first"))
+        })
+    };
+    assert!(
+        warned(&k),
+        "no warning about heavy programs before measuring"
+    );
+    k.app.machine.start_quick();
+    let t0 = std::time::Instant::now();
+    let mut paused = false;
+    while k.app.machine.running() {
+        assert!(
+            t0.elapsed() < std::time::Duration::from_secs(300),
+            "the measuring did not end"
+        );
+        k.frames(1);
+        paused |= !k.app.playing;
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(paused, "the world kept running while JETCARP measured");
+    // The hold is looked at about twice a second.
+    for _ in 0..40 {
+        k.frames(1);
+        if k.app.playing {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(
+        k.app.playing,
+        "the world did not run again after the measuring"
+    );
+    done();
+}

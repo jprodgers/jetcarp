@@ -1689,8 +1689,12 @@ fn apply(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
         );
         match m {
             Ok(s) => out.notes.push(format!(
-                "this computer's JETCARP Hardware Score: {}",
-                s.score.text()
+                "this computer's JETCARP Hardware Score: {}{}",
+                s.score.text(),
+                s.score
+                    .conditions
+                    .as_ref()
+                    .map_or(String::new(), |c| format!(", {}", c.text()))
             )),
             Err(e) => out.notes.push(format!(
                 "this computer was not measured: {e} (`jetcarp score` tries again)"

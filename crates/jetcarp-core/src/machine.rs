@@ -22,6 +22,7 @@ pub mod cost;
 pub mod hardware;
 pub mod limits;
 pub mod pool;
+pub mod quiet;
 pub mod score;
 
 pub use hardware::{GpuMemory, Hardware};

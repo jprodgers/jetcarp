@@ -170,7 +170,7 @@ fn seizure_warning(a: &SetupArgs, interactive: bool) -> Result<Warned> {
 }
 
 /// A line from the terminal, trimmed (`None` at the end of input).
-fn ask(prompt: &str) -> Option<String> {
+pub(crate) fn ask(prompt: &str) -> Option<String> {
     eprint!("{prompt}");
     let _ = std::io::stderr().flush();
     let mut s = String::new();
@@ -388,6 +388,11 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
             );
         }
         eprint!("{}", plan.notes());
+    }
+    // Before measuring: what lowers the score (#301). The rest of JETCARP holds still while it
+    // measures, and setup measures anyway, saying how the score was taken.
+    if measure && !json {
+        eprintln!("\n{}", jetcarp_api::ops::machine::HEAVY_WARNING);
     }
     if interactive && !yes_no("Go ahead?", true) {
         eprintln!("nothing changed");

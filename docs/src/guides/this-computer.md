@@ -219,6 +219,56 @@ from the parts, not from the one number: with no size from before,
 one-core rate (on the processor) or the GPU's soup rate (on the GPU) says the scene's work fits in,
 and it counts a step on the GPU at the GPU's speed over the processor's.
 
+### While it measures
+
+The score times JETCARP's own work, so anything else keeping the computer busy lowers it, and
+JETCARP's own running worlds most of all. So before measuring, setup, *This computer* and
+`jetcarp score` ask you to close other heavy programs: games, video, builds and other simulations.
+
+**JETCARP holds its own work still while it measures**, and carries on as it was after:
+
+| What | While it measures |
+| --- | --- |
+| The app's world, screensaver mode's too | Paused; it runs again after, if it was running |
+| The desktop background, GNOME's lock screen and Windows' screen saver | Held still: `jetcarp host status` says *JETCARP is measuring this computer*, and a pause by hand stays as it was |
+| Searches and jobs, in any program | Each waits between two of its steps, in the program running it, then carries on |
+
+The measuring says so in the runtime folder, as `measuring/<process id>.json`, renewed every 2
+seconds and removed when it ends. A record not renewed for 10 seconds is from a measuring that has
+gone, so a crash holds nothing still for long. Each program that holds still says so in its record
+in the [memory pool](#sharing-the-pool).
+
+**What would still lower the score is said first:**
+
+- **A JETCARP program that can't hold still**: one that steps worlds of its own (`jetcarp run`, a
+  script, a picture being rendered) or another measuring. MCP servers are not named, since they
+  work only while an AI's tool call runs, and the load check sees one that is busy. Neither is
+  macOS's screen saver: its sandbox can't read the runtime folder, and it runs only while the Mac
+  is idle.
+- **A processor busy with something else**: other programs at 15% or more of it, as the system
+  counts its busy time, less the measuring program's own. An idle desktop keeps a few percent busy;
+  a game, a video call, a build or another simulation keeps a quarter or more. The parts on every
+  core lose about the share others take, so at 15% they read about 15% low.
+- **A busy GPU**: 25% or more, where its driver says how busy it is (on Linux, AMD's
+  `gpu_busy_percent`). The figure counts the desktop's own drawing, so its threshold is higher.
+  Other GPUs, and Windows and macOS, give no figure, so only the processor is looked at there.
+
+The load is looked at once JETCARP has held still, for up to five seconds while it stays over a
+threshold (a job's step under way ends first). Then the app's *This computer* window and setup's
+progress page say what they found and wait, measuring as soon as it has gone, with **Measure
+anyway**, and **Stop** or **Skip measuring**. `jetcarp score` asks in a terminal whether to wait,
+measure anyway or stop; with its output going to a file or another program, or with `--json`, it
+never asks: it says what it found and measures anyway, so scripts carry on.
+
+**A score measured anyway is marked as taken under load**, in the result, in `machine.json` and in
+the report, beside the score. Its `conditions` say other programs' share of the processor (`cpu`,
+0 to 1) and the GPU's busy figure (`gpu`) as the measuring started, the JETCARP programs that held
+still (`paused`) and those that couldn't (`not_paused`), and `under_load`. Such a score is likely
+lower than the computer's. **The limits never come from the score**: they come from the hardware
+and your own values, so a score taken under load leaves them as they were. Fit to this computer's
+first guesses, which do come from the score's parts, skip a score taken under load, as they skip a
+short run, until the computer is measured again with nothing else busy.
+
 The benchmark is **versioned**. A JETCARP that changes the workloads raises the version, and an
 older score is then shown as from an older benchmark, with a suggestion to measure again. A computer
 that changed (another processor, memory, GPU or system, or a new firmware split of its memory) is
@@ -227,26 +277,46 @@ benchmark by itself.
 
 ```text
 $ jetcarp score --report report
+Close other heavy programs first: games, video, builds and other simulations lower the score.
+JETCARP holds its own work still while it measures (the app's worlds, the desktop background,
+searches and jobs, the screen saver) and carries on after.
+
+Held still while it measures: the desktop background.
 Measuring this computer (about a minute): JETCARP's own work on fixed scenes, each answer checked.
 Nothing is drawn or sent anywhere.
 JETCARP Hardware Score: 1,234 (score v1, 2026-11-21 14:05, JETCARP 0.4.3)
   Life soups on the hat                    processor (16 threads)     402 soups/s
   ...
+  taken with the computer quiet (other programs 3% of the processor, the GPU 1% busy)
 Kept in ~/.config/jetcarp/machine.json
 Report: report.md
 Report: report.json
 ```
 
-`--report FILE` writes the computer, the parts, the score and the limits in Markdown and JSON, for
-comparing computers; `--quick` runs each workload once, for its answers alone, in a few seconds;
-`--no-gpu` leaves the GPU out; `--no-save` keeps nothing.
+With something in the way, it says so first, and in a terminal asks:
+
+```text
+Running too, and can't be paused for the measuring: jetcarp run. Wait for it to end, or measure
+anyway.
+The processor is 42% busy with other programs: close what keeps it busy, or measure anyway.
+A score measured anyway is marked as taken under load.
+Wait for them (w), measure anyway (m), or stop (s)? [w]
+```
+
+`--report FILE` writes the computer, the parts, the score, how it was taken and the limits in
+Markdown and JSON, for comparing computers; `--quick` runs each workload once, for its answers
+alone, in a few seconds; `--no-gpu` leaves the GPU out; `--no-save` keeps nothing. In a terminal
+the progress is one line, redrawn in place; to a file or a pipe each step is a line of its own,
+with no escape codes.
 
 ## Tools → This computer…
 
-<img src="../images/guides/this-computer-window.webp" alt="The This computer window: an example 8-core, 32 GB machine with a 12 GB GPU, not measured yet, what JETCARP's programs hold of its pool now, and its limits, with 12 GB reserved for the system as the person's own value" width="800">
+<img src="../images/guides/this-computer-window.webp" alt="The This computer window: an example 8-core, 32 GB machine with a 12 GB GPU, not measured yet, the request to close other heavy programs above Measure this computer, what JETCARP's programs hold of its pool now, and its limits, with 12 GB reserved for the system as the person's own value" width="800">
 
-The window shows the hardware, the score with its parts and the date of the last run, **Measure
-this computer** (then **Run again**) and **Save a report…**, and the limits. Each limit shows what
+The window shows the hardware, the score with its parts, the date of the last run and how it was
+taken, **Measure this computer** (then **Run again**) with the request to close other heavy programs
+above it, **Save a report…**, and the limits. While something would lower the score, it says what
+and waits ([While it measures](#while-it-measures)). Each limit shows what
 applies now, the machine's suggestion (with how it was worked out when you hover over it), your own
 value, and its ceiling. Type a value of your own (memory as `24GB` or `512MB`, counts as `64000000`
 or `64M`) and leave the field; **Back to the suggestion** puts one back, **All back to the
@@ -283,7 +353,8 @@ part, so a computer whose memory changes keeps what the system was given:
 }
 ```
 
-The score and its parts are kept in `machine.json` beside it, with the hardware it was measured on.
+The score and its parts are kept in `machine.json` beside it, with the hardware it was measured on
+and how it was taken (`conditions`).
 `host.json`'s `max_cells` and `max_memory_mb` give way to `host-cells` and `host-memory`, unless
 they were edited by hand, when the edited value still applies. `JETCARP_HUNT_CACHE_MB` still sets
 the hunt caches over everything.

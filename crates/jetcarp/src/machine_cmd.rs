@@ -1,5 +1,11 @@
 //! `jetcarp score` (measure this machine: the JETCARP Hardware Score) and `jetcarp limits`
 //! (show, set and reset the limits set from it): the `machine.*` operations.
+//!
+//! Before measuring, `jetcarp score` asks for other heavy programs to be closed, holds the rest
+//! of JETCARP still (#301), and says what would still lower the score: a JETCARP program that
+//! can't hold still, or a busy processor or GPU. In a terminal it then asks whether to wait or
+//! measure anyway; otherwise it measures anyway and says so, so scripts never wait on a
+//! question. A score measured that way is marked as taken under load.
 
 use crate::{ProgressLine, show};
 use anyhow::Result;
@@ -7,8 +13,8 @@ use clap::{Args, Subcommand};
 use jetcarp_api::Ctx;
 use jetcarp_api::op::{NoInput, Op, Quiet};
 use jetcarp_api::ops::machine::{
-    LimitResetIn, LimitSetIn, MachineLimits, MachineLimitsReset, MachineLimitsSet, MachineScore,
-    ScoreIn,
+    Before, HEAVY_WARNING, LimitResetIn, LimitSetIn, MachineLimits, MachineLimitsReset,
+    MachineLimitsSet, ScoreIn, measure,
 };
 
 #[derive(Args)]
@@ -59,6 +65,31 @@ pub fn score(cx: &Ctx, a: ScoreArgs, json: bool) -> Result<()> {
         save: Some(!a.no_save),
     };
     if !json {
+        eprintln!("{HEAVY_WARNING}\n");
+    }
+    // Ctrl-C: the rest of JETCARP carries on at once, rather than once the hold goes stale.
+    let _ = ctrlc::set_handler(|| {
+        jetcarp_core::machine::quiet::end_now();
+        jetcarp_core::machine::pool::exit(130);
+    });
+    let mut before = Before::check(a.quick);
+    if before.busy() {
+        if !json {
+            eprintln!("{}", before.text());
+        }
+        if !json && interactive() {
+            if !wait_or_go(&mut before) {
+                anyhow::bail!("not measured");
+            }
+        } else if !json {
+            eprintln!("Measuring anyway (no terminal to ask in).");
+        }
+    }
+    if !json {
+        let held = before.paused_text();
+        if !held.is_empty() {
+            eprintln!("{held}");
+        }
         eprintln!(
             "Measuring this computer ({}): JETCARP's own work on fixed scenes, each answer \
              checked. Nothing is drawn or sent anywhere.",
@@ -70,13 +101,48 @@ pub fn score(cx: &Ctx, a: ScoreArgs, json: bool) -> Result<()> {
         );
     }
     let r = if json {
-        MachineScore::run(cx, i, &Quiet)
+        measure(cx, i, &before, &Quiet)
     } else {
-        let r = MachineScore::run(cx, i, &ProgressLine);
-        eprint!("{}", crate::term::clear_line());
+        let p = ProgressLine::steps();
+        let r = measure(cx, i, &before, &p);
+        p.erase();
         r
     };
+    drop(before);
     show(&r?, json)
+}
+
+/// Standard input and standard error are a terminal: someone can be asked.
+fn interactive() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+}
+
+/// Asked in a terminal, while something would lower the score: wait for it to go (looking
+/// again each second, saying what is left when it changes), measure anyway, or stop. True to
+/// measure.
+fn wait_or_go(before: &mut Before) -> bool {
+    loop {
+        let a = crate::setup_cmd::ask("Wait for them (w), measure anyway (m), or stop (s)? [w] ");
+        match a.as_deref().map(str::to_ascii_lowercase).as_deref() {
+            None | Some("s" | "stop") => return false,
+            Some("m" | "measure" | "anyway") => return true,
+            Some("" | "w" | "wait") => break,
+            Some(_) => eprintln!("  type w, m or s"),
+        }
+    }
+    eprintln!("Waiting (Ctrl-C stops)...");
+    let mut said = before.text();
+    while before.busy() {
+        before.look(false);
+        let now = before.text();
+        if before.busy() && now != said {
+            eprintln!("{now}");
+            said = now;
+        }
+    }
+    eprintln!("They have gone.");
+    true
 }
 
 pub fn limits(cx: &Ctx, a: LimitsArgs, json: bool) -> Result<()> {
