@@ -252,6 +252,8 @@ pub struct Core {
     /// guard's setting (every [`GUARD_CHECK`] seconds), so a font chosen in the app shows
     /// without a restart.
     caption_font: jetcarp_display::caption::FontWatch,
+    /// The macOS screen saver, built again when what it bakes changes (#287).
+    saver: jetcarp_display::saver_update::Keeper,
 }
 
 /// A running screen's monitor, as a fit by itself compares it with the one it was fitted for.
@@ -516,6 +518,7 @@ impl Core {
             desktop_at_risk: jetcarp_core::photosensitivity::at_risk(),
             guard_at: 0.0,
             caption_font,
+            saver: Default::default(),
         };
         if let Some(w) = warning {
             core.note(w);
@@ -903,6 +906,16 @@ impl Core {
             }
             if let Some(n) = self.caption_font.check() {
                 self.note(n);
+            }
+            // The guard's setting and the warning's answer above, the rotation, the caption and
+            // its font: whatever the Mac's sandboxed screen saver has baked in, it gets again.
+            match self.saver.poll() {
+                Some(Ok(n)) => self.note(n),
+                Some(Err(e)) => self.note(format!(
+                    "the screen saver couldn't be brought up to date ({e}); it shows what it did \
+                     before"
+                )),
+                None => {}
             }
             if on != self.desktop_guard {
                 self.desktop_guard = on;
