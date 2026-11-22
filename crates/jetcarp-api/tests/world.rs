@@ -260,7 +260,8 @@ fn a_grid_s_cells_are_counted_against_the_limit() {
     );
     assert_eq!(
         e.message,
-        "4096 x 4096 on square is 16,777,216 cells, over the limit of 4,000,000 cells (try 2000 x 2000)"
+        "4096 x 4096 on square is 16,777,216 cells, over the limit of 4,000,000 cells (try 2000 x 2000). \
+         It is an AI's share, small, of this machine's limits: Tools → This computer…, or `jetcarp limits`"
     );
     let e = fails(
         run(
@@ -287,8 +288,8 @@ fn a_grid_s_cells_are_counted_against_the_limit() {
         .message
         .rsplit("(try ")
         .next()
-        .unwrap()
-        .trim_end_matches(')');
+        .and_then(|t| t.split(')').next())
+        .unwrap();
     let (w, hh) = fit.split_once(" x ").unwrap();
     let out = run(
         &mut h,

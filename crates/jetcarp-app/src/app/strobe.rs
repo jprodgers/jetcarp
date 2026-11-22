@@ -17,7 +17,7 @@ use super::*;
 use crate::gpu::{GuardFeed, GuardOut};
 use jetcarp_core::photosensitivity::{self as ps, Answer, GuardPlace};
 use jetcarp_core::strobe::Viewing;
-use jetcarp_core::strobe::guard::{Action, Pace, Report};
+use jetcarp_core::strobe::guard::{self, Action, Pace, Report};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
@@ -55,6 +55,10 @@ pub(crate) struct AppStrobe {
     /// Generations a second reached: where the count started (seconds, generation).
     mark: Option<(f64, u64)>,
     pub reached: Option<f32>,
+    /// The person's steps in the last second (the app's clock), the pace the guard is told while
+    /// the world is stepped rather than run (#293), and when it last said it held a step back.
+    steps: VecDeque<f64>,
+    held_note_at: f64,
     pub window_open: bool,
     pub confirm: Option<Confirm>,
     pub error: Option<String>,
@@ -77,6 +81,8 @@ impl Default for AppStrobe {
             was_playing: false,
             mark: None,
             reached: None,
+            steps: VecDeque::new(),
+            held_note_at: f64::NEG_INFINITY,
             window_open: false,
             confirm: None,
             error: None,
@@ -140,6 +146,14 @@ impl JetcarpApp {
                 }
             }
         }
+        // Stepped by hand (#293): the steps of the last second are the pace the guard is told, as
+        // a run's generations are, so it caps them from the rate they really come at.
+        while self.strobe.steps.front().is_some_and(|t| now - t > 1.0) {
+            self.strobe.steps.pop_front();
+        }
+        if !self.playing && !self.strobe.steps.is_empty() {
+            self.strobe.reached = Some(self.strobe.steps.len() as f32);
+        }
         let (mut cap, mut paused, mut report, mut notes) =
             (None::<f32>, None::<String>, None::<Report>, vec![]);
         if let Ok(mut out) = self.strobe.out.lock() {
@@ -195,6 +209,42 @@ impl JetcarpApp {
             Some(c) if self.max_speed || self.speed > c => (c, false),
             _ => (self.speed, self.max_speed),
         }
+    }
+
+    /// Whether a step the person (or AI control) asks for now may go (#293). The guard's cap holds
+    /// steps as it holds a run: a step sooner than one over the cap after the last is dropped, so
+    /// a key held down builds no backlog. While the guard holds a pause, steps come no faster than
+    /// its slowest pace. A step that goes is counted for the pace the guard is told.
+    pub(super) fn step_allowed(&mut self) -> bool {
+        let now = self.started.elapsed().as_secs_f64();
+        let limit = if !self.guard_on_here() {
+            None
+        } else if self.strobe.paused.is_some() {
+            Some(
+                self.strobe
+                    .cap
+                    .map_or(guard::MIN_PACE, |c| c.min(guard::MIN_PACE)),
+            )
+        } else {
+            self.strobe.cap
+        };
+        if let (Some(limit), Some(last)) = (limit, self.strobe.steps.back())
+            && now - last < 1.0 / limit.max(1e-3) as f64 - 1e-6
+        {
+            if now - self.strobe.held_note_at >= 1.0 {
+                self.strobe.held_note_at = now;
+                self.message = Some((
+                    format!(
+                        "Strobe guard: steps held to {} while this scene flashes.",
+                        steps_words(limit)
+                    ),
+                    false,
+                ));
+            }
+            return false;
+        }
+        self.strobe.steps.push_back(now);
+        true
     }
 
     /// What view `view`'s guard needs this frame, for a view of `size` physical pixels.
@@ -411,5 +461,20 @@ impl JetcarpApp {
         } else {
             self.strobe.confirm = Some(c);
         }
+    }
+}
+
+/// A pace of steps in words: "2 steps a second", "a step every 2 seconds".
+fn steps_words(per_s: f32) -> String {
+    if per_s >= 1.0 {
+        let n = (per_s * 10.0).round() / 10.0;
+        if n == 1.0 {
+            "1 step a second".into()
+        } else {
+            format!("{n} steps a second")
+        }
+    } else {
+        let every = (1.0 / per_s.max(1e-3) * 10.0).round() / 10.0;
+        format!("a step every {every} seconds")
     }
 }

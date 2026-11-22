@@ -50,6 +50,8 @@ pub(crate) use settings::saved_gpu_choice;
 mod shell;
 #[cfg(test)]
 mod shots;
+#[cfg(test)]
+mod size_tests;
 mod start_screen;
 mod strobe;
 mod tiling_ui;
@@ -120,6 +122,9 @@ pub struct JetcarpApp {
     sim: crate::simgpu::SimBackend,
     // Running
     playing: bool,
+    /// The world was running when JETCARP started measuring this computer, and runs again once it
+    /// has ended (#301).
+    measure_paused: bool,
     speed: f32,
     max_speed: bool,
     acc: f64,
@@ -134,6 +139,9 @@ pub struct JetcarpApp {
     zoom: f64,
     fit_pending: bool,
     view_size: egui::Vec2,
+    /// The grid view could not draw every cell in view last frame (too many, under a pixel):
+    /// how it thinned them, said in the status line (#300).
+    thinned: Option<jetcarp_display::view::Thinned>,
     // Tools
     tool: Tool,
     draw_target: Option<u32>,
@@ -278,6 +286,7 @@ impl JetcarpApp {
             gpu,
             sim: crate::simgpu::backend(cc),
             playing: false,
+            measure_paused: false,
             speed: 15.0,
             max_speed: false,
             acc: 0.0,
@@ -288,6 +297,7 @@ impl JetcarpApp {
             zoom: 8.0,
             fit_pending: true,
             view_size: egui::vec2(1000.0, 800.0),
+            thinned: None,
             tool: Tool::Pan,
             draw_target: None,
             draw_value: 1,
@@ -353,6 +363,8 @@ impl JetcarpApp {
         app.apply_settings(&cc.egui_ctx, settings);
         // A changed machine suggests measuring it again, once (#213).
         app.machine_suggestion();
+        // The app holds still while JETCARP measures this computer (#301).
+        jetcarp_core::machine::quiet::honour();
         // Reduced motion and the theme, before the first scene opens or the first frame draws.
         app.a11y_frame(&cc.egui_ctx);
         // The installed fonts' character maps, for characters no font in place has, read on a
@@ -463,6 +475,12 @@ impl JetcarpApp {
         self.jaca_text.clear();
         self.script_edit = self.world.script.clone();
         self.script_dirty = false;
+        self.tiling_ui_from_world();
+    }
+
+    /// The Tiling pane's family, edges and size, as the world on screen has them (a new tiling,
+    /// or a change of them not built).
+    fn tiling_ui_from_world(&mut self) {
         let spec = &self.world.topo.spec;
         self.t_family = spec.family.clone();
         self.t_boundary = if self.world.topo.wraps() {
@@ -560,6 +578,7 @@ impl eframe::App for JetcarpApp {
         if crate::file_dialog::any_open() {
             return;
         }
+        self.measuring_hold(ctx);
         self.ai_poll(ctx);
         if self.screen == Screen::Sim {
             let now = self.started.elapsed().as_secs_f64();

@@ -27,8 +27,8 @@ built-in rotations, using one, and making your own.
   for that screen (see
   [The Desktop background pane](wallpapers.md#the-desktop-background-pane)).
 - **The system's screen saver:** `jetcarp host saver install --rotation NAME`, or *System screen saver
-  runs* in the *Screensaver* pane. On macOS the rotation (and the caption's font) is copied into the screen saver, so install it again after changing
-  the rotation (see [Wallpapers](wallpapers.md#the-systems-screen-saver)).
+  runs* in the *Screensaver* pane. On macOS the rotation (and the caption's font) is copied into the screen saver, and copied
+  again whenever it changes (see [Wallpapers](wallpapers.md#the-systems-screen-saver)).
 
 While a rotation runs, the ◀ and ▶ buttons in the pane, *Next* and *Previous* in the host's menu,
 `jetcarp host next` and `previous`, and `jetcarp app next` for the app's screensaver skip between items.
@@ -112,7 +112,7 @@ such a rotation, opened with *Edit*, with `kites` typed into the *Add Quick Star
 Each rotation of your own is a JSON file in the `rotations` folder of the settings folder (see
 [Folders](../reference/folders.md)), so rotations can be written by hand, kept and shared. The app,
 the host and the Windows screen saver read the same files; the macOS screen saver gets a copy when it
-is installed. This one shows Brian's Brain until it settles,
+is installed, made again whenever they change. This one shows Brian's Brain until it settles,
 then Langton's ant for ten minutes, and from 10 pm to 6 am also the 256 elementary rules:
 
 ```json

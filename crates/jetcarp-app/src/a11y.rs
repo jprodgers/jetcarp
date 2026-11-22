@@ -795,11 +795,25 @@ pub fn find_chrome(ctx: &egui::Context) -> HashSet<egui::Id> {
                 if !w.sense.senses_drag() {
                     continue;
                 }
-                let (wd, ht) = (w.rect.width(), w.rect.height());
-                let thin = (wd <= 12.0 && ht >= 40.0) || (ht <= 12.0 && wd >= 40.0);
-                let behind = ws[i + 1..]
-                    .iter()
-                    .any(|o| o.id != w.id && w.rect.contains_rect(o.rect));
+                let is_thin = |r: egui::Rect| {
+                    let (wd, ht) = (r.width(), r.height());
+                    (wd <= 12.0 && ht >= 40.0) || (ht <= 12.0 && wd >= 40.0)
+                };
+                let thin = is_thin(w.rect);
+                // A background holds controls (a tab bar its tabs, a pane its rows, some scrolled
+                // out of view). A control in view counts only inside the part of the background in
+                // view: a scrolled text box's whole rectangle runs far past its view (the script
+                // editor's was taller than the window once it scrolled) and held the window's other
+                // controls. A thin bar inside it (its scroll bars) doesn't count either. The code
+                // box was passed over by Tab and left without its ring (#295).
+                let behind = ws[i + 1..].iter().any(|o| {
+                    let held = if o.interact_rect.is_positive() {
+                        w.interact_rect.contains_rect(o.interact_rect)
+                    } else {
+                        w.rect.contains_rect(o.rect)
+                    };
+                    o.id != w.id && held && !is_thin(o.rect)
+                });
                 if thin || behind {
                     found.insert(w.id);
                 }
@@ -924,8 +938,10 @@ pub fn paint_focus_ring(ctx: &egui::Context, skip: &HashSet<egui::Id>) {
     let stroke = ring_stroke(&ctx.global_style().visuals, high_contrast(ctx));
     let big = w.rect.width() > 200.0 && w.rect.height() > 200.0;
     let (rect, kind) = if big {
-        // A widget as big as the grid: inside its edge, where no neighbour covers the ring.
-        (w.rect.shrink(1.0), egui::StrokeKind::Inside)
+        // A widget as big as the grid: inside its edge, where no neighbour covers the ring, and
+        // round the part of it in view. A scrolled text box (the script editor's) is far taller
+        // than its view, and a ring round the whole of it showed nowhere (#295).
+        (w.interact_rect.shrink(1.0), egui::StrokeKind::Inside)
     } else {
         (w.rect.expand(1.0), egui::StrokeKind::Outside)
     };

@@ -15,7 +15,7 @@ The renderer knows the handful of handlebars forms about.hbs uses ({{name}}, {{a
 {{#each}}, {{#if}} with {{else}}), escapes as handlebars does, and removes the lines that hold only
 a block tag, as handlebars does. notices.sh checks it against cargo-about's own rendering.
 
-The page is set in Atkinson Hyperlegible Next, which it carries (#273): the line FONT_FACES in
+The page is set in Atkinson Hyperlegible Next and Mono, which it carries (#273): the line FONT_FACES in
 about.hbs's style sheet becomes @font-face rules with the WOFF2 files of crates/jetcarp-core/fonts/
 as data: addresses, as the clip-rating page carries them (jetcarp-core's web_fonts.rs), so the page
 works as one file offline. The template, which people edit by hand, keeps no encoded font.
@@ -30,10 +30,13 @@ import sys
 
 FONT_FACES = "/* @font-face rules: filled in by packaging/notices_union.py from crates/jetcarp-core/fonts/ */"
 FONTS = pathlib.Path(__file__).resolve().parent.parent / "crates" / "jetcarp-core" / "fonts"
-# (file, weights), as web_fonts.rs gives them for text.
+# (family, file, weights), as web_fonts.rs gives them for text and monospaced text.
+NEXT = "Atkinson Hyperlegible Next"
+MONO = "Atkinson Hyperlegible Mono"
 FACES = [
-    ("AtkinsonHyperlegibleNext-Regular.woff2", "100 549"),
-    ("AtkinsonHyperlegibleNext-Bold.woff2", "550 900"),
+    (NEXT, "AtkinsonHyperlegibleNext-Regular.woff2", "100 549"),
+    (NEXT, "AtkinsonHyperlegibleNext-Bold.woff2", "550 900"),
+    (MONO, "AtkinsonHyperlegibleMono-Regular.woff2", "100 900"),
 ]
 
 TAG = re.compile(r"\{\{\s*([#/]?)\s*([A-Za-z_][\w.]*)?(?:\s+([\w.]+))?\s*\}\}")
@@ -118,18 +121,18 @@ def font_faces():
     """The @font-face rules for FONT_FACES, each file the one the fonts' README names by SHA-256."""
     readme = (FONTS / "README.md").read_text(encoding="utf-8")
     rules = []
-    for name, weights in FACES:
+    for family, name, weights in FACES:
         data = (FONTS / name).read_bytes()
         digest = hashlib.sha256(data).hexdigest()
         if not any(name in line and digest in line for line in readme.splitlines()):
             raise SystemExit(f"{name}'s SHA-256 is not the one crates/jetcarp-core/fonts/README.md gives")
         rules.append(
-            '@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; '
+            f'@font-face {{ font-family: "{family}"; font-style: normal; '
             f"font-weight: {weights}; font-display: swap; "
             f'src: url("data:font/woff2;base64,{base64.b64encode(data).decode()}") format("woff2"); }}'
         )
     return ("\n  ").join(
-        ["/* Atkinson Hyperlegible Next (SIL Open Font License 1.1), the Braille Institute's, as JETCARP ships it. */"]
+        ["/* Atkinson Hyperlegible Next and Mono (SIL Open Font License 1.1), the Braille Institute's, as JETCARP ships them. */"]
         + rules
     )
 

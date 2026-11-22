@@ -73,6 +73,17 @@ pub struct ColorWork {
     pub secs: f64,
 }
 
+/// How a view draws fewer cells than it has in view, when there are more than it can draw one by
+/// one (they are then under a pixel): the world is whole and every cell of it runs; only the
+/// picture is thinned.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Thinned {
+    /// A lattice: one unit cell in every `n` × `n` is drawn, `n` times larger.
+    Lattice(u32),
+    /// An explicit patch (aperiodic): one tile in `n` is drawn.
+    Patch(u32),
+}
+
 /// Colouring state of every view of one world.
 pub struct Views {
     views: HashMap<u64, ViewCpu>,
@@ -95,6 +106,25 @@ impl Views {
             patch_epoch: 0,
             patch_faint: false,
         }
+    }
+
+    /// Whether a view of `geom` at this camera (centre, physical pixels per world unit, size in
+    /// physical pixels) draws every cell in view: `None` when it does, else how it thins them,
+    /// as [`Views::draw`] would. A world too big to show whole at once says so with this.
+    pub fn thinned(
+        &self,
+        geom: &Geometry,
+        center: [f64; 2],
+        zoom: f64,
+        size: [f32; 2],
+    ) -> Option<Thinned> {
+        if let Some(l) = &geom.lattice {
+            let budget = window_budget(size[0] as f64 * size[1] as f64, self.slot_cap);
+            let w = l.window(center, zoom, size, budget, self.slot_cap)?;
+            return (w.stride > 1).then_some(Thinned::Lattice(w.stride as u32));
+        }
+        let v = geom.patch_view(center, zoom, size)?;
+        (v.lod == 3).then_some(Thinned::Patch(crate::gpu::SAMPLE as u32))
     }
 
     /// This frame's drawing for one view: colours the cells in view that are not current on the
@@ -239,4 +269,35 @@ pub fn place(world: &World, canvas: [f64; 2], px: f64) -> ([f64; 2], f64) {
         ],
         zoom,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jetcarp_core::{Boundary, TilingSpec, Topology};
+
+    /// A view fitted to a grid of 4 million squares, 800 × 500 pixels, cannot draw each cell: it
+    /// draws one in every few across and down. Zoomed in to 4 pixels a cell, it draws them all; so
+    /// does a view of a small grid.
+    #[test]
+    fn a_view_says_when_it_cannot_draw_every_cell() {
+        let views = Views::new(crate::gpu::TEX_W as usize * 2048);
+        let size = [800.0, 500.0];
+        let topo =
+            Topology::build(&TilingSpec::rect("square", 2000, 2000, Boundary::Wrap)).unwrap();
+        let g = Geometry::build(&topo, 1);
+        let b = topo.bounds;
+        let center = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
+        let fit = 500.0 / (b[3] - b[1]);
+        match views.thinned(&g, center, fit, size) {
+            Some(Thinned::Lattice(n)) => assert!(n >= 2, "{n}"),
+            other => panic!("a fitted view of 4 million cells: {other:?}"),
+        }
+        assert_eq!(views.thinned(&g, center, 4.0, size), None);
+        let small = Topology::build(&TilingSpec::rect("square", 64, 64, Boundary::Wrap)).unwrap();
+        let gs = Geometry::build(&small, 2);
+        let b = small.bounds;
+        let c = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
+        assert_eq!(views.thinned(&gs, c, 500.0 / (b[3] - b[1]), size), None);
+    }
 }

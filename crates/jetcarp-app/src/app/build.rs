@@ -157,6 +157,17 @@ impl JetcarpApp {
         });
     }
 
+    /// [`Self::set_tiling_bg`] for a tiling from elsewhere (a tile's JSON, the tile editor), at
+    /// the Tiling pane's size: asked about first when over the limit, as every tiling is, and
+    /// `said` in the status line once it is in place at once (a large one says when it is built).
+    pub(super) fn set_tiling_saying(&mut self, spec: TilingSpec, said: &str) {
+        let before = self.world.topo.clone();
+        self.set_tiling_bg(spec);
+        if !Arc::ptr_eq(&before, &self.world.topo) {
+            self.message = Some((said.into(), false));
+        }
+    }
+
     /// Forget a build in progress (something newer replaced the world).
     pub(super) fn cancel_build(&mut self) {
         self.building = None;

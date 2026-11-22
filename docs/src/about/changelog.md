@@ -154,8 +154,8 @@ day later (0.4.2: 17 November here, 18 November there).
   saved, and the caption on the desktop background and the Windows screen saver follows it: the
   desktop background reads the setting every couple of seconds, so a font chosen in the app shows
   there without a restart (Atkinson when the chosen font can't be loaded). The macOS screen saver,
-  which can't read the setting, takes the font when it is installed: the font file is copied into
-  it, so install it again after changing the font. egui's fonts stay
+  which can't read the setting, has the font file copied into it, and again whenever the font
+  changes. egui's fonts stay
   behind whichever font is chosen, for any character it lacks; a character none of them has, such
   as the macOS key symbols (⌘, ⌥) or Chinese, Japanese and Korean, is drawn in an installed font
   that has it, found when the app starts without holding it up, and so it is in the desktop
@@ -247,6 +247,19 @@ day later (0.4.2: 17 November here, 18 November there).
   `jetcarp guard` shows them and `jetcarp guard --on` turns them back on, and no command, script or
   MCP tool turns them off. Measuring a 1080p frame takes 0.07 ms on a Radeon 8060S.
   ([The strobe guard](../guides/strobe-guard.md), [#97](https://github.com/jprodgers/jetcarp/issues/97))
+- **The macOS screen saver brings itself up to date.** It can't read JETCARP's settings, so what
+  it shows is baked into it when it is installed. Now, whenever the rotation or a scene in it, the
+  caption or its font, the strobe guard's setting or the answer to the seizure warning changes,
+  JETCARP builds it again as installing does (in a fresh folder, signed, then put in the old one's
+  place), so a change to the guard reaches it without installing again. The app and the desktop
+  background check every couple of seconds while they run, an MCP server too, and the command line
+  as each command ends; a saver installed by an earlier version is built again the first time this
+  one runs. A rebuild that fails keeps the old saver, and the app, `jetcarp host saver status` and
+  `jetcarp doctor` say why. Tests check that each of those changes marks it out of date, that the
+  rebuild writes a fresh folder and changes no old file in place, that a failed rebuild keeps the
+  old one, and that a guard change or the answer reaches it.
+  ([The system's screen saver](../guides/wallpapers.md#the-systems-screen-saver),
+  [#287](https://github.com/jprodgers/jetcarp/issues/287))
 - **Exported animations are checked for flashing and strong stripes before they are saved.** A GIF
   or WebP is measured at its own frame rate, looping as a player would. *File → Export animation…*
   holds one that flashes and offers a softened version (or, with the app's guard off, the
@@ -444,6 +457,31 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The status line stays one line high** (#291). It wrapped onto a second line when its row grew too
+  wide and fell back when it shrank, so on a busy scene (Brian's Brain on Penrose, in a small window)
+  it grew and shrank in a loop and moved the whole window. Text too long for it is now cut short
+  with "…" (the whole of it on hover), and its counts keep their widest width while a world is open.
+- **The strobe guard holds steps as it holds a run** (#293). Holding down **S** stepped a scene at
+  the keyboard's repeat rate, past the guard's cap and its pause, which acted only on a running
+  scene, and now and then a flash reached the screen. Steps by hand and from AI control now count
+  as the scene's pace, the cap drops a step that comes too soon, and while the guard holds a pause,
+  steps come no faster than one every two seconds.
+- **The script editor's code box takes the keyboard in plain sight** (#295). Once it scrolled, its
+  whole rectangle ran far past its view and held the window's other controls, so the keyboard's
+  pass over mouse-only widgets took it for a dragged background: Tab went past it, and the focus
+  ring, drawn round the whole scrolled text, showed nowhere. A control in view now counts only
+  inside the part of a background in view, a thin bar (a scroll bar) never makes a widget a
+  background, and the ring of a large widget goes round the part of it in view.
+- **A world over the limit is asked about, never made smaller to fit.** The *Tiling* pane's
+  *Width × height* fields stopped each side at 16,384, so 100,000 × 100,000 squares (about 75 GB)
+  became 16,384 × 16,384 (about 2 GB) and were built with nothing said; the fields take any size
+  now, and the over-limit question decides, as it does for a tile's JSON, the tile editor, the
+  catalog and the isohedral shapes, which had built at once without asking. A world within the
+  limit but too big for the view to draw every cell is built at the size asked, and the status line
+  says the view shows one cell in every few until zoomed in. An AI's sizes past its share are
+  refused naming the share, and `world.new`'s `cells` past 4,294,967,295 is refused, not cut down.
+  ([Over a limit](../guides/this-computer.md#over-a-limit),
+  [#300](https://github.com/jprodgers/jetcarp/issues/300))
 - **The strobe guard counts a reversing checkerboard of squares smaller than its tiles as
   flashing, as WCAG does.** A board of squares smaller than the guard's 16-pixel tiles keeps every
   tile's mean brightness when it reverses, though every pixel of it changes, so the guard did not
@@ -793,6 +831,29 @@ day later (0.4.2: 17 November here, 18 November there).
   tile, which WCAG counts as flashing unless its squares are under 0.1°, was caught only as stripes,
   over a quarter of the screen (now fixed, [#269](https://github.com/jprodgers/jetcarp/issues/269)).
   ([The strobe guard](../guides/strobe-guard.md), [Bibliography](../research/bibliography.md))
+
+- **Measuring this computer holds the rest of JETCARP still, and asks for heavy programs to be
+  closed first.** The JETCARP Hardware Score times JETCARP's own work, so measuring while the app
+  ran a large grid gave a much lower score. Now, while it measures, from setup, *This computer* or
+  `jetcarp score`, the app's world (screensaver mode's too) pauses, the desktop background, GNOME's
+  lock screen and Windows' screen saver hold still, and every search and job waits between two of
+  its steps, in whatever program runs it; each carries on as it was after (measuring from *This
+  computer* used to leave the world paused). Before measuring, each says plainly that games,
+  video, builds and other simulations lower the score, and asks for them to be closed. A JETCARP
+  program that can't hold still (`jetcarp run`, a script, another measuring) is named, and so is a
+  processor busy with something else (other programs at 15% or more of it) or, where Linux's
+  driver says, a GPU at 25% or more: the app and setup wait and measure once it has gone, with
+  *Measure anyway*; `jetcarp score` asks in a terminal whether to wait, and otherwise measures
+  anyway and says so, so scripts never wait on a question. A score measured anyway is marked as
+  taken under load, with what was found, in the result, `machine.json` and the report; the limits
+  never came from the score and are unchanged, and Fit to this computer's first guesses skip such
+  a score. ([While it measures](../guides/this-computer.md#while-it-measures),
+  [#301](https://github.com/jprodgers/jetcarp/issues/301))
+- **`jetcarp score`'s progress reads in a log.** With its output going to a file or a pipe, its
+  steps ran together on one line, ended by a terminal's erase code. Each step is now a line of its
+  own, with no escape codes; in a terminal the line is still redrawn in place. `jetcarp library
+  verify`, `reverify` and `compounds`, which shared it, write a count at most every five seconds
+  there. ([#299](https://github.com/jprodgers/jetcarp/issues/299))
 
 ## [0.4.2] – 2026-11-17
 

@@ -149,9 +149,7 @@ These are known, and each is tracked:
   and Cyrillic, arrows and common symbols, but not Chinese, Japanese or Korean, nor the macOS key
   symbols (⌘, ⌥). The app, and the caption on the desktop background and the screen savers, draw
   those in an installed font that has them (macOS's own fonts have the key symbols). A character
-  that no font installed on the computer has is still drawn as a box; so is one the macOS screen
-  saver's caption needs that came into its rotation after it was installed, until it is installed
-  again.
+  that no font installed on the computer has is still drawn as a box.
 - **Not yet tested by hand** with screen readers (Narrator, NVDA, VoiceOver and Orca) or with
   keyboard-only use, though the program's tests drive the whole app with key presses and read
   what it offers screen readers ([#219](https://github.com/jprodgers/jetcarp/issues/219)); nor by

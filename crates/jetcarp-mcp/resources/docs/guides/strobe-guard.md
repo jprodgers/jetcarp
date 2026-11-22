@@ -151,6 +151,12 @@ It acts in order, as far as it has to:
    flashing does not come from its generations), or more than three flashes a second reached the
    screen, the scene is paused, with a note saying why.
 
+**Stepping counts too.** A scene stepped by hand (**S** or **→** held down, the Step button, or AI
+control) is measured at the rate its steps come, as a run is. The cap holds its steps as it holds a
+run: a step sooner than the cap allows is dropped, with a note in the status line, so a key held
+down builds no backlog. While the guard holds a pause, steps come no faster than one every two
+seconds, its slowest pace.
+
 Strong stripes are **veiled** where they are found: blended towards a dim grey (no brighter than
 0.18) until their contrast is 0.04, below what counts. The veil comes on over an eighth of a
 second, well within the half second stripes are allowed, and stays for a second and a half after
@@ -225,8 +231,9 @@ flash together. The sandpile preview changes at most four times a second, and th
 only when a jump is asked for, so neither can flash more than twice a second.
 
 macOS runs its screen saver in a sandbox that cannot read JETCARP's settings, so `jetcarp host
-saver install` bakes the switch into the bundle as it is then; install it again after changing the
-switch.
+saver install` bakes the switch, and whether the answer to the seizure warning is *at risk*, into
+the bundle; whenever either changes, JETCARP builds the bundle again with them (see
+[The system's screen saver](wallpapers.md#the-systems-screen-saver)).
 
 ## Turning it off
 

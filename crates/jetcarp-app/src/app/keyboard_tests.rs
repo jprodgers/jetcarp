@@ -20,7 +20,7 @@ const CHILD: &str = "JETCARP_KEYBOARD_TEST_CHILD";
 
 /// Run the `#[ignore]`d test `name` (`app::keyboard_tests::child_…`) in a process of its own,
 /// every folder JETCARP uses a scratch one; panic with its output when it fails.
-fn in_scratch(name: &str) {
+pub(super) fn in_scratch(name: &str) {
     let short = name.rsplit("::").next().unwrap_or(name);
     let root = jetcarp_core::scratch::ScratchDir::new(&format!("kb-{short}"));
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
@@ -67,14 +67,14 @@ fn in_scratch(name: &str) {
 const PASSED: &str = "keyboard test passed";
 
 /// The end of a twin that passed: say so, and end the process at once.
-fn done() -> ! {
+pub(super) fn done() -> ! {
     println!("{PASSED}");
     jetcarp_display::exit::end_process(0)
 }
 
 /// In a twin: whether it was started by [`in_scratch`] (else it returns at once, touching no
 /// folder of the person running it).
-fn child() -> bool {
+pub(super) fn child() -> bool {
     std::env::var_os(CHILD).is_some()
 }
 
@@ -1364,5 +1364,252 @@ fn child_screen_reader_names_are_the_same_in_every_font() {
     }
     assert!(differ.is_empty(), "{}", differ.join("\n"));
     assert!(atkinson.iter().all(|(_, v)| !v.is_empty()));
+    done();
+}
+
+/// The status line keeps one line's height whatever it holds (#291): a message too long for the
+/// window is cut short, not wrapped onto a second line, so nothing above the bar moves as its
+/// contents come and go. (Brian's Brain on Penrose made it grow and shrink in a loop, moving the
+/// whole window.)
+#[test]
+fn the_status_line_stays_one_line() {
+    in_scratch("app::keyboard_tests::child_the_status_line_stays_one_line");
+}
+
+#[test]
+#[ignore = "started by the_status_line_stays_one_line, in a scratch process"]
+fn child_the_status_line_stays_one_line() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
+    k.size = egui::vec2(640.0, 480.0);
+    k.frames(3);
+    let long = "A message long enough to run past the edge of a narrow window, and on. ".repeat(4);
+    let mut grids = vec![];
+    for i in 0..12 {
+        let text = if i % 2 == 0 {
+            long.clone()
+        } else {
+            "Short".into()
+        };
+        k.app.message = Some((text, false));
+        k.frames(2);
+        grids.push(
+            k.focusable()
+                .into_iter()
+                .map(|w| w.2)
+                .max_by(|a, b| a.area().total_cmp(&b.area()))
+                .unwrap(),
+        );
+    }
+    assert!(
+        grids.windows(2).all(|w| w[0] == w[1]),
+        "the grid moved as the status line's message changed: {grids:?}"
+    );
+    done();
+}
+
+/// Steps obey the strobe guard as a run does (#293): with the guard's cap in place, steps held
+/// down come no faster than the cap; while it holds a pause, no faster than its slowest pace; a
+/// calm scene steps at any rate, and the steps' rate is the pace the guard is told. (Holding S on a
+/// flashing scene stepped it at the key's repeat rate, past the cap and the pause, and now and then
+/// a flash reached the screen.)
+#[test]
+fn steps_obey_the_strobe_guard() {
+    in_scratch("app::keyboard_tests::child_steps_obey_the_strobe_guard");
+}
+
+#[test]
+#[ignore = "started by steps_obey_the_strobe_guard, in a scratch process"]
+fn child_steps_obey_the_strobe_guard() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
+    // What the grid's guard said this frame, stood in (the test has no GPU to measure with).
+    fn guard_says(k: &mut Kb, cap: Option<f32>, paused: Option<&str>) {
+        let now = k.app.started.elapsed().as_secs_f64();
+        let mut out = k.app.strobe.out.lock().unwrap();
+        let v = out.views.entry(super::view::TILE_VIEW).or_default();
+        v.at = now;
+        v.cap = cap;
+        v.paused = paused.map(String::from);
+    }
+    // 30 presses of S, a frame each, as a key held down; the generations they made, and how long
+    // they took.
+    fn hold_s(k: &mut Kb, cap: Option<f32>, paused: Option<&str>) -> (u64, f64) {
+        let (g0, t0) = (k.app.world.generation, std::time::Instant::now());
+        for _ in 0..30 {
+            guard_says(k, cap, paused);
+            k.key(Key::S);
+        }
+        (k.app.world.generation - g0, t0.elapsed().as_secs_f64())
+    }
+    let (made, secs) = hold_s(&mut k, None, None);
+    assert_eq!(made, 30, "a calm scene steps at any rate");
+    assert!(
+        k.app.strobe.reached.is_some_and(|r| r >= 1.0),
+        "the steps' rate is the pace the guard is told: {:?}",
+        k.app.strobe.reached
+    );
+    let _ = secs;
+    let cap = 2.0;
+    let (made, secs) = hold_s(&mut k, Some(cap), None);
+    let most = 1 + (secs * cap as f64).floor() as u64;
+    assert!(
+        made <= most,
+        "with a cap of {cap} a second, {made} steps in {secs:.2} s (at most {most})"
+    );
+    let pace = jetcarp_core::strobe::guard::MIN_PACE;
+    let (made, secs) = hold_s(&mut k, None, Some("test"));
+    let most = 1 + (secs * pace as f64).floor() as u64;
+    assert!(
+        made <= most,
+        "while the guard holds a pause, {made} steps in {secs:.2} s (at most {most})"
+    );
+    done();
+}
+
+/// Tab reaches the script editor's code box (#295). A box that senses dragging (to select text),
+/// with its scroll area's bars drawn inside it, was taken for a dragged background and passed over
+/// by Tab and F6 alike. The tool-window walk above never met it: it opens *Scripts and sweeps…* on
+/// its Sweep tab, and leaves out what it takes for mouse-only.
+#[test]
+fn tab_reaches_the_script_editor_s_code_box() {
+    in_scratch("app::keyboard_tests::child_tab_reaches_the_script_editor_s_code_box");
+}
+
+#[test]
+#[ignore = "started by tab_reaches_the_script_editor_s_code_box, in a scratch process"]
+fn child_tab_reaches_the_script_editor_s_code_box() {
+    if !child() {
+        return;
+    }
+    // A script long enough to scroll, so the scroll bars are drawn.
+    let long = crate::scripts_ui::EXAMPLES
+        .iter()
+        .map(|e| e.1)
+        .max_by_key(|s| s.len())
+        .unwrap();
+    let mut failures = vec![];
+    for (w, h) in [(1280.0, 800.0), (1000.0, 700.0), (800.0, 600.0)] {
+        let mut k = Kb::with_life();
+        k.size = egui::vec2(w, h);
+        k.app
+            .scripts
+            .set_text_for_test(&format!("{long}\n{long}\n{long}"));
+        k.app.scripts.tab = crate::scripts_ui::Tab::Script;
+        k.app.set_tool_open(menu::ToolWin::Scripts, true);
+        k.frames(4);
+        let ws = k.focusable();
+        let (code, layer) = ws
+            .iter()
+            .find(|w| {
+                k.nodes
+                    .get(&w.0.accesskit_id())
+                    .is_some_and(|n| n.role == accesskit::Role::MultilineTextInput)
+            })
+            .map(|w| (w.0, w.1))
+            .expect("the code box is drawn");
+        let chrome = k.app.kb_chrome(&k.ctx);
+        if chrome.contains(&code) {
+            failures.push(format!(
+                "{w}x{h}: the code box is taken for a mouse-only widget"
+            ));
+        }
+        let first = ws
+            .iter()
+            .find(|w| w.1 == layer && !chrome.contains(&w.0))
+            .unwrap()
+            .0;
+        k.ctx.memory_mut(|m| m.request_focus(first));
+        k.frames(2);
+        let mut reached = k.focused() == Some(code);
+        for _ in 0..ws.len() + 5 {
+            if reached {
+                break;
+            }
+            k.key(Key::Tab);
+            k.frames(1);
+            reached = k.focused() == Some(code);
+        }
+        if !reached {
+            failures.push(format!("{w}x{h}: Tab never reached the code box"));
+            continue;
+        }
+        // The ring shows round the part of the box in view, not round the whole scrolled text.
+        k.frames(2);
+        let (_, visible) = k.focused_rects().unwrap();
+        if !k.ring_round(visible, 2.0) {
+            failures.push(format!(
+                "{w}x{h}: no focus ring round the code box in view ({visible:?})"
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    done();
+}
+
+#[test]
+fn measuring_pauses_the_world_and_resumes_it_after() {
+    in_scratch("app::keyboard_tests::child_measuring_pauses_the_world_and_resumes_it_after");
+}
+
+/// *Tools → This computer…* asks the person to close other heavy programs before measuring, and
+/// measuring pauses the world running in the app, which runs again once it has ended (#301).
+#[test]
+#[ignore]
+fn child_measuring_pauses_the_world_and_resumes_it_after() {
+    if !child() {
+        return;
+    }
+    // The test machine is busy with other tests: the load is taken as quiet here, so the window
+    // measures at once rather than waiting for the processor to go quiet.
+    jetcarp_core::machine::quiet::sample_with(|_| jetcarp_core::machine::quiet::Load {
+        cpu: Some(0.0),
+        gpu: None,
+    });
+    let mut k = Kb::with_life();
+    k.app.set_tool_open(menu::ToolWin::Machine, true);
+    k.app.playing = true;
+    k.frames(4);
+    let warned = |k: &Kb| {
+        k.nodes.values().any(|n| {
+            [&n.label, &n.value]
+                .into_iter()
+                .flatten()
+                .any(|t| t.contains("Close other heavy programs first"))
+        })
+    };
+    assert!(
+        warned(&k),
+        "no warning about heavy programs before measuring"
+    );
+    k.app.machine.start_quick();
+    let t0 = std::time::Instant::now();
+    let mut paused = false;
+    while k.app.machine.running() {
+        assert!(
+            t0.elapsed() < std::time::Duration::from_secs(300),
+            "the measuring did not end"
+        );
+        k.frames(1);
+        paused |= !k.app.playing;
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(paused, "the world kept running while JETCARP measured");
+    // The hold is looked at about twice a second.
+    for _ in 0..40 {
+        k.frames(1);
+        if k.app.playing {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(
+        k.app.playing,
+        "the world did not run again after the measuring"
+    );
     done();
 }

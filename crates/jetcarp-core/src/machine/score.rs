@@ -60,6 +60,10 @@ pub struct Score {
     pub quick: bool,
     /// How long it took, seconds.
     pub seconds: f64,
+    /// What else was going on as it was measured: the load from other programs, and the JETCARP
+    /// programs that held still or could not (#301). None from a JETCARP before 0.4.3-rc.2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<super::quiet::Conditions>,
 }
 
 impl Score {
@@ -96,6 +100,12 @@ impl Score {
             .max_by(|a, b| a.value.total_cmp(&b.value))
     }
 
+    /// Taken under load ([`super::quiet::Conditions::under_load`]): the defaults that depend on
+    /// time (Fast Fit's first guesses) don't use it.
+    pub fn under_load(&self) -> bool {
+        self.conditions.as_ref().is_some_and(|c| c.under_load)
+    }
+
     /// The parts with a wrong answer.
     pub fn wrong(&self) -> impl Iterator<Item = &Part> {
         self.parts.iter().filter(|p| p.correct == Some(false))
@@ -129,6 +139,9 @@ impl Score {
             self.date,
             self.seconds
         );
+        if let Some(c) = &self.conditions {
+            let _ = writeln!(s, "{}\n", conditions_md(c));
+        }
         let _ = writeln!(s, "## The machine\n");
         let _ = writeln!(s, "| | |\n| --- | --- |");
         let _ = writeln!(s, "| System | {} {} |", hw.os, hw.arch);
@@ -191,6 +204,11 @@ impl Score {
         let _ = writeln!(s, "\n## The limits\n");
         let _ = writeln!(
             s,
+            "From the hardware and your own values alone: no score, under load or not, lowers \
+             them.\n"
+        );
+        let _ = writeln!(
+            s,
             "| Limit | Value | From | Ceiling |\n| --- | --- | --- | --- |"
         );
         for e in &limits.entries {
@@ -208,6 +226,27 @@ impl Score {
         }
         s
     }
+}
+
+/// The conditions in the report: `**Taken under load:** ...`, or `Taken with the computer quiet
+/// (...)`, and what held still.
+fn conditions_md(c: &super::quiet::Conditions) -> String {
+    let mut t = c.text();
+    if let Some(rest) = t.strip_prefix("taken under load: ") {
+        t = format!(
+            "**Taken under load:** {rest}. The score is likely lower than this machine's; \
+             Fast Fit's first guesses don't use it. Measure again with the computer idle."
+        );
+    } else {
+        t = format!("{}{}.", t[..1].to_uppercase(), &t[1..]);
+    }
+    if !c.paused.is_empty() {
+        t.push_str(&format!(
+            " Held still while it measured: {}.",
+            super::quiet::and_list(&c.paused)
+        ));
+    }
+    t
 }
 
 /// [`SCALE`] times the geometric mean of `rates`; 0 when any is 0 (a workload with no right
@@ -289,6 +328,55 @@ mod tests {
             part("soups-spectre", 5.0, true),
         ];
         assert_eq!(Score::from_parts(&none), 0.0);
+    }
+
+    #[test]
+    fn the_report_says_a_score_was_taken_under_load() {
+        use crate::machine::quiet::{Conditions, Load};
+        let hw = crate::machine::Hardware::default();
+        let l = crate::machine::Limits::reference();
+        let mut s = Score {
+            benchmark: BENCHMARK,
+            score: 100.0,
+            ..Default::default()
+        };
+        assert!(!s.under_load());
+        let md = s.markdown(&hw, &l, &[]);
+        assert!(!md.contains("Taken under load"), "{md}");
+        assert!(
+            md.contains("no score, under load or not, lowers them"),
+            "{md}"
+        );
+        s.conditions = Some(Conditions::of(
+            Load {
+                cpu: Some(0.5),
+                gpu: None,
+            },
+            vec!["the desktop background".into()],
+            vec![],
+        ));
+        assert!(s.under_load());
+        let md = s.markdown(&hw, &l, &[]);
+        assert!(
+            md.contains(
+                "**Taken under load:** the processor was 50% busy with other programs. The score \
+                 is likely lower"
+            ),
+            "{md}"
+        );
+        assert!(
+            md.contains("Held still while it measured: the desktop background."),
+            "{md}"
+        );
+        // Kept and read back as it was.
+        let back: Score = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back, s);
+        // A score from before has none.
+        let old: Score = serde_json::from_str(
+            r#"{"benchmark": 1, "jetcarp": "0.4.3-rc.1", "score": 5, "parts": [], "seconds": 60}"#,
+        )
+        .unwrap();
+        assert!(old.conditions.is_none() && !old.under_load());
     }
 
     #[test]

@@ -1689,8 +1689,12 @@ fn apply(cx: &Ctx, a: ApplyIn, p: &dyn Progress) -> Result<Applied, ApiError> {
         );
         match m {
             Ok(s) => out.notes.push(format!(
-                "this computer's JETCARP Hardware Score: {}",
-                s.score.text()
+                "this computer's JETCARP Hardware Score: {}{}",
+                s.score.text(),
+                s.score
+                    .conditions
+                    .as_ref()
+                    .map_or(String::new(), |c| format!(", {}", c.text()))
             )),
             Err(e) => out.notes.push(format!(
                 "this computer was not measured: {e} (`jetcarp score` tries again)"
@@ -1842,6 +1846,8 @@ mod tests {
         std::fs::write(runtime.join("app-endpoint.json"), "{}").unwrap();
         std::fs::write(runtime.join("host.lock"), "").unwrap();
         std::fs::write(runtime.join("mcp-http-endpoint.json"), "{}").unwrap();
+        // A measurement's hold (#301), and the folder it leaves.
+        std::fs::create_dir_all(runtime.join(jetcarp_core::machine::quiet::DIR)).unwrap();
         // The runtime folder, holding only JETCARP's own: a new data folder.
         assert!(!check_data_dir_beside(&runtime, Some(&runtime)).unwrap());
         // The same files in a folder that isn't the runtime folder are someone else's.

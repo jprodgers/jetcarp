@@ -335,6 +335,7 @@ pub fn run(
         problems,
         quick: opts.quick,
         seconds: start.elapsed().as_secs_f64(),
+        conditions: None,
     })
 }
 

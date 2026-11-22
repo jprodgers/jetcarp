@@ -88,7 +88,14 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   speed: no test depends on how fast the machine is.
 - **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
   person's own values, the two linked memory values and the ceilings; a world over the limit is
-  refused before anything is built, naming the limit and where it came from. The memory each kind
+  refused before anything is built, naming the limit and where it came from, and never made
+  smaller (#300): in the whole app with no window, 100,000 × 100,000 squares typed into the
+  *Tiling* pane's *Width × height* fields, on a machine whose largest world is lowered to 1 GB, must
+  keep the sides typed, get the over-limit question and build nothing, as must the same size from a
+  tile's JSON; 20,000 × 1,000 squares must be built at that size, with the status line saying the
+  view cannot draw every cell, until it is zoomed in. The command line, `world.new` and
+  `set_tiling` must refuse 100,000 × 100,000 with the reason, an AI's sides, cells and level saying
+  they are its share. The memory each kind
   of world takes is measured by counting every allocation while one is built and stepped, and the
   table the limits use must never be below it. A grid of exactly the largest number of cells the
   code can number (4,294,967,295) is built and its last cells' neighbours checked, without making
@@ -174,9 +181,18 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   carry Atkinson Hyperlegible Next (and the rating page Mono) inside them, the files those the
   fonts' README names by SHA-256, and fetch nothing from elsewhere
   (`jetcarp-core/src/web_fonts.rs`, `jetcarp-api/tests/explore.rs`, `jetcarp-store/tests/website.rs`);
-  so must `THIRD_PARTY_LICENSES.html`, Next's regular and bold, which `packaging/notices_union.py`
-  puts in when the page is generated (it refuses a file whose SHA-256 isn't the README's), and
-  CI's check that the page is current regenerates it so.
+  so must `THIRD_PARTY_LICENSES.html`, Next's regular and bold and Mono's regular, which
+  `packaging/notices_union.py` puts in when the page is generated (it refuses a file whose SHA-256
+  isn't the README's), and CI's check that the page is current regenerates it so.
+- **The macOS screen saver kept up to date** (#287), in scratch folders on Linux and macOS (what
+  needs no Mac): each thing the bundle bakes (the rotation chosen, a rotation or scene saved, the
+  caption, its font, the strobe guard, the seizure warning's answer, the saver's code) must mark it
+  out of date; the rebuild must write a fresh folder and put it in the old one's place, a file of
+  the old bundle held open reading as it was and nothing left beside the bundle; a rebuild that
+  fails (its signing, here) must leave the old bundle as it was, keep the reason for `jetcarp
+  doctor`, and not be tried again until the next change; and a change to the guard or the answer
+  must reach the bundle without installing again, while a change that bakes the same leaves it
+  alone (`jetcarp-display/tests/saver_update.rs`).
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the

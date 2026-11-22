@@ -123,6 +123,11 @@ impl jetcarp_api::op::Progress for Measuring {
     }
 }
 
+/// *Measure anyway*, while setup waits for what would lower the score to go.
+const MEASURE_ANYWAY: u8 = 1;
+/// *Skip measuring*, then.
+const MEASURE_SKIP: u8 = 2;
+
 /// How the wizard makes the operations' context (the app's platform, or a test's folders).
 pub type MakeCtx = Arc<dyn Fn() -> Ctx + Send + Sync>;
 
@@ -154,6 +159,11 @@ pub struct Wizard {
     pub measure_on: bool,
     /// What the measuring says while it runs.
     measuring: Arc<std::sync::Mutex<Option<(f32, String)>>>,
+    /// Before measuring: what would lower the score (a JETCARP program that can't hold still, a
+    /// busy processor or GPU), while setup waits for it to go (#301).
+    measure_ask: Arc<std::sync::Mutex<Option<String>>>,
+    /// The answer: [`MEASURE_ANYWAY`] or [`MEASURE_SKIP`] (0 while waiting).
+    measure_answer: Arc<std::sync::atomic::AtomicU8>,
     pub offers: BTreeMap<&'static str, bool>,
     /// Add JETCARP to the system's apps (`jetcarp launcher install`), for every profile: ticked
     /// when it isn't there yet.
@@ -217,6 +227,8 @@ impl Wizard {
                 .collect(),
             measure_on: true,
             measuring: Default::default(),
+            measure_ask: Default::default(),
+            measure_answer: Default::default(),
             offers: Offer::ALL.iter().map(|o| (offer_key(*o), false)).collect(),
             launcher_on: !launcher_there,
             launcher_there,
@@ -629,12 +641,44 @@ impl Wizard {
         let (tx, rx) = channel();
         let mk = self.make_ctx.clone();
         let measuring = self.measuring.clone();
+        let (ask, answer) = (self.measure_ask.clone(), self.measure_answer.clone());
+        answer.store(0, std::sync::atomic::Ordering::Relaxed);
         std::thread::Builder::new()
             .name("jetcarp-setup-apply".into())
             .spawn(move || {
+                let mut input = input;
+                // Measuring first: the rest of JETCARP holds still from here until setup is
+                // done, and what would still lower the score is said, and waited for, unless
+                // the person measures anyway or skips it (#301).
+                let before = (input.measure == Some(true)).then(|| {
+                    let mut b = jetcarp_api::ops::machine::Before::check(input.measure_quick);
+                    let mut skip = false;
+                    loop {
+                        let a = answer.load(std::sync::atomic::Ordering::Relaxed);
+                        if !b.busy() || a == MEASURE_ANYWAY {
+                            break;
+                        }
+                        if a == MEASURE_SKIP {
+                            skip = true;
+                            break;
+                        }
+                        if let Ok(mut t) = ask.lock() {
+                            *t = Some(b.text());
+                        }
+                        b.look(false);
+                    }
+                    if let Ok(mut t) = ask.lock() {
+                        *t = None;
+                    }
+                    if skip {
+                        input.measure = Some(false);
+                    }
+                    b
+                });
                 // Only the measuring reports progress (the jobs start in the background).
                 let p = Measuring(measuring.clone());
                 let r = setup::SetupApply::run(&mk(), input, &p).map_err(|e| e.to_string());
+                drop(before);
                 if let Ok(mut m) = measuring.lock() {
                     *m = None;
                 }
@@ -1300,6 +1344,8 @@ impl Wizard {
             "Measure this computer first (about a minute)",
         );
         ui.add_space(6.0);
+        ui.label(jetcarp_api::ops::machine::HEAVY_WARNING);
+        ui.add_space(6.0);
         let l = jetcarp_core::machine::current();
         ui.label(
             RichText::new(format!(
@@ -1505,7 +1551,24 @@ impl Wizard {
             format!("Setting up for {title}")
         });
         ui.add_space(6.0);
-        if self.applying.is_some() {
+        let ask = self.measure_ask.lock().ok().and_then(|a| a.clone());
+        if let Some(t) = ask.filter(|_| self.applying.is_some()) {
+            ui.label("Measuring this computer first.");
+            ui.colored_label(
+                crate::theme::ink(ui, Color32::from_rgb(0xff, 0xb0, 0x60)),
+                t,
+            );
+            ui.label(RichText::new("Setup waits, and measures as soon as they have gone.").weak());
+            ui.horizontal(|ui| {
+                use std::sync::atomic::Ordering;
+                if ui.button("Measure anyway").clicked() {
+                    self.measure_answer.store(MEASURE_ANYWAY, Ordering::Relaxed);
+                }
+                if ui.button("Skip measuring").clicked() {
+                    self.measure_answer.store(MEASURE_SKIP, Ordering::Relaxed);
+                }
+            });
+        } else if self.applying.is_some() {
             let m = self.measuring.lock().ok().and_then(|m| m.clone());
             match m {
                 // A plain bar, nothing animated (the benchmark draws nothing).

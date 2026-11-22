@@ -486,8 +486,10 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
                 periods,
                 drop,
             };
-            let out = LibraryVerify::run(&cx, a, &crate::ProgressLine)?;
-            eprintln!();
+            let p = crate::ProgressLine::counts();
+            let out = LibraryVerify::run(&cx, a, &p);
+            p.end();
+            let out = out?;
             show(&out, json)
         }
         LibCmd::Reverify {
@@ -506,8 +508,10 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
                 threads,
                 minutes,
             };
-            let out = LibraryReverify::run(&cx, a, &crate::ProgressLine)?;
-            eprintln!();
+            let p = crate::ProgressLine::counts();
+            let out = LibraryReverify::run(&cx, a, &p);
+            p.end();
+            let out = out?;
             show(&out, json)
         }
         LibCmd::Compounds {
@@ -524,8 +528,10 @@ pub fn run(a: LibraryArgs, json: bool) -> Result<()> {
                 threads,
                 minutes,
             };
-            let out = LibraryCompounds::run(&cx, a, &crate::ProgressLine)?;
-            eprintln!();
+            let p = crate::ProgressLine::counts();
+            let out = LibraryCompounds::run(&cx, a, &p);
+            p.end();
+            let out = out?;
             show(&out, json)
         }
         LibCmd::Prune {

@@ -979,7 +979,10 @@ impl JetcarpApp {
             RunPause => self.playing = !self.playing,
             Step => {
                 self.playing = false;
-                self.exec(Command::Step { gens: 1 });
+                // The strobe guard holds steps as it holds a run (#293).
+                if self.step_allowed() {
+                    self.exec(Command::Step { gens: 1 });
+                }
             }
             MaxSpeed => self.max_speed = !self.max_speed,
             GpuSim => self.set_gpu_choice(crate::simgpu::next_choice(self.shell.gpu)),

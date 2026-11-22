@@ -177,6 +177,7 @@ impl JetcarpApp {
             self.fit_pending = false;
         }
         if self.outputs_active() && self.shell.display.hide_preview {
+            self.thinned = None;
             resp.widget_info(|| {
                 egui::WidgetInfo::labeled(
                     egui::Role::Grid,
@@ -258,8 +259,13 @@ impl JetcarpApp {
         } else {
             self.last_painted = None;
         }
+        // A world too big to show every cell at once is drawn thinned, and the status line says
+        // so (#300); it is never made smaller to fit the view.
+        let size = xf.size_px();
+        self.thinned = self
+            .views
+            .thinned(&self.geom, xf.center, xf.zoom_px, [size.x, size.y]);
         if self.gpu {
-            let size = xf.size_px();
             let cb = self.tile_callback(TILE_VIEW, xf.center, xf.zoom_px, size);
             ui.painter()
                 .add(egui_wgpu::Callback::new_paint_callback(rect, cb));
@@ -267,6 +273,7 @@ impl JetcarpApp {
             self.objects_overlay(ui, rect);
             self.build_overlay(ui, rect);
             self.message_overlay(ui, rect);
+            self.thinned_overlay(ui, rect);
             if !self.outputs_active()
                 && let Some(c) = self.saver_caption(ui.input(|i| i.time))
             {

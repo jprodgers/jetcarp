@@ -46,6 +46,10 @@ pub(crate) const WARNING_HOLD: &str = "warning";
 const WARNING_CHECK: f64 = 2.0;
 /// How often the host reads the strobe guard's setting again.
 const GUARD_CHECK: f64 = 2.0;
+/// The hold that keeps every screen still while JETCARP measures this computer (#301).
+pub(crate) const MEASURING_HOLD: &str = "measuring";
+/// How often the host looks whether JETCARP is measuring.
+const MEASURING_CHECK: f64 = 0.5;
 /// What a host held by the warning prints on standard error as it starts.
 const WARNING_SAID: &str = "nothing runs until the photosensitive seizure warning has been \
                             accepted: open the JETCARP app, or run `jetcarp setup`";
@@ -187,6 +191,8 @@ pub struct Core {
     lookup: Lookup,
     started: Instant,
     last_memory_check: f64,
+    /// When the host last looked whether JETCARP is measuring this computer.
+    measuring_at: f64,
     /// The host itself, not a screen saver the system started: only it follows the pause rules.
     watch_power: bool,
     /// The host itself: only it touches the desktop's own picture.
@@ -252,6 +258,8 @@ pub struct Core {
     /// guard's setting (every [`GUARD_CHECK`] seconds), so a font chosen in the app shows
     /// without a restart.
     caption_font: jetcarp_display::caption::FontWatch,
+    /// The macOS screen saver, built again when what it bakes changes (#287).
+    saver: jetcarp_display::saver_update::Keeper,
 }
 
 /// A running screen's monitor, as a fit by itself compares it with the one it was fitted for.
@@ -329,6 +337,7 @@ pub fn hold_reasons<'a>(holds: impl Iterator<Item = &'a str>) -> Vec<String> {
             "busy" => "the processor is busy".into(),
             "covered" => "windows cover the desktop".into(),
             "tuning" => "tuning the desktop background for this computer".into(),
+            MEASURING_HOLD => "JETCARP is measuring this computer".into(),
             "dark" => "the screen is locked or off".into(),
             WARNING_HOLD => jetcarp_core::photosensitivity::HOST_HELD.into(),
             other => format!("the desktop asked ({other})"),
@@ -410,6 +419,8 @@ impl Core {
         core.is_host = true;
         core.check_warning();
         core.settle_still();
+        // The desktop background holds still while JETCARP measures this computer (#301).
+        jetcarp_core::machine::quiet::honour();
         Ok(core)
     }
 
@@ -446,6 +457,8 @@ impl Core {
             rotation,
             ..Default::default()
         }];
+        // So does the screen saver (#301).
+        jetcarp_core::machine::quiet::honour();
         Core::build(settings, warning, None, None, None)
     }
 
@@ -482,6 +495,7 @@ impl Core {
             lookup,
             started: Instant::now(),
             last_memory_check: 0.0,
+            measuring_at: f64::NEG_INFINITY,
             watch_power: false,
             is_host: false,
             wallpaper_failing: false,
@@ -516,6 +530,7 @@ impl Core {
             desktop_at_risk: jetcarp_core::photosensitivity::at_risk(),
             guard_at: 0.0,
             caption_font,
+            saver: Default::default(),
         };
         if let Some(w) = warning {
             core.note(w);
@@ -876,6 +891,12 @@ impl Core {
         }
         self.expire_holds();
         let now = self.now();
+        // While JETCARP measures this computer its screens hold still, so their load does not
+        // lower the score; they carry on as they were after (#301).
+        if now - self.measuring_at >= MEASURING_CHECK {
+            self.measuring_at = now;
+            self.set_local_hold(MEASURING_HOLD, jetcarp_core::machine::quiet::held());
+        }
         if now - self.last_memory_check >= MEMORY_CHECK {
             self.last_memory_check = now;
             self.check_memory();
@@ -903,6 +924,16 @@ impl Core {
             }
             if let Some(n) = self.caption_font.check() {
                 self.note(n);
+            }
+            // The guard's setting and the warning's answer above, the rotation, the caption and
+            // its font: whatever the Mac's sandboxed screen saver has baked in, it gets again.
+            match self.saver.poll() {
+                Some(Ok(n)) => self.note(n),
+                Some(Err(e)) => self.note(format!(
+                    "the screen saver couldn't be brought up to date ({e}); it shows what it did \
+                     before"
+                )),
+                None => {}
             }
             if on != self.desktop_guard {
                 self.desktop_guard = on;
@@ -1388,6 +1419,7 @@ impl Core {
             || self.local_holds.contains(WARNING_HOLD)
             || self.local_holds.contains("battery")
             || self.local_holds.contains("busy")
+            || self.local_holds.contains(MEASURING_HOLD)
             || self.tuning_at.is_some();
         if now - since < RETUNE_SETTLE || waiting {
             return;
