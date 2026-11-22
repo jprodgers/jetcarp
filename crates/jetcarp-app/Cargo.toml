@@ -34,6 +34,9 @@ jetcarp-mcp.workspace = true
 jetcarp-script = { workspace = true, features = ["default"] }
 png.workspace = true
 clap.workspace = true
+# Reading installed fonts' names and checking a chosen font file (`src/fonts.rs`): egui's own font
+# parser, already in the tree through epaint, so this adds no new crates.
+skrifa = { version = "0.44.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 # Offscreen pictures of tool windows in tests (`src/offscreen.rs`); already in the tree.

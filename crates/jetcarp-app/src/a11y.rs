@@ -561,7 +561,7 @@ use egui::Color32;
 // accessibility tree before it goes to the screen reader. `app/keyboard.rs` drives them.
 
 use egui::accesskit;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Name a control for screen readers where nothing beside it does (a list at the start of a
 /// line, a box whose label is above it): egui's `accessible_name` for a response held by
@@ -948,6 +948,8 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
         /// others ("for", "to").
         labels: Vec<(egui::Id, Option<egui::LayerId>, egui::Rect, bool)>,
         chrome: Vec<egui::Id>,
+        /// The part of each widget on screen (`None`: scrolled out of its pane or window).
+        shown: HashMap<egui::Id, Option<egui::Rect>>,
     }
     let rect_of = |b: accesskit::Rect| {
         egui::Rect::from_min_max(
@@ -961,6 +963,7 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
             unnamed: vec![],
             labels: vec![],
             chrome: vec![],
+            shown: HashMap::new(),
         };
         for (id, n) in &st.nodes {
             if chrome.contains(id) {
@@ -970,6 +973,10 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
             let Some(b) = n.bounds() else { continue };
             let r = rect_of(b);
             let layer = v.this_pass.widgets.get(*id).map(|w| w.layer_id);
+            if let Some(w) = v.this_pass.widgets.get(*id) {
+                let part = w.interact_rect.intersect(w.rect);
+                s.shown.insert(*id, part.is_positive().then_some(part));
+            }
             let role = n.role();
             let says = |t: &str| t.chars().any(char::is_alphanumeric);
             let words = match role {
@@ -1020,8 +1027,31 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
             }
         });
     }
+    // The parts of the window drawn this frame (the panes among them), and which holds a rect.
+    let regions: Vec<Region> = ctx.data(|d| {
+        d.get_temp::<Regions>(regions_id())
+            .map(|r| r.now)
+            .unwrap_or_default()
+    });
+    let region_at = |layer: Option<egui::LayerId>, r: egui::Rect| {
+        regions
+            .iter()
+            .position(|g| Some(g.layer) == layer && g.rect.contains(r.center()))
+    };
+    // Whether a label can be in the same part of the window as a control: both on screen in the
+    // same pane or window, or both scrolled out of view (a pane's hidden rows lie where the pane
+    // below it is drawn).
+    let same_part = |a: egui::Id, b: egui::Id, layer: Option<egui::LayerId>| match (
+        seen.shown.get(&a),
+        seen.shown.get(&b),
+    ) {
+        (Some(Some(x)), Some(Some(y))) => region_at(layer, *x) == region_at(layer, *y),
+        (Some(x), Some(y)) => x.is_some() == y.is_some(),
+        _ => true,
+    };
     for (id, layer, r) in seen.unnamed {
-        // The words on the same line to its left, in the same window.
+        // The words on the same line to its left, in the same window and the same pane (a pane
+        // beside it is no part of its line, whatever the font puts level with it).
         let row: Vec<&(egui::Id, Option<egui::LayerId>, egui::Rect, bool)> = seen
             .labels
             .iter()
@@ -1029,6 +1059,7 @@ pub fn tidy_tree(ctx: &egui::Context, chrome: &HashSet<egui::Id>) {
                 let overlap = (l.max.y.min(r.max.y) - l.min.y.max(r.min.y)).max(0.0);
                 *l_id != id
                     && *l_layer == layer
+                    && same_part(id, *l_id, layer)
                     && overlap >= 0.5 * l.height().min(r.height())
                     && l.max.x <= r.min.x + 2.0
                     && r.min.x - l.max.x <= 260.0

@@ -1,8 +1,9 @@
 //! The caption: a few lines saying what is on screen (the rule, the grid, the rotation). The words
 //! come from the world here, so every display says the same thing. The app draws them with egui;
-//! [`CaptionPainter`] draws them on a plain wgpu surface.
+//! [`CaptionPainter`] draws them on a plain wgpu surface, in Atkinson Hyperlegible Next as the app
+//! does ([`crate::fonts`]), with egui's Ubuntu Light behind it for what Atkinson lacks (Greek).
 
-use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
+use ab_glyph::{Font, FontRef, GlyphId, PxScale, ScaleFont};
 use jetcarp_core::rules::{self, Rule};
 use jetcarp_core::topology::{Boundary, Topology};
 use jetcarp_core::{World, families};
@@ -261,9 +262,160 @@ struct Picture {
     size: [u32; 2],
 }
 
+/// The caption's fonts: Atkinson Hyperlegible Next, then Ubuntu Light (egui's) for a character it
+/// lacks. Each character is drawn in the first that has it.
+pub struct CaptionFont {
+    fonts: [FontRef<'static>; 2],
+}
+
+impl Default for CaptionFont {
+    fn default() -> Self {
+        CaptionFont {
+            fonts: [
+                FontRef::try_from_slice(crate::fonts::NEXT_REGULAR).expect("the shipped font"),
+                FontRef::try_from_slice(epaint_default_fonts::UBUNTU_LIGHT)
+                    .expect("the built-in font"),
+            ],
+        }
+    }
+}
+
+impl CaptionFont {
+    /// The font that draws `c` (the first, for a character none has), and its glyph there.
+    pub fn glyph(&self, c: char) -> (usize, GlyphId) {
+        for (i, f) in self.fonts.iter().enumerate() {
+            let g = f.glyph_id(c);
+            if g.0 != 0 {
+                return (i, g);
+            }
+        }
+        (0, self.fonts[0].glyph_id(c))
+    }
+
+    /// The advance from glyph `last` to `g` at `px`, with their kerning when one font has both.
+    fn advance(&self, last: Option<(usize, GlyphId)>, (i, g): (usize, GlyphId), px: f32) -> f32 {
+        let f = self.fonts[i].as_scaled(PxScale::from(px));
+        let kern = match last {
+            Some((j, l)) if j == i => f.kern(l, g),
+            _ => 0.0,
+        };
+        kern + f.h_advance(g)
+    }
+
+    /// Ascent, descent and line gap at `px` (of the first font: lines keep one height).
+    fn metrics(&self, px: f32) -> (f32, f32, f32) {
+        let f = self.fonts[0].as_scaled(PxScale::from(px));
+        (f.ascent(), f.descent(), f.line_gap())
+    }
+
+    pub fn line_width(&self, text: &str, px: f32) -> f32 {
+        let mut w = 0.0;
+        let mut last = None;
+        for c in text.chars() {
+            let g = self.glyph(c);
+            w += self.advance(last, g, px);
+            last = Some(g);
+        }
+        w
+    }
+
+    /// `text`, cut with an ellipsis to fit `max` pixels.
+    fn fit(&self, text: &str, px: f32, max: f32) -> String {
+        if self.line_width(text, px) <= max {
+            return text.to_string();
+        }
+        let mut t: Vec<char> = text.chars().collect();
+        while !t.is_empty() {
+            t.pop();
+            let s = format!("{}…", t.iter().collect::<String>());
+            if self.line_width(&s, px) <= max {
+                return s;
+            }
+        }
+        String::new()
+    }
+
+    /// The caption as premultiplied RGBA: (pixels, width, height).
+    pub fn rasterize(&self, lines: &[String], first_px: f32, max_w: f32) -> (Vec<u8>, u32, u32) {
+        let pad = (first_px * PADDING).ceil();
+        let inner = (max_w - 2.0 * pad).max(1.0);
+        let px_of = |i: usize| {
+            if i == 0 {
+                first_px
+            } else {
+                first_px * LATER_LINES
+            }
+        };
+        let fitted: Vec<String> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| self.fit(l, px_of(i), inner))
+            .collect();
+        let width = fitted
+            .iter()
+            .enumerate()
+            .map(|(i, l)| self.line_width(l, px_of(i)))
+            .fold(0.0, f32::max);
+        let line_h = |i: usize| {
+            let (a, d, g) = self.metrics(px_of(i));
+            a - d + g
+        };
+        let height: f32 = (0..fitted.len()).map(line_h).sum();
+        let (w, h) = (
+            (width + 2.0 * pad).ceil() as u32,
+            (height + 2.0 * pad).ceil() as u32,
+        );
+        let mut img = vec![0u8; (w * h * 4) as usize];
+        for p in img.as_chunks_mut::<4>().0 {
+            p[3] = BACKDROP_ALPHA;
+        }
+        let mut y = pad;
+        for (i, line) in fitted.iter().enumerate() {
+            let px = px_of(i);
+            let scale = PxScale::from(px);
+            let baseline = y + self.metrics(px).0;
+            let mut x = pad;
+            let mut last = None;
+            for c in line.chars() {
+                let (fi, id) = self.glyph(c);
+                let font = &self.fonts[fi];
+                if let Some((j, l)) = last
+                    && j == fi
+                {
+                    x += font.as_scaled(scale).kern(l, id);
+                }
+                let glyph = id.with_scale_and_position(scale, ab_glyph::point(x, baseline));
+                if let Some(o) = font.outline_glyph(glyph) {
+                    let b = o.px_bounds();
+                    o.draw(|gx, gy, cov| {
+                        let (px, py) = (b.min.x as i64 + gx as i64, b.min.y as i64 + gy as i64);
+                        if px < 0 || py < 0 || px >= w as i64 || py >= h as i64 {
+                            return;
+                        }
+                        let at = (py as usize * w as usize + px as usize) * 4;
+                        let a = BACKDROP_ALPHA as f32 / 255.0;
+                        let cov = cov.clamp(0.0, 1.0);
+                        // White text over the backdrop, premultiplied.
+                        let value = (cov * 255.0).round() as u8;
+                        let alpha = ((cov + (1.0 - cov) * a) * 255.0).round() as u8;
+                        img[at] = img[at].max(value);
+                        img[at + 1] = img[at + 1].max(value);
+                        img[at + 2] = img[at + 2].max(value);
+                        img[at + 3] = img[at + 3].max(alpha);
+                    });
+                }
+                x += font.as_scaled(scale).h_advance(id);
+                last = Some((fi, id));
+            }
+            y += line_h(i);
+        }
+        (img, w, h)
+    }
+}
+
 /// Draws a caption on a plain wgpu target.
 pub struct CaptionPainter {
-    font: FontRef<'static>,
+    font: CaptionFont,
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
@@ -344,8 +496,7 @@ impl CaptionPainter {
             cache: None,
         });
         CaptionPainter {
-            font: FontRef::try_from_slice(epaint_default_fonts::UBUNTU_LIGHT)
-                .expect("the built-in font"),
+            font: CaptionFont::default(),
             pipeline,
             layout,
             sampler: device.create_sampler(&wgpu::SamplerDescriptor::default()),
@@ -359,111 +510,6 @@ impl CaptionPainter {
             drawn: None,
             visible: false,
         }
-    }
-
-    fn line_width(&self, text: &str, px: f32) -> f32 {
-        let f = self.font.as_scaled(PxScale::from(px));
-        let mut w = 0.0;
-        let mut last = None;
-        for c in text.chars() {
-            let g = f.glyph_id(c);
-            if let Some(l) = last {
-                w += f.kern(l, g);
-            }
-            w += f.h_advance(g);
-            last = Some(g);
-        }
-        w
-    }
-
-    /// `text`, cut with an ellipsis to fit `max` pixels.
-    fn fit(&self, text: &str, px: f32, max: f32) -> String {
-        if self.line_width(text, px) <= max {
-            return text.to_string();
-        }
-        let mut t: Vec<char> = text.chars().collect();
-        while !t.is_empty() {
-            t.pop();
-            let s = format!("{}…", t.iter().collect::<String>());
-            if self.line_width(&s, px) <= max {
-                return s;
-            }
-        }
-        String::new()
-    }
-
-    /// The caption as premultiplied RGBA: (pixels, width, height).
-    fn rasterize(&self, lines: &[String], first_px: f32, max_w: f32) -> (Vec<u8>, u32, u32) {
-        let pad = (first_px * PADDING).ceil();
-        let inner = (max_w - 2.0 * pad).max(1.0);
-        let px_of = |i: usize| {
-            if i == 0 {
-                first_px
-            } else {
-                first_px * LATER_LINES
-            }
-        };
-        let fitted: Vec<String> = lines
-            .iter()
-            .enumerate()
-            .map(|(i, l)| self.fit(l, px_of(i), inner))
-            .collect();
-        let width = fitted
-            .iter()
-            .enumerate()
-            .map(|(i, l)| self.line_width(l, px_of(i)))
-            .fold(0.0, f32::max);
-        let line_h = |i: usize| {
-            let f = self.font.as_scaled(PxScale::from(px_of(i)));
-            f.ascent() - f.descent() + f.line_gap()
-        };
-        let height: f32 = (0..fitted.len()).map(line_h).sum();
-        let (w, h) = (
-            (width + 2.0 * pad).ceil() as u32,
-            (height + 2.0 * pad).ceil() as u32,
-        );
-        let mut img = vec![0u8; (w * h * 4) as usize];
-        for p in img.as_chunks_mut::<4>().0 {
-            p[3] = BACKDROP_ALPHA;
-        }
-        let mut y = pad;
-        for (i, line) in fitted.iter().enumerate() {
-            let scale = PxScale::from(px_of(i));
-            let f = self.font.as_scaled(scale);
-            let baseline = y + f.ascent();
-            let mut x = pad;
-            let mut last = None;
-            for c in line.chars() {
-                let id = f.glyph_id(c);
-                if let Some(l) = last {
-                    x += f.kern(l, id);
-                }
-                let glyph = id.with_scale_and_position(scale, ab_glyph::point(x, baseline));
-                if let Some(o) = self.font.outline_glyph(glyph) {
-                    let b = o.px_bounds();
-                    o.draw(|gx, gy, cov| {
-                        let (px, py) = (b.min.x as i64 + gx as i64, b.min.y as i64 + gy as i64);
-                        if px < 0 || py < 0 || px >= w as i64 || py >= h as i64 {
-                            return;
-                        }
-                        let at = (py as usize * w as usize + px as usize) * 4;
-                        let a = BACKDROP_ALPHA as f32 / 255.0;
-                        let cov = cov.clamp(0.0, 1.0);
-                        // White text over the backdrop, premultiplied.
-                        let value = (cov * 255.0).round() as u8;
-                        let alpha = ((cov + (1.0 - cov) * a) * 255.0).round() as u8;
-                        img[at] = img[at].max(value);
-                        img[at + 1] = img[at + 1].max(value);
-                        img[at + 2] = img[at + 2].max(value);
-                        img[at + 3] = img[at + 3].max(alpha);
-                    });
-                }
-                x += f.h_advance(id);
-                last = Some(id);
-            }
-            y += line_h(i);
-        }
-        (img, w, h)
     }
 
     /// Prepares `lines` for a target of `target` pixels. `scale` is pixels per point; `opacity`
@@ -506,7 +552,7 @@ impl CaptionPainter {
         let key = (lines.to_vec(), px.to_bits(), free_w as u32);
         if self.drawn.as_ref() != Some(&key) {
             let margin = (px * MARGIN).ceil();
-            let (img, w, h) = self.rasterize(lines, px, free_w - 2.0 * margin);
+            let (img, w, h) = self.font.rasterize(lines, px, free_w - 2.0 * margin);
             let size = wgpu::Extent3d {
                 width: w,
                 height: h,
@@ -645,6 +691,40 @@ mod tests {
         let g = grid_line(&w);
         assert!(g.starts_with("Penrose rhombs"), "{g}");
         assert!(g.ends_with(" cells"), "{g}");
+    }
+
+    /// The caption is drawn in Atkinson Hyperlegible Next, and a character it lacks in Ubuntu
+    /// Light behind it.
+    #[test]
+    fn the_caption_is_in_atkinson_with_ubuntu_light_behind() {
+        let f = CaptionFont::default();
+        let atkinson = FontRef::try_from_slice(crate::fonts::NEXT_REGULAR).unwrap();
+        for c in "Life B3/S23 · 480 × 270 · wraps … généré".chars() {
+            assert_eq!(f.glyph(c), (0, atkinson.glyph_id(c)), "{c}");
+        }
+        // Greek letters Atkinson lacks.
+        for c in "λφαβγ".chars() {
+            assert_eq!(f.glyph(c).0, 1, "{c}");
+            assert_ne!(f.glyph(c).1.0, 0, "{c}");
+        }
+        // Atkinson's widths, so its picture is not the Ubuntu one.
+        let ubuntu = FontRef::try_from_slice(epaint_default_fonts::UBUNTU_LIGHT).unwrap();
+        let w = f.line_width("Square grid", 20.0);
+        let uw: f32 = "Square grid"
+            .chars()
+            .map(|c| {
+                ubuntu
+                    .as_scaled(PxScale::from(20.0))
+                    .h_advance(ubuntu.glyph_id(c))
+            })
+            .sum();
+        assert!((w - uw).abs() > 1.0, "{w} vs Ubuntu Light's {uw}");
+        let (img, iw, ih) = f.rasterize(&["Life".into(), "λ".into()], 20.0, 400.0);
+        assert_eq!(img.len(), (iw * ih * 4) as usize);
+        assert!(
+            img.as_chunks::<4>().0.iter().any(|p| p[0] > 200),
+            "text drawn"
+        );
     }
 
     #[test]

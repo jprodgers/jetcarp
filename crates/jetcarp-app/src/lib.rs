@@ -13,6 +13,7 @@ mod dash_ui;
 pub mod desktop_offers;
 mod editor;
 mod file_dialog;
+mod fonts;
 mod frametime;
 mod gpu;
 pub mod gpu_info;

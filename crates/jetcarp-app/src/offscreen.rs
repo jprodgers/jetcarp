@@ -58,6 +58,8 @@ impl Offscreen {
         let renderer = egui_wgpu::Renderer::new(&device, FORMAT, Default::default());
         let ctx = egui::Context::default();
         ctx.set_visuals(egui::Visuals::dark());
+        // The app's own fonts, so every picture shows what the app does.
+        crate::fonts::install_default(&ctx);
         Some(Offscreen {
             instance,
             adapter,

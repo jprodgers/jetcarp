@@ -1695,13 +1695,9 @@ mod tests {
         eprintln!("wrote {}", p.display());
     }
 
-    /// The app's fonts (Hack after the proportional font, for arrows and dots).
+    /// The app's fonts (`crate::fonts`).
     fn app_fonts(ctx: &egui::Context) {
-        let mut fonts = egui::FontDefinitions::default();
-        if let Some(p) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
-            p.push("Hack".to_owned());
-        }
-        ctx.set_fonts(fonts);
+        crate::fonts::install_default(ctx);
     }
 
     /// What the wizard's pictures need: their folder (`JETCARP_OFFSCREEN_OUT`), a device of the
