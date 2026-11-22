@@ -119,6 +119,15 @@ fn child_sides_typed_over_the_limit_are_asked_about_never_made_smaller() {
     assert!(k.app.machine.ask.is_none(), "Cancel answered it");
     assert!(k.app.building.is_none());
     assert_eq!(sides(&k), (100_000, 30), "nothing built on Cancel");
+    assert_eq!(
+        k.app.t_size,
+        SizeChoice::Rect(100_000, 30),
+        "the fields show the world on screen again"
+    );
+    assert_eq!(
+        k.app.message.as_ref().map(|m| m.0.as_str()),
+        Some("Not built: over this machine's limit.")
+    );
     done();
 }
 

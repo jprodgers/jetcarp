@@ -465,6 +465,12 @@ impl JetcarpApp {
         self.jaca_text.clear();
         self.script_edit = self.world.script.clone();
         self.script_dirty = false;
+        self.tiling_ui_from_world();
+    }
+
+    /// The Tiling pane's family, edges and size, as the world on screen has them (a new tiling,
+    /// or a change of them not built).
+    fn tiling_ui_from_world(&mut self) {
         let spec = &self.world.topo.spec;
         self.t_family = spec.family.clone();
         self.t_boundary = if self.world.topo.wraps() {

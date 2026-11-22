@@ -194,8 +194,15 @@ impl JetcarpApp {
             && !aperiodic
         {
             ui.horizontal(|ui| {
+                // Any side: the size typed is the size asked for (#300). A world over this
+                // machine's limit gets the over-limit question; one past what JETCARP can
+                // number, or under 8 a side, is refused with the reason when it is built.
+                // Never clamped to fit (the field once stopped at 16,384, the old cap).
                 fn side(v: &mut u32) -> egui::DragValue<'_> {
-                    egui::DragValue::new(v).range(1..=16384).speed(1.0)
+                    egui::DragValue::new(v)
+                        .range(1..=u32::MAX)
+                        .speed(1.0)
+                        .custom_parser(side_number)
                 }
                 let rw = ui.add(side(&mut w)).on_hover_text("Unit cells across");
                 crate::a11y::name(&rw, "Width in unit cells");
@@ -326,6 +333,16 @@ impl JetcarpApp {
     }
 }
 
+/// A side typed into *Width × height*: a whole number, its thousands grouped or not (`100000`,
+/// `100,000`, `100 000`, `100_000`).
+fn side_number(s: &str) -> Option<f64> {
+    let digits: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && !matches!(c, ',' | '_'))
+        .collect();
+    digits.parse::<u64>().ok().map(|n| n as f64)
+}
+
 /// "Level 4 (4,000 tiles)" for an aperiodic family's size choice.
 pub(super) fn level_label(family: &str, l: u32) -> String {
     match aperiodic::tile_count(family, l) {
@@ -341,5 +358,22 @@ pub(super) fn level_label(family: &str, l: u32) -> String {
             format!("Level {l} ({t} tiles)")
         }
         None => format!("Level {l}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Sides are read as typed, thousands grouped or not; anything else is not a side.
+    #[test]
+    fn sides_are_read_as_typed() {
+        for t in ["100000", "100,000", " 100 000 ", "100_000"] {
+            assert_eq!(side_number(t), Some(100_000.0), "{t:?}");
+        }
+        assert_eq!(side_number("4294967295"), Some(u32::MAX as f64));
+        for t in ["", "-5", "1.5", "lots"] {
+            assert_eq!(side_number(t), None, "{t:?}");
+        }
     }
 }

@@ -599,6 +599,10 @@ impl JetcarpApp {
             return;
         };
         if !yes {
+            // The Tiling pane shows the world on screen again, not the size refused.
+            if matches!(ask.then, Then::Tiling(_)) {
+                self.tiling_ui_from_world();
+            }
             self.message = Some(("Not built: over this machine's limit.".into(), false));
             return;
         }
