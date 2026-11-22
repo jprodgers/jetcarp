@@ -396,8 +396,10 @@ fn sigterm_stops_mcp_over_http_as_its_own_shutdown_does() {
     );
 }
 
-/// A second signal ends `jetcarp mcp --http` at once, with 128 + its number, while the first
-/// waits on a call that has not returned: a `job_status` waiting for a hunt to end.
+/// A second signal ends `jetcarp mcp --http` at once, with 128 + its number. A caller still
+/// connected holds a stopping server for up to a second, as it waits for its callers to hang up
+/// once the last answers are written, so the second signal comes while it waits. (Before the
+/// calls in flight were cut short, a `job_status` still waiting held it.)
 #[test]
 fn a_second_signal_ends_mcp_over_http_at_once() {
     let home = Home::new("mcp-twice");
@@ -405,24 +407,10 @@ fn a_second_signal_ends_mcp_over_http_at_once() {
     let mut server = home.mcp_http();
     server.wait_until("endpoint file", || file.exists());
     let (port, token) = endpoint(&file);
-    let (sid, job) = session_with_a_hunt(port, &token);
-    let waiting = std::thread::spawn(move || {
-        let body = json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-                "params": {"name": "job_status", "arguments": {"job": job, "wait_s": 120}}})
-        .to_string();
-        let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
-        let _ = write!(
-            s,
-            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\
-             Mcp-Session-Id: {sid}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\
-             Connection: close\r\n\r\n{body}",
-            body.len()
-        );
-        // Whatever comes back, if anything, once the server has gone.
-        let _ = s.read_to_end(&mut vec![]);
-    });
-    // The server takes the call in and waits on it.
-    std::thread::sleep(Duration::from_secs(1));
+    let _ = session_with_a_hunt(port, &token);
+    let _caller = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    // The server takes the connection in.
+    std::thread::sleep(Duration::from_millis(300));
 
     server.signal("TERM");
     let stopping = server.wait_for_line("stopping", Duration::from_secs(30));
@@ -442,8 +430,6 @@ fn a_second_signal_ends_mcp_over_http_at_once() {
         Some(128 + 15),
         "a second SIGTERM ends it at once: {status:?}; its stderr:\n{err}"
     );
-    // The waiting call's connection closed with the server.
-    let _ = waiting.join();
 }
 
 /// A `job_status` call waiting for `job` to end (up to two minutes), as JSON-RPC request `id`.
@@ -511,6 +497,87 @@ fn sigterm_cuts_a_waiting_call_short_and_mcp_over_http_ends_soon() {
         "the waiting call is told the server is stopping: {answer}"
     );
     assert_eq!(answer["result"]["isError"], true, "{answer}");
+}
+
+/// A call that does not watch its cancel flag is left once the stop's grace (2 s) is over: the
+/// server ends without its answer, with 0, its endpoint file and memory record gone, as it
+/// would after its last call. The stand-in is `use_app` reaching for an "app" that takes the
+/// connection and never answers, which waits 5 s for its handshake.
+#[test]
+fn a_call_that_does_not_stop_is_left_after_the_grace() {
+    let home = Home::new("mcp-grace");
+    let file = home.runtime().join("mcp-http-endpoint.json");
+    let mut server = home.mcp_http();
+    let record = home.record(server.pid());
+    server.wait_until("endpoint file and memory record", || {
+        file.exists() && record.exists()
+    });
+    let (port, token) = endpoint(&file);
+    let (head, _) = post(
+        port,
+        &token,
+        None,
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                           "clientInfo": {"name": "quit-signal-test", "version": "1"}}}),
+    );
+    let sid = head
+        .lines()
+        .find_map(|l| l.strip_prefix("Mcp-Session-Id: "))
+        .expect("a session")
+        .to_string();
+    let silent = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let app_port = silent.local_addr().unwrap().port();
+    let _held = std::thread::spawn(move || {
+        let held: Vec<TcpStream> = silent.incoming().take(1).map_while(Result::ok).collect();
+        std::thread::sleep(Duration::from_secs(30));
+        drop(held);
+    });
+    std::thread::spawn(move || {
+        let _ = std::panic::catch_unwind(|| {
+            post(
+                port,
+                &token,
+                Some(&sid),
+                &json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                        "params": {"name": "use_app", "arguments":
+                            {"attach": true, "port": app_port, "token": "silent"}}}),
+            )
+        });
+    });
+    // The server takes the call in and waits for the "app" to answer.
+    std::thread::sleep(Duration::from_secs(1));
+
+    let t0 = Instant::now();
+    server.signal("TERM");
+    let status = server.ended_within(Duration::from_secs(10));
+    let took = t0.elapsed();
+    std::thread::sleep(Duration::from_millis(100));
+    let err = server.stderr();
+    let status =
+        status.unwrap_or_else(|| panic!("still running 10 s after SIGTERM; its stderr:\n{err}"));
+    assert!(
+        took < Duration::from_secs(3),
+        "the server took {took:?} to end after SIGTERM; its stderr:\n{err}"
+    );
+    assert!(
+        status.success(),
+        "the server ends with 0: {status:?}; its stderr:\n{err}"
+    );
+    assert!(
+        err.contains("a call was still running"),
+        "it says it ended without the call's answer; its stderr:\n{err}"
+    );
+    assert!(
+        !file.exists(),
+        "the server left {} behind; its stderr:\n{err}",
+        file.display()
+    );
+    assert!(
+        !record.exists(),
+        "the server left its memory record {}; its stderr:\n{err}",
+        record.display()
+    );
 }
 
 /// SIGTERM stops `jetcarp mcp` over stdio as stdin closing does: a call still running is cut
