@@ -5,7 +5,8 @@
 //! the bundle: the rotation, every item's scene inline, and the frame rate and caption. Change the
 //! rotation and install again to update it. No administrator rights are needed.
 
-use crate::caption::CaptionSettings;
+use crate::caption::{CaptionFont, CaptionSettings};
+use crate::fonts::FontChoice;
 use crate::host_settings::{HostSettings, ScreenSettings};
 use crate::profiles::{self, Show};
 use crate::rotation::{self, Rotation, Slot};
@@ -40,6 +41,48 @@ pub const DYLIB: &str = "libjetcarp_saver.dylib";
 pub const BAKED_FILE: &str = "jetcarp-saver.json";
 pub const BAKED_FORMAT: u32 = 1;
 const EXECUTABLE: &str = "JETCARP";
+/// The copy of the caption's font in the bundle's Resources, with the file's own extension.
+const FONT_STEM: &str = "caption-font";
+
+/// The caption's font in a bundle, as the app's Font setting named it at install (#273).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BakedFont {
+    /// Atkinson Hyperlegible Next, which the saver's code has built in.
+    #[default]
+    Atkinson,
+    /// egui's original, Ubuntu Light, also built in.
+    Egui,
+    /// An installed font or a font file, copied into the bundle's Resources as `file`; `index` is
+    /// its face in a collection (`.ttc`).
+    File {
+        family: String,
+        file: String,
+        #[serde(default)]
+        index: u32,
+    },
+}
+
+impl BakedFont {
+    /// In words, for the saver's log.
+    pub fn label(&self) -> String {
+        match self {
+            BakedFont::Atkinson => FontChoice::Atkinson.label(false),
+            BakedFont::Egui => FontChoice::Egui.label(false),
+            BakedFont::File { family, .. } => family.clone(),
+        }
+    }
+}
+
+/// A font file's bytes, read when the bundle is baked, for [`write_bundle`] to copy in.
+#[derive(Clone, Default)]
+pub struct FontBytes(pub std::sync::Arc<Vec<u8>>);
+
+impl std::fmt::Debug for FontBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} bytes", self.0.len())
+    }
+}
 
 /// Everything the saver shows, so it needs nothing outside its bundle.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -60,6 +103,11 @@ pub struct Baked {
     /// guard's stricter stripe rule ([`jetcarp_core::strobe::similar`]).
     #[serde(default)]
     pub strobe_at_risk: bool,
+    /// The caption's font (#273), as the app's Font setting named it when the bundle was built.
+    pub font: BakedFont,
+    /// The file `font` names, read when baked, for [`write_bundle`] to copy in.
+    #[serde(skip)]
+    pub font_file: Option<FontBytes>,
 }
 
 fn guard_default() -> bool {
@@ -82,12 +130,15 @@ pub fn chosen_rotation(settings: &HostSettings) -> String {
 }
 
 /// Rotation `name` with every item's scene looked up now, with warnings for items that could not
-/// be (those show Life, with a note in the log, as they would in the host).
+/// be (those show Life, with a note in the log, as they would in the host). `font` is the app's
+/// Font setting, for the caption.
 pub fn bake(
     name: &str,
     settings: &HostSettings,
+    font: &FontChoice,
     lookup: &dyn Fn(&str) -> Option<Scene>,
 ) -> Result<(Baked, Vec<String>), String> {
+    let _ = font;
     let (rotation, mut slots, mut warnings) = rotation::load_stored(name)?;
     for s in &mut slots {
         match profiles::source_scene(&s.profile, lookup) {
@@ -112,8 +163,28 @@ pub fn bake(
             jetcarp_core::photosensitivity::GuardPlace::Desktop,
         ),
         strobe_at_risk: jetcarp_core::photosensitivity::at_risk(),
+        font: BakedFont::Atkinson,
+        font_file: None,
     };
     Ok((baked, warnings))
+}
+
+/// The baked settings from `text`, a bundle's [`BAKED_FILE`].
+pub fn parse_baked(text: &str) -> Result<Baked, String> {
+    let baked: Baked = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    if baked.format != BAKED_FORMAT {
+        return Err(format!(
+            "it is format {}, this code reads {BAKED_FORMAT}; install the saver again",
+            baked.format
+        ));
+    }
+    Ok(baked)
+}
+
+/// The caption's fonts for the `font` baked into a bundle whose Resources are at `resources`.
+pub fn caption_font(font: &BakedFont, resources: &Path) -> (CaptionFont, Option<String>) {
+    let _ = (font, resources, FONT_STEM);
+    (CaptionFont::default(), None)
 }
 
 /// `~/Library/Screen Savers/JETCARP.saver`.
@@ -276,7 +347,10 @@ pub fn install() -> Result<(PathBuf, Vec<String>), String> {
     let settings = HostSettings::load().0;
     let name = chosen_rotation(&settings);
     let lookup = crate::stage::library_lookup();
-    let (baked, warnings) = bake(&name, &settings, &*lookup)?;
+    let font = crate::host_settings::config_dir()
+        .map(|d| crate::fonts::saved_in(&d).0)
+        .unwrap_or_default();
+    let (baked, warnings) = bake(&name, &settings, &font, &*lookup)?;
     let dest = bundle_path()?;
     // What the saver will replace once chosen, to put back when it is removed. Without a record,
     // removing shows the desktop picture as the screen saver instead.
@@ -521,7 +595,7 @@ mod tests {
         let settings = HostSettings::default();
         let lookup = crate::stage::library_lookup();
         let name = ScreenSettings::default().rotation;
-        let (baked, _) = bake(&name, &settings, &*lookup).unwrap();
+        let (baked, _) = bake(&name, &settings, &FontChoice::Atkinson, &*lookup).unwrap();
         assert!(!baked.slots.is_empty());
         assert!(
             baked
@@ -554,6 +628,7 @@ mod tests {
         let (baked, _) = bake(
             &ScreenSettings::default().rotation,
             &HostSettings::default(),
+            &FontChoice::Atkinson,
             &*crate::stage::library_lookup(),
         )
         .unwrap();
@@ -576,5 +651,270 @@ mod tests {
         );
         assert!(dest.join("Contents/Resources/thumbnail.png").exists());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The text the font tests measure.
+    const TEXT: &str = "Square grid 480 270";
+
+    /// The caption's width in `font`, at 20 pixels.
+    fn width(font: &CaptionFont) -> f32 {
+        font.line_width(TEXT, 20.0)
+    }
+
+    /// Two stand-ins for installed fonts, which tests can't count on: every basic Latin letter
+    /// and digit drawn as egui's Hack draws X, and as Ubuntu Light draws W.
+    fn stand_ins() -> (Vec<u8>, Vec<u8>) {
+        use crate::fonts::stand_in::font_with;
+        let latin: String = ('A'..='Z').chain('a'..='z').chain('0'..='9').collect();
+        (
+            font_with(
+                epaint_default_fonts::HACK_REGULAR,
+                &latin,
+                'X',
+                "Stand-in Sans",
+            ),
+            font_with(
+                epaint_default_fonts::UBUNTU_LIGHT,
+                &latin,
+                'W',
+                "Stand-in Wide",
+            ),
+        )
+    }
+
+    /// The bundle baked with `font` and written in `dir`: what was baked, the install's warnings,
+    /// and the bundle's Resources.
+    fn bundle_with(font: &FontChoice, dir: &Path) -> (Baked, Vec<String>, PathBuf) {
+        let (baked, warnings) = bake(
+            &ScreenSettings::default().rotation,
+            &HostSettings::default(),
+            font,
+            &*crate::stage::library_lookup(),
+        )
+        .unwrap();
+        let dylib = dir.join("fake.dylib");
+        std::fs::write(&dylib, b"code").unwrap();
+        let dest = dir.join(BUNDLE);
+        write_bundle(&dest, &dylib, &baked).unwrap();
+        (baked, warnings, dest.join("Contents/Resources"))
+    }
+
+    /// The fonts copied into a bundle's Resources.
+    fn copied(resources: &Path) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(resources)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with("caption-font"))
+            .collect();
+        v.sort();
+        v
+    }
+
+    /// A scratch folder with the stand-ins in `fonts/`: one font file, and a collection of the
+    /// two.
+    fn scratch_fonts(name: &str) -> (jetcarp_core::scratch::ScratchDir, PathBuf, PathBuf) {
+        let dir = jetcarp_core::scratch::ScratchDir::new(name);
+        let fonts = dir.join("fonts");
+        std::fs::create_dir_all(&fonts).unwrap();
+        let (one, two) = stand_ins();
+        let single = fonts.join("StandIn-Regular.ttf");
+        let collection = fonts.join("StandIns.ttc");
+        std::fs::write(&single, &one).unwrap();
+        std::fs::write(&collection, crate::fonts::stand_in::collection(&[one, two])).unwrap();
+        (dir, single, collection)
+    }
+
+    /// Installing with an installed font (or a font file) chosen in the app records the choice
+    /// and copies the file into the bundle's Resources, a collection whole with its face recorded,
+    /// since the sandboxed saver can't be counted on to read the user's font folders. Atkinson and
+    /// egui's original, which the saver has built in, are not copied.
+    #[test]
+    fn baking_a_chosen_font_records_it_and_copies_the_file() {
+        let (dir, single, collection) = scratch_fonts("macsaver-font-bake");
+        let (_, base, _) = bundle_with(&FontChoice::Atkinson, &dir);
+
+        let choice = FontChoice::File {
+            family: "Stand-in Sans".into(),
+            path: single.clone(),
+            index: 0,
+        };
+        let (baked, warnings, resources) = bundle_with(&choice, &dir);
+        assert_eq!(warnings, base);
+        assert_eq!(
+            baked.font,
+            BakedFont::File {
+                family: "Stand-in Sans".into(),
+                file: "caption-font.ttf".into(),
+                index: 0
+            },
+            "the choice is recorded"
+        );
+        assert_eq!(copied(&resources), ["caption-font.ttf"]);
+        assert_eq!(
+            std::fs::read(resources.join("caption-font.ttf")).unwrap(),
+            std::fs::read(&single).unwrap(),
+            "the file is copied whole"
+        );
+        let json = std::fs::read_to_string(resources.join(BAKED_FILE)).unwrap();
+        assert_eq!(parse_baked(&json).unwrap().font, baked.font);
+        let folder = single.parent().unwrap().to_string_lossy().into_owned();
+        assert!(
+            !json.contains(&folder),
+            "no folder of the user's in the bundle"
+        );
+
+        // Face 1 of a collection: the whole file, and which face.
+        let choice = FontChoice::File {
+            family: "Stand-in Wide".into(),
+            path: collection.clone(),
+            index: 1,
+        };
+        let (baked, warnings, resources) = bundle_with(&choice, &dir);
+        assert_eq!(warnings, base);
+        assert_eq!(
+            baked.font,
+            BakedFont::File {
+                family: "Stand-in Wide".into(),
+                file: "caption-font.ttc".into(),
+                index: 1
+            }
+        );
+        assert_eq!(
+            copied(&resources),
+            ["caption-font.ttc"],
+            "installing again leaves no earlier copy"
+        );
+        assert_eq!(
+            std::fs::read(resources.join("caption-font.ttc")).unwrap(),
+            std::fs::read(&collection).unwrap()
+        );
+
+        // The saver's own fonts are not copied.
+        for (choice, want) in [
+            (FontChoice::Atkinson, BakedFont::Atkinson),
+            (FontChoice::Egui, BakedFont::Egui),
+        ] {
+            let (baked, warnings, resources) = bundle_with(&choice, &dir);
+            assert_eq!(warnings, base);
+            assert_eq!(baked.font, want);
+            assert!(copied(&resources).is_empty(), "{want:?}");
+        }
+    }
+
+    /// A bundle of format 1, from before the saver followed the Font setting, still loads, its
+    /// caption in Atkinson Hyperlegible Next. A format newer than this code reads is refused.
+    #[test]
+    fn a_format_1_bundle_still_loads_in_atkinson() {
+        let (baked, _) = bake(
+            &ScreenSettings::default().rotation,
+            &HostSettings::default(),
+            &FontChoice::Atkinson,
+            &*crate::stage::library_lookup(),
+        )
+        .unwrap();
+        // As format 1 wrote it: every setting of today's but the font.
+        let mut v = serde_json::to_value(&baked).unwrap();
+        let fields = v.as_object_mut().unwrap();
+        fields.remove("font");
+        fields.insert("format".into(), 1.into());
+        let old = parse_baked(&v.to_string()).expect("a format-1 bundle loads");
+        assert_eq!(old.format, 1);
+        assert_eq!(old.font, BakedFont::Atkinson);
+        assert_eq!(old.slots.len(), baked.slots.len());
+        let (font, note) = caption_font(&old.font, Path::new("nowhere"));
+        assert_eq!(note, None);
+        assert_eq!(width(&font), width(&CaptionFont::default()));
+
+        v["format"] = (BAKED_FORMAT + 1).into();
+        let e = parse_baked(&v.to_string()).unwrap_err();
+        assert!(e.contains("install the saver again"), "{e}");
+    }
+
+    /// A chosen font that can't be read at install (gone, or not a font) gives Atkinson
+    /// Hyperlegible Next in the bundle, nothing copied, and a warning in the install's report that
+    /// names the file and no folder.
+    #[test]
+    fn a_font_that_can_t_be_read_at_install_gives_atkinson_and_a_warning() {
+        let (dir, single, _) = scratch_fonts("macsaver-font-gone");
+        let (_, base, _) = bundle_with(&FontChoice::Atkinson, &dir);
+        let fonts = single.parent().unwrap().to_path_buf();
+        std::fs::write(fonts.join("junk.ttf"), b"not a font").unwrap();
+        for file in ["Gone-Regular.ttf", "junk.ttf"] {
+            let choice = FontChoice::File {
+                family: "Gone Sans".into(),
+                path: fonts.join(file),
+                index: 0,
+            };
+            let (baked, warnings, resources) = bundle_with(&choice, &dir);
+            assert_eq!(baked.font, BakedFont::Atkinson, "{file}");
+            assert!(copied(&resources).is_empty(), "{file}");
+            assert_eq!(warnings.len(), base.len() + 1, "a warning for {file}");
+            let w = warnings.last().unwrap();
+            assert!(w.contains(file), "{w}");
+            assert!(w.contains("Atkinson Hyperlegible Next"), "{w}");
+            assert!(!w.contains(&*fonts.to_string_lossy()), "{w}");
+        }
+    }
+
+    /// The saver draws its caption in the font baked into its bundle (a font file, a collection's
+    /// face, egui's original), and, as the desktop background does, in Atkinson Hyperlegible Next
+    /// with a note naming the file when the bundle's copy is broken or gone.
+    #[test]
+    fn the_saver_draws_in_the_baked_font_and_in_atkinson_without_it() {
+        let (dir, single, collection) = scratch_fonts("macsaver-font-load");
+        let atkinson = width(&CaptionFont::default());
+        let ubuntu = width(&CaptionFont::for_choice(&FontChoice::Egui).unwrap());
+        let in_file = |path: &Path, index| {
+            let choice = FontChoice::File {
+                family: String::new(),
+                path: path.into(),
+                index,
+            };
+            width(&CaptionFont::for_choice(&choice).unwrap())
+        };
+        let (sans, wide) = (in_file(&single, 0), in_file(&collection, 1));
+        for (a, b) in [(sans, atkinson), (wide, atkinson), (sans, wide)] {
+            assert!(
+                (a - b).abs() > 1.0,
+                "{a} vs {b}: the fonts can be told apart"
+            );
+        }
+
+        let (font, note) = caption_font(&BakedFont::Egui, &dir);
+        assert_eq!((width(&font), note), (ubuntu, None));
+
+        let choice = FontChoice::File {
+            family: "Stand-in Sans".into(),
+            path: single,
+            index: 0,
+        };
+        let (_, _, resources) = bundle_with(&choice, &dir);
+        let json = std::fs::read_to_string(resources.join(BAKED_FILE)).unwrap();
+        let baked = parse_baked(&json).unwrap();
+        let (font, note) = caption_font(&baked.font, &resources);
+        assert_eq!(note, None);
+        assert_eq!(width(&font), sans, "the baked font is drawn");
+
+        let choice = FontChoice::File {
+            family: "Stand-in Wide".into(),
+            path: collection,
+            index: 1,
+        };
+        let (baked, _, resources) = bundle_with(&choice, &dir);
+        let (font, note) = caption_font(&baked.font, &resources);
+        assert_eq!((width(&font), note), (wide, None), "the collection's face");
+
+        // The bundle's copy broken, then gone: Atkinson, and a note naming the file.
+        let copy = resources.join("caption-font.ttc");
+        std::fs::write(&copy, b"broken").unwrap();
+        for _ in ["broken", "gone"] {
+            let (font, note) = caption_font(&baked.font, &resources);
+            assert_eq!(width(&font), atkinson);
+            let note = note.expect("a note that the font can't be used");
+            assert!(note.contains("caption-font.ttc"), "{note}");
+            assert!(note.contains("Atkinson Hyperlegible Next"), "{note}");
+            assert!(!note.contains(&*resources.to_string_lossy()), "{note}");
+            let _ = std::fs::remove_file(&copy);
+        }
     }
 }

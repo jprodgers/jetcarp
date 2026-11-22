@@ -643,6 +643,33 @@ pub mod stand_in {
         sfnt(tables)
     }
 
+    /// A font collection (`.ttc`) of `fonts`, each a font file of one face such as
+    /// [`font_with`] makes: face `i` is the `i`th.
+    pub fn collection(fonts: &[Vec<u8>]) -> Vec<u8> {
+        let mut out = vec![];
+        out.extend(b"ttcf");
+        out.extend(0x0001_0000u32.to_be_bytes());
+        out.extend((fonts.len() as u32).to_be_bytes());
+        let mut at = 12 + 4 * fonts.len();
+        let mut body = vec![];
+        for font in fonts {
+            out.extend((at as u32).to_be_bytes());
+            // A collection's table offsets count from the start of the collection.
+            let mut f = font.clone();
+            let n = usize::from(u16::from_be_bytes([f[4], f[5]]));
+            for i in 0..n {
+                let o = 12 + 16 * i + 8;
+                let v = u32::from_be_bytes(f[o..o + 4].try_into().unwrap()) + at as u32;
+                f[o..o + 4].copy_from_slice(&v.to_be_bytes());
+            }
+            f.resize(f.len().div_ceil(4) * 4, 0);
+            at += f.len();
+            body.extend(f);
+        }
+        out.extend(body);
+        out
+    }
+
     /// A character map of one Windows full-Unicode subtable (format 12), `cps` to `glyph`.
     fn cmap12(cps: &[u32], glyph: u32) -> Vec<u8> {
         let mut t = vec![];
