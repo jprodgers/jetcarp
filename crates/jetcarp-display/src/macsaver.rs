@@ -90,6 +90,9 @@ pub struct BakedFallback {
     /// The file, read when baked, for [`write_bundle`] to copy in.
     #[serde(skip)]
     pub bytes: FontBytes,
+    /// Where it was copied from.
+    #[serde(skip)]
+    pub from: PathBuf,
 }
 
 /// A font file's bytes, read when the bundle is baked, for [`write_bundle`] to copy in.
@@ -133,6 +136,10 @@ pub struct Baked {
     /// name, the rules' names, the grids') that none of its fonts has.
     #[serde(default)]
     pub fallbacks: Vec<BakedFallback>,
+    /// The files outside the settings folder the bake read: scene files, the font file, the
+    /// fallbacks' files (for [`crate::saver_update`], which watches them).
+    #[serde(skip)]
+    pub sources: Vec<PathBuf>,
 }
 
 fn guard_default() -> bool {
@@ -177,7 +184,11 @@ fn bake_loaded(
     installed: &[PathBuf],
     lookup: &dyn Fn(&str) -> Option<Scene>,
 ) -> (Baked, Vec<String>) {
+    let mut sources = vec![];
     for s in &mut slots {
+        if let Show::File { path } = &s.profile.show {
+            sources.push(PathBuf::from(path));
+        }
         match profiles::source_scene(&s.profile, lookup) {
             Ok(scene) => {
                 s.profile.show = Show::Scene {
@@ -200,6 +211,12 @@ fn bake_loaded(
     };
     let chars = caption_chars(&rotation.name, &slots);
     let fallbacks = bake_fallbacks(&chars, &drawn, installed, &mut warnings);
+    if let FontChoice::File { path, .. } = choice {
+        sources.push(path.clone());
+    }
+    sources.extend(fallbacks.iter().map(|f| f.from.clone()));
+    sources.sort();
+    sources.dedup();
     let baked = Baked {
         format: BAKED_FORMAT,
         rotation,
@@ -216,6 +233,7 @@ fn bake_loaded(
         font,
         font_file,
         fallbacks,
+        sources,
     };
     (baked, warnings)
 }
@@ -305,6 +323,7 @@ fn bake_fallbacks(
                 family,
                 file: format!("{FALLBACK_STEM}-{}.{}", out.len() + 1, font_ext(&path)),
                 bytes: FontBytes(std::sync::Arc::new(bytes)),
+                from: path.clone(),
             }),
             Err(e) => {
                 let name = path.file_name().unwrap_or_default().to_string_lossy();
@@ -546,7 +565,7 @@ pub fn thumbnails(baked: &Baked) -> Option<[Vec<u8>; 2]> {
 
 /// Signs the bundle for this machine only (ad hoc), which Apple silicon needs before it runs code.
 #[cfg(feature = "library")]
-pub(crate) fn sign(bundle: &Path) -> Result<(), String> {
+pub fn sign(bundle: &Path) -> Result<(), String> {
     let out = Command::new("codesign")
         .args(["--force", "--sign", "-"])
         .arg(bundle)
@@ -592,21 +611,20 @@ pub fn install() -> Result<(PathBuf, Vec<String>), String> {
     if !cfg!(target_os = "macos") {
         return Err("`.saver` screen savers exist only on macOS".into());
     }
-    let dylib = built_dylib()?;
-    let settings = HostSettings::load().0;
-    let name = chosen_rotation(&settings);
-    let lookup = crate::stage::library_lookup();
-    let font = crate::host_settings::config_dir()
-        .map(|d| crate::fonts::saved_in(&d).0)
-        .unwrap_or_default();
-    let installed = crate::fonts::system_dirs();
-    let (baked, warnings) = bake(&name, &settings, &font, &installed, &*lookup)?;
-    let dest = bundle_path()?;
+    let config = crate::host_settings::config_dir().ok_or("no settings folder")?;
+    let target = crate::saver_update::Target {
+        bundle: bundle_path()?,
+        dylib: built_dylib()?,
+        sign: &sign,
+        installed_fonts: crate::fonts::system_dirs(),
+    };
     // What the saver will replace once chosen, to put back when it is removed. Without a record,
     // removing shows the desktop picture as the screen saver instead.
     let _ = record_choices();
-    write_bundle(&dest, &dylib, &baked)?;
-    sign(&dest)?;
+    // As it is kept up to date after (#287): a fresh bundle in the old one's place, and a record
+    // of what it was built from.
+    let warnings = crate::saver_update::install_at(&config, &target)?;
+    let dest = target.bundle;
     let _ = Command::new("open")
         .arg(format!("x-apple.systempreferences:{}", settings_pane()))
         .spawn();
@@ -657,6 +675,10 @@ pub fn remove() -> Result<Option<String>, String> {
     let had = dest.exists();
     if had {
         std::fs::remove_dir_all(&dest).map_err(|e| format!("{}: {e}", dest.display()))?;
+    }
+    #[cfg(feature = "library")]
+    if let Some(d) = crate::host_settings::config_dir() {
+        let _ = std::fs::remove_file(d.join(crate::saver_update::STATE_FILE));
     }
     if !cfg!(target_os = "macos") {
         return Ok(None);
@@ -823,9 +845,15 @@ pub fn describe() -> String {
     if !path.exists() {
         return "JETCARP's screen saver is not installed.".into();
     }
+    #[cfg(feature = "library")]
+    let behind = crate::saver_update::installed_note()
+        .map(|n| format!(" {n}"))
+        .unwrap_or_default();
+    #[cfg(not(feature = "library"))]
+    let behind = String::new();
     match installed_rotation() {
         Some(r) => format!(
-            "JETCARP's screen saver is at {}, showing {r:?}. Choose it in {}.",
+            "JETCARP's screen saver is at {}, showing {r:?}. Choose it in {}.{behind}",
             path.display(),
             settings_place()
         ),

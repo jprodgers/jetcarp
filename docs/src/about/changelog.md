@@ -154,8 +154,8 @@ day later (0.4.2: 17 November here, 18 November there).
   saved, and the caption on the desktop background and the Windows screen saver follows it: the
   desktop background reads the setting every couple of seconds, so a font chosen in the app shows
   there without a restart (Atkinson when the chosen font can't be loaded). The macOS screen saver,
-  which can't read the setting, takes the font when it is installed: the font file is copied into
-  it, so install it again after changing the font. egui's fonts stay
+  which can't read the setting, has the font file copied into it, and again whenever the font
+  changes. egui's fonts stay
   behind whichever font is chosen, for any character it lacks; a character none of them has, such
   as the macOS key symbols (⌘, ⌥) or Chinese, Japanese and Korean, is drawn in an installed font
   that has it, found when the app starts without holding it up, and so it is in the desktop
@@ -247,6 +247,19 @@ day later (0.4.2: 17 November here, 18 November there).
   `jetcarp guard` shows them and `jetcarp guard --on` turns them back on, and no command, script or
   MCP tool turns them off. Measuring a 1080p frame takes 0.07 ms on a Radeon 8060S.
   ([The strobe guard](../guides/strobe-guard.md), [#97](https://github.com/jprodgers/jetcarp/issues/97))
+- **The macOS screen saver brings itself up to date.** It can't read JETCARP's settings, so what
+  it shows is baked into it when it is installed. Now, whenever the rotation or a scene in it, the
+  caption or its font, the strobe guard's setting or the answer to the seizure warning changes,
+  JETCARP builds it again as installing does (in a fresh folder, signed, then put in the old one's
+  place), so a change to the guard reaches it without installing again. The app and the desktop
+  background check every couple of seconds while they run, an MCP server too, and the command line
+  as each command ends; a saver installed by an earlier version is built again the first time this
+  one runs. A rebuild that fails keeps the old saver, and the app, `jetcarp host saver status` and
+  `jetcarp doctor` say why. Tests check that each of those changes marks it out of date, that the
+  rebuild writes a fresh folder and changes no old file in place, that a failed rebuild keeps the
+  old one, and that a guard change or the answer reaches it.
+  ([The system's screen saver](../guides/wallpapers.md#the-systems-screen-saver),
+  [#287](https://github.com/jprodgers/jetcarp/issues/287))
 - **Exported animations are checked for flashing and strong stripes before they are saved.** A GIF
   or WebP is measured at its own frame rate, looping as a player would. *File → Export animation…*
   holds one that flashes and offers a softened version (or, with the app's guard off, the

@@ -45,6 +45,9 @@ pub(super) struct HostPanel {
     settings: Option<HostSettings>,
     login: Option<bool>,
     note: Option<String>,
+    /// The macOS screen saver, built again while the app is open when what it bakes changes
+    /// (#287), as the background host does.
+    saver: jetcarp_display::saver_update::Keeper,
     /// GNOME's extension, asked for on a thread because it runs a program.
     extension: Option<ExtensionState>,
     extension_rx: Option<Receiver<Result<ExtensionState, String>>>,
@@ -280,6 +283,25 @@ fn monitor_label(names: &[String], m: Option<usize>) -> String {
 }
 
 impl JetcarpApp {
+    /// Once a frame: keep the macOS screen saver up to date (a cheap check every couple of
+    /// seconds; a rebuild on a thread of its own). What it did goes on the status line, and a
+    /// failure also under the pane's *Install*.
+    pub(super) fn saver_frame(&mut self) {
+        match self.display.host.saver.poll() {
+            Some(Ok(n)) => self.message = Some((format!("{n}."), false)),
+            Some(Err(e)) => {
+                let e = format!(
+                    "The screen saver couldn't be brought up to date with the settings ({}), so \
+                     it shows what it did before; install it again.",
+                    e.trim_end_matches('.')
+                );
+                self.display.host.note = Some(e.clone());
+                self.message = Some((e, true));
+            }
+            None => {}
+        }
+    }
+
     /// The scenes rotation `name` shows (its items' labels, as the host and the tuner name them),
     /// from the rotation and profile stores, expanded again only when the rotation changes. None
     /// for a rotation that can't be found here.
@@ -869,7 +891,7 @@ impl JetcarpApp {
                 });
             combo.response.labelled_by(label.id);
             let tip = if jetcarp_display::saver::BAKED {
-                "Add JETCARP to macOS's screen savers. The rotation and the font are copied in, so install again after changing either"
+                "Add JETCARP to macOS's screen savers. The rotation, the caption and its font, and the strobe guard are copied in, and JETCARP copies them in again whenever they change"
             } else {
                 "Add JETCARP to Windows' list of screen savers"
             };
@@ -887,6 +909,16 @@ impl JetcarpApp {
         }
         if let Some(n) = &h.note {
             ui.colored_label(crate::theme::ink(ui, WARN), n);
+        } else if let Some(why) = h.saver.failed() {
+            // Kept from a rebuild by the host or the command line, too.
+            ui.colored_label(
+                crate::theme::ink(ui, WARN),
+                format!(
+                    "The screen saver couldn't be brought up to date with the settings ({}), so \
+                     it shows what it did before; install it again.",
+                    why.trim_end_matches('.')
+                ),
+            );
         }
     }
 }

@@ -90,6 +90,9 @@ it keeps the stills in `desktop-pictures/` and remembers your own picture in `de
 so that it can put it back. On macOS, installing the screen saver records the screen saver macOS had
 chosen in `screen-saver-before.plist`, for removing it to put back (the file goes then), and removing
 it keeps a copy of macOS's wallpaper store as it was in `wallpaper-store-before-saver-remove.plist`.
+What the installed screen saver was built from (each settings file's size and time, and the reason
+if building it again failed) is in `screen-saver-state.json`, so that it is built again when they
+change; removing the screen saver removes it.
 *Fit to this computer* keeps the pictures of its fits in `tune/`. If you publish packs, `pack/`
 holds your publisher key (`publisher_ed25519`, with `publisher_ed25519.pub`), who you are as a
 publisher (`publisher.json`) and the rater book (`raters.json`); see [Packs](../guides/packs.md).

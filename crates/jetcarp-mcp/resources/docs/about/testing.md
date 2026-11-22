@@ -184,6 +184,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   so must `THIRD_PARTY_LICENSES.html`, Next's regular and bold and Mono's regular, which
   `packaging/notices_union.py` puts in when the page is generated (it refuses a file whose SHA-256
   isn't the README's), and CI's check that the page is current regenerates it so.
+- **The macOS screen saver kept up to date** (#287), in scratch folders on Linux and macOS (what
+  needs no Mac): each thing the bundle bakes (the rotation chosen, a rotation or scene saved, the
+  caption, its font, the strobe guard, the seizure warning's answer, the saver's code) must mark it
+  out of date; the rebuild must write a fresh folder and put it in the old one's place, a file of
+  the old bundle held open reading as it was and nothing left beside the bundle; a rebuild that
+  fails (its signing, here) must leave the old bundle as it was, keep the reason for `jetcarp
+  doctor`, and not be tried again until the next change; and a change to the guard or the answer
+  must reach the bundle without installing again, while a change that bakes the same leaves it
+  alone (`jetcarp-display/tests/saver_update.rs`).
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the

@@ -527,6 +527,10 @@ fn main() -> Result<()> {
         eprintln!("note: {n}");
     }
     let r = run();
+    // The macOS screen saver has what it shows baked in (#287): a command that changed any of it
+    // (the strobe guard, the seizure warning's answer, a rotation, the caption) brings it up to
+    // date as it ends. The app and the background host keep it up to date while they run.
+    saver_note(jetcarp_display::saver_update::keep_current());
     // This program's record in JETCARP's memory pool goes with it.
     jetcarp_core::machine::pool::stop();
     if let Err(e) = &r
@@ -535,6 +539,19 @@ fn main() -> Result<()> {
         broken_pipe::exit();
     }
     r
+}
+
+/// What keeping the macOS screen saver up to date did, on the error stream (never in the way of
+/// `--json` output).
+fn saver_note(said: Option<Result<String, String>>) {
+    match said {
+        Some(Ok(n)) => eprintln!("note: {n}"),
+        Some(Err(e)) => eprintln!(
+            "note: the screen saver couldn't be brought up to date with the settings ({e}); it \
+             shows what it did before. Install it again: `jetcarp host saver install`"
+        ),
+        None => {}
+    }
 }
 
 /// What this program is, in words, for its record in JETCARP's memory pool: `the app`, `the
@@ -588,6 +605,19 @@ fn run() -> Result<()> {
             .map(|g| Box::new(g) as Box<dyn jetcarp_core::pile::Toppler>)
     });
     let cx = platform::ctx();
+    // An MCP server runs a while, and its tools change settings too: it keeps the macOS screen
+    // saver up to date as the host does (#287).
+    if cfg!(target_os = "macos") && matches!(cmd, Cmd::Mcp { .. }) {
+        let _ = std::thread::Builder::new()
+            .name("screen saver keeper".into())
+            .spawn(|| {
+                let mut keeper = jetcarp_display::saver_update::Keeper::default();
+                loop {
+                    saver_note(keeper.poll());
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
+            });
+    }
     match cmd {
         Cmd::Run {
             scene,

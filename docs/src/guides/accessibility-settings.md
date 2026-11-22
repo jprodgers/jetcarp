@@ -151,15 +151,16 @@ If the chosen font can't be loaded there (a file since removed), the caption is 
 Atkinson Hyperlegible Next and the desktop background's log says why. The Windows screen saver
 reads the setting when it starts.
 
-**The macOS screen saver takes the font when it is installed.** macOS runs it in a sandbox that
+**The macOS screen saver has its own copy of the font.** macOS runs it in a sandbox that
 can't read JETCARP's settings, nor be counted on to read your font folders, so installing it
 (`jetcarp host saver install`, or *Install* in the *Screensaver* pane) copies the chosen font file
 into the saver, as it copies the rotation; Atkinson Hyperlegible Next and egui's original fonts are
 in the saver already. Installing also copies in the installed fonts the last resort would use for
 the characters its caption can show (the rotation's name, the rules' names and notations, the
-grids' names) that its fonts lack. Install it again after changing the font. A font that can't be
-read at install is left out and the saver's caption is in Atkinson Hyperlegible Next, and the
-install says why; so does the saver's log if its copy is later missing or broken. The font file is
+grids' names) that its fonts lack. When the font changes, JETCARP builds the saver again with the
+new one ([The system's screen saver](wallpapers.md#the-systems-screen-saver)). A font that can't be
+read then is left out and the saver's caption is in Atkinson Hyperlegible Next, and the install
+(or the note when it is built again) says why; so does the saver's log if its copy is later missing or broken. The font file is
 copied whole: a few hundred kilobytes for most fonts, but a collection of Chinese, Japanese and
 Korean faces can be tens of megabytes.
 

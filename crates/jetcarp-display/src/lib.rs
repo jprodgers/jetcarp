@@ -58,6 +58,8 @@ pub mod profiles;
 pub mod reseed_presets;
 pub mod rotation;
 pub mod saver;
+#[cfg(feature = "library")]
+pub mod saver_update;
 pub mod simgpu;
 pub mod stage;
 pub mod strobe_gpu;

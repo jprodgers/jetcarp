@@ -632,8 +632,8 @@ first screen's rotation); in the app, the same choice is *System screen saver ru
 
 Until the [photosensitive seizure warning](../getting-started/photosensitivity.md) has been
 answered, `install` refuses, and on Windows a screen saver installed before shows nothing but the
-warning, in a message box. A macOS screen saver installed before the warning existed keeps running
-as it was built until it is installed again.
+warning, in a message box. A macOS screen saver installed before the warning existed is built again,
+with the strobe guard on, the first time this version of JETCARP runs (see below).
 
 - **Windows.** A copy of JETCARP's windowless launcher is made at `%LOCALAPPDATA%\JETCARP\JETCARP.scr`
   and selected in *Screen Saver Settings*, as right-clicking a `.scr` file and choosing *Install*
@@ -649,11 +649,29 @@ as it was built until it is installed again.
   inside it, and the caption's font (a font file chosen in *Settings → Accessibility* is copied in
   whole; see [Font](accessibility-settings.md#font)), signs it for this machine, and opens System
   Settings where screen savers are chosen (*System Settings, Wallpaper, Screen Saver…* on
-  macOS 27). Install it again after changing the rotation or the font. It needs `libjetcarp_saver.dylib` beside the `jetcarp` program; a build from source makes
-  it with `cargo build --release -p jetcarp-saver`. macOS prepares the saver's full-screen views ahead
-  of time, as soon as it is chosen and after each run; they hold their first picture, and the scene
-  starts moving only once the screen saver has really started. The preview in System Settings always
-  moves. `remove` deletes the bundle and puts back the screen saver macOS had chosen before JETCARP
+  macOS 27). It needs `libjetcarp_saver.dylib` beside the `jetcarp` program; a build from source
+  makes it with `cargo build --release -p jetcarp-saver`.
+
+  **It is kept up to date.** When something the bundle holds changes (the rotation or a scene in
+  it, the caption or its font, the strobe guard's setting, the answer to the seizure warning, or the
+  program itself, after an upgrade), JETCARP builds the bundle again as installing does: in a fresh
+  folder, signed, then put in the old one's place, so no file macOS may be using is changed where it
+  is. There is no need to install it again. The app and the desktop background check every couple
+  of seconds while they run, an MCP server too, and the command line once as each command ends, so
+  a change made any of those ways reaches the saver, and so does one made in the settings files by
+  hand, the next time one of them runs. The check looks only at the size and time of each file the
+  bundle is baked from; it is baked again only after a change, and built again only if it would come
+  out different, on a thread of its own in the app and the desktop background. A Quick Start entry
+  the rotation shows is looked up again in the library whenever the bundle is built, but a change to
+  the entry alone isn't watched for. A screen saver already showing keeps what it had until it next
+  starts, and System Settings keeps the one its preview loaded until it is quit and opened again. If a rebuild fails, the old bundle stays as it was, and the app (under *Install* in the
+  *Screensaver* pane, and on the status line), `jetcarp host saver status` and `jetcarp doctor` say
+  why; it is tried again at the next change, or install it again. What the bundle was built from is
+  recorded in `screen-saver-state.json` in the settings folder.
+
+  macOS prepares the saver's full-screen views ahead of time, as soon as it is chosen and after each
+  run; they hold their first picture, and the scene starts moving only once the screen saver has
+  really started. The preview in System Settings always moves. `remove` deletes the bundle and puts back the screen saver macOS had chosen before JETCARP
   was installed, on every display and Space that still chooses JETCARP; with nothing recorded (an
   install by 0.4.0-rc.1), they show your desktop picture as the screen saver instead. If System
   Settings is open, it may keep listing JETCARP until you quit and reopen it.

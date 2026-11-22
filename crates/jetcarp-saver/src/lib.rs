@@ -260,11 +260,18 @@ impl Shared {
         let caption_font =
             caption_font.with_last_resort(macsaver::last_resort(&baked.fallbacks, &resources));
         log(&format!(
-            "rotation {:?}, {} items, caption in {} ({} fonts copied in behind it)",
+            "rotation {:?}, {} items, caption in {} ({} fonts copied in behind it), strobe \
+             guard {}{}",
             baked.rotation.name,
             baked.slots.len(),
             baked.font.label(),
-            baked.fallbacks.len()
+            baked.fallbacks.len(),
+            if baked.strobe_guard { "on" } else { "off" },
+            if baked.strobe_at_risk {
+                ", at risk"
+            } else {
+                ""
+            }
         ));
         Ok(Shared {
             instance: wgpu::Instance::new(
