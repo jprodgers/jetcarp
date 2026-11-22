@@ -31,6 +31,8 @@ mod palette_pick;
 mod pile_ui;
 mod popout;
 mod previews;
+#[cfg(all(test, unix))]
+mod quit_signal;
 mod results;
 mod rhai_edit;
 mod scripts_ui;
@@ -131,7 +133,12 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
     eframe::run_native(
         "JETCARP",
         opts,
-        Box::new(move |cc| Ok(Box::new(app::JetcarpApp::new(cc, launch)))),
+        Box::new(move |cc| Ok(Box::new(new_app(cc, launch)))),
     )
     .map_err(|e| e.to_string())
+}
+
+/// The app, once eframe has made its window and its context.
+fn new_app(cc: &eframe::CreationContext<'_>, launch: LaunchArgs) -> app::JetcarpApp {
+    app::JetcarpApp::new(cc, launch)
 }
