@@ -1,4 +1,93 @@
-//! The app ended by a signal (#135).
+//! The app ended by a signal (#135): SIGTERM (how `kill`, a logout or a system shutting down
+//! ends a program), SIGHUP (the terminal it was started from closing) and SIGINT (Ctrl-C there)
+//! close the app as its window's close button and *Quit* do, so it ends through `on_exit`: its
+//! layout and settings saved, its jobs stopped at a checkpoint, and AI control's endpoint file
+//! (`app-endpoint.json` in the runtime folder) removed. Before, each ended the process at once,
+//! and on the Mac an app ended with SIGTERM left its endpoint file behind. A second signal ends
+//! the app at once, as before, for one that does not close.
+//!
+//! A signal handler may do next to nothing safely, so this one only writes a byte to a socket
+//! pair; a thread of its own waits on the other end and asks the window to close
+//! (`ViewportCommand::Close`), which eframe answers on the UI thread. A signal ignored when the
+//! app started (SIGHUP under `nohup`) stays ignored. Linux and macOS: Windows has no such
+//! signals, and `taskkill` without `/F` asks the window to close, which ends the app through
+//! `on_exit` already.
+
+use eframe::egui;
+use std::io::Read;
+use std::os::fd::IntoRawFd;
+use std::os::unix::net::UnixStream;
+use std::sync::Once;
+use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
+
+/// The signals that close the app.
+const SIGNALS: [libc::c_int; 3] = [libc::SIGTERM, libc::SIGHUP, libc::SIGINT];
+
+/// The end of the socket pair the handler writes to (-1 until there is one).
+static WAKE: AtomicI32 = AtomicI32::new(-1);
+/// How many of the signals have come.
+static COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// The handler: the first signal wakes the thread that closes the window; a second ends the
+/// process at once, with the status a shell gives a program a signal ended (128 + its number).
+/// Only async-signal-safe calls: `write` and `_exit`, and lock-free atomics.
+extern "C" fn on_signal(sig: libc::c_int) {
+    if COUNT.fetch_add(1, Ordering::SeqCst) > 0 {
+        // SAFETY: `_exit` is async-signal-safe and does not return.
+        unsafe { libc::_exit(128 + sig) };
+    }
+    let fd = WAKE.load(Ordering::SeqCst);
+    if fd >= 0 {
+        let byte = [1u8];
+        // SAFETY: `write` is async-signal-safe; `byte` outlives the call. A failure leaves the
+        // app running, as an ignored signal would, and a second signal still ends it.
+        unsafe { libc::write(fd, byte.as_ptr().cast(), 1) };
+    }
+}
+
+/// From now on, SIGTERM, SIGHUP and SIGINT close the app whose context is `ctx`, as its window's
+/// close button does. Once per process (the app has one window of its own); later calls do
+/// nothing.
+pub(crate) fn install(ctx: &egui::Context) {
+    static ONCE: Once = Once::new();
+    let ctx = ctx.clone();
+    ONCE.call_once(move || {
+        let Ok((mut woken, wake)) = UnixStream::pair() else {
+            return;
+        };
+        let watcher = std::thread::Builder::new()
+            .name("jetcarp-quit-signal".into())
+            .spawn(move || {
+                let mut byte = [0u8];
+                if woken.read_exact(&mut byte).is_ok() {
+                    // As *Quit* does, to the main window whichever is in front; it asks for the
+                    // frame that answers it.
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
+                }
+            });
+        if watcher.is_err() {
+            return;
+        }
+        WAKE.store(wake.into_raw_fd(), Ordering::SeqCst);
+        let handler: extern "C" fn(libc::c_int) = on_signal;
+        for sig in SIGNALS {
+            // SAFETY: plain structs filled in before use; the handler is async-signal-safe.
+            unsafe {
+                let mut was: libc::sigaction = std::mem::zeroed();
+                if libc::sigaction(sig, std::ptr::null(), &mut was) == 0
+                    && was.sa_sigaction == libc::SIG_IGN
+                {
+                    continue;
+                }
+                let mut sa: libc::sigaction = std::mem::zeroed();
+                sa.sa_sigaction = handler as libc::sighandler_t;
+                sa.sa_flags = libc::SA_RESTART;
+                libc::sigemptyset(&mut sa.sa_mask);
+                libc::sigaction(sig, &sa, std::ptr::null_mut());
+            }
+        }
+    });
+}
 
 #[cfg(test)]
 mod tests {
