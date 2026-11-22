@@ -23,7 +23,7 @@
 //! with a sampler, whose filtering precision is the driver's), writes the frame to show (each
 //! byte from the processor's table) and measures that too. With nothing to soften the frame is
 //! shown as drawn and nothing is written but the tiles' readings, and only those as drawn are
-//! read back (64 bytes a tile, 2 MB a frame at 3840 by 2160).
+//! read back (80 bytes a tile, 2.6 MB a frame at 3840 by 2160).
 //!
 //! The maps come back to the processor through a ring of [`SLOTS`] readback buffers, a frame or two
 //! later, never blocking a frame: the guard decides on the frames already shown, and the softening
@@ -44,9 +44,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 /// Readback buffers in flight at once.
 pub const SLOTS: usize = 4;
 
-/// Bytes a tile's readings take, as drawn (and again as shown): its means, and its fine
-/// patterns' light and dark parts and windows.
-const TILE_RECORD: u64 = 64;
+/// Bytes a tile's readings take, as drawn (and again as shown): its means, its fine patterns'
+/// light and dark parts and windows, and its mean colour.
+const TILE_RECORD: u64 = 80;
 
 const SHADER: &str = r#"
 struct P {
@@ -60,8 +60,9 @@ struct P {
 };
 @group(0) @binding(0) var<uniform> p: P;
 @group(0) @binding(1) var src: texture_2d<f32>;
-// Four records a tile, as drawn: the means (in, out), then the fine patterns' light and dark
-// parts, luminance's windows, the red measure's windows; then the same for each tile as shown.
+// Five records a tile, as drawn: the means (in, out), then the fine patterns' light and dark
+// parts, luminance's windows, the red measure's windows, and the mean colour in linear light; then
+// the same for each tile as shown.
 @group(0) @binding(2) var<storage, read_write> tiles: array<vec4<u32>>;
 @group(0) @binding(3) var<storage, read_write> halfimg: array<f32>;
 @group(0) @binding(4) var<storage, read_write> state: array<vec2<u32>>;
@@ -139,6 +140,16 @@ fn reduce(lx: u32) {
   for (var st = 32u; st > 0u; st = st >> 1u) {
     if (lx < st) {
       acc[lx] = acc[lx] + acc[lx + st];
+      cnt[lx] = cnt[lx] + cnt[lx + st];
+    }
+    workgroupBarrier();
+  }
+}
+fn reduce3(lx: u32) {
+  for (var st = 32u; st > 0u; st = st >> 1u) {
+    if (lx < st) {
+      acc[lx] = acc[lx] + acc[lx + st];
+      acc2[lx] = acc2[lx] + acc2[lx + st];
       cnt[lx] = cnt[lx] + cnt[lx + st];
     }
     workgroupBarrier();
@@ -226,6 +237,9 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
   var l = 0.0;
   var r = 0.0;
   var n = 0.0;
+  // The colour's sums in linear light, as drawn and as shown (for WCAG 2.2's red flashes).
+  var crgb = vec3<f32>(0.0);
+  var orgb = vec3<f32>(0.0);
   for (var k = 0u; k < 4u; k++) {
     let q = base + vec2<u32>(k & 1u, k >> 1u);
     ok[k] = q.x < p.size.x && q.y < p.size.y;
@@ -245,6 +259,7 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
         rk = red(c);
       }
       px[k] = c;
+      crgb += c;
       vin[k] = vec2<f32>(lum(c), rk);
       l += vin[k].x;
       r += rk;
@@ -254,16 +269,21 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
   if ((p.mode & HALF) != 0u && n > 0.0) {
     halfimg[(base.y >> 1u) * p.half_w + (base.x >> 1u)] = l / n;
   }
-  acc[lx] = vec4<f32>(l, r, 0.0, 0.0);
+  acc[lx] = vec4<f32>(l, r, crgb.r, crgb.g);
+  acc2[lx] = vec4<f32>(crgb.b, 0.0, 0.0, 0.0);
   cnt[lx] = n;
   workgroupBarrier();
-  reduce(lx);
+  reduce3(lx);
   let total = max(cnt[0], 1.0);
   let lin = acc[0].x / total;
   let rin = acc[0].y / total;
+  let cin = vec3<f32>(acc[0].z, acc[0].w, acc2[0].x) / total;
   // Everyone has read the sums before the arrays are used again.
   workgroupBarrier();
-  let rec = tile * 4u;
+  let rec = tile * 5u;
+  if (lx == 0u) {
+    tiles[rec + 4u] = bitcast<vec4<u32>>(vec4<f32>(cin, 0.0));
+  }
   fine(lx, vin, ok, vec2<f32>(lin, rin), rec);
   if ((p.mode & GUARD) == 0u) {
     if (lx == 0u) {
@@ -301,23 +321,28 @@ fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: 
       let v = veil_at(q);
       let o = s * (1.0 - v.x) + vec3<f32>(v.y);
       vout[k] = vec2<f32>(lum(o), red(o));
+      orgb += o;
       sums += vec4<f32>(lum(s), red(s), vout[k].x, vout[k].y);
       textureStore(shown, vec2<i32>(q), vec4<f32>(enc8(o.r), enc8(o.g), enc8(o.b), 1.0));
     }
   }
   acc[lx] = sums;
+  acc2[lx] = vec4<f32>(orgb, 0.0);
   cnt[lx] = n;
   workgroupBarrier();
-  reduce(lx);
+  reduce3(lx);
   let t = max(cnt[0], 1.0);
   let a0 = acc[0];
+  let c0 = acc2[0];
   workgroupBarrier();
+  let out_rec = (p.cols * p.rows + tile) * 5u;
   if (lx == 0u) {
     prev[tile] = vec2<f32>(a0.x / t, a0.y / t);
     tiles[rec] = bitcast<vec4<u32>>(vec4<f32>(lin, rin, a0.z / t, a0.w / t));
+    tiles[out_rec + 4u] = bitcast<vec4<u32>>(vec4<f32>(c0.xyz / t, 0.0));
   }
   // The fine patterns shown.
-  fine(lx, vout, ok, vec2<f32>(a0.z / t, a0.w / t), (p.cols * p.rows + tile) * 4u);
+  fine(lx, vout, ok, vec2<f32>(a0.z / t, a0.w / t), out_rec);
 }
 "#;
 
@@ -790,7 +815,7 @@ impl StrobeGpu {
                 mapped_at_creation: false,
             })
         };
-        // Four records of 16 bytes a tile as drawn, and four as shown.
+        // Five records of 16 bytes a tile as drawn, and five as shown.
         let tile_bytes = cols as u64 * rows as u64 * TILE_RECORD * 2;
         let half_bytes = half_w as u64 * half_h as u64 * 4;
         let st = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
@@ -1129,9 +1154,11 @@ impl StrobeGpu {
                             output.lum[t] = f(r[2]);
                             output.red[t] = f(r[3]);
                             (input.fine[t], input.red_fine[t]) = fines(r);
+                            input.rgb[t] = [f(r[16]), f(r[17]), f(r[18])];
                             if slot.soft {
                                 let o = &u[(n + t) * rec..(n + t + 1) * rec];
                                 (output.fine[t], output.red_fine[t]) = fines(o);
+                                output.rgb[t] = [f(o[16]), f(o[17]), f(o[18])];
                             }
                         }
                     }

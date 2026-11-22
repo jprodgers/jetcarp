@@ -408,7 +408,7 @@ fn the_corpus_verdicts_are_pinned() {
         );
         if print {
             eprintln!(
-                "{label}: flash {:?} ({} transitions: area {}, screen {}, fine patterns {}, share {:.2}); red {:?} ({}); stripes {:?} (share {:.2}, contrast {:.2}, period {:.1} px); at risk {:?} ({} similar parts)",
+                "{label}: flash {:?} ({} transitions: area {}, screen {}, fine patterns {}, share {:.2}); red {:?} ({}, by chromaticity {}); stripes {:?} (share {:.2}, contrast {:.2}, period {:.1} px); at risk {:?} ({} similar parts)",
                 flash.level,
                 flash.transitions,
                 flash.area_transitions,
@@ -417,6 +417,7 @@ fn the_corpus_verdicts_are_pinned() {
                 flash.share,
                 red.red_level,
                 red.red_transitions,
+                red.chroma_transitions,
                 stripes.level,
                 stripes.share,
                 stripes.contrast,

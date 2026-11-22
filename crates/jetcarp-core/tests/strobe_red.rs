@@ -133,3 +133,154 @@ fn red_flashes_by_wcag_2_2_keep_the_area_rule() {
         assert_eq!(r.red_level.fails(), fails, "{side} pixels square: {r:?}");
     }
 }
+
+/// Ordinary scenes in colour, drawn `cell_px` pixels a cell at `speed` generations a second, 4
+/// seconds at 60 frames a second at 320 by 240: their worst red reading with WCAG 2.2's red
+/// flashes counted and without (their tiles' colours dropped), and the most red transitions WCAG
+/// 2.2's alone made over the area rule.
+fn colour_readings(
+    rule: &str,
+    seed: &str,
+    palette: &str,
+    cell_px: f64,
+    speed: f64,
+) -> (FlashReading, FlashReading, u32) {
+    use jetcarp_core::render::{ViewOptions, render_view};
+    use jetcarp_core::{Scene, World};
+    let (w, h) = (
+        (W as f64 / cell_px).ceil() as u32 + 2,
+        (H as f64 / cell_px).ceil() as u32 + 2,
+    );
+    let json = format!(
+        r#"{{"name": "colour", "tiling": {{"family": "square", "size": {{"rect": {{"w": {w}, "h": {h}}}}}, "boundary": "wrap"}}, "rng_state": 5, "cas": [{{"rule": "{rule}", "seed": {seed}, "palette": "{palette}"}}]}}"#
+    );
+    let scene: Scene = serde_json::from_str(&json).unwrap();
+    let mut world = World::from_scene(&scene).unwrap();
+    let b = world.topo.bounds;
+    let center = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
+    let (mut with, mut without) = (
+        FlashMeter::new(Viewing::screen(1.0), None),
+        FlashMeter::new(Viewing::screen(1.0), None),
+    );
+    let (mut a, mut c, mut chroma) = (FlashReading::default(), FlashReading::default(), 0);
+    let worse = |x: &FlashReading, y: &FlashReading| {
+        (y.red_level, y.red_transitions) > (x.red_level, x.red_transitions)
+    };
+    for k in 0..240u32 {
+        let t = k as f64 / 60.0;
+        let due = (k as f64 * speed / 60.0 + 1e-9).floor() as u64;
+        while world.generation < due {
+            world.step();
+        }
+        let px = render_view(&world, W, H, center, cell_px, &ViewOptions::default()).rgba;
+        let map = reduce(&px, W, H);
+        let r = with.update(&map, t);
+        chroma = chroma.max(r.chroma_transitions);
+        if worse(&a, &r) {
+            a = r;
+        }
+        let mut plain = map.clone();
+        plain.rgb.clear();
+        let r = without.update(&plain, t);
+        if worse(&c, &r) {
+            c = r;
+        }
+    }
+    (a, c, chroma)
+}
+
+/// The numbers behind ordinary scenes in colour (ignored; `--ignored --nocapture`).
+#[test]
+#[ignore]
+fn ordinary_scenes_in_colour_by_the_numbers() {
+    let soup = r#"{"random": {"density": 0.35}}"#;
+    let states = r#""random_states""#;
+    for (rule, seed, palette) in [
+        ("B3/S23", soup, "Prism"),
+        ("B3/S23", soup, "Ember"),
+        ("B2/S/C3", soup, "Prism"),
+        ("B2/S345/C4", soup, "Prism"),
+        ("GH 10/1", states, "Prism"),
+        ("GH 10/1", states, "Autumn"),
+        ("GH 10/1", states, "Synthwave"),
+        ("Hodgepodge 200/3/3/28", states, "Prism"),
+        ("Hodgepodge 200/3/3/28", states, "Autumn"),
+    ] {
+        for (px, speed) in [(4.0, 30.0), (8.0, 15.0), (16.0, 10.0)] {
+            let (with, without, chroma) = colour_readings(rule, seed, palette, px, speed);
+            println!(
+                "{rule} in {palette}, {px} px a cell, {speed} gen/s: red {:?} ({}), by WCAG 2.2 alone {chroma}; without it {:?} ({}); general {:?} ({})",
+                with.red_level,
+                with.red_transitions,
+                without.red_level,
+                without.red_transitions,
+                with.level,
+                with.transitions
+            );
+        }
+    }
+}
+
+/// Through the guard as a screen shows it (the processor's softener carrying out its plan, read
+/// back two frames late, its pace cap holding the generations back), what is shown never fails
+/// for red by either definition, whichever definition the red flash was.
+#[test]
+fn the_guard_keeps_red_flashes_by_either_definition_under_the_limit() {
+    use jetcarp_core::strobe::guard::{Frame, Guard, Pace};
+    use jetcarp_core::strobe::soften::Softener;
+    let speed = 10.0f64;
+    for (name, (a, b)) in [
+        ("only WCAG 2.0's", ONLY_2_0),
+        ("only WCAG 2.2's", ONLY_2_2),
+        ("both", BOTH),
+    ] {
+        let frames = [solid(a), solid(b)];
+        let mut guard = Guard::new(Viewing::screen(1.0), None, true);
+        let mut soft = Softener::new();
+        let mut shown = FlashMeter::new(Viewing::screen(1.0), None);
+        let mut queue = std::collections::VecDeque::new();
+        let (mut due, mut gen_no, mut worst) = (0.0f64, 0u64, FlashReading::default());
+        for k in 0..(60 * 8) as u32 {
+            let t = k as f64 / 60.0;
+            let pace = guard.cap().map_or(speed, |c| (c as f64).min(speed));
+            if k > 0 && guard.paused().is_none() {
+                due += pace / 60.0;
+                gen_no = (due + 1e-9).floor() as u64;
+            }
+            let px = &frames[(gen_no % 2) as usize];
+            let s = soft.apply(px, W, H, &guard.plan().clone(), 1.0 / 60.0);
+            let r = shown.update(&s.output, t);
+            if (r.red_level, r.red_transitions) > (worst.red_level, worst.red_transitions) {
+                worst = r;
+            }
+            queue.push_back((t, s.input, s.output));
+            while queue.len() > 2 {
+                let (t, i, o) = queue.pop_front().unwrap();
+                guard.observe(
+                    Frame {
+                        time: t,
+                        input: &i,
+                        output: &o,
+                        half: None,
+                    },
+                    Pace {
+                        speed: speed as f32,
+                        reached: Some(pace as f32),
+                        frame_rate: 60.0,
+                    },
+                );
+            }
+        }
+        eprintln!(
+            "{name}: shown {} red transitions a second at most; {:?}, cap {:?}",
+            worst.red_transitions,
+            guard.report().action,
+            guard.cap()
+        );
+        assert!(
+            !worst.red_level.fails() && worst.red_transitions <= 6,
+            "{name}: {worst:?} ({:?})",
+            guard.report()
+        );
+    }
+}

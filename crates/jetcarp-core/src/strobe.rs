@@ -19,9 +19,13 @@
 //! - A *transition* is a change of relative luminance of at least [`FLASH_DELTA`] (10% of the
 //!   maximum) in one direction, counted once per run, where the darker of its two states is below
 //!   [`DARK_LIMIT`]. A *flash* is a pair of opposing transitions.
-//! - A *red transition* is the same for the red measure ([`red_measure`]): for a saturated red
-//!   (red at least [`RED_SATURATION`] of `R + G + B`), `(R - G - B) * 320`, changing by at least
-//!   [`RED_DELTA`].
+//! - A *red transition* is counted by either of WCAG's two definitions (#270), since a red flash
+//!   either calls one is a red flash. WCAG 2.0's working definition, which PEAT and IRIS use: the
+//!   same as a transition, for the red measure ([`red_measure`]): for a saturated red (red at
+//!   least [`RED_SATURATION`] of `R + G + B`), `(R - G - B) * 320`, changing by at least
+//!   [`RED_DELTA`]. WCAG 2.2's (its glossary, *general flash and red flash thresholds*, note 3): a
+//!   change of more than [`RED_CHROMA_DELTA`] in CIE 1976 UCS chromaticity ([`chromaticity`]), to
+//!   or from a saturated red.
 //! - More than three flashes in any one second fail: more than [`MAX_TRANSITIONS`] transitions
 //!   in a sliding one-second window. [`WARN_TRANSITIONS`] (two flashes a second) is a warning, and
 //!   a warning that lasts four seconds out of five is the *extended* failure IRIS reports (the
@@ -84,6 +88,10 @@ pub const RED_SATURATION: f32 = 0.8;
 
 /// The red measure's scale: `(R - G - B) * RED_SCALE`.
 pub const RED_SCALE: f32 = 320.0;
+
+/// A red transition by WCAG 2.2's definition: a change of more than this in CIE 1976 UCS
+/// chromaticity (`u'`, `v'`; unitless), where one of the two states is a saturated red.
+pub const RED_CHROMA_DELTA: f32 = 0.2;
 
 /// More transitions than this in one second fail: more than three flashes a second.
 pub const MAX_TRANSITIONS: u32 = 6;
@@ -165,6 +173,23 @@ pub fn red_measure_linear(r: f32, g: f32, b: f32) -> f32 {
     } else {
         0.0
     }
+}
+
+/// Whether linear-light red, green and blue are a saturated red: red at least [`RED_SATURATION`]
+/// of `R + G + B` (WCAG's `R / (R + G + B) >= 0.8`).
+pub fn saturated_red(r: f32, g: f32, b: f32) -> bool {
+    let s = r + g + b;
+    s > 0.0 && r >= RED_SATURATION * s
+}
+
+/// The CIE 1976 UCS chromaticity (`u'`, `v'`) of linear-light sRGB red, green and blue, by way of
+/// CIE XYZ with sRGB's primaries and D65 white (IEC 61966-2-1); None for black, which has none.
+pub fn chromaticity(r: f32, g: f32, b: f32) -> Option<[f32; 2]> {
+    let x = 0.4124 * r + 0.3576 * g + 0.1805 * b;
+    let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    let z = 0.0193 * r + 0.1192 * g + 0.9505 * b;
+    let d = x + 15.0 * y + 3.0 * z;
+    (d > 1e-6).then(|| [4.0 * x / d, 9.0 * y / d])
 }
 
 /// Full light in the fixed-point linear values of [`linear_fixed`].
@@ -345,6 +370,36 @@ mod tests {
         assert_eq!(red_measure([255, 128, 128]), 0.0);
         // Magenta-ish: blue takes it below the share.
         assert_eq!(red_measure([255, 0, 200]), 0.0);
+    }
+
+    /// Chromaticity (#270): sRGB's white, red, green and blue fall where CIE 1976 UCS puts D65 and
+    /// sRGB's primaries (from their CIE 1931 xy: u' = 4x / (-2x + 12y + 3), v' = 9y / (...)).
+    #[test]
+    fn chromaticity_puts_srgb_s_primaries_where_they_belong() {
+        let uv = |x: f32, y: f32| {
+            let d = -2.0 * x + 12.0 * y + 3.0;
+            [4.0 * x / d, 9.0 * y / d]
+        };
+        for (rgb, xy) in [
+            ([1.0, 1.0, 1.0], (0.3127, 0.3290)),
+            ([1.0, 0.0, 0.0], (0.64, 0.33)),
+            ([0.0, 1.0, 0.0], (0.30, 0.60)),
+            ([0.0, 0.0, 1.0], (0.15, 0.06)),
+        ] {
+            let c = chromaticity(rgb[0], rgb[1], rgb[2]).unwrap();
+            let want = uv(xy.0, xy.1);
+            assert!(
+                (c[0] - want[0]).abs() < 2e-3 && (c[1] - want[1]).abs() < 2e-3,
+                "{rgb:?}: {c:?} vs {want:?}"
+            );
+        }
+        // Brightness does not move it; black has none.
+        let a = chromaticity(0.5, 0.2, 0.1).unwrap();
+        let b = chromaticity(0.05, 0.02, 0.01).unwrap();
+        assert!((a[0] - b[0]).abs() < 1e-6 && (a[1] - b[1]).abs() < 1e-6);
+        assert_eq!(chromaticity(0.0, 0.0, 0.0), None);
+        assert!(saturated_red(1.0, 0.1, 0.1) && !saturated_red(1.0, 0.2, 0.1));
+        assert!(!saturated_red(0.0, 0.0, 0.0));
     }
 
     #[test]

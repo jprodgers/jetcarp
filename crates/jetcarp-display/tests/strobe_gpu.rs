@@ -218,6 +218,7 @@ const RED_SUMS: f32 = 1e-2;
 /// mean is exactly the threshold away from the tile's (in exact arithmetic, as in a frame made of
 /// a few colours it can be) is clear or not by rounding: where `frame` (the RGBA frame measured,
 /// and its width) is given, a bit may differ only for such a window; else every bit must agree.
+/// The tiles' mean colours (#270) agree to `lum` too, each channel being in linear light, 0 to 1.
 fn same_fine(
     gpu: &TileMap,
     cpu: &TileMap,
@@ -230,6 +231,14 @@ fn same_fine(
     use jetcarp_core::strobe::{TILE, luminance, red_measure};
     let mut ties = 0;
     for t in 0..cpu.len() {
+        for k in 0..3 {
+            assert!(
+                (gpu.rgb[t][k] - cpu.rgb[t][k]).abs() < lum,
+                "{what} tile {t}, colour: {:?} vs {:?}",
+                gpu.rgb[t],
+                cpu.rgb[t]
+            );
+        }
         for (g, c, tol, which) in [
             (gpu.fine[t], cpu.fine[t], lum, 0),
             (gpu.red_fine[t], cpu.red_fine[t], red, 1),

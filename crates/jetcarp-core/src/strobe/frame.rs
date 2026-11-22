@@ -160,6 +160,9 @@ pub struct TileMap {
     /// Each tile's fine pattern of luminance, and of the red measure.
     pub fine: Vec<Fine>,
     pub red_fine: Vec<Fine>,
+    /// Each tile's mean colour in linear light (red, green, blue, each 0 to 1), for WCAG 2.2's
+    /// red flashes, a change of chromaticity (#270; [`super::chromaticity`]).
+    pub rgb: Vec<[f32; 3]>,
 }
 
 /// Tiles across and down a frame of this size.
@@ -181,6 +184,7 @@ impl TileMap {
             red: vec![0.0; n],
             fine: vec![Fine::flat(0.0); n],
             red_fine: vec![Fine::flat(0.0); n],
+            rgb: vec![[0.0; 3]; n],
         }
     }
 
@@ -192,6 +196,7 @@ impl TileMap {
         m.red.fill(r);
         m.fine.fill(Fine::flat(l));
         m.red_fine.fill(Fine::flat(r));
+        m.rgb.fill(rgb.map(linear));
         m
     }
 
@@ -286,6 +291,7 @@ fn reduce_with(rgba: &[u8], width: u32, height: u32, half: bool) -> (TileMap, Op
     let mut red_rows: Vec<&mut [f32]> = map.red.chunks_mut(cols).collect();
     let mut fine_rows: Vec<&mut [Fine]> = map.fine.chunks_mut(cols).collect();
     let mut red_fine_rows: Vec<&mut [Fine]> = map.red_fine.chunks_mut(cols).collect();
+    let mut rgb_rows: Vec<&mut [[f32; 3]]> = map.rgb.chunks_mut(cols).collect();
     let mut half_rows: Vec<Option<&mut [f32]>> = match &mut himg {
         Some(h) => h
             .lum
@@ -300,13 +306,15 @@ fn reduce_with(rgba: &[u8], width: u32, height: u32, half: bool) -> (TileMap, Op
         .zip(red_rows.par_iter_mut())
         .zip(fine_rows.par_iter_mut())
         .zip(red_fine_rows.par_iter_mut())
+        .zip(rgb_rows.par_iter_mut())
         .zip(half_rows.par_iter_mut())
         .enumerate()
-        .for_each(|(tr, ((((lrow, rrow), frow), rfrow), hrow))| {
+        .for_each(|(tr, (((((lrow, rrow), frow), rfrow), crow), hrow))| {
             let y0 = tr * band_rows;
             let y1 = (y0 + band_rows).min(height as usize);
             let mut lsum = vec![0f32; cols];
             let mut rsum = vec![0f32; cols];
+            let mut csum = vec![[0f32; 3]; cols];
             // The band's pixels' values, for the fine patterns.
             let mut vals = vec![(0f32, 0f32); w * (y1 - y0)];
             // Half image: sums of the band's 2x2 blocks.
@@ -326,6 +334,10 @@ fn reduce_with(rgba: &[u8], width: u32, height: u32, half: bool) -> (TileMap, Op
                     vals[(y - y0) * w + x] = (l, r);
                     lsum[x / TILE as usize] += l;
                     rsum[x / TILE as usize] += r;
+                    let c = &mut csum[x / TILE as usize];
+                    for k in 0..3 {
+                        c[k] += linear(px[k]);
+                    }
                     if !hsum.is_empty() {
                         let k = ((y - y0) / 2) * hw as usize + x / 2;
                         hsum[k] += l;
@@ -338,6 +350,7 @@ fn reduce_with(rgba: &[u8], width: u32, height: u32, half: bool) -> (TileMap, Op
                 let n = (tw * (y1 - y0)) as f32;
                 lrow[c] = lsum[c] / n;
                 rrow[c] = rsum[c] / n;
+                crow[c] = csum[c].map(|s| s / n);
                 let x0 = c * TILE as usize;
                 let at = |x: usize, y: usize| vals[y * w + x0 + x];
                 frow[c] = fine_of(tw, y1 - y0, lrow[c], |x, y| at(x, y).0);
@@ -383,6 +396,12 @@ mod tests {
             let mut u = TileMap::uniform(w, h, [200, 30, 40]);
             u.lum.iter_mut().zip(&m.lum).for_each(|(a, b)| *a = *b);
             u.red.iter_mut().zip(&m.red).for_each(|(a, b)| *a = *b);
+            for (a, b) in u.rgb.iter().zip(&m.rgb) {
+                for k in 0..3 {
+                    assert!((a[k] - b[k]).abs() < 1e-6, "{a:?} {b:?}");
+                }
+            }
+            u.rgb.clone_from(&m.rgb);
             // No pattern: light and dark at the mean, no window clear of it.
             u.fine = u.lum.iter().map(|l| Fine::flat(*l)).collect();
             u.red_fine = u.red.iter().map(|r| Fine::flat(*r)).collect();

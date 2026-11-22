@@ -39,11 +39,19 @@
 //! fading through grey, have no clear pattern to compare. Reversals count only where neighbouring
 //! tiles reverse together, as above. A soup's cells change a few at a time, and its tiles' patterns
 //! never turn into their negatives; the same is done for the red measure.
+//!
+//! **Red, by either definition** (#270). A tile's red transitions are WCAG 2.0's (its mean red
+//! measure, tracked as luminance is) and WCAG 2.2's (its mean colour's chromaticity moving more than
+//! [`RED_CHROMA_DELTA`] from where its run began, to or from a saturated red: [`ChromaTracker`]),
+//! counted once where both happen in one frame, by the same coherence (with no direction, for
+//! chromaticity) and the same area rule. WCAG 2.2's are counted only on tiles: the whole screen's
+//! mean colour on a dark ground has the chromaticity of whatever is lit, however small, so it
+//! would count a flicker of a few pixels as the whole screen's.
 
 use super::frame::{Fine, TileMap};
 use super::{
     AREA_SHARE, DARK_LIMIT, EXTENDED_SECONDS, EXTENDED_WINDOW, FLASH_DELTA, MAX_TRANSITIONS,
-    RED_DELTA, Viewing, WARN_TRANSITIONS,
+    RED_CHROMA_DELTA, RED_DELTA, Viewing, WARN_TRANSITIONS,
 };
 use serde::Serialize;
 use std::collections::VecDeque;
@@ -108,6 +116,67 @@ impl FineRef {
         });
         self.last = Some(*f);
         reversed
+    }
+}
+
+/// Moves in chromaticity smaller than this (CIE 1976 UCS) neither end a run nor turn it back.
+pub const CHROMA_EPSILON: f32 = 0.005;
+
+/// A colour's state for WCAG 2.2's red flashes: its chromaticity, and whether it is a saturated
+/// red.
+type Chroma = ([f32; 2], bool);
+
+/// A tile's red transitions by WCAG 2.2's definition (#270): a change of more than
+/// [`RED_CHROMA_DELTA`] in chromaticity from where the run began, to or from a saturated red.
+/// Chromaticity has no up and down, so a run is a move away from its start, and it turns back
+/// (a new run begins, from the farthest state reached) when the colour comes back towards its
+/// start by more than [`CHROMA_EPSILON`]. Each run counts once, however slowly it goes: as a
+/// transition of luminance is counted ([`Tracker`]). Black has no chromaticity, and leaves a run
+/// as it is.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ChromaTracker {
+    /// The run's start, and the state farthest from it so far, with its distance.
+    run: Option<(Chroma, Chroma, f32)>,
+    counted: bool,
+    /// The last colour taken: the same colour again changes nothing, and is not worked out again.
+    last: Option<[f32; 3]>,
+}
+
+fn chroma_distance(a: [f32; 2], b: [f32; 2]) -> f32 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
+}
+
+impl ChromaTracker {
+    /// Takes a colour in linear light: true when it makes a red transition by WCAG 2.2.
+    pub fn observe(&mut self, rgb: [f32; 3]) -> bool {
+        if self.last == Some(rgb) {
+            return false;
+        }
+        self.last = Some(rgb);
+        let Some(c) = super::chromaticity(rgb[0], rgb[1], rgb[2]) else {
+            return false;
+        };
+        let now = (c, super::saturated_red(rgb[0], rgb[1], rgb[2]));
+        let Some((start, far, far_d)) = self.run else {
+            self.run = Some((now, now, 0.0));
+            return false;
+        };
+        let d = chroma_distance(start.0, c);
+        let (start, far, far_d) = if d >= far_d {
+            (start, now, d)
+        } else if far_d - d > CHROMA_EPSILON {
+            // Turned back: a new run, from the farthest state.
+            self.counted = false;
+            (far, now, chroma_distance(far.0, c))
+        } else {
+            (start, far, far_d)
+        };
+        self.run = Some((start, far, far_d));
+        if !self.counted && far_d > RED_CHROMA_DELTA && (start.1 || far.1) {
+            self.counted = true;
+            return true;
+        }
+        false
     }
 }
 
@@ -257,8 +326,11 @@ pub struct FlashReading {
     /// The area rule over the tiles' fine-pattern reversals alone (general and red, whichever is
     /// more): what a tile's mean cannot see.
     pub fine_transitions: u32,
-    /// Red flashes: the same for the red measure.
+    /// Red flashes: the same for red, by either of WCAG's definitions (2.0's red measure, 2.2's
+    /// chromaticity).
     pub red_transitions: u32,
+    /// The area rule over the tiles' red transitions by WCAG 2.2's definition alone (#270).
+    pub chroma_transitions: u32,
     /// The largest share of a 10° field covered by tiles that made at least two transitions (a
     /// flash) in the last second.
     pub share: f32,
@@ -340,6 +412,12 @@ pub struct FlashMeter {
     /// Each tile's fine-pattern reversals in the last second, of luminance or red, whichever is
     /// more.
     fine_counts: Vec<u8>,
+    /// Each tile's colour, for WCAG 2.2's red transitions; its latest one, counted or not, for
+    /// coherence; those counted (their times); and how many in the last second.
+    chroma: Vec<ChromaTracker>,
+    chroma_raw: Vec<f64>,
+    chroma_times: Vec<Tracker>,
+    chroma_counts: Vec<u8>,
     last: FlashReading,
 }
 
@@ -370,6 +448,10 @@ impl FlashMeter {
             fine: vec![],
             red_fine: vec![],
             fine_counts: vec![],
+            chroma: vec![],
+            chroma_raw: vec![],
+            chroma_times: vec![],
+            chroma_counts: vec![],
             last: FlashReading::default(),
         }
     }
@@ -437,6 +519,10 @@ impl FlashMeter {
             self.fine = vec![Tracker::default(); n];
             self.red_fine = vec![Tracker::default(); n];
             self.fine_counts = vec![0; n];
+            self.chroma = vec![ChromaTracker::default(); n];
+            self.chroma_raw = vec![f64::NEG_INFINITY; n];
+            self.chroma_times = vec![Tracker::default(); n];
+            self.chroma_counts = vec![0; n];
         }
         let dt = self.last_t.map_or(0.0, |l| (t - l).clamp(0.0, 1.0));
         self.last_t = Some(t);
@@ -445,8 +531,10 @@ impl FlashMeter {
         let mut now_red = vec![0i8; n];
         let mut now_fine = vec![false; n];
         let mut now_red_fine = vec![false; n];
-        // A map made without fine patterns (by hand, in tests) has none to compare.
+        let mut now_chroma = vec![false; n];
+        // A map made without fine patterns or colours (by hand, in tests) has none to compare.
         let has_fine = map.fine.len() == n && map.red_fine.len() == n;
+        let has_rgb = map.rgb.len() == n;
         for i in 0..n {
             now[i] = self.lum[i].observe(map.lum[i], FLASH_DELTA, EPSILON, Some(DARK_LIMIT));
             now_red[i] = self.red[i].observe(map.red[i], RED_DELTA, RED_EPSILON, None);
@@ -464,6 +552,12 @@ impl FlashMeter {
                 }
                 if now_red_fine[i] {
                     self.red_fine_raw[i] = t;
+                }
+            }
+            if has_rgb {
+                now_chroma[i] = self.chroma[i].observe(map.rgb[i]);
+                if now_chroma[i] {
+                    self.chroma_raw[i] = t;
                 }
             }
         }
@@ -508,11 +602,17 @@ impl FlashMeter {
         for i in 0..n {
             let fine = now_fine[i] && agree_fine(&self.fine_raw, i) >= COHERENT;
             let red_fine = now_red_fine[i] && agree_fine(&self.red_fine_raw, i) >= COHERENT;
-            // A frame whose mean and fine pattern both changed made one transition.
+            // Chromaticity has no direction either.
+            let chroma = now_chroma[i] && agree_fine(&self.chroma_raw, i) >= COHERENT;
+            // A frame whose mean and fine pattern both changed made one transition; so did one
+            // whose red measure and chromaticity both did.
             if fine || (now[i] != 0 && agree(&self.raw, i, now[i]) >= COHERENT) {
                 self.lum[i].commit(t);
             }
-            if red_fine || (now_red[i] != 0 && agree(&self.red_raw, i, now_red[i]) >= COHERENT) {
+            if red_fine
+                || chroma
+                || (now_red[i] != 0 && agree(&self.red_raw, i, now_red[i]) >= COHERENT)
+            {
                 self.red[i].commit(t);
             }
             if fine {
@@ -521,18 +621,24 @@ impl FlashMeter {
             if red_fine {
                 self.red_fine[i].commit(t);
             }
+            if chroma {
+                self.chroma_times[i].commit(t);
+            }
         }
-        let (mut any, mut any_red, mut any_fine) = (false, false, false);
+        let (mut any, mut any_red, mut any_fine, mut any_chroma) = (false, false, false, false);
         for i in 0..n {
             let c = self.lum[i].count(t) as u8;
             let r = self.red[i].count(t) as u8;
             let f = self.fine[i].count(t).max(self.red_fine[i].count(t)) as u8;
+            let h = self.chroma_times[i].count(t) as u8;
             self.counts[i] = c;
             self.red_counts[i] = r;
             self.fine_counts[i] = f;
+            self.chroma_counts[i] = h;
             any |= c > 0;
             any_red |= r > 0;
             any_fine |= f > 0;
+            any_chroma |= h > 0;
         }
         // The whole screen: the view's mean, weighted by its share of the screen.
         let view_px = map.width as f64 * map.height as f64;
@@ -570,6 +676,12 @@ impl FlashMeter {
         } else {
             0
         };
+        // The same for WCAG 2.2's red transitions, among the red ones.
+        let chroma_transitions = if any_chroma && red_area > 0 {
+            self.area_rule(map, &self.chroma_counts).0
+        } else {
+            0
+        };
         let transitions = area.max(screen_transitions);
         let red_transitions = red_area.max(screen_red);
         let level = Self::level(
@@ -589,6 +701,7 @@ impl FlashMeter {
             screen_transitions,
             fine_transitions,
             red_transitions,
+            chroma_transitions,
             share: flash_share,
             red_share,
             level,
@@ -960,6 +1073,40 @@ mod tests {
         // Pink is not saturated: no red flash, though its luminance flashes.
         let r = run(60.0, 2.0, 1, FULL, BLACK, [255, 140, 140], BLACK);
         assert_eq!((r.red_transitions, r.level), (0, Level::Fail));
+    }
+
+    /// WCAG 2.2's red transitions (#270): a move of more than 0.2 in chromaticity, to or from a
+    /// saturated red, counted once per run however slowly it goes.
+    #[test]
+    fn wcag_2_2_red_transitions_follow_chromaticity() {
+        let (red, green, blue) = ([1.0f32, 0.0, 0.0], [0.0f32, 0.3, 0.0], [0.0f32, 0.0, 1.0]);
+        let mix = |a: [f32; 3], b: [f32; 3], f: f32| [0, 1, 2].map(|k| a[k] + (b[k] - a[k]) * f);
+        // Red and green in turn: a transition each time.
+        let mut c = ChromaTracker::default();
+        assert!(!c.observe(red));
+        assert!(c.observe(green) && c.observe(red) && c.observe(green));
+        // A slow fade from red to green is one transition, and back again another.
+        let mut c = ChromaTracker::default();
+        let there: u32 = (0..=60)
+            .map(|k| c.observe(mix(red, green, k as f32 / 60.0)) as u32)
+            .sum();
+        let back: u32 = (0..=60)
+            .rev()
+            .map(|k| c.observe(mix(red, green, k as f32 / 60.0)) as u32)
+            .sum();
+        assert_eq!((there, back), (1, 1));
+        // Neither state a saturated red: green and blue, never.
+        let mut c = ChromaTracker::default();
+        assert!((0..10).all(|k| !c.observe(if k % 2 == 0 { green } else { blue })));
+        // Black has no chromaticity: red, black, red is no transition.
+        let mut c = ChromaTracker::default();
+        assert!((0..10).all(|k| !c.observe(if k % 2 == 0 { red } else { [0.0; 3] })));
+        // Red and an orange-red, under 0.2 apart: none.
+        let mut c = ChromaTracker::default();
+        assert!((0..10).all(|k| !c.observe(if k % 2 == 0 { red } else { [1.0, 0.1, 0.0] })));
+        // The brightness of a red alone moves no chromaticity.
+        let mut c = ChromaTracker::default();
+        assert!((0..10).all(|k| !c.observe(if k % 2 == 0 { red } else { [0.3, 0.0, 0.0] })));
     }
 
     #[test]

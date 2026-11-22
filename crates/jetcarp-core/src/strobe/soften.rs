@@ -269,6 +269,8 @@ impl Softener {
         let cols = input.cols as usize;
         let mut ema = vec![[0f32; 2]; input.len()];
         let mut out_sum = vec![[0f32; 2]; input.len()];
+        // Each tile's colour shown, in linear light.
+        let mut out_rgb = vec![[0f32; 3]; input.len()];
         // Each pixel's luminance and red measure as shown, for the fine patterns shown.
         let mut out_px = vec![[0f32; 2]; n];
         let mut shown = vec![0u8; n * 4];
@@ -306,6 +308,7 @@ impl Softener {
                 out_sum[t][0] += out_px[i][0];
                 out_sum[t][1] += out_px[i][1];
                 for k in 0..3 {
+                    out_rgb[t][k] += o[k];
                     shown[i * 4 + k] = table[unorm16(o[k]) as usize];
                 }
                 shown[i * 4 + 3] = 255;
@@ -318,6 +321,7 @@ impl Softener {
             self.prev[t] = [ema[t][0] / px, ema[t][1] / px];
             output.lum[t] = out_sum[t][0] / px;
             output.red[t] = out_sum[t][1] / px;
+            output.rgb[t] = out_rgb[t].map(|c| c / px);
             // The fine patterns shown.
             let (x0, y0) = ((t % cols) * TILE as usize, (t / cols) * TILE as usize);
             let (tw, th) = (
