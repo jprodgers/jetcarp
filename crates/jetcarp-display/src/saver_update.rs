@@ -278,8 +278,8 @@ pub fn keep_current_at(config: &Path, target: &Target) -> Option<Result<String, 
         save(config, &kept);
         Err(why)
     };
-    let baked = match bake(config, target) {
-        Ok((baked, _)) => baked,
+    let (baked, warnings) = match bake(config, target) {
+        Ok(b) => b,
         Err(e) => return Some(failed(e)),
     };
     let record = BuiltFrom {
@@ -294,9 +294,13 @@ pub fn keep_current_at(config: &Path, target: &Target) -> Option<Result<String, 
     match build(target, &baked) {
         Ok(()) => {
             save(config, &record);
-            Some(Ok(
-                "JETCARP's screen saver was brought up to date with the settings".into(),
-            ))
+            // What installing would have warned of (an item showing Life, a font left out).
+            let mut said =
+                String::from("JETCARP's screen saver was brought up to date with the settings");
+            for w in warnings {
+                said += &format!("; {w}");
+            }
+            Some(Ok(said))
         }
         Err(e) => Some(failed(e)),
     }
