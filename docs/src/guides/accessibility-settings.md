@@ -107,7 +107,8 @@ The app's words are in **Atkinson Hyperlegible Next**, and its monospaced text (
 numbers in tables) in **Atkinson Hyperlegible Mono**: fonts whose letters are easier to tell
 apart, designed by the Braille Institute for low-vision readers. Headings and window titles are
 in its bold. So is this book, and so are the pages JETCARP writes for a browser (the clip-rating
-page and the website export's page), which carry the fonts inside them.
+page and the website export's page) and the notices of the libraries it is built from
+(`THIRD_PARTY_LICENSES.html`), which carry the fonts inside them.
 
 Two lists choose the fonts, **Font** for the app's words and **Monospace font** for its
 monospaced text. Each offers:

@@ -146,8 +146,9 @@ day later (0.4.2: 17 November here, 18 November there).
   now in Atkinson Hyperlegible Next, its monospaced text in Atkinson Hyperlegible Mono, and its
   headings and window titles in Atkinson Hyperlegible Next Bold: fonts whose letters are easier to
   tell apart, designed by the Braille Institute for low-vision readers. The book is set in it, from
-  font files that come with the book, and so are the clip-rating page and the website export's
-  page, which carry the fonts inside them and still work offline as one file. *Settings →
+  font files that come with the book, and so are the clip-rating page, the website export's
+  page and `THIRD_PARTY_LICENSES.html`, which carry the fonts inside them and still work offline
+  as one file. *Settings →
   Accessibility* has a *Font* and a *Monospace font*: Atkinson (the default), egui's original
   fonts, every font installed on the computer, or a font file. The choice applies at once and is
   saved, and the caption on the desktop background and the Windows screen saver follows it: the

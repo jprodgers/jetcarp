@@ -173,7 +173,10 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   rotation its fonts draw whole copies none (`macsaver.rs`). The clip-rating page and the website export's page must
   carry Atkinson Hyperlegible Next (and the rating page Mono) inside them, the files those the
   fonts' README names by SHA-256, and fetch nothing from elsewhere
-  (`jetcarp-core/src/web_fonts.rs`, `jetcarp-api/tests/explore.rs`, `jetcarp-store/tests/website.rs`).
+  (`jetcarp-core/src/web_fonts.rs`, `jetcarp-api/tests/explore.rs`, `jetcarp-store/tests/website.rs`);
+  so must `THIRD_PARTY_LICENSES.html`, Next's regular and bold, which `packaging/notices_union.py`
+  puts in when the page is generated (it refuses a file whose SHA-256 isn't the README's), and
+  CI's check that the page is current regenerates it so.
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the
