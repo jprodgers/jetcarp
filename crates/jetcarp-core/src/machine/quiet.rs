@@ -99,7 +99,16 @@ fn renew(program: &str) {
 }
 
 /// Write a record for `pid` in `dir` (whole, then moved into place), readable by this user only.
+/// Another program ending its measuring removes the folder when it leaves it empty, so a folder
+/// gone between making it and writing into it is made again, once.
 pub fn write_in(dir: &Path, pid: u32, program: &str, at_ms: u64) -> std::io::Result<()> {
+    match write_once(dir, pid, program, at_ms) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => write_once(dir, pid, program, at_ms),
+        r => r,
+    }
+}
+
+fn write_once(dir: &Path, pid: u32, program: &str, at_ms: u64) -> std::io::Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt;
@@ -164,6 +173,8 @@ impl Drop for Hold {
             && let Some(dir) = folder()
         {
             let _ = std::fs::remove_file(dir.join(format!("{}.json", std::process::id())));
+            // Its folder too, once no other program measures (only an empty one goes).
+            let _ = std::fs::remove_dir(&dir);
         }
         // Whoever looks next reads the folder again.
         if let Ok(mut c) = CACHE.lock() {
@@ -179,6 +190,8 @@ pub fn end_now() {
     HOLDS.store(0, Ordering::SeqCst);
     if let Some(dir) = folder() {
         let _ = std::fs::remove_file(dir.join(format!("{}.json", std::process::id())));
+        // Its folder too, once no other program measures (only an empty one goes).
+        let _ = std::fs::remove_dir(&dir);
     }
 }
 
