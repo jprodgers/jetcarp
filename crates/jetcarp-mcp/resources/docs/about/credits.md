@@ -67,6 +67,11 @@ Listed in full, with their licences, on the [Licence](licence.md#third-party-wor
 - **James Edmond**: the mutation step and rule notation of monotile-ca.
 - **Bert Wang-Chak Chan**: the *Orbium unicaudatus* pattern from Chan's Lenia repository
   ([Lenia](../automata/lenia.md)).
+- **The Braille Institute**: Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono, the fonts
+  the app, its caption and this book are set in, fonts whose letters are easier to tell apart,
+  designed for low-vision readers. Their designers are **Elliott Scott**, **Megan Eiswerth**,
+  **Linus Boman**, **Theodore Petrosky** and **Letters from Sweden**, with Applied Design Works;
+  Google Fonts keeps their official repositories. SIL Open Font License 1.1.
 - The authors of the Rust libraries JETCARP is built from, of SQLite, and of the fonts that ship with
   egui (listed in each release's notices).
 

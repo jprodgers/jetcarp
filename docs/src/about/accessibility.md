@@ -75,6 +75,13 @@ photosensitive epilepsy. This is the part of JETCARP's accessibility we take mos
 
 ## Seeing the screen differently
 
+- **Letters easier to tell apart.** The app's words are in Atkinson Hyperlegible Next, and its
+  monospaced text (rules, scripts, numbers in tables) in Atkinson Hyperlegible Mono: fonts whose
+  letters are easier to tell apart, designed by the Braille Institute for low-vision readers. So
+  is the caption on the desktop background and the screen savers, and so is this book. Someone who
+  reads more easily in another font can choose any font installed on their computer, or a font
+  file, in *Settings → Accessibility*, and egui's original fonts are there too
+  ([Accessibility settings](../guides/accessibility-settings.md#font)).
 - **Size.** In the app, you can zoom the world in and out with the + and − keys or the scroll
   wheel. On the desktop background, the caption that names the rule and the tiling has a size of
   its own.
@@ -138,6 +145,11 @@ These are known, and each is tracked:
   Only the cursor's cell of the grid is offered to a screen reader, and on Windows, Narrator and
   NVDA may announce the grid as having "0 rows"
   ([#219](https://github.com/jprodgers/jetcarp/issues/219)).
+- **Characters no built-in font has.** The fonts that come with the app draw Latin, Greek and
+  Cyrillic, arrows and common symbols, but not Chinese, Japanese or Korean, nor the macOS key
+  symbols (⌘, ⌥) in the keyboard window's macOS column, nor the star before a preset of your own
+  in the Reseed pane. A scene or a pattern named in those is drawn with boxes unless a font that
+  has them is chosen in *Settings → Accessibility*.
 - **Not yet tested by hand** with screen readers (Narrator, NVDA, VoiceOver and Orca) or with
   keyboard-only use, though the program's tests drive the whole app with key presses and read
   what it offers screen readers ([#219](https://github.com/jprodgers/jetcarp/issues/219)); nor by

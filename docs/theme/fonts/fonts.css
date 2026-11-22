@@ -1,0 +1,61 @@
+/* The book's fonts: Atkinson Hyperlegible Next for text and Atkinson Hyperlegible Mono for code,
+   fonts whose letters are easier to tell apart, designed by the Braille Institute for low-vision
+   readers. The files come with the book (this folder; README.md says where from), so no page
+   fetches a font from another site. SIL Open Font License 1.1: OFL-*.txt beside them.
+   theme/jetcarp.css puts them to use. */
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('{{ resource "fonts/AtkinsonHyperlegibleNext-Regular.woff2" }}') format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('{{ resource "fonts/AtkinsonHyperlegibleNext-Italic.woff2" }}') format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  font-style: normal;
+  font-weight: 500 900;
+  font-display: swap;
+  src: url('{{ resource "fonts/AtkinsonHyperlegibleNext-Bold.woff2" }}') format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  font-style: italic;
+  font-weight: 500 900;
+  font-display: swap;
+  src: url('{{ resource "fonts/AtkinsonHyperlegibleNext-BoldItalic.woff2" }}') format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('{{ resource "fonts/AtkinsonHyperlegibleMono-Regular.woff2" }}') format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('{{ resource "fonts/AtkinsonHyperlegibleMono-Italic.woff2" }}') format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  font-style: normal;
+  font-weight: 500 900;
+  font-display: swap;
+  src: url('{{ resource "fonts/AtkinsonHyperlegibleMono-Bold.woff2" }}') format("woff2");
+}

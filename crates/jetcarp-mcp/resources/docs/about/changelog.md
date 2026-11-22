@@ -142,6 +142,20 @@ day later (0.4.2: 17 November here, 18 November there).
   the light and high-contrast themes, where they kept the grid's dark backdrop.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
   [#220](https://github.com/jprodgers/jetcarp/issues/220))
+- **A font whose letters are easier to tell apart, and any font you like.** The app's words are
+  now in Atkinson Hyperlegible Next, its monospaced text in Atkinson Hyperlegible Mono, and its
+  headings and window titles in Atkinson Hyperlegible Next Bold: fonts whose letters are easier to
+  tell apart, designed by the Braille Institute for low-vision readers. The caption on the desktop
+  background and the screen savers is drawn in it, and the book is set in it, from font files that
+  come with the book. *Settings → Accessibility* has a *Font* and a *Monospace font*: Atkinson (the
+  default), egui's original fonts, every font installed on the computer, or a font file. The
+  choice applies at once and is saved; egui's fonts stay behind whichever is chosen, for any
+  character it lacks; and a file that isn't a font, or a font without basic Latin letters and
+  digits, is refused with a sentence saying so. The fonts ship unmodified under the SIL Open Font
+  License 1.1. Tests check the default fonts, that every symbol the interface uses is still drawn,
+  that an installed font chosen is used, saved and put back at the next start, that a bad file is
+  refused, and that screen readers are told the same names in every font. Every picture of the app
+  in the book is drawn again. ([Accessibility settings](../guides/accessibility-settings.md#font))
 - **Copy as RLE.** *Edit → Copy as RLE* copies the world's pattern, and *Copy as RLE* on a library
   pattern copies that one, as the run-length text Golly and LifeViewer read, ready to post on the
   ConwayLife forums: two-state B/S rules on the square grid (Moore or von Neumann) and the hexagon
@@ -467,6 +481,14 @@ day later (0.4.2: 17 November here, 18 November there).
   on white, and is now drawn in the theme's colours.
   ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
   [#137](https://github.com/jprodgers/jetcarp/issues/137))
+- **A list or number named by the label beside it is no longer named by one in another pane.** A
+  pane's rows scrolled out of view lie, on screen, where the pane below it is drawn, so a list in
+  the *Screensaver* pane could take its name from the *Reseed* pane's "Reseed now"; the label must
+  now be in the same pane, and both on screen or both scrolled away.
+- **The notices name the fonts a release contains.** The licence page and `THIRD_PARTY_NOTICES.md`
+  said releases bundle egui's Noto Emoji and emoji-icon-font, which JETCARP doesn't build in; they
+  now name egui's five icons, the only part of emoji-icon-font it does, and add Atkinson
+  Hyperlegible Next and Mono.
 - **A number past 32 bits is refused, not wrapped round to a small one.** A size of
   `[4294967304, 8]` made an 8 by 8 grid, a paste at index 4,294,967,301 landed on cell 5, a cell
   list's cell 4,294,967,596 (or state 257) was cell 300 (state 1) in `search.try` and scripts'

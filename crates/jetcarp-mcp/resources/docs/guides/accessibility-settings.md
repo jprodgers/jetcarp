@@ -1,7 +1,8 @@
 # Accessibility settings
 
 *Settings → Accessibility* holds the app's settings for reduced motion, the high-contrast theme,
-light or dark, and the palettes that scenes are drawn in when they don't choose their own. Reduced
+light or dark, the fonts, and the palettes that scenes are drawn in when they don't choose their
+own. Reduced
 motion and high contrast follow your system's settings unless you choose otherwise here. The app
 reads the system's settings when it starts and every couple of seconds while it runs, so a change
 you make in your system's settings shows within a moment, without a restart. The app can be used
@@ -99,6 +100,41 @@ choice: on Windows and macOS, and on Linux through the desktop's settings portal
 (`org.freedesktop.appearance color-scheme`, or GNOME's own `org.gnome.desktop.interface
 color-scheme` where there is no portal). GNOME's *Light* style says no preference there, and the
 app takes it as light; a desktop it can't read at all leaves the app dark.
+
+## Font
+
+The app's words are in **Atkinson Hyperlegible Next**, and its monospaced text (rules, scripts,
+numbers in tables) in **Atkinson Hyperlegible Mono**: fonts whose letters are easier to tell
+apart, designed by the Braille Institute for low-vision readers. Headings and window titles are
+in its bold. The caption on the desktop background and the screen savers is drawn in it too, and
+so is this book.
+
+Two lists choose the fonts, **Font** for the app's words and **Monospace font** for its
+monospaced text. Each offers:
+
+- **Atkinson Hyperlegible Next** (or **Mono**), JETCARP's, the default;
+- **Ubuntu Light** (or **Hack**), egui's original fonts, as JETCARP drew before 0.4.3;
+- **every font installed on this computer**, by its family name. The app looks for them when the
+  window first opens, in each system's usual folders: `/usr/share/fonts`, `/usr/local/share/fonts`,
+  `~/.local/share/fonts` and `~/.fonts` on Linux; `C:\Windows\Fonts` and
+  `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows; `/System/Library/Fonts`, `/Library/Fonts`
+  and `~/Library/Fonts` on macOS. It lists the fonts that draw basic Latin letters and digits, and
+  draws each family in its upright face nearest regular weight. Someone who prefers another font,
+  OpenDyslexic for instance, chooses it here once it is installed;
+- **Choose a font file…**, for a TrueType or OpenType file (`.ttf`, `.otf`, `.ttc`) that isn't
+  installed.
+
+The choice applies at once, and is saved with the other settings (`font` and `mono_font` in the
+`accessibility` section of `app.json`, the file's path among them). Whatever font is chosen,
+egui's own fonts stay behind it: a character the font lacks is drawn in Ubuntu Light (Greek,
+Cyrillic and more Latin letters), then egui's icons, then Hack (arrows, boxes and dots). None of
+the fonts that come with the app draws Chinese, Japanese or Korean; choose an installed font that
+does to see names written in them.
+
+A file that isn't a font JETCARP can read, or a font with no basic Latin letters and digits, is
+refused with a sentence saying so, and the setting stays as it was. If a font chosen earlier has
+since been removed, the app goes back to Atkinson Hyperlegible when it starts, and says why on the
+status line.
 
 ## Palettes for scenes that name none
 

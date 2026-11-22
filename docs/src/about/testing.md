@@ -126,7 +126,25 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   next cell is checked on thirteen tilings (`cell_cursor.rs`), and an ignored test reads the tree
   again with the starter pack's cards, patterns and ant runs in the windows
   (`screen_reader_tree_with_the_starter_pack`). What a screen reader says aloud is checked by hand
-  (see [What this testing does not cover](#what-this-testing-does-not-cover)).
+  (see [What this testing does not cover](#what-this-testing-does-not-cover)). Every pane, menu and
+  tool window must give screen readers the same roles and names in Atkinson Hyperlegible as in
+  egui's original fonts, where a font's widths and line heights move controls and their labels
+  about (`screen_reader_names_are_the_same_in_every_font`).
+- **The fonts.** The app must start in Atkinson Hyperlegible Next and Mono, with Next Bold for
+  headings, the files byte for byte those the fonts' README names by SHA-256, and egui's fonts
+  behind them in egui's order; egui's original choice must give exactly the fonts the app had
+  before. Every non-ASCII character in the app's and the display crate's strings, read from their
+  source, must be drawn in each family wherever egui's own fonts drew it, and Greek and accented
+  Latin must be drawn; six symbols that no built-in font has (the macOS key symbols and the Reseed
+  pane's star) are listed, and CJK is drawn as before, by none. Installed fonts must be found by
+  family in nested folders of a scratch font folder, the upright regular face of each, with a file
+  that isn't a font, one without basic Latin and one of another type left out; a font chosen from
+  them must be in place at once, saved in `app.json` and put back by the next start; and a file
+  that isn't a font, one without basic Latin, and one that has gone must each be refused with a
+  sentence that names the file and no folder, the setting going back to Atkinson
+  (`crates/jetcarp-app/src/fonts.rs`, `app/accessibility.rs`). The caption on surfaces with no egui
+  must draw in Atkinson Hyperlegible Next, with Ubuntu Light for the Greek it lacks
+  (`jetcarp-display/src/caption.rs`).
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the
@@ -159,7 +177,7 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
 
 About 50 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
 book's pictures of the app, and the rest time the program, run very large worlds, need a desktop
-session, or read the app's accessibility tree with the starter pack set up. (The eleven halves of
+session, or read the app's accessibility tree with the starter pack set up. (The twelve halves of
 the keyboard tests that run in a process of their own are ignored too: the suite starts them
 itself, with their scratch folders, and they do nothing when started any other way.)
 
