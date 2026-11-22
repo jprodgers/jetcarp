@@ -74,16 +74,38 @@ fn a_running_job_waits_while_jetcarp_measures() {
         )
         .unwrap()
     };
-    // Unheld, the hunt's progress moves on with each step (about three seconds of soups).
+    // Unheld, the hunt's progress moves on with each step: how long one takes on this machine
+    // (about three seconds here, longer on a slow runner) sets every wait below.
     let before = soups();
     wait("the hunt's next step", &|| soups() > before);
+    let (t1, s1) = (Instant::now(), soups());
+    wait("another step", &|| soups() > s1);
+    let step = t1.elapsed().max(Duration::from_secs(1));
+    // The record goes stale after ten seconds, so it is written again every second.
+    let hold_for = |d: Duration| {
+        let t = Instant::now();
+        while t.elapsed() < d {
+            write();
+            std::thread::sleep(Duration::from_millis(500).min(d.saturating_sub(t.elapsed())));
+        }
+    };
     write();
-    // A step under way ends first.
-    std::thread::sleep(Duration::from_secs(5));
-    write();
+    // A step under way ends first: wait until the count has stood still for two steps' time.
+    let (t0, mut last, mut still) = (Instant::now(), soups(), Instant::now());
+    while still.elapsed() < step * 2 {
+        assert!(
+            t0.elapsed() < Duration::from_secs(120),
+            "the hunt never held"
+        );
+        hold_for(Duration::from_millis(500));
+        let now = soups();
+        if now != last {
+            (last, still) = (now, Instant::now());
+        }
+    }
     let a = soups();
-    // Long enough for two or three steps, had it run on.
-    std::thread::sleep(Duration::from_secs(8));
+    // Long enough for three steps, had it run on.
+    hold_for(step * 3);
     let b = soups();
     assert_eq!(a, b, "the hunt ran on while JETCARP measured");
     // The measuring ends: the hunt carries on in this process, as it was.
