@@ -920,6 +920,19 @@ day later (0.4.2: 17 November here, 18 November there).
   tile, which WCAG counts as flashing unless its squares are under 0.1°, was caught only as stripes,
   over a quarter of the screen (now fixed, [#269](https://github.com/jprodgers/jetcarp/issues/269)).
   ([The strobe guard](../guides/strobe-guard.md), [Bibliography](../research/bibliography.md))
+- **The book says what falls short on each system, and why.** *What works on each system*, in
+  *Installing JETCARP*, had five rows and no reasons. It is now a table for each area (installing
+  and builds, the desktop background and the screen saver, windows and monitors, accessibility,
+  the GPU, this computer, stopping, files, and what has been tried by hand), and each shortfall
+  says why: the window's place, for one, comes back on Windows, macOS and X11, but under Wayland
+  only its size does, since Wayland gives an app no say in where its windows go. It also says
+  plainly that a Mac is not recommended for serious research, and why. Pages that said what the
+  program doesn't do are corrected: the background host's windows open on their monitors except
+  under Wayland, which places them itself; under Wayland the wallpaper export's *Detected* layout
+  can read every monitor at (0, 0), and then lays them left to right; on Linux desktops other
+  than GNOME, a host started at login shows nothing; and Orca has now been tried by hand, with
+  0.4.3-rc.1. ([What works on each system](../getting-started/installing.md#what-works-on-each-system),
+  [#306](https://github.com/jprodgers/jetcarp/issues/306))
 
 - **Measuring this computer holds the rest of JETCARP still, and asks for heavy programs to be
   closed first.** The JETCARP Hardware Score times JETCARP's own work, so measuring while the app

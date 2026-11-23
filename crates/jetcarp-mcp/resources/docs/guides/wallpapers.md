@@ -35,10 +35,11 @@ setup, see [Your first live wallpaper](../tutorials/first-wallpaper.md).
 | In the system's screen saver list | No (use the lock screen instead) | No | Yes (`JETCARP.scr`) | Yes (`JETCARP.saver`) |
 | Menu for the host | In the top bar, from the extension | None | In the notification area | In the menu bar |
 | Still picture as the desktop background | Yes | No | Yes | Yes |
-| Start the host at login | Yes | Yes (an autostart entry) | Yes | Yes |
+| Start the host at login | Yes | An autostart entry, but the host it starts shows nothing (at login it opens no windows) | Yes | Yes |
 
 None of this needs administrator rights: everything JETCARP sets up lives in your own folders and
-settings, and [Uninstalling](uninstalling.md) undoes it.
+settings, and [Uninstalling](uninstalling.md) undoes it. Why each system falls short where it
+does is in [What works on each system](../getting-started/installing.md#the-desktop-background-and-the-screen-saver).
 
 ## What has been tested
 
@@ -579,8 +580,9 @@ jetcarp host wallpaper on --screen 1 --monitor 1 --rotation "Classics, hourly"
 ```
 
 `jetcarp host status` lists the monitors by number. A screen given no monitor fills every monitor no
-other screen claims, and `jetcarp host wallpaper off` turns the screens back into ordinary windows
-(1280 by 720, each on its monitor) that you can move, resize or minimise.
+other screen claims, and `jetcarp host wallpaper off` turns the screens back into ordinary windows,
+1280 by 720, that you can move, resize or minimise. A screen given a monitor opens near that
+monitor's top left corner, except under Wayland, where the desktop places every window itself.
 
 **GNOME** needs JETCARP's GNOME Shell extension, *JETCARP live desktop*, which shows the host's
 windows as the background of the desktop, the overview and the lock screen, and adds the top-bar menu.
