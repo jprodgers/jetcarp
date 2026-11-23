@@ -210,7 +210,7 @@ jobs:
 
   # ------------------------------------------------------------------------------------ build
   build:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.target }}${{ matrix.also && format(' and {0}', matrix.also) || '' }})
     needs: verify
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -222,9 +222,10 @@ jobs:
           # Built on x86_64 with zig, like x86_64: no Arm runner needed, and build-only anyway.
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04, smoke: false }
           - { target: x86_64-pc-windows-msvc, os: windows-latest, smoke: true }
-          - { target: aarch64-apple-darwin, os: macos-latest, smoke: true }
-          # Cross-built on Apple silicon; build-only.
-          - { target: x86_64-apple-darwin, os: macos-latest, smoke: false }
+          # Both Macs on one Apple silicon runner, one after the other: those runners are GitHub's
+          # scarcest, and v0.4.3-rc.2's first attempt found none for a second job. The Intel build
+          # is cross-built; its smoke test runs under Rosetta when the runner has it.
+          - { target: aarch64-apple-darwin, also: x86_64-apple-darwin, os: macos-latest, smoke: true }
     defaults:
       run:
         shell: bash
@@ -232,16 +233,18 @@ jobs:
       DIST: dist
       PYTHON: python
       TARGET: ${{ matrix.target }}
+      # A second target built on the same runner after the first (the Intel Mac), or nothing.
+      ALSO: ${{ matrix.also }}
       # The starter pack's folder, or nothing.
       PACKS: ${{ needs.verify.outputs.packs == 'true' && 'starter-pack' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.target }}${{ matrix.also && format(',{0}', matrix.also) || '' }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          key: release-${{ matrix.target }}
+          key: release-${{ matrix.target }}${{ matrix.also && format('-{0}', matrix.also) || '' }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -260,7 +263,10 @@ jobs:
           path: starter-pack
 
       - name: Build the wheel and the archive
-        run: packaging/build.sh "$TARGET" ${PACKS:+"$PACKS"}
+        run: |
+          for t in "$TARGET" ${ALSO:+"$ALSO"}; do
+            packaging/build.sh "$t" ${PACKS:+"$PACKS"}
+          done
 
       # Windows code signing, off until JETCARP is accepted by SignPath Foundation (which needs the
       # repository public). To switch it on, set the repository variables SIGNPATH_ORGANIZATION_ID
@@ -309,6 +315,11 @@ jobs:
         run: |
           for a in dist/jetcarp-*.tar.gz dist/jetcarp-*.zip; do
             if [ -e "$a" ]; then
+              # The Intel Mac's program runs on Apple silicon only under Rosetta.
+              if [[ $a == *x86_64-apple-darwin* ]] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+                echo "::notice::No Rosetta on this runner: $a was built, not run"
+                continue
+              fi
               python packaging/package.py smoke "$a"
             fi
           done

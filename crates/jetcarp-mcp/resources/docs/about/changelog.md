@@ -458,6 +458,12 @@ day later (0.4.2: 17 November here, 18 November there).
   ([The state hash](../research/reproducibility.md#the-state-hash),
   [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
+- **The release builds both Macs on one runner.** The Apple silicon and Intel Mac builds are made
+  one after the other on one Apple silicon runner, not on one each: GitHub's Apple silicon runners
+  are the scarcest, and v0.4.3-rc.2's first attempt found none for the second Mac job, so nothing
+  was published until it was run again. The Intel build's program is now also run once, under
+  Rosetta, where the runner has it; before, it was only built.
+
 ### Fixed
 
 - **The window comes back whole on screen** (#306). It came back at its saved size but partly off
