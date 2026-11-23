@@ -2,7 +2,9 @@
 //!
 //! 1. **Capacity** ([`hardware`]): memory, the processor, each GPU's memory, read in
 //!    milliseconds every time a JETCARP program starts. The memory-based limits come from this
-//!    alone ([`limits`]), so a machine never measured still gets limits that fit it.
+//!    alone ([`limits`]), so a machine never measured still gets limits that fit it. A GPU whose
+//!    memory only NVML or Vulkan gives is read through them once and kept, so a plain start does
+//!    not open them ([`read_hardware`]); `jetcarp doctor` and measuring read it afresh.
 //! 2. **Speed** ([`bench`], [`score`]): about a minute of JETCARP's own work, run at setup if
 //!    chosen and by hand, never by itself. It gives the JETCARP Hardware Score, its parts, and
 //!    (with Fast Fit) the defaults that depend on time.
@@ -14,8 +16,9 @@
 //! result: they only allow or refuse.
 //!
 //! Files in the settings folder: `machine.json` ([`MachineFile`]: the hardware when last
-//! measured, its fingerprint, the score and its parts) and `limits.json` ([`limits::Own`]: only
-//! the person's own values, so measuring again never undoes a choice).
+//! measured, its fingerprint, the score and its parts, and each GPU as last read afresh) and
+//! `limits.json` ([`limits::Own`]: only the person's own values, so measuring again never undoes
+//! a choice).
 
 pub mod bench;
 pub mod cost;
@@ -119,6 +122,69 @@ pub struct MachineFile {
     /// made once.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub suggested_for: String,
+    /// Each GPU as last read afresh, with its ids and PCI address: a plain start takes the memory
+    /// of a GPU that only NVML or Vulkan gives from here, so as not to open them
+    /// ([`read_hardware`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gpus: Vec<GpuMemory>,
+    /// `hardware` lists every GPU, its memory read or why not (written since 0.4.3-rc.3); an
+    /// older file lists only those whose memory was read.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub all_gpus: bool,
+}
+
+/// How the hardware's GPU memory is read ([`read_hardware`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GpuReading {
+    /// From what `machine.json` keeps for each GPU still there, opening NVML or Vulkan only for
+    /// a GPU it has nothing for: a plain start.
+    Saved,
+    /// Afresh: `jetcarp doctor`, and measuring.
+    Fresh,
+}
+
+thread_local! {
+    static LAST_READING: std::cell::Cell<Option<GpuReading>> = const { std::cell::Cell::new(None) };
+}
+
+/// How this thread last read the hardware ([`read_hardware`]), for the tests.
+pub fn last_reading() -> Option<GpuReading> {
+    LAST_READING.with(|c| c.get())
+}
+
+/// This machine's hardware, read now, its GPUs' memory as `how` says. A plain start
+/// ([`GpuReading::Saved`]) takes a GPU's memory from what `settings`' `machine.json` keeps for a
+/// GPU of the same ids and PCI address, so NVML and Vulkan are opened (and a laptop's sleeping
+/// GPU woken) only for a GPU it has nothing for: a new or changed one, or the first start. A
+/// reading that opened either is kept there for the next start.
+pub fn read_hardware(settings: Option<&Path>, how: GpuReading) -> Hardware {
+    LAST_READING.with(|c| c.set(Some(how)));
+    let saved = match how {
+        GpuReading::Saved => MachineFile::load(settings)
+            .map(|f| f.gpus)
+            .unwrap_or_default(),
+        GpuReading::Fresh => vec![],
+    };
+    let (hw, opened) = Hardware::read_with(&saved);
+    if opened && let Some(dir) = settings {
+        keep_gpus(dir, &hw.gpus);
+    }
+    hw
+}
+
+/// Keep `gpus` in `machine.json` for the next start: the file read again just before, so what
+/// else it holds is kept; nothing written if it holds them already. A file that can't be written
+/// only means the next start reads them again.
+fn keep_gpus(dir: &Path, gpus: &[GpuMemory]) {
+    let mut f = MachineFile::load(Some(dir)).unwrap_or(MachineFile {
+        version: 1,
+        ..Default::default()
+    });
+    if f.gpus == gpus {
+        return;
+    }
+    f.gpus = gpus.to_vec();
+    let _ = f.save(dir);
 }
 
 fn one() -> u32 {
@@ -156,14 +222,106 @@ impl MachineFile {
             ));
         }
         if !self.fingerprint.is_empty() && self.fingerprint != now.fingerprint() {
-            return Some(
-                "this computer has changed since it was measured (its processor, memory, GPUs or \
-                 system)"
-                    .into(),
-            );
+            let what = self
+                .hardware
+                .as_ref()
+                .map(|before| changes(before, now, self.all_gpus))
+                .filter(|c| !c.is_empty())
+                .map_or("its processor, memory, GPUs or system".into(), |c| {
+                    c.join("; ")
+                });
+            return Some(format!(
+                "this computer has changed since it was measured ({what})"
+            ));
         }
         None
     }
+}
+
+/// What changed from `before` (the hardware when measured) to `now`, among what the fingerprint
+/// counts, in words. `all_gpus`: `before` lists every GPU, read or not, so a GPU not in it is
+/// new; an older record lists only those whose memory was read, so a GPU NVML, dmem.capacity or
+/// Vulkan now reads may have been there all along.
+fn changes(before: &Hardware, now: &Hardware, all_gpus: bool) -> Vec<String> {
+    let gib = |b: u64| (b + (1 << 29)) >> 30;
+    let mut v = vec![];
+    if (&before.os, &before.arch) != (&now.os, &now.arch) {
+        v.push(format!("its system is now {} {}", now.os, now.arch));
+    }
+    if before.cpu.trim() != now.cpu.trim() {
+        v.push(format!("its processor is now {}", now.cpu.trim()));
+    } else if before.threads != now.threads {
+        v.push(format!("its processor now runs {} threads", now.threads));
+    }
+    if gib(before.memory_total) != gib(now.memory_total) {
+        v.push(format!(
+            "its memory changed from {} to {}",
+            bytes_text(before.memory_total),
+            bytes_text(now.memory_total)
+        ));
+    }
+    let id = |g: &GpuMemory| format!("{:04x}:{:04x}", g.vendor, g.device);
+    let mut paired = vec![false; before.gpus.len()];
+    for g in &now.gpus {
+        let b = before
+            .gpus
+            .iter()
+            .enumerate()
+            .find(|(i, b)| !paired[*i] && (b.vendor, b.device) == (g.vendor, g.device));
+        match b {
+            Some((i, b)) => {
+                paired[i] = true;
+                match (b.read(), g.read()) {
+                    (true, true) if b.dedicated.map(gib) != g.dedicated.map(gib) => {
+                        v.push(format!(
+                            "its GPU {}'s memory changed from {} to {}",
+                            id(g),
+                            b.memory_words(),
+                            g.memory_words()
+                        ))
+                    }
+                    (false, true) => v.push(format!(
+                        "its GPU {}'s memory is now read, {} from {}",
+                        id(g),
+                        g.memory_words(),
+                        g.source_words()
+                    )),
+                    (true, false) => {
+                        v.push(format!("its GPU {}'s memory is no longer read", id(g)))
+                    }
+                    _ => {}
+                }
+            }
+            None if g.read() => {
+                let newly_read = matches!(g.source.as_str(), "NVML" | "dmem.capacity" | "Vulkan");
+                if newly_read && !all_gpus {
+                    v.push(format!(
+                        "its GPU {}'s memory is now read, {} from {}",
+                        id(g),
+                        g.memory_words(),
+                        g.source_words()
+                    ));
+                } else {
+                    v.push(format!(
+                        "it has a new GPU, {}, {} from {}",
+                        id(g),
+                        g.memory_words(),
+                        g.source_words()
+                    ));
+                }
+            }
+            None => {}
+        }
+    }
+    for (b, _) in before
+        .gpus
+        .iter()
+        .zip(&paired)
+        .filter(|(b, p)| !**p && b.read())
+    {
+        v.push(format!("it no longer has GPU {}", id(b)));
+    }
+    v
 }
 
 /// The suggestion to measure again, once per machine change: the text for the status line, or
@@ -211,12 +369,13 @@ pub fn install(l: Limits) -> Arc<Limits> {
     l
 }
 
-/// This machine's limits: its hardware, read now, and the person's own values from the
-/// settings folder; used in this process from now on. The note says a `limits.json` that could
+/// This machine's limits: its hardware, read now (each GPU's memory as saved, where it was:
+/// [`read_hardware`]), and the person's own values from the settings folder; used in this process
+/// from now on. The note says a `limits.json` that could
 /// not be read.
 pub fn use_this_machine() -> (Arc<Limits>, Option<String>) {
-    let hw = Hardware::read();
     let settings = crate::paths::config_dir();
+    let hw = read_hardware(settings.as_deref(), GpuReading::Saved);
     let (own, note) = Own::load(settings.as_deref());
     let l = Limits::compute(&hw, &own);
     if let Ok(mut g) = HARDWARE.write() {
@@ -228,10 +387,10 @@ pub fn use_this_machine() -> (Arc<Limits>, Option<String>) {
 /// Read the person's own values again (after the window or `jetcarp limits` changed them), on
 /// the hardware already read; this machine's limits from then on.
 pub fn reload() -> Arc<Limits> {
+    let settings = crate::paths::config_dir();
     let hw = hardware()
         .map(|h| (*h).clone())
-        .unwrap_or_else(Hardware::read);
-    let settings = crate::paths::config_dir();
+        .unwrap_or_else(|| read_hardware(settings.as_deref(), GpuReading::Saved));
     let (own, _) = Own::load(settings.as_deref());
     if let Ok(mut g) = HARDWARE.write() {
         *g = Some(Arc::new(hw.clone()));
@@ -262,6 +421,131 @@ mod tests {
     fn the_reference_until_asked() {
         // Tests never ask for this machine's limits, so they get the reference's.
         assert_eq!(*current(), Limits::reference());
+    }
+
+    /// What a fresh reading found of the GPUs is kept in `machine.json` for the next start,
+    /// beside the score already there, and the file is not written again when it holds them.
+    #[test]
+    fn the_gpus_read_afresh_are_kept_beside_the_score() {
+        let d = crate::scratch::ScratchDir::new("machine-keep-gpus");
+        std::fs::create_dir_all(&d).unwrap();
+        let gpus = vec![GpuMemory {
+            vendor: 0x10de,
+            device: 0x2684,
+            dedicated: Some(24 << 30),
+            source: "NVML".into(),
+            address: "0000:01:00.0".into(),
+            ..Default::default()
+        }];
+        // No file yet: one is made, holding only them.
+        keep_gpus(&d, &gpus);
+        let f = MachineFile::load(Some(&d)).unwrap();
+        assert_eq!((f.version, &f.gpus, f.score.is_none()), (1, &gpus, true));
+        // Beside a score: the score stays.
+        MachineFile {
+            score: Some(Score {
+                benchmark: score::BENCHMARK,
+                score: 7.0,
+                ..Default::default()
+            }),
+            ..f
+        }
+        .save(&d)
+        .unwrap();
+        let mut other = gpus.clone();
+        other[0].dedicated = Some(23 << 30);
+        keep_gpus(&d, &other);
+        let f = MachineFile::load(Some(&d)).unwrap();
+        assert_eq!(
+            (f.gpus.clone(), f.score.map(|s| s.score)),
+            (other.clone(), Some(7.0))
+        );
+        // The same again: not written.
+        let file = MachineFile::file(&d);
+        let before = std::fs::metadata(&file).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        keep_gpus(&d, &other);
+        assert_eq!(
+            std::fs::metadata(&file).unwrap().modified().unwrap(),
+            before
+        );
+    }
+
+    /// The note that the computer changed says what changed: a GPU whose memory is now read
+    /// (with where from), a new GPU, the memory, the processor.
+    #[test]
+    fn the_change_is_said() {
+        let nvidia = |dedicated: Option<u64>, source: &str| GpuMemory {
+            vendor: 0x10de,
+            device: 0x2684,
+            dedicated,
+            source: source.into(),
+            not_read: dedicated.is_none().then(|| gpu_load::NO_NVML.to_string()),
+            address: "0000:01:00.0".into(),
+            ..Default::default()
+        };
+        let before = Hardware {
+            os: "linux".into(),
+            cpu: "A".into(),
+            threads: 8,
+            memory_total: 32 << 30,
+            ..Default::default()
+        };
+        let measured = |hw: &Hardware, all_gpus| MachineFile {
+            hardware: Some(hw.clone()),
+            fingerprint: hw.fingerprint(),
+            score: Some(Score {
+                benchmark: score::BENCHMARK,
+                ..Default::default()
+            }),
+            all_gpus,
+            ..Default::default()
+        };
+        let now = Hardware {
+            gpus: vec![nvidia(Some(24 << 30), "NVML")],
+            ..before.clone()
+        };
+        // Measured before NVIDIA's GPUs were read (they were left out): now read.
+        assert_eq!(
+            measured(&before, false).stale(&now).as_deref(),
+            Some(
+                "this computer has changed since it was measured (its GPU 10de:2684's memory is \
+                 now read, 24 GB from NVIDIA's NVML)"
+            )
+        );
+        // Measured with it listed but not read: now read.
+        let unread = Hardware {
+            gpus: vec![nvidia(None, "")],
+            ..before.clone()
+        };
+        assert_eq!(
+            measured(&unread, true).stale(&now).as_deref(),
+            Some(
+                "this computer has changed since it was measured (its GPU 10de:2684's memory is \
+                 now read, 24 GB from NVIDIA's NVML)"
+            )
+        );
+        // Measured since every GPU is listed, without it: a new GPU.
+        assert_eq!(
+            measured(&before, true).stale(&now).as_deref(),
+            Some(
+                "this computer has changed since it was measured (it has a new GPU, 10de:2684, \
+                 24 GB from NVIDIA's NVML)"
+            )
+        );
+        // Its memory, a GPU gone, and the processor.
+        let other = Hardware {
+            cpu: "B".into(),
+            memory_total: 64 << 30,
+            ..before.clone()
+        };
+        assert_eq!(
+            measured(&now, true).stale(&other).as_deref(),
+            Some(
+                "this computer has changed since it was measured (its processor is now B; its \
+                 memory changed from 32 GB to 64 GB; it no longer has GPU 10de:2684)"
+            )
+        );
     }
 
     #[test]

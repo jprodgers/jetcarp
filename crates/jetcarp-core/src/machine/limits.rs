@@ -1113,6 +1113,7 @@ mod tests {
             source: "sysfs".into(),
             name: String::new(),
             not_read: None,
+            address: String::new(),
         });
         let l = Limits::compute(&hw, &Own::default());
         assert_eq!(l.gpu_world_cells(), 16 * GIB / GPU_CELL_BYTES);
@@ -1138,6 +1139,7 @@ mod tests {
             source: "DXGI".into(),
             name: "An integrated GPU".into(),
             not_read: None,
+            address: String::new(),
         });
         let l = Limits::compute(&hw, &Own::default());
         // Its 128 MB and the 8 GB it may borrow, held to JETCARP's 8 GB: half of that.

@@ -1,5 +1,5 @@
 //! A GPU's memory as its Vulkan driver gives it, on Linux, for a GPU whose memory nothing else
-//! gives ([`super::hardware::read_drm`]): nouveau's NVIDIA GPUs (with Mesa's NVK), i915's
+//! gives ([`super::hardware::read_gpus`]): nouveau's NVIDIA GPUs (with Mesa's NVK), i915's
 //! discrete Intel GPUs, NVIDIA's without NVML. Its memory is the largest heap the driver marks
 //! as the device's own (`VK_MEMORY_HEAP_DEVICE_LOCAL_BIT`, from
 //! `vkGetPhysicalDeviceMemoryProperties`), found among the DRM cards by its PCI address

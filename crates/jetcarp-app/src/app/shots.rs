@@ -1283,6 +1283,7 @@ fn shots_this_computer() {
             source: "sysfs".into(),
             name: String::new(),
             not_read: None,
+            address: String::new(),
         }],
     };
     let set_example = |h: &mut Harness, own: &Own| {
