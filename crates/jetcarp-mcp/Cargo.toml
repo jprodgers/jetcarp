@@ -27,12 +27,6 @@ getrandom = "0.3.4"
 # dependencies of its own.
 httparse = "1.10.1"
 
-# Windows: Ctrl-C stops `jetcarp-mcp --http` as it stops `jetcarp mcp --http`, its jobs at their
-# next checkpoint. On Linux and macOS, `jetcarp_core::quit_signal` does, for SIGTERM and SIGHUP
-# too (#278).
-[target.'cfg(windows)'.dependencies]
-ctrlc = "3.5.2"
-
 [[bin]]
 name = "jetcarp-mcp"
 path = "src/main.rs"

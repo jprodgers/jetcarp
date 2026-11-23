@@ -457,6 +457,19 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **On Windows, closing a command's console, signing out and shutting down stop it at a
+  checkpoint** (#319), where Windows ended it at once: a search's job was left marked running and
+  its memory record behind. `jetcarp search`, `jetcarp jobs resume`, `jetcarp script` and
+  `jetcarp mcp` (over stdio and HTTP) now stop as Ctrl-C stops them, at their next checkpoint or
+  step, and so do the app and the background host at a sign-out or a shutdown: the host as
+  `jetcarp host stop` does, leaving its still picture when one is asked for. `taskkill` without
+  `/F`, which before couldn't end a command at all, stops one the same way, as `kill` does on
+  Linux. Windows ends a program as soon as the handler it tells returns, so JETCARP's waits for
+  the program to stop, as long as Windows itself waits for one that doesn't answer (5 seconds
+  unless changed). `jetcarp.exe` loads `user32.dll`, so Windows tells it of a sign-out or a
+  shutdown only through its windows, as it tells any windowed program: a hidden window of its own
+  hears them. The `ctrlc` crate is no longer used. ([Folders](../reference/folders.md#runtime-folder),
+  [#319](https://github.com/jprodgers/jetcarp/issues/319))
 - **Commands that use the GPU end cleanly on Windows** (#315). `jetcarp jobs refit` crashed as it
   ended on a laptop with an NVIDIA GPU (0xC0000005 in `nvoglv64.dll`, NVIDIA's Vulkan and OpenGL
   driver, once it had been unloaded), and the test suite failed with it, now and then: the

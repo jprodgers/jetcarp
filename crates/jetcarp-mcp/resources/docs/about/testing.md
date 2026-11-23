@@ -256,8 +256,24 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   answer reads and when the grace ends are checked in `crates/jetcarp-mcp/src/stopping.rs`. The
   handling they all share must run a program's own stop on the first signal, end it on the
   second, and leave a signal ignored at start (SIGHUP under `nohup`) ignored
-  (`crates/jetcarp-core/src/quit_signal.rs`). A headless host leaves no still picture, so the
-  still a host showing the desktop leaves as it stops is checked by hand, at a logout.
+  (`crates/jetcarp-core/src/quit_signal.rs`). Windows' console events are handed to a test
+  program as Windows hands them, on a thread of their own, on every system, and when the handler
+  returns the program ends at once, as Windows then ends it: a closed console must run the
+  program's stop and its handler must not return until the program has ended itself, with its own
+  status; a program still stopping must see the handler return after Windows' own wait (5 seconds
+  unless changed); Ctrl-C must stop it and return at once, and a second end it with 130. On
+  Windows, the hidden window that hears the session end must answer `WM_QUERYENDSESSION` with yes
+  and `WM_ENDSESSION` only once the program has ended, and `WM_CLOSE` (what `taskkill` without
+  `/F` sends) must stop it, a second ending it with 143 (the same file). A closed console must
+  stop a running `jetcarp search` at its checkpoint, run as `main` runs it, its job paused and
+  resumable and its memory record gone (`crates/jetcarp/src/stop_signal.rs`). On Windows, a
+  sign-out, sent as Windows sends it to the real program's hidden window, must stop a search at
+  its checkpoint and the headless host as `jetcarp host stop` does, and the real `taskkill`
+  without `/F` must stop a search at its checkpoint (`crates/jetcarp/tests/session_end.rs`); the
+  whole app, headless, must end at a sign-out as closing its window does
+  (`crates/jetcarp-app/src/quit_signal.rs`). A headless host leaves no still picture, so the
+  still a host showing the desktop leaves as it stops is checked by hand, at a logout and on
+  Windows at a sign-out and a shutdown.
 - **The book.** The command-line and MCP reference pages and the keyboard page's table of keys are
   generated from the program and checked against it, and the copy of the book built into the
   program must match the book.

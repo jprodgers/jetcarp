@@ -142,7 +142,10 @@ It prints:
   Monitor shows, and the resident size elsewhere (the working set on Windows).
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint. On Linux and macOS, so do SIGTERM (what `kill` sends, and a session as it ends) and
-  SIGHUP (the terminal it runs in closing); a second signal quits at once.
+  SIGHUP (the terminal it runs in closing); on Windows, closing the console it runs in, signing
+  out, shutting down and `taskkill` without `/F`. A second signal quits at once. Windows gives a
+  search 5 seconds (unless changed) to reach its checkpoint; one ended before then is left marked
+  running until `jetcarp jobs resume JOB` carries it on from its last checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB`, or the same search with `--resume JOB`, carries it on
   from there. It ends exactly where an uninterrupted run would have ended, at any thread count.
 - **In the background.** `--detach` runs a search in a process of its own and returns as soon as

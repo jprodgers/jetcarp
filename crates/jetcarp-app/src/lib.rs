@@ -32,7 +32,6 @@ mod palette_pick;
 mod pile_ui;
 mod popout;
 mod previews;
-#[cfg(unix)]
 mod quit_signal;
 mod results;
 mod rhai_edit;
@@ -151,11 +150,10 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-/// The app, once eframe has made its window and its context. On Linux and macOS, SIGTERM,
-/// SIGHUP and SIGINT close it from then on as its window's close button does (`quit_signal`,
-/// #135).
+/// The app, once eframe has made its window and its context. SIGTERM, SIGHUP and SIGINT close it
+/// from then on as its window's close button does (`quit_signal`, #135), and on Windows Ctrl-C,
+/// the console closing, a sign-out and a shutdown (#319).
 fn new_app(cc: &eframe::CreationContext<'_>, launch: LaunchArgs) -> app::JetcarpApp {
-    #[cfg(unix)]
     quit_signal::install(&cc.egui_ctx);
     app::JetcarpApp::new(cc, launch)
 }
