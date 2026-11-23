@@ -137,8 +137,8 @@ It prints:
   the grids it keeps for reuse but is not using) and reads again, and pauses only once its memory
   has stayed over the cap for 10 seconds, so a moment's peak does not pause it but a lasting one
   does. It keeps the grids it has built for reuse, up to about 3 GB, so over hours its memory grows
-  towards that as it reaches more tilings; on Linux it gives the memory it has freed back to the
-  system every 30 seconds. "Memory" is the physical footprint on macOS, the figure Activity
+  towards that as it reaches more tilings; on Linux and macOS it gives the memory it has freed back
+  to the system every 30 seconds. "Memory" is the physical footprint on macOS, the figure Activity
   Monitor shows, and the resident size elsewhere (the working set on Windows).
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint. On Linux and macOS, so do SIGTERM (what `kill` sends, and a session as it ends) and

@@ -351,33 +351,11 @@ pub fn hold_reasons<'a>(holds: impl Iterator<Item = &'a str>) -> Vec<String> {
 /// The start of a wallpaper window's title; GNOME's extension looks for it.
 const WALLPAPER_TAG: &str = "@jetcarp-wallpaper";
 
-/// Give the memory allocator's free pages back to the system. glibc keeps the memory the host
-/// frees (a sweep's trial grids of up to millions of cells, a scene let go) in its arenas, which
-/// give memory back only from their top, so the host grew by about 100 MB with each Fit sweep and
-/// kept it (#69). macOS's allocator keeps freed pages the same way, and the host grew over
-/// two-screen fits there (#111): `malloc_zone_pressure_relief` gives them back. Called after a
-/// fit, and before the memory limit lets a scene go, so memory the host no longer holds is never
-/// counted against it. Elsewhere this does nothing.
-pub(crate) fn release_free_memory() {
-    #[cfg(all(target_os = "linux", target_env = "gnu"))]
-    // SAFETY: malloc_trim only returns free memory to the system; it is safe to call at any time.
-    unsafe {
-        libc::malloc_trim(0);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        unsafe extern "C" {
-            /// `<malloc/malloc.h>`: frees what it can of every zone (`zone` null) back to the
-            /// system, up to `goal` bytes (0: as much as it can); returns the bytes freed.
-            fn malloc_zone_pressure_relief(zone: *mut std::ffi::c_void, goal: usize) -> usize;
-        }
-        // SAFETY: a null zone means every zone, and the call only returns free pages to the
-        // system; it is safe to call at any time.
-        unsafe {
-            malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
-        }
-    }
-}
+// Give the memory allocator's free pages back to the system, on Linux and macOS: what the host
+// frees (a sweep's trial grids of up to millions of cells, a scene let go) would otherwise stay
+// counted as its memory (#69, #111). Called after a fit, and before the memory limit lets a scene
+// go, so memory the host no longer holds is never counted against it.
+pub(crate) use jetcarp_core::machine::pool::release_free_memory;
 
 fn gnome_session() -> bool {
     cfg!(all(unix, not(target_os = "macos")))

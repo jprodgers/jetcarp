@@ -93,10 +93,33 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   own left out), two IOAccelerator `PerformanceStatistics` dictionaries as `ioreg` prints them (an
   Apple GPU's `Device Utilization %`, an older driver's `GPU Activity(%)`), `fdinfo` of amdgpu,
   i915 and xe clients a second apart (engine time in nanoseconds, and xe's cycles), and NVML
-  stand-ins (three GPUs, one of which can't say). A live reading must give a figure between 0 and
-  1 and say where from, or say why there is none; on Linux with an AMD GPU it must give one.
-  Whether a busy GPU is noticed is checked by hand in the sittings on each system, since CI's
-  runners have no GPU to keep busy.
+  stand-ins (three GPUs, one of which can't say; `machine::nvml`). A live reading must give a
+  figure between 0 and 1 and say where from, or say why there is none; on Linux with an AMD GPU it
+  must give one. Whether a busy GPU is noticed is checked by hand in the sittings on each system,
+  since CI's runners have no GPU to keep busy.
+- **What the computer holds.** Each GPU's memory on Linux is read back from stand-in DRM folders
+  (`jetcarp-core`'s `machine::hardware`): an AMD card from its driver's files, as before, with
+  NVML not started; two NVIDIA cards through NVML stand-ins that list them in the other order, so
+  each must be found by its PCI address (NVML's own stand-ins give each GPU's memory and address,
+  one in capitals with a longer domain, one only in numbers); the same cards without NVML, each
+  with NVML's reason, the estimate for its limit, and the machine's fingerprint unchanged; Intel's
+  integrated GPU (the estimate, and why), a discrete one on xe from a stand-in `dmem.capacity`,
+  and one on i915 (its reason); and, where none of those gives it, stand-in Vulkan GPUs: an NVIDIA
+  card on nouveau (NVML not asked), the i915 card found by its ids, an NVIDIA card without NVML,
+  and another vendor's integrated GPU, whose heap counts as memory it may borrow, with Vulkan
+  asked once, and not at all for an integrated Intel GPU. NVIDIA GPUs with no DRM card, in a
+  stand-in of NVIDIA's driver's list, must be read through NVML too, one that has a card counted
+  once. With figures saved from an earlier reading, stand-ins that count their opens must show
+  neither NVML nor Vulkan opened; with nothing saved, another GPU at the same address or the same
+  GPU at another, each is opened once. A virtual machine's display adapters, with no render node
+  (Hyper-V's virtual VGA, as on CI's runners, and QEMU's bochs), must be left out with nothing
+  opened. Only the `jetcarp` program keeps what NVML or Vulkan said, so no test writes it into the
+  user's settings folder (CI's step with the default folders checks that). `machine.info` must read the saved figures, and doctor and
+  measuring afresh, with what they read kept beside the score. A live test reads the Vulkan drivers
+  here: on Linux with an AMD GPU, RADV must list it at its card's PCI address. The doctor's lines
+  and the score report must say where each GPU's memory came from, or why it was not read, and the
+  note that the computer changed what changed (a GPU's memory now read and where from, a new GPU,
+  one gone, the memory, the processor).
 - **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
   person's own values, the two linked memory values and the ceilings; a world over the limit is
   refused before anything is built, naming the limit and where it came from, and never made
@@ -903,8 +926,13 @@ keeps them free of it.
 
 - **Hardware and systems.** Three machines: no Linux on NVIDIA or Intel graphics, no Windows on AMD,
   no Mac with an Intel processor, and on Linux only GNOME on Wayland has been tried for the desktop
-  background. CI's runners have no real GPU. A driver that miscomputes on hardware we have not tried
-  could still give a different answer; `jetcarp verify` checks any run on the CPU.
+  background. So on Linux, reading an NVIDIA GPU's memory through NVML, and an Intel GPU's from
+  `dmem.capacity`, is tested only with stand-ins. The Vulkan reader is tried on the Framework's
+  Radeon (whose memory still comes from its driver's files), and is to be tried on the Acer's RTX
+  from a live Fedora system, where only Mesa's drivers run (nouveau and NVK): NVIDIA's own driver,
+  and so NVML, can't be tried there. CI's runners have no real GPU. A driver that miscomputes on
+  hardware we have not tried could still give a different answer; `jetcarp verify` checks any run
+  on the CPU.
 - **One person at the keyboard.** The hands-on sittings are Jimmie's: one person's eyes and habits,
   on one set of machines.
 - **What a screen reader says.** The tests read the tree a screen reader is given, not what
