@@ -207,10 +207,12 @@ stopped
 ```
 
 On Linux and macOS, SIGTERM (what `kill` sends, launchd at logout on the Mac, and a Linux session
-as it ends), SIGHUP and Ctrl-C stop the host the same way, so a logout stops it cleanly: its port
-and token file and its memory record leave the [runtime folder](../reference/folders.md#runtime-folder),
-and the [still picture](#still-picture), if you asked for one, is left on the desktop. A second
-signal ends it at once.
+as it ends), SIGHUP and Ctrl-C stop the host the same way; on Windows, signing out, shutting down
+and `taskkill` without `/F` do, and Ctrl-C or closing the console of a host started in one
+(`jetcarp host serve`). So a logout stops it cleanly: its port and token file and its memory
+record leave the [runtime folder](../reference/folders.md#runtime-folder), and the
+[still picture](#still-picture), if you asked for one, is left on the desktop. A second signal
+ends it at once.
 
 `status` (and every command that changes something) says what each screen shows and where (a window,
 or the desktop background on a monitor or on every monitor), how fast it draws and its scene runs
@@ -721,9 +723,11 @@ the host just waits in the notification area or the menu bar (on GNOME, the top 
 holds for the whole run; `jetcarp host stop` and `jetcarp host start` start a host that opens windows
 as usual. `jetcarp host status` lists a waiting screen as *not shown (started at login)*.
 
-At logout the system stops the host: on the Mac launchd sends it SIGTERM, and a Linux session ends
-its programs the same way. It stops as `jetcarp host stop` stops it
-([above](#the-background-host)), so the runtime folder holds nothing stale at your next login.
+At logout the system stops the host: on the Mac launchd sends it SIGTERM, a Linux session ends
+its programs the same way, and Windows tells every program's windows that the session is ending.
+It stops as `jetcarp host stop` stops it ([above](#the-background-host)), so the runtime folder
+holds nothing stale at your next login. Windows gives it 5 seconds (unless changed) and then
+ends it.
 
 More: [Rotations](rotations.md), [Reseeding](reseeding.md), [Folders](../reference/folders.md) and
 [Uninstalling](uninstalling.md).

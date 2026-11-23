@@ -1,20 +1,26 @@
 //! How a program that has used the GPU ends: the app when its window closes, the background host
-//! when it quits.
+//! when it quits, and since #315 every other `jetcarp` command that has opened the GPU
+//! (`jetcarp_gpu::select::opened`), as it ends or ends early.
 //!
 //! Destroying the last wgpu instance unloads the graphics driver's library (the Vulkan loader and
 //! OpenGL both free it), but the driver may still have threads of its own running, which then run
 //! code that is no longer there. On the Acer (NVIDIA, Windows 11) the app ended once in three with
 //! 0xC0000005 in `nvoglv64.dll_unloaded`, exception data 8: an attempt to execute code in the
 //! unloaded driver. The headless host on Windows CI (WARP, no GPU) ended with 0xC0000005 the same
-//! way. The program can join its own threads, but not the driver's.
+//! way. `jetcarp jobs refit` ended so too on the Acer (in `nvoglv64.dll` again, NVIDIA's Vulkan
+//! driver as well as its OpenGL one), as its GPU device went and with it the process's only
+//! instance. The program can join its own threads, but not the driver's.
 //!
 //! So the programs end in two steps. First everything of their own that isn't on the GPU is put
 //! in order: settings saved, jobs stopped at a checkpoint, the link closed and its endpoint file
 //! removed. Then [`end_process`] ends the process at once. Nothing on the GPU is touched: no
 //! buffer is dropped, no device waited on, and the device and the instance are never destroyed,
 //! so the driver is never unloaded while it runs. (Dropping the host's GPU buffers and waiting on
-//! its device before ending still crashed WARP on Windows CI.) The system reclaims the memory,
-//! handles and GPU work of a process that has ended; browsers and game engines end the same way.
+//! its device before ending still crashed WARP on Windows CI.) A command line's devices come and
+//! go as it runs, so the process keeps its first instance to its end instead
+//! (`jetcarp_gpu::select::new_instance`), which keeps the drivers loaded. The system reclaims the
+//! memory, handles and GPU work of a process that has ended; browsers and game engines end the
+//! same way.
 
 /// Ends the process now with `code`, once this program's record in JETCARP's memory pool is
 /// removed (`jetcarp_core::machine::pool::stop`, which the `jetcarp` program's `main` would

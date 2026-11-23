@@ -33,6 +33,7 @@ use jetcarp_core::{CaSpec, Command, SeedSpec, World};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -468,6 +469,77 @@ impl Choice {
     }
 }
 
+/// The graphics backends JETCARP opens for `want`: wgpu's own `WGPU_BACKEND` when it is set,
+/// else all of them, except OpenGL on Windows unless `want` names an adapter (#315).
+///
+/// On Windows every adapter worth using is reached through DirectX 12 or Vulkan, which the
+/// choice ranks before OpenGL anyway; but opening OpenGL loads the graphics card's OpenGL driver
+/// and makes it a context, a hidden window and a thread, in every program that opens the GPU,
+/// even one that then uses DirectX 12. An adapter named by `JETCARP_GPU` or the saved setting
+/// may be one only OpenGL reaches, so a name still looks there too; the same card on DirectX 12
+/// or Vulkan is still taken first. Linux and macOS open every backend, as before: on Linux,
+/// OpenGL ES is what draws where there is no Vulkan.
+pub fn backends(want: &Want) -> wgpu::Backends {
+    if let Some(b) = wgpu::Backends::from_env() {
+        return b;
+    }
+    let all = wgpu::Backends::all();
+    if cfg!(windows) && !matches!(want, Want::Named(_)) {
+        all - wgpu::Backends::GL
+    } else {
+        all
+    }
+}
+
+/// An instance's options under the saved policy: [`backends`], and wgpu's other variables.
+pub fn instance_descriptor() -> wgpu::InstanceDescriptor {
+    let mut d = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+    d.backends = backends(&Policy::load().want);
+    d
+}
+
+/// The instances this process keeps to its end: the first it made of each set of backends.
+static KEPT: Mutex<Vec<(wgpu::Backends, wgpu::Instance)>> = Mutex::new(Vec::new());
+/// Whether this process has opened the GPU ([`opened`]).
+static OPENED: AtomicBool = AtomicBool::new(false);
+
+/// A new wgpu instance under the saved policy ([`instance_descriptor`]), for everything in
+/// JETCARP that opens the GPU, but the app's window (eframe's own).
+///
+/// The process keeps the first of each set of backends to its end (#315). Destroying a
+/// process's last instance unloads the graphics drivers (the Vulkan loader frees them, and so
+/// does OpenGL), while a driver may still have threads of its own running, which then run code
+/// that is no longer there: `jetcarp jobs refit` ended so on the Acer (0xC0000005 in NVIDIA's
+/// `nvoglv64.dll`, its Vulkan driver as well as its OpenGL one, once it had been unloaded), as
+/// the app did before it ended through `jetcarp_display::exit::end_process`. With one instance
+/// kept, the drivers stay loaded as long as the process runs, and a program that has opened the
+/// GPU ends without unloading them ([`opened`]). The instances made after it are each the
+/// caller's own, freed when it is done with them, so each lists the adapters anew.
+pub fn new_instance() -> wgpu::Instance {
+    let d = instance_descriptor();
+    let backends = d.backends;
+    let instance = wgpu::Instance::new(d);
+    OPENED.store(true, Ordering::SeqCst);
+    let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+    if !kept.iter().any(|(b, _)| *b == backends) {
+        kept.push((backends, instance.clone()));
+    }
+    instance
+}
+
+/// Whether this process has opened the GPU ([`new_instance`], or [`opening`] for an instance
+/// made elsewhere): such a program ends through `jetcarp_display::exit::end_process`, which
+/// neither destroys its instances nor runs the code its libraries leave to run at exit.
+pub fn opened() -> bool {
+    OPENED.load(Ordering::SeqCst)
+}
+
+/// Says this process opens the GPU through an instance [`new_instance`] did not make (the app's
+/// window, whose instance eframe makes).
+pub fn opening() {
+    OPENED.store(true, Ordering::SeqCst);
+}
+
 /// Choose an adapter of `instance` for `purpose` under the saved policy. A display choice needs
 /// the `surface` it will draw on, when there is one.
 pub fn pick(
@@ -841,8 +913,7 @@ pub fn open_device(
 /// The compute adapter under the policy, with a device of its own (the simulators' headless
 /// constructors). The name is the adapter's, for reports.
 pub fn compute_device(label: &'static str) -> Result<(wgpu::Device, wgpu::Queue, String), String> {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let instance = new_instance();
     let c = pick(&instance, Purpose::Compute, None)?;
     let (device, queue) = open_device(&c.adapter, label)?;
     Ok((device, queue, c.label()))
@@ -1211,8 +1282,7 @@ pub struct ChoiceReport {
 /// `software`, ...), for a choice of adapter in the app (#59). A name chosen here is saved as
 /// [`Setting::gpu_adapter`], which matches by part of the name, as `JETCARP_GPU` does.
 pub fn adapter_names() -> Vec<(String, &'static str)> {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let instance = new_instance();
     let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
     let mut out: Vec<(String, &'static str)> = Vec::new();
     for a in adapters {
@@ -1233,8 +1303,7 @@ pub fn report() -> (Policy, Vec<ChoiceReport>) {
 /// off for everything, so turning the GPU off doesn't cost a test of every adapter).
 pub fn report_with(test: bool) -> (Policy, Vec<ChoiceReport>) {
     let policy = Policy::load();
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let instance = new_instance();
     let adapters = adapters_for(&instance, &policy.want);
     let out = [Purpose::Display, Purpose::Compute]
         .into_iter()
@@ -1539,6 +1608,35 @@ mod tests {
             transient_saves_memory: None,
             limit_bucket: None,
         }
+    }
+
+    /// On Windows, JETCARP's instances leave OpenGL out unless an adapter is named, which may be
+    /// one only OpenGL reaches (#315); Linux and macOS open every backend, as before. wgpu's own
+    /// `WGPU_BACKEND`, when it is set, decides instead.
+    #[test]
+    fn windows_leaves_opengl_out_unless_an_adapter_is_named() {
+        if std::env::var_os("WGPU_BACKEND").is_some() {
+            return;
+        }
+        let all = wgpu::Backends::all();
+        for want in [Want::Best, Want::Software, Want::Integrated, Want::Discrete] {
+            let b = backends(&want);
+            assert_eq!(b.contains(wgpu::Backends::GL), !cfg!(windows), "{want:?}");
+            assert_eq!(b | wgpu::Backends::GL, all, "{want:?}");
+        }
+        assert_eq!(backends(&Want::Named("RTX".into())), all);
+    }
+
+    /// A process keeps the first instance it makes of its backends to its end, so the graphics
+    /// drivers stay loaded while it runs, and says it has opened the GPU (#315).
+    #[test]
+    fn the_first_instance_is_kept_and_the_gpu_is_opened() {
+        let instance = new_instance();
+        assert!(opened());
+        let backends = instance_descriptor().backends;
+        let kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(kept.iter().filter(|(b, _)| *b == backends).count(), 1);
+        drop(instance);
     }
 
     /// The app's adapter list (#59) names each adapter once, however many backends reach it, and

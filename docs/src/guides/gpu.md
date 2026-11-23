@@ -107,6 +107,15 @@ integrated (such as an OpenGL one), by name. Windows' software renderer (WARP) i
 no decent adapter, everything runs on the processor, and windows still draw on whatever adapter
 can.
 
+JETCARP looks for adapters through every graphics interface wgpu has: Vulkan, Metal, DirectX 12
+and OpenGL (OpenGL ES on Linux, where it draws when there is no Vulkan). On Windows it leaves
+OpenGL out: a graphics card there is reached through DirectX 12 or Vulkan, which come first
+anyway, and looking through OpenGL loads the card's OpenGL driver into every program that opens
+the GPU. It looks there too when `JETCARP_GPU` or the saved setting names an adapter, which may be
+one only OpenGL reaches (an old card with no DirectX 12 or Vulkan driver); the same card through
+DirectX 12 or Vulkan is still taken first. wgpu's own `WGPU_BACKEND` overrides all of this
+(`WGPU_BACKEND=gl` for OpenGL alone).
+
 Worlds too large for an adapter's buffers, or over this computer's `gpu-world` limit (half the
 GPU's memory at 16 bytes a cell, where the system reports it), step on the processor, with the
 same result; `jetcarp doctor` shows the buffer limits, and `jetcarp limits` the rest (see

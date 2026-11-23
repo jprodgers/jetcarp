@@ -32,7 +32,6 @@ mod palette_pick;
 mod pile_ui;
 mod popout;
 mod previews;
-#[cfg(unix)]
 mod quit_signal;
 mod results;
 mod rhai_edit;
@@ -84,7 +83,15 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
     // (instances) and storage bindings over 128 MB (the GPU simulation's neighbour lists): ask for
     // what the adapter allows.
     let mut wgpu_options = eframe::NativeOptions::default().wgpu_options;
+    // The window's instance is eframe's: the program ends through `jetcarp_display::exit` either
+    // way (`on_exit`), and a second Ctrl-C does too (#315).
+    jetcarp_gpu::select::opening();
     if let egui_wgpu::WgpuSetup::CreateNew(c) = &mut wgpu_options.wgpu_setup {
+        // The backends every JETCARP program opens (`jetcarp_gpu::select::backends`, #315): on
+        // Windows, OpenGL is left out unless an adapter is asked for by name; elsewhere eframe's
+        // own choice stands.
+        c.instance_descriptor.backends &=
+            jetcarp_gpu::select::backends(&jetcarp_gpu::select::Policy::load().want);
         // The adapter driving the screen, under the GPU policy: the host and the screen savers
         // choose the same way (`jetcarp_gpu::select`).
         c.native_adapter_selector = Some(std::sync::Arc::new(|adapters, surface| {
@@ -143,11 +150,10 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-/// The app, once eframe has made its window and its context. On Linux and macOS, SIGTERM,
-/// SIGHUP and SIGINT close it from then on as its window's close button does (`quit_signal`,
-/// #135).
+/// The app, once eframe has made its window and its context. SIGTERM, SIGHUP and SIGINT close it
+/// from then on as its window's close button does (`quit_signal`, #135), and on Windows Ctrl-C,
+/// the console closing, a sign-out and a shutdown (#319).
 fn new_app(cc: &eframe::CreationContext<'_>, launch: LaunchArgs) -> app::JetcarpApp {
-    #[cfg(unix)]
     quit_signal::install(&cc.egui_ctx);
     app::JetcarpApp::new(cc, launch)
 }
