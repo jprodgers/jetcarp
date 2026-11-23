@@ -61,7 +61,13 @@ pub(crate) const MOVING: &[KeyLine] = &[
         keys: "Esc",
         mac: "Esc",
         what: "Leave a text box; close a menu, a list, a dialog, or the tool window that has \
-               the keyboard",
+               the keyboard (from a text box, Esc twice); in a docked pane, back to the grid",
+    },
+    KeyLine {
+        keys: "Ctrl+W",
+        mac: "⌘W",
+        what: "Close the tool window or dialog that has the keyboard (a popped-out one goes \
+               back to the main window)",
     },
     KeyLine {
         keys: "Shift+F10",
@@ -129,6 +135,12 @@ pub(super) struct KeyboardRt {
     pointer_at: f64,
     /// The text box Esc just left: Tab carries on from it rather than from the window's start.
     escaped_from: Option<egui::Id>,
+    /// An arrow key pressed last frame on a control of a floating window: the control, and its
+    /// window's layer.
+    arrow_from: Option<(egui::Id, egui::LayerId)>,
+    /// A tool window just opened from the menus or by its key: its layer, to give the keyboard to
+    /// its first control once it is drawn, and how many more frames to wait for it.
+    pub focus_window: Option<(egui::LayerId, u8)>,
     /// F10 asked for the menu bar.
     pub menu_request: bool,
     /// The menu bar's buttons and their menus, as drawn last frame.
@@ -152,6 +164,7 @@ impl JetcarpApp {
         if let Some(d) = self.kb.skip.take() {
             ctx.memory_mut(|m| m.move_focus(d));
         }
+        self.keep_arrows_in_window(ctx);
         let tab = ctx.input(|i| {
             i.events.iter().find_map(|e| match e {
                 egui::Event::Key {
@@ -179,6 +192,8 @@ impl JetcarpApp {
         } else if self.kb.pointer_at == now || ctx.memory(|m| m.focused().is_some()) {
             self.kb.escaped_from = None;
         }
+        self.escape_from_pane(ctx);
+        self.focus_opened_window(ctx);
         // F6: the next part of the window; Shift+F6 the one before.
         for (m, back) in [(Modifiers::NONE, false), (Modifiers::SHIFT, true)] {
             if take_key(ctx, Key::F6, m) {
@@ -226,6 +241,99 @@ impl JetcarpApp {
             || (egui::Popup::is_any_open(ctx) && self.kb.on_menus);
         self.kb.last_focus = focused;
         a11y::note_focus(ctx);
+    }
+
+    /// A tool window opened from the menus or by its key (#308): the keyboard to its first control,
+    /// where F6 would put it, once the window has been drawn, so Esc closes it and Tab goes
+    /// through it. Opened from the menu bar, the keyboard was left nowhere and Esc did nothing.
+    fn focus_opened_window(&mut self, ctx: &egui::Context) {
+        let Some((layer, left)) = self.kb.focus_window.take() else {
+            return;
+        };
+        let first = a11y::last_regions(ctx)
+            .iter()
+            .find(|r| r.layer == layer)
+            .and_then(|r| a11y::focusable_in(ctx, r).first().copied());
+        match first {
+            Some(id) => {
+                ctx.memory_mut(|m| m.request_focus(id));
+                ctx.move_to_top(layer);
+            }
+            None if left > 0 => self.kb.focus_window = Some((layer, left - 1)),
+            None => {}
+        }
+    }
+
+    /// egui's arrow keys take the keyboard to the nearest control that way on screen, in any
+    /// layer: from the top or bottom of a floating window, to a control of the main window hidden
+    /// behind it, where its ring can't be seen (#309). An arrow that took it out of its window
+    /// brings it back to where it was.
+    fn keep_arrows_in_window(&mut self, ctx: &egui::Context) {
+        let layer_of = |id: egui::Id| {
+            ctx.viewport(|v| {
+                v.this_pass
+                    .widgets
+                    .get(id)
+                    .or_else(|| v.prev_pass.widgets.get(id))
+                    .map(|w| w.layer_id)
+            })
+        };
+        if let Some((from, layer)) = self.kb.arrow_from.take()
+            && let Some(now) = ctx.memory(|m| m.focused())
+            && now != from
+            && layer_of(now) != Some(layer)
+            && ctx.memory(|m| m.allows_interaction(layer))
+            && ctx.viewport(|v| v.prev_pass.widgets.get(from).is_some())
+        {
+            ctx.memory_mut(|m| m.request_focus(from));
+        }
+        let f = a11y::last_focus(ctx);
+        let arrow = ctx.input(|i| {
+            i.modifiers.is_none()
+                && [
+                    Key::ArrowUp,
+                    Key::ArrowDown,
+                    Key::ArrowLeft,
+                    Key::ArrowRight,
+                ]
+                .into_iter()
+                .any(|k| i.key_pressed(k))
+        });
+        if arrow
+            && !f.popup
+            && !f.text
+            && let (Some(id), Some(layer)) = (f.id, f.layer)
+            && layer != egui::LayerId::background()
+        {
+            self.kb.arrow_from = Some((id, layer));
+        }
+    }
+
+    /// Esc on a control of a docked pane (not a text box, nor in a list): the keyboard back to the
+    /// grid, as a tool window's Esc closes it (#308). Pasting, Esc stops the paste instead.
+    fn escape_from_pane(&mut self, ctx: &egui::Context) {
+        let f = a11y::last_focus(ctx);
+        let (Some(id), Some(grid)) = (f.id, self.kb.grid_id) else {
+            return;
+        };
+        if f.text
+            || f.popup
+            || id == grid
+            || self.paste.is_some()
+            || !ctx.input(|i| i.key_pressed(Key::Escape))
+            || ctx.viewport(|v| v.prev_pass.widgets.get(grid).is_none())
+        {
+            return;
+        }
+        let regions = a11y::last_regions(ctx);
+        let in_pane = a11y::region_of(ctx, &regions, id).is_some_and(|i| {
+            let r = &regions[i];
+            r.layer == egui::LayerId::background() && panes::PANES.iter().any(|p| p.title == r.name)
+        });
+        if in_pane {
+            ctx.memory_mut(|m| m.request_focus(grid));
+            ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
+        }
     }
 
     /// F6 (or Shift+F6 with `back`): the keyboard to the first control of the next part of the

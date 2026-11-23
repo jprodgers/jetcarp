@@ -196,35 +196,38 @@ impl Default for ExploreForm {
 }
 
 /// *All* and *None* (and, with `default`, *Default*: the ones it says) for a list of checkboxes,
-/// each named for screen readers by what it does to which list (`what`: "tiling group").
+/// each named for screen readers by what it does to which list (`what`: "tiling group"); their
+/// ids are put on `ids`, in order.
 fn list_buttons<T>(
     ui: &mut egui::Ui,
     list: &mut [(T, bool)],
     what: &str,
     default: Option<&dyn Fn(&T) -> bool>,
+    ids: &mut Vec<egui::Id>,
 ) {
-    if ui
+    let r = ui
         .small_button("All")
-        .accessible_name(format!("Tick every {what}"))
-        .clicked()
-    {
+        .accessible_name(format!("Tick every {what}"));
+    ids.push(r.id);
+    if r.clicked() {
         list.iter_mut().for_each(|x| x.1 = true);
     }
-    if ui
+    let r = ui
         .small_button("None")
-        .accessible_name(format!("Clear every {what}"))
-        .clicked()
-    {
+        .accessible_name(format!("Clear every {what}"));
+    ids.push(r.id);
+    if r.clicked() {
         list.iter_mut().for_each(|x| x.1 = false);
     }
-    if let Some(d) = default
-        && ui
+    if let Some(d) = default {
+        let r = ui
             .small_button("Default")
             .accessible_name(format!("Tick the default {what} choice"))
-            .on_hover_text("Every family but isotropic rules, as a search with no choice")
-            .clicked()
-    {
-        list.iter_mut().for_each(|x| x.1 = d(&x.0));
+            .on_hover_text("Every family but isotropic rules, as a search with no choice");
+        ids.push(r.id);
+        if r.clicked() {
+            list.iter_mut().for_each(|x| x.1 = d(&x.0));
+        }
     }
 }
 
@@ -1029,6 +1032,8 @@ pub struct DashWindow {
     /// The start-an-explore-search form (#239).
     pub explore: ExploreForm,
     explore_open: bool,
+    /// The form was opened from the menu: its first control takes the keyboard as it shows.
+    explore_focus: bool,
     explore_error: Option<String>,
     heat_tex: Option<(u64, bool, TextureHandle)>,
     anims: Option<AnimCache>,
@@ -1063,6 +1068,7 @@ impl Default for DashWindow {
             form_error: None,
             explore: ExploreForm::default(),
             explore_open: false,
+            explore_focus: false,
             explore_error: None,
             heat_tex: None,
             anims: None,
@@ -1441,6 +1447,14 @@ impl DashWindow {
         }
     }
 
+    /// *Tools → Start an explore search…* (#310): the window open, on top, with the explore form
+    /// open and the keyboard on its first control.
+    pub fn open_explore_form(&mut self) {
+        self.open = true;
+        self.explore_open = true;
+        self.explore_focus = true;
+    }
+
     /// The explore form (#239): a checkbox for each group of tilings and each rule family, with
     /// buttons to tick or clear each list, then how long and where it runs. Every control is a
     /// standard one, reached with Tab and named for screen readers by its own words (the number
@@ -1454,11 +1468,20 @@ impl DashWindow {
                 .weak(),
         );
         ui.label("Tilings");
+        let focus = std::mem::take(&mut self.explore_focus);
+        // The choices' ids, in Tab's order.
+        let mut ids = vec![];
         ui.horizontal_wrapped(|ui| {
-            for (g, on) in f.groups.iter_mut() {
-                ui.checkbox(on, group_label(g)).on_hover_text(group_note(g));
+            for (i, (g, on)) in f.groups.iter_mut().enumerate() {
+                let r = ui.checkbox(on, group_label(g)).on_hover_text(group_note(g));
+                ids.push(r.id);
+                if i == 0 && focus {
+                    r.request_focus();
+                    r.scroll_to_me(Some(egui::Align::Center));
+                    ui.ctx().move_to_top(ui.layer_id());
+                }
             }
-            list_buttons(ui, &mut f.groups, "tiling group", None);
+            list_buttons(ui, &mut f.groups, "tiling group", None, &mut ids);
         });
         ui.label("Rule families");
         ui.horizontal_wrapped(|ui| {
@@ -1470,11 +1493,14 @@ impl DashWindow {
                 if *fam == Fam::Isotropic {
                     tip.push_str(": searched only when ticked");
                 }
-                ui.checkbox(on, family_label(*fam)).on_hover_text(tip);
+                ids.push(ui.checkbox(on, family_label(*fam)).on_hover_text(tip).id);
             }
             let default = |f: &Fam| !jetcarp_search::explore::job::OPT_IN.contains(f);
-            list_buttons(ui, &mut f.families, "rule family", Some(&default));
+            list_buttons(ui, &mut f.families, "rule family", Some(&default), &mut ids);
         });
+        // ↓ and ↑ go through the choices one by one, as Tab does, as in setup's *What it
+        // searches* (#309).
+        crate::a11y::arrow_list(ui.ctx(), None, &ids);
         ui.horizontal_wrapped(|ui| {
             let l = ui.label("Minutes");
             ui.add(
