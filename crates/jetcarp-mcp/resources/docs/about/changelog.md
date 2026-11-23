@@ -458,6 +458,10 @@ day later (0.4.2: 17 November here, 18 November there).
   ([The state hash](../research/reproducibility.md#the-state-hash),
   [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
+- **Parquet and Arrow 60.2.0** (from 60.1.0), for RUSTSEC-2026-0595: Parquet 60.1.0 wrote an
+  encrypted file's Bloom filters in plaintext. JETCARP builds Parquet without its encryption, so
+  it was never affected; the update keeps the dependency check clean.
+
 ### Fixed
 
 - **The window comes back whole on screen** (#306). It came back at its saved size but partly off
