@@ -26,6 +26,7 @@ impl log::Log for Logger {
         m.level() <= log::Level::Warn
             || (m.level() <= log::Level::Info && m.target().starts_with("wgpu_hal"))
             || (m.target() == "wgpu_hal::dx12::device" && hlsl_dir().is_some())
+            || m.target().starts_with("wgpu_hal::auxil::dxgi::exception")
     }
     fn log(&self, r: &log::Record) {
         if !self.enabled(r.metadata()) {
@@ -43,7 +44,9 @@ impl log::Log for Logger {
             eprintln!("[hlsl] {entry}: {} bytes", body.len());
             return;
         }
-        if r.level() <= log::Level::Info {
+        if r.level() <= log::Level::Info
+            || r.target().starts_with("wgpu_hal::auxil::dxgi::exception")
+        {
             eprintln!("[{} {}] {text}", r.level(), r.target());
         }
     }
@@ -56,11 +59,7 @@ fn hlsl_dir() -> Option<std::path::PathBuf> {
 
 fn logger() {
     let _ = log::set_logger(&Logger);
-    log::set_max_level(if hlsl_dir().is_some() {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Info
-    });
+    log::set_max_level(log::LevelFilter::Debug);
 }
 
 fn say(s: &str) {
@@ -503,6 +502,7 @@ const BATCH: Groups = &[
 ];
 const PILE: Groups = &[&[(0, 'r'), (1, 'w'), (2, 'r'), (3, 'r'), (4, 'w'), (5, 'd')]];
 const ONE: Groups = &[&[(0, 'w')]];
+const ONE_U: Groups = &[&[(0, 'w'), (1, 'u')]];
 
 /// `src` without the text from `from` (included) to `to` (left), with `put` in its place.
 fn cut(src: &str, from: &str, to: &str, put: &str) -> String {
@@ -519,6 +519,13 @@ const CDEF: &str = "      default: {}";
 const TAIL: &str = "  if (p.flags != 0u || p.stat != NONE) {\n    workgroupBarrier();";
 const AFTER_STEP: &str = "// JACA with a blast radius, part 1";
 const HALT: &str = "  if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }\n  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }\n";
+
+const TAIL_IF: &str =
+    "  if (p.flags != 0u || p.stat != NONE) {\n    workgroupBarrier();\n    if (li == 0u) {";
+const TAIL_ALWAYS: &str =
+    "  workgroupBarrier();\n  if (p.flags != 0u || p.stat != NONE) {\n    if (li == 0u) {";
+const HALT_RET: &str = "  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }\n  let i = (wg.y * u32(topo[8]) + wg.x) * WG + li;\n  let n = u32(topo[0]);\n  if (i < n) {";
+const NO_RET: &str = "  let halted = workgroupUniformLoad(&wg_halt) != 0u;\n  let i = (wg.y * u32(topo[8]) + wg.x) * WG + li;\n  let n = u32(topo[0]);\n  if (!halted && i < n) {";
 
 fn sim_variant(name: &str) -> String {
     // A Windows checkout has CRLF line ends.
@@ -537,6 +544,12 @@ fn sim_variant(name: &str) -> String {
             ),
             "no_tail" => cut(&s, TAIL, AFTER_STEP, "}\n\n"),
             "no_halt" => s.replacen(HALT, "", 1),
+            "bar_always" => s.replacen(TAIL_IF, TAIL_ALWAYS, 1),
+            "noret_step" => s.replacen(HALT_RET, NO_RET, 1),
+            "noret_contact" => {
+                let at = s.find("fn contact(").unwrap();
+                format!("{}{}", &s[..at], s[at..].replacen(HALT_RET, NO_RET, 1))
+            }
             "no_flags" => cut(
                 &s,
                 "    if ((p.flags & 1u) != 0u) {",
@@ -588,8 +601,39 @@ fn jit_cases() -> Vec<(String, String, &'static str, Groups)> {
         "no_case6+no_tail",
         "only_case0+no_tail+no_halt+no_flags",
         "only_case0+no_flags",
+        "bar_always",
+        "noret_step",
+        "bar_always+noret_step",
     ] {
         v.push((format!("sim step {name}"), sim_variant(name), "step", SIM));
+    }
+    v.push((
+        "sim contact noret_contact".into(),
+        sim_variant("noret_contact"),
+        "contact",
+        SIM,
+    ));
+    // The smallest shaders: a division (FXC's udiv, its unused half written to the null
+    // register) or a multiply (imul, the same) before or after a barrier, with the barrier in an
+    // if or after an early return, or not.
+    let mini = "@group(0) @binding(0) var<storage, read_write> b: array<u32>;\n@group(0) @binding(1) var<uniform> u: vec4<u32>;\nvar<workgroup> s: atomic<u32>;\nvar<workgroup> h: u32;\n@compute @workgroup_size(256)\nfn main(@builtin(local_invocation_index) li: u32) {\n";
+    let div = "  atomicAdd(&s, b[li] / max(b[li + 1u], 1u));\n";
+    let bar = "  workgroupBarrier();\n  if (li == 0u) { b[0] = atomicLoad(&s); }\n";
+    let ret =
+        "  if (li == 0u) { h = b[1000]; }\n  if (workgroupUniformLoad(&h) != 0u) { return; }\n";
+    for (name, body) in [
+        ("mini div, barrier in an if", format!("{div}  if (u.x != 0u) {{\n{bar}  }}\n")),
+        ("mini div, barrier", format!("{div}{bar}")),
+        ("mini barrier in an if, then div", format!("  if (u.x != 0u) {{\n{bar}  }}\n{div}  b[1] = atomicLoad(&s);\n")),
+        ("mini no div, barrier in an if", "  atomicAdd(&s, b[li] + b[li + 1u]);\n  if (u.x != 0u) {\n  workgroupBarrier();\n  if (li == 0u) { b[0] = atomicLoad(&s); }\n  }\n".to_string()),
+        ("mini early return, div, barrier", format!("{ret}{div}{bar}")),
+        ("mini early return, no div, barrier", format!("{ret}  atomicAdd(&s, b[li] + 1u);\n{bar}")),
+        ("mini signed div, barrier in an if", "  atomicAdd(&s, u32(i32(b[li]) / max(i32(b[li + 1u]), 1)));\n  if (u.x != 0u) {\n  workgroupBarrier();\n  if (li == 0u) { b[0] = atomicLoad(&s); }\n  }\n".to_string()),
+        ("mini remainder, barrier in an if", "  atomicAdd(&s, b[li] % max(b[li + 1u], 1u));\n  if (u.x != 0u) {\n  workgroupBarrier();\n  if (li == 0u) { b[0] = atomicLoad(&s); }\n  }\n".to_string()),
+        ("mini multiply, barrier in an if", "  atomicAdd(&s, b[li] * b[li + 1u]);\n  if (u.x != 0u) {\n  workgroupBarrier();\n  if (li == 0u) { b[0] = atomicLoad(&s); }\n  }\n".to_string()),
+        ("mini div by a constant, barrier in an if", "  atomicAdd(&s, b[li] / 7u);\n  if (u.x != 0u) {\n  workgroupBarrier();\n  if (li == 0u) { b[0] = atomicLoad(&s); }\n  }\n".to_string()),
+    ] {
+        v.push((name.to_string(), format!("{mini}{body}}}\n"), "main", ONE_U));
     }
     // sim.wgsl's bindings and helpers, with an entry point of the probe's own.
     let sim = include_str!("../src/sim.wgsl").replace("\r\n", "\n");

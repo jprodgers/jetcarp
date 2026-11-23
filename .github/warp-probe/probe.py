@@ -176,20 +176,13 @@ def main():
     else:
         SUMMARY.append("fxc: not found")
 
-    if crashing:
-        last = crashing[-1]
-        under_cdb_jit(last, probe, base)
+    for case in [c for c in crashing if c.startswith("mini")][:2] or crashing[-1:]:
+        under_cdb_jit(case, probe, base)
 
     # The whole probe on NuGet's WARP with the D3D12 debug layer (no GPU-based validation, which
     # removed the device on NuGet's WARP and ran for over 25 minutes on the system's).
     sweep("NuGet WARP, FXC, D3D12 debug layer", dict(base, **dict(checks, WGPU_GPU_BASED_VALIDATION="0")),
-          new_probe, 2)
-
-    # The suites that read files beside them, from their own folder as cargo runs them.
-    for cwd, name, exe in gpu_exes:
-        if name in ("equality", "families"):
-            run(f"tests [{name}, NuGet WARP]", [with_new_warp(exe), "--test-threads=1"], base,
-                cwd=cwd)
+          new_probe, 1)
 
     print(f"\n==== JIT TABLE, {len(table)} cases (system FXC | NuGet FXC | system DXC) ====")
     for r in table:
