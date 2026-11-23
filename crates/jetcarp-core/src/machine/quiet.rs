@@ -318,7 +318,19 @@ impl Load {
             }
             not_read = not_read.or(r.not_read);
         }
-        let cpu = match (cpu0, imp::cpu_times(), own0, imp::own_time()) {
+        // The system's tick counts may not have moved yet over a short window (a virtual Mac
+        // updates them only now and then, and `--quick` samples briefly): read on, up to two
+        // seconds more, rather than give no figure at all.
+        let mut cpu1 = imp::cpu_times();
+        let more = std::time::Instant::now() + Duration::from_secs(2);
+        while let (Some((_, t0)), Some((_, t1))) = (cpu0, cpu1)
+            && t1 <= t0
+            && std::time::Instant::now() < more
+        {
+            std::thread::sleep(Duration::from_millis(100));
+            cpu1 = imp::cpu_times();
+        }
+        let cpu = match (cpu0, cpu1, own0, imp::own_time()) {
             (Some((b0, t0)), Some((b1, t1)), Some(o0), Some(o1)) if t1 > t0 => {
                 let others = (b1.saturating_sub(b0) as f64 - (o1 - o0).max(0.0)).max(0.0);
                 Some((others / (t1 - t0) as f64).clamp(0.0, 1.0))
