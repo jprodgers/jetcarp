@@ -86,6 +86,17 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   answers on the processor, and on the GPU where there is one (Mesa's software renderer in CI), and
   a device with a wrong answer must be left out of the score. CI checks the answers, never the
   speed: no test depends on how fast the machine is.
+- **The load before measuring.** The GPU's load is read from a different place on each system, so
+  each reader's arithmetic is tested on every system from fixtures (`jetcarp-core`'s
+  `machine::gpu_load`): a list of Windows' GPU engine counters from a machine with an NVIDIA and an
+  Intel GPU (each engine's processes summed, video and copy engines and the measuring program's
+  own left out), two IOAccelerator `PerformanceStatistics` dictionaries as `ioreg` prints them (an
+  Apple GPU's `Device Utilization %`, an older driver's `GPU Activity(%)`), `fdinfo` of amdgpu,
+  i915 and xe clients a second apart (engine time in nanoseconds, and xe's cycles), and NVML
+  stand-ins (three GPUs, one of which can't say). A live reading must give a figure between 0 and
+  1 and say where from, or say why there is none; on Linux with an AMD GPU it must give one.
+  Whether a busy GPU is noticed is checked by hand in the sittings on each system, since CI's
+  runners have no GPU to keep busy.
 - **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
   person's own values, the two linked memory values and the ceilings; a world over the limit is
   refused before anything is built, naming the limit and where it came from, and never made
@@ -238,7 +249,23 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   is the data folder, the library must stay unless `--data` deletes the whole folder
   (`uninstall_runtime.rs`, `uninstall_leftovers.rs`). The whole app, headless and with AI control
   on, must end on SIGTERM as closing its window does, removing its endpoint file
-  (`crates/jetcarp-app/src/quit_signal.rs`, Linux and macOS).
+  (`crates/jetcarp-app/src/quit_signal.rs`, Linux and macOS). The background host, headless, and
+  `jetcarp mcp --http`, each in scratch folders, must stop on SIGTERM as their own stop does: a
+  clean exit, their endpoint file and memory record gone, and the HTTP server's hunt paused at its
+  checkpoint; a second SIGTERM, while either waits for a caller to hang up, must end it at once
+  with 143. A `job_status` waiting up to two minutes for a hunt must not hold up the HTTP server's
+  stop: the call must be told the server is stopping, and the server must end within 3 seconds,
+  with 0, its files gone. A call that ignores its cancel (`use_app` reaching for an "app" that never
+  answers) must be left after the 2-second grace, the server still ending within 3 seconds with
+  its files gone. `jetcarp mcp` over stdio must stop as stdin closing stops it, its waiting call
+  told and its hunt paused; a foreground `jetcarp search` must stop at its checkpoint, paused, and
+  `--resume` must carry it on from there; `jetcarp script` must stop at its next step and end with
+  143; each with its memory record gone (`crates/jetcarp/tests/quit_signal.rs`). How a cut-short
+  answer reads and when the grace ends are checked in `crates/jetcarp-mcp/src/stopping.rs`. The
+  handling they all share must run a program's own stop on the first signal, end it on the
+  second, and leave a signal ignored at start (SIGHUP under `nohup`) ignored
+  (`crates/jetcarp-core/src/quit_signal.rs`). A headless host leaves no still picture, so the
+  still a host showing the desktop leaves as it stops is checked by hand, at a logout.
 - **The book.** The command-line and MCP reference pages and the keyboard page's table of keys are
   generated from the program and checked against it, and the copy of the book built into the
   program must match the book.
@@ -246,8 +273,9 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
 About 50 more tests are ignored by default and run only when asked (`-- --ignored`): most draw the
 book's pictures of the app, and the rest time the program, run very large worlds, need a desktop
 session, or read the app's accessibility tree with the starter pack set up. (The twelve halves of
-the keyboard tests that run in a process of their own are ignored too: the suite starts them
-itself, with their scratch folders, and they do nothing when started any other way.)
+the keyboard tests that run in a process of their own are ignored too, and so are those of the
+signal tests: the suite starts them itself, with their scratch folders, and they do nothing when
+started any other way.)
 
 Tests never write to your own settings, data or pictures: they run in scratch folders, and CI fails
 if a test touches the default ones.
@@ -299,7 +327,16 @@ with the guard already on.
   such a field counts it too, and its guard keeps it under the limit
   (`the_gpu_measure_counts_a_dense_period_2_field`,
   `the_gpu_guard_keeps_a_dense_period_2_field_under_the_limit`). The study's full table is an
-  ignored test (`study_table`).
+  ignored test (`study_table`). **Restless change** (#289, the same file): the settled soups of
+  Walled Cities, 34 Life and Long Life, and a Seeds soup, whose cells keep changing without coming
+  back, must be counted where the reference counts them, strictly and concurrently, and through
+  the guard show at most 6 transitions in any second from the start, before the scene is slowed
+  as after; Brian's Brain, Lava and a Life soup, which the reference does not count as flashing
+  together, must not be veiled. These were written first, and failed: 8 transitions a second
+  reached the screen for up to 77 frames. On the GPU, a Walled Cities soup's guard must show at
+  most 4 (`the_gpu_guard_keeps_restless_ash_under_the_limit`). The study's table of 15 rules at 1
+  to 16 pixels a cell, and the reference on recordings for IRIS, are ignored tests
+  (`restless_table`, `the_reference_on_recordings`).
 - **The stripe check** is tested on stripes of every orientation from 4 to 128 pixels a pair,
   checkerboards and rows of dots, which it must find; and on noise, random cells of 2 to 16 pixels,
   faint cell outlines, low contrast and bright stripes, which it must not.
@@ -498,7 +535,12 @@ differently. It was run once more for #270, with red flashes counted by WCAG 2.2
 well as WCAG 2.0's measure: every recording came out the same, byte for byte, and every verdict
 with it. The red flashes the corpus has (the Tron field in red-orange, against black, which has no
 chromaticity) are WCAG 2.0's, which IRIS counts too; by either definition JETCARP is never more
-lenient than IRIS.
+lenient than IRIS. It was run again for #289, through the guard that veils restless change: IRIS's
+verdict on every recording was as before, in every column, and the Seeds soup with the usual guard
+is now veiled, where pixel by pixel it flashed together. On dense restless ash (Walled Cities, 34
+Life, Long Life, Seeds and Replicator soups at 2 to 16 pixels a cell), which WCAG counted pixel by
+pixel fails, IRIS counts no flash at all, as drawn or through either guard, since the frame's mean
+hardly moves: a difference like the checkerboard's, and JETCARP follows WCAG.
 
 **Patterns, for someone at risk**: no misses, and with the at-risk guard on IRIS passes all 22
 recordings, the Seeds soup, the Greenberg-Hastings waves and the Paper field among them, for

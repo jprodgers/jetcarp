@@ -42,7 +42,6 @@ jetcarp-script = { workspace = true, features = ["default"] }
 jetcarp-app.workspace = true
 jetcarp-host.workspace = true
 rayon.workspace = true
-ctrlc = "3.5.2"
 
 # The terminal's width, so a progress line redrawn in place fits it (#104): ioctl(TIOCGWINSZ) on
 # Unix, GetConsoleScreenBufferInfo on Windows. Both are bindings only, already in the dependency
@@ -52,3 +51,6 @@ libc = "0.2.191"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Console"] }
+# Windows: Ctrl-C stops `jetcarp search` and `jetcarp script` at their next checkpoint or step. On
+# Linux and macOS, `jetcarp_core::quit_signal` does, for SIGTERM and SIGHUP too (#278).
+ctrlc = "3.5.2"

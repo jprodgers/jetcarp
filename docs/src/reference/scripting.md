@@ -82,8 +82,11 @@ signs of a JACA world have sorted themselves into territories, using each cell's
 (`w.neighbours`, `w.live_cells`).
 
 Pressing Ctrl-C once stops the script after the runs in flight; a sweep writes its manifest first, and
-JETCARP prints the command that carries it on. Pressing it again quits at once. A sweep folder can
-always be resumed: running the same sweep with `folder:` set to it skips the runs already done.
+JETCARP prints the command that carries it on. Pressing it again quits at once. On Linux and macOS,
+SIGTERM (what `kill` sends) and SIGHUP (the terminal closing) stop it the same way. A script
+stopped so ends with 128 + the signal's number: 130 after Ctrl-C, 143 after SIGTERM, 129 after
+SIGHUP. A sweep folder can always be resumed: running the same sweep with `folder:` set to it
+skips the runs already done.
 
 **In the app**, *Tools → Scripts and sweeps…* opens a window with three tabs: the *Sweep builder*, a
 form that builds a rule sweep without writing code; the *Script editor*, with *New*, *Open…*, *Save*,

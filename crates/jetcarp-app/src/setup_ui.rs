@@ -1335,8 +1335,9 @@ impl Wizard {
         ui.label(
             "JETCARP can measure this computer with about a minute of its own work: Life soups on \
              five tilings, one core, the GPU, memory and the disk, each answer checked. Nothing \
-             is drawn but a progress bar, and nothing is sent anywhere. Its limits then fit it, \
-             and it gets a JETCARP Hardware Score, kept in the settings folder.",
+             is drawn but a progress bar, and nothing is sent anywhere. It gets a JETCARP \
+             Hardware Score, kept in the settings folder: to compare it with other computers, and \
+             for Fit to this computer's first guess.",
         );
         ui.add_space(6.0);
         ui.checkbox(
@@ -1349,9 +1350,9 @@ impl Wizard {
         let l = jetcarp_core::machine::current();
         ui.label(
             RichText::new(format!(
-                "Without measuring, the limits come from the memory alone: {} reserved for \
-                 JETCARP, worlds of up to {}. Tools → This computer… measures it later and \
-                 changes any limit.",
+                "Measured or not, the limits come from the memory and your own values: {} \
+                 reserved for JETCARP, worlds of up to {}. Tools → This computer… measures it \
+                 later, and any limit can be changed there.",
                 jetcarp_core::machine::bytes_text(l.jetcarp_memory()),
                 jetcarp_core::machine::bytes_text(l.world_bytes())
             ))

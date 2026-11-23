@@ -23,11 +23,15 @@ gif.workspace = true
 image-webp.workspace = true
 
 # Reading the machine's memory, processor and GPU memory (`src/machine/hardware.rs`), and the
-# processor's load as the score is measured (`src/machine/quiet.rs`): bindings only, already in
-# the dependency tree.
+# processor's and the GPU's load as the score is measured (`src/machine/quiet.rs`,
+# `src/machine/gpu_load.rs`: PDH's GPU engine counters on Windows, IOKit on macOS, NVML opened
+# with dlopen on Linux): bindings only, already in the dependency tree.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Performance", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading"] }
 windows = { version = "0.62.2", features = ["Win32_Graphics_Dxgi"] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
+# The Mac's memory figures (`src/machine/hardware.rs`), the GPU's load on Linux (NVML opened with
+# dlopen, `src/machine/gpu_load.rs`), and on Linux and macOS the signals that stop a program as its
+# own stop does (`src/quit_signal.rs`, #278): bindings only, already in the dependency tree.
+[target.'cfg(unix)'.dependencies]
 libc = "0.2.191"

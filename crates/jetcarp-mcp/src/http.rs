@@ -1680,20 +1680,47 @@ pub struct Serve {
     pub allow_origins: Vec<String>,
 }
 
-/// Set (by the first Ctrl-C) when `jetcarp mcp --http` should stop; a second Ctrl-C quits at
-/// once.
-pub fn stop_on_ctrl_c() -> Arc<AtomicBool> {
+/// Set when `jetcarp mcp --http` should stop: by the first Ctrl-C, and on Linux and macOS by the
+/// first SIGTERM or SIGHUP too (what `kill` sends, and a session as it ends, #278), so the server
+/// stops as Ctrl-C stops it, its jobs at their next checkpoint and its endpoint file and memory
+/// record removed. A second quits at once.
+pub fn stop_on_signal() -> Arc<AtomicBool> {
     let stop = Arc::new(AtomicBool::new(false));
     let s = stop.clone();
-    let presses = AtomicUsize::new(0);
-    let _ = ctrlc::set_handler(move || {
-        if presses.fetch_add(1, Ordering::SeqCst) == 0 {
-            s.store(true, Ordering::SeqCst);
-            eprintln!("\njetcarp mcp: stopping (press Ctrl-C again to quit now)");
+    let stopping = move |sig: &str| {
+        s.store(true, Ordering::SeqCst);
+        // Never `eprintln!`, which panics when standard error has gone (the terminal closed).
+        let _ = if sig == "SIGINT" || sig == "Ctrl-C" {
+            // On a line of its own, after the terminal's `^C`.
+            writeln!(
+                std::io::stderr(),
+                "\njetcarp mcp: stopping (press Ctrl-C again to quit now)"
+            )
         } else {
-            std::process::exit(130);
-        }
-    });
+            writeln!(
+                std::io::stderr(),
+                "jetcarp mcp: {sig}: stopping (a second signal quits now)"
+            )
+        };
+    };
+    // Linux and macOS: the program's shared handling of the signals that stop it
+    // (`jetcarp_core::quit_signal`, as the app and the host stop). A second ends it at once with
+    // 128 + its number (130 for Ctrl-C).
+    #[cfg(unix)]
+    jetcarp_core::quit_signal::on_signal(stopping);
+    #[cfg(windows)]
+    {
+        let presses = AtomicUsize::new(0);
+        let _ = ctrlc::set_handler(move || {
+            if presses.fetch_add(1, Ordering::SeqCst) == 0 {
+                stopping("Ctrl-C");
+            } else {
+                std::process::exit(130);
+            }
+        });
+    }
+    #[cfg(not(any(unix, windows)))]
+    let _ = stopping;
     stop
 }
 
@@ -1743,9 +1770,52 @@ pub fn serve(opts: Serve, stop: Arc<AtomicBool>) -> Result<(), String> {
             .map_err(|e| format!("could not listen on 127.0.0.1: {e}"))?,
     };
     announce(&listener, &opts);
+    // The stop cuts the calls in flight short (#278); one that goes on past the grace is left,
+    // and the server ends as it would after it: its endpoint file, its own jobs, its memory
+    // record.
+    let settled = Arc::new(AtomicBool::new(false));
+    {
+        let cancellers = cancellers.clone();
+        let (file, token) = (
+            listener.file().map(Path::to_path_buf),
+            listener.token.clone(),
+        );
+        crate::stopping::watch(
+            stop.clone(),
+            settled.clone(),
+            move || cancellers.lock().unwrap().values().cloned().collect(),
+            move || {
+                crate::stdio::say(format_args!(
+                    "jetcarp mcp: a call was still running {} s after the stop; ending without \
+                     its answer",
+                    crate::stopping::GRACE.as_secs()
+                ));
+                if let Some(p) = &file
+                    && recorded_token(p).as_deref() == Some(token.as_str())
+                {
+                    let _ = std::fs::remove_file(p);
+                }
+                crate::stdio::stop_own_jobs_within("the server is closing", crate::stdio::END_WAIT);
+                jetcarp_core::machine::pool::exit(0);
+            },
+        );
+    }
     let mut clients: HashMap<Option<String>, Client> = HashMap::new();
     while !stop.load(Ordering::SeqCst) {
         if let Some(p) = listener.recv_timeout(Duration::from_millis(200)) {
+            if stop.load(Ordering::SeqCst) {
+                // Not taken up: the server is stopping.
+                let reply = p.message.get("id").map(|id| {
+                    protocol::error_response(
+                        id,
+                        protocol::INTERNAL_ERROR,
+                        crate::stopping::STOPPING_WORDS,
+                        None,
+                    )
+                });
+                p.reply(reply);
+                break;
+            }
             let key = p.session().map(String::from);
             let c = clients.entry(key.clone()).or_insert_with(|| {
                 let mut c = Client::new(opts.app, info.clone());
@@ -1768,8 +1838,15 @@ pub fn serve(opts: Serve, stop: Arc<AtomicBool>) -> Result<(), String> {
             .unwrap()
             .retain(|k, _| k.as_ref().is_none_or(|k| open.contains(k)));
     }
+    settled.store(true, Ordering::SeqCst);
+    // The last answers reach their callers before the connections are closed: up to a second
+    // for the callers to hang up.
+    let t0 = Instant::now();
+    while listener.connection_count() > 0 && t0.elapsed() < Duration::from_secs(1) {
+        std::thread::sleep(Duration::from_millis(20));
+    }
     drop(listener);
-    crate::stdio::stop_own_jobs();
+    crate::stdio::stop_own_jobs("the server is closing");
     Ok(())
 }
 

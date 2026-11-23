@@ -24,6 +24,7 @@
 //! (`gpu_busy_percent`: AMD's). Over [`CPU_BUSY`] or [`GPU_BUSY`], or with a JETCARP program
 //! that could not pause, the score is taken under load ([`Conditions`], kept beside it).
 
+use super::gpu_load::{self, GpuSource};
 use super::pool;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -271,8 +272,12 @@ pub fn others_in(records: &[pool::Use]) -> (Vec<String>, Vec<String>) {
 pub struct Load {
     /// Other programs' share of the processor, 0 to 1 (none: not known on this system).
     pub cpu: Option<f64>,
-    /// The GPU's busy figure, 0 to 1 (none: this system doesn't say).
+    /// The GPU's busy figure, 0 to 1 (none: not read).
     pub gpu: Option<f64>,
+    /// Where the GPU's figure was read from.
+    pub gpu_source: Option<GpuSource>,
+    /// Why a GPU's load was not read, in words.
+    pub gpu_not_read: Option<&'static str>,
 }
 
 /// A way to measure the load over so many seconds.
@@ -297,15 +302,35 @@ impl Load {
         }
         let cpu0 = imp::cpu_times();
         let own0 = imp::own_time();
-        let mut gpu = vec![];
+        let mut meter = gpu_load::Meter::start();
+        let (mut gpu, mut source, mut not_read) = (vec![], None, None);
+        let mut most = f64::NEG_INFINITY;
         let n = 5;
         for _ in 0..n {
             std::thread::sleep(Duration::from_secs_f64(secs.max(0.05) / n as f64));
-            if let Some(g) = imp::gpu_busy() {
+            let r = meter.read();
+            if let Some(g) = r.busy {
                 gpu.push(g);
+                // The source of the busiest reading, should the busiest GPU change.
+                if g > most {
+                    (most, source) = (g, r.source);
+                }
             }
+            not_read = not_read.or(r.not_read);
         }
-        let cpu = match (cpu0, imp::cpu_times(), own0, imp::own_time()) {
+        // The system's tick counts may not have moved yet over a short window (a virtual Mac
+        // updates them only now and then, and `--quick` samples briefly): read on, up to two
+        // seconds more, rather than give no figure at all.
+        let mut cpu1 = imp::cpu_times();
+        let more = std::time::Instant::now() + Duration::from_secs(2);
+        while let (Some((_, t0)), Some((_, t1))) = (cpu0, cpu1)
+            && t1 <= t0
+            && std::time::Instant::now() < more
+        {
+            std::thread::sleep(Duration::from_millis(100));
+            cpu1 = imp::cpu_times();
+        }
+        let cpu = match (cpu0, cpu1, own0, imp::own_time()) {
             (Some((b0, t0)), Some((b1, t1)), Some(o0), Some(o1)) if t1 > t0 => {
                 let others = (b1.saturating_sub(b0) as f64 - (o1 - o0).max(0.0)).max(0.0);
                 Some((others / (t1 - t0) as f64).clamp(0.0, 1.0))
@@ -315,6 +340,8 @@ impl Load {
         Load {
             cpu,
             gpu: (!gpu.is_empty()).then(|| gpu.iter().sum::<f64>() / gpu.len() as f64),
+            gpu_source: source,
+            gpu_not_read: not_read,
         }
     }
 
@@ -348,9 +375,16 @@ pub struct Conditions {
     /// on this system).
     #[serde(default)]
     pub cpu: Option<f64>,
-    /// The GPU's busy figure then, 0 to 1 (none: this system doesn't say).
+    /// The GPU's busy figure then, 0 to 1 (none: not read).
     #[serde(default)]
     pub gpu: Option<f64>,
+    /// Where the GPU's figure was read from: `pdh` (Windows), `iokit` (macOS), `amdgpu`, `nvml`
+    /// or `fdinfo` (Linux).
+    #[serde(default)]
+    pub gpu_load_source: Option<GpuSource>,
+    /// Why a GPU's load was not read (none: it was, or the score is older than this).
+    #[serde(default)]
+    pub gpu_not_read: Option<String>,
     /// The JETCARP programs that held still while it measured: `the desktop background`,
     /// `a search job`.
     #[serde(default)]
@@ -370,43 +404,64 @@ impl Conditions {
             under_load: !load.busy().is_empty() || !not_paused.is_empty(),
             cpu: load.cpu,
             gpu: load.gpu,
+            gpu_load_source: load.gpu.and(load.gpu_source),
+            gpu_not_read: load.gpu_not_read.map(String::from),
             paused,
             not_paused,
         }
     }
 
     /// In a line: `taken under load: the processor was 42% busy with other programs; jetcarp run
-    /// could not pause`, or `taken with the computer quiet (other programs 3% of the processor)`.
+    /// could not pause`, or `taken with the computer quiet (other programs 3% of the processor,
+    /// the GPU 4% busy, from AMD's gpu_busy_percent)`. A GPU not read is said: `GPU load not
+    /// read: ...`.
     pub fn text(&self) -> String {
-        let load = Load {
-            cpu: self.cpu,
-            gpu: self.gpu,
+        let from = self
+            .gpu_load_source
+            .map(|s| format!(", from {}", s.text()))
+            .unwrap_or_default();
+        let not_read = match (&self.gpu_not_read, self.gpu) {
+            (Some(why), _) => Some(format!("GPU load not read: {why}")),
+            (None, None) => Some("GPU load not read".to_string()),
+            (None, Some(_)) => None,
         };
         if self.under_load {
-            let mut why: Vec<String> = load
-                .busy()
-                .into_iter()
-                .map(|s| s.replace(" is ", " was "))
-                .collect();
+            let mut why = vec![];
+            if let Some(c) = self.cpu.filter(|&c| c >= CPU_BUSY) {
+                why.push(format!(
+                    "the processor was {} busy with other programs",
+                    percent(c)
+                ));
+            }
+            if let Some(g) = self.gpu.filter(|&g| g >= GPU_BUSY) {
+                why.push(format!("the GPU was {} busy{from}", percent(g)));
+            }
             if !self.not_paused.is_empty() {
                 why.push(format!("{} could not pause", and_list(&self.not_paused)));
             }
-            return format!("taken under load: {}", why.join("; "));
+            let mut t = format!("taken under load: {}", why.join("; "));
+            if let Some(n) = not_read {
+                t.push_str(&format!(" ({n})"));
+            }
+            return t;
         }
         let mut figures = vec![];
         if let Some(c) = self.cpu {
             figures.push(format!("other programs {} of the processor", percent(c)));
         }
         if let Some(g) = self.gpu {
-            figures.push(format!("the GPU {} busy", percent(g)));
+            figures.push(format!("the GPU {} busy{from}", percent(g)));
         }
         if figures.is_empty() {
-            "taken with no JETCARP program running alongside (this system does not say how busy \
-             it was)"
-                .into()
-        } else {
-            format!("taken with the computer quiet ({})", figures.join(", "))
+            return "taken with no JETCARP program running alongside (this system does not say \
+                    how busy it was)"
+                .into();
         }
+        let mut t = figures.join(", ");
+        if let Some(n) = not_read {
+            t.push_str(&format!("; {n}"));
+        }
+        format!("taken with the computer quiet ({t})")
     }
 }
 
@@ -450,27 +505,6 @@ mod imp {
         let t: f64 = f.get(12)?.parse().ok()?;
         Some(u + t)
     }
-
-    /// The busiest GPU's busy figure, 0 to 1, where the driver gives one (`gpu_busy_percent`).
-    pub fn gpu_busy() -> Option<f64> {
-        std::fs::read_dir("/sys/class/drm")
-            .ok()?
-            .flatten()
-            .filter(|e| {
-                let n = e.file_name();
-                let n = n.to_string_lossy();
-                n.starts_with("card") && !n.contains('-')
-            })
-            .filter_map(|e| {
-                std::fs::read_to_string(e.path().join("device/gpu_busy_percent"))
-                    .ok()?
-                    .trim()
-                    .parse::<f64>()
-                    .ok()
-            })
-            .map(|p| (p / 100.0).clamp(0.0, 1.0))
-            .reduce(f64::max)
-    }
 }
 
 #[cfg(windows)]
@@ -513,10 +547,6 @@ mod imp {
             )
         };
         (ok != 0).then(|| (ticks(&kernel) + ticks(&user)) as f64)
-    }
-
-    pub fn gpu_busy() -> Option<f64> {
-        None
     }
 }
 
@@ -567,10 +597,6 @@ mod imp {
         let s = |t: libc::timeval| t.tv_sec as f64 + t.tv_usec as f64 / 1e6;
         Some((s(ru.ru_utime) + s(ru.ru_stime)) * TICKS_PER_SECOND)
     }
-
-    pub fn gpu_busy() -> Option<f64> {
-        None
-    }
 }
 
 #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
@@ -579,9 +605,6 @@ mod imp {
         None
     }
     pub fn own_time() -> Option<f64> {
-        None
-    }
-    pub fn gpu_busy() -> Option<f64> {
         None
     }
 }
@@ -646,6 +669,7 @@ mod tests {
         let quiet = Load {
             cpu: Some(0.03),
             gpu: Some(0.10),
+            ..Load::default()
         };
         assert!(quiet.busy().is_empty());
         let c = Conditions::of(quiet, vec!["the desktop background".into()], vec![]);
@@ -657,6 +681,7 @@ mod tests {
         let busy = Load {
             cpu: Some(0.42),
             gpu: Some(0.80),
+            ..Load::default()
         };
         assert_eq!(
             busy.busy(),
@@ -676,7 +701,7 @@ mod tests {
         let c = Conditions::of(
             Load {
                 cpu: Some(CPU_BUSY - 0.01),
-                gpu: None,
+                ..Load::default()
             },
             vec![],
             vec!["jetcarp script".into(), "jetcarp media".into()],
@@ -684,12 +709,87 @@ mod tests {
         assert!(c.under_load);
         assert!(
             c.text()
-                .ends_with("jetcarp script and jetcarp media could not pause"),
+                .ends_with("jetcarp script and jetcarp media could not pause (GPU load not read)"),
             "{}",
             c.text()
         );
         // Unknown figures: not under load by themselves.
         assert!(!Conditions::of(Load::default(), vec![], vec![]).under_load);
+    }
+
+    /// Where the GPU's figure came from is kept, and a figure not read is said plainly.
+    #[test]
+    fn the_gpu_figure_s_source_is_kept_and_one_not_read_is_said() {
+        let c = Conditions::of(
+            Load {
+                cpu: Some(0.03),
+                gpu: Some(0.40),
+                gpu_source: Some(GpuSource::Pdh),
+                gpu_not_read: None,
+            },
+            vec![],
+            vec![],
+        );
+        assert!(c.under_load);
+        assert_eq!(
+            c.text(),
+            "taken under load: the GPU was 40% busy, from Windows' GPU engine counters"
+        );
+        let j = serde_json::to_value(&c).unwrap();
+        assert_eq!(j["gpu_load_source"], "pdh");
+        let quiet = Conditions::of(
+            Load {
+                cpu: Some(0.03),
+                gpu: Some(0.05),
+                gpu_source: Some(GpuSource::Iokit),
+                gpu_not_read: None,
+            },
+            vec![],
+            vec![],
+        );
+        assert_eq!(
+            quiet.text(),
+            "taken with the computer quiet (other programs 3% of the processor, the GPU 5% busy, \
+             from macOS's IOAccelerator statistics)"
+        );
+        let why = "NVIDIA's management library, libnvidia-ml.so.1, isn't installed";
+        let unread = Conditions::of(
+            Load {
+                cpu: Some(0.03),
+                gpu_not_read: Some(why),
+                ..Load::default()
+            },
+            vec![],
+            vec![],
+        );
+        assert!(
+            !unread.under_load,
+            "a GPU not read doesn't make it under load"
+        );
+        assert_eq!(
+            unread.text(),
+            format!(
+                "taken with the computer quiet (other programs 3% of the processor; GPU load not read: {why})"
+            )
+        );
+        assert_eq!(serde_json::to_value(&unread).unwrap()["gpu_not_read"], why);
+        // Under load for another reason, the GPU not read is said too.
+        let loaded = Conditions::of(
+            Load {
+                cpu: Some(0.5),
+                ..Load::default()
+            },
+            vec![],
+            vec![],
+        );
+        assert_eq!(
+            loaded.text(),
+            "taken under load: the processor was 50% busy with other programs (GPU load not read)"
+        );
+        // A score kept before the source was: read back without one.
+        let old: Conditions =
+            serde_json::from_str(r#"{"cpu":0.02,"gpu":0.1,"under_load":false}"#).unwrap();
+        assert_eq!((old.gpu_load_source, old.gpu_not_read), (None, None));
     }
 
     #[cfg(any(target_os = "linux", windows, target_os = "macos"))]

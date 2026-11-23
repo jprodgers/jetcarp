@@ -64,15 +64,11 @@ fn a_running_job_waits_while_jetcarp_measures() {
     let dir = runtime.join("measuring");
     std::fs::create_dir_all(&dir).unwrap();
     let record = dir.join("4000001.json");
+    // Written as JETCARP writes it (whole, then moved into place): a record rewritten in place
+    // can be read empty between its truncation and its writing, and a job reading it then saw no
+    // hold and took a step (macOS CI).
     let write = || {
-        std::fs::write(
-            &record,
-            format!(
-                r#"{{"pid": 4000001, "program": "jetcarp score", "at_ms": {}}}"#,
-                now_ms()
-            ),
-        )
-        .unwrap()
+        jetcarp_core::machine::quiet::write_in(&dir, 4000001, "jetcarp score", now_ms()).unwrap()
     };
     // Unheld, the hunt's progress moves on with each step: how long one takes on this machine
     // (about three seconds here, longer on a slow runner) sets every wait below.

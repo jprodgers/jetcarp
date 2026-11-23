@@ -28,7 +28,7 @@
 use super::Viewing;
 use super::flash::{FlashMeter, FlashReading, Level};
 use super::frame::reduce_both;
-use super::guard::{PATTERN_EVERY, fine_veil, veil_for};
+use super::guard::{PATTERN_EVERY, RESTLESS_ACT, fine_veil, veil_for};
 use super::pattern::{PatternLevel, PatternMeter, PatternReading};
 use super::soften::{Plan, Softener};
 use crate::render::Image;
@@ -228,14 +228,21 @@ pub fn soften(frames: &[Image], delay_ms: u32, at_risk: bool) -> Vec<Image> {
         let reading = flash.update(&map, t);
         let fine_flashing = reading.fine_transitions >= 2;
         let partial_flashing = reading.partial_transitions >= 2;
+        // And restless change in part of tiles, once it flashes on its own (#289).
+        let restless_flashing = reading.restless_transitions >= RESTLESS_ACT;
         let (cols, rows) = flash.tiles();
         for j in 0..flash.tile_counts().len() {
             let (c, r) = (flash.tile_counts()[j], flash.tile_red_counts()[j]);
             let (fine, partial) = (flash.tile_fine_counts()[j], flash.tile_partial_counts()[j]);
-            let change = flash.tile_change_counts()[j];
-            if c >= 2 || r >= 2 || change >= 2 {
-                let veil = ((fine_flashing && fine > 0) || (partial_flashing && partial > 0))
-                    .then(|| fine_veil(&map, j));
+            let (change, restless) = (
+                flash.tile_change_counts()[j],
+                flash.tile_restless_counts()[j],
+            );
+            let restless = restless_flashing && restless >= 2;
+            if c >= 2 || r >= 2 || change >= 2 || restless {
+                let veil =
+                    ((fine_flashing && fine > 0) || (partial_flashing && partial > 0) || restless)
+                        .then(|| fine_veil(&map, j));
                 let (x, y) = ((j as u32 % cols) as i64, (j as u32 / cols) as i64);
                 for dy in -1..=1 {
                     for dx in -1..=1 {

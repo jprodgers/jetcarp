@@ -44,12 +44,6 @@ pollster.workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
 
-# Linux and macOS: SIGTERM, SIGHUP and SIGINT close the app as its window does
-# (`src/quit_signal.rs`, #135), through `sigaction`. Bindings only, already in the tree (the
-# program and the other crates use it).
-[target.'cfg(unix)'.dependencies]
-libc = "0.2.191"
-
 # Windows: the system's reduced motion and contrast themes (`src/a11y.rs`, #218, #220), through
 # `SystemParametersInfoW`. windows-sys is already in the tree (the display crate uses it).
 [target.'cfg(windows)'.dependencies]

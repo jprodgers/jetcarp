@@ -40,6 +40,7 @@ pub mod photosensitivity;
 pub mod pile;
 pub mod pin;
 pub mod quickstart;
+pub mod quit_signal;
 pub mod render;
 pub mod reseed;
 pub mod rng;

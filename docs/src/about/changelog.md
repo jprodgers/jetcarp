@@ -535,6 +535,13 @@ day later (0.4.2: 17 November here, 18 November there).
   are veiled where they flash, on the GPU and the processor alike.
   ([Change in part of a tile](../guides/strobe-guard.md#partial-change),
   [#275](https://github.com/jprodgers/jetcarp/issues/275))
+- **The strobe guard veils dense restless ash at once.** Ash that keeps changing in part of each
+  tile without coming back (Walled Cities, 34 Life, Long Life, a Seeds soup) was softened and
+  slowed, but up to 2.7 seconds of flashing reached the screen first; such change now
+  counts where it flashes on its own and is veiled at once, while Brian's Brain and Life soups,
+  which WCAG counted pixel by pixel does not count as flashing together, are left alone.
+  ([Restless change](../guides/strobe-guard.md#restless-change),
+  [#289](https://github.com/jprodgers/jetcarp/issues/289))
 
 - **The Windows installer's `-Uninstall` leaves the user PATH alone when JETCARP's folder isn't on
   it.** It wrote the PATH back whatever it held, tidied (empty entries dropped), so a PATH could
@@ -807,6 +814,19 @@ day later (0.4.2: 17 November here, 18 November there).
   data folder, the library stays. On Linux and macOS the app ended with SIGTERM, SIGHUP or Ctrl-C
   closes as its window does, removing its port and token file, which SIGTERM left on the Mac.
   ([Uninstalling](../guides/uninstalling.md), [#135](https://github.com/jprodgers/jetcarp/issues/135))
+- **The background host, `jetcarp mcp`, `jetcarp search` and `jetcarp script` stop on SIGTERM as
+  their own stop does,** where they ended at once and left their port and token file and memory
+  record in the runtime folder, and a search's job marked running with nothing running it: on
+  Linux and macOS, SIGTERM (launchd at logout on the Mac, a Linux session as it ends), SIGHUP and
+  Ctrl-C stop the host as `jetcarp host stop` does, leaving its still picture when one is asked
+  for; the MCP server, over HTTP or stdio, as a closed session does, its jobs at their next
+  checkpoint; a search at its next checkpoint, so `--resume` carries it on; and a script at its next
+  step, ending with 128 + the signal's number. A second signal ends any of them at once. A call
+  still running when the MCP server stops, such as a `job_status` waiting for a job, no longer
+  holds it up: it is cut short with an answer saying the server is stopping, and the server ends
+  within a few seconds. ([The background host](../guides/wallpapers.md#the-background-host),
+  [Calls cut short](../reference/mcp.md#calls-cut-short),
+  [#278](https://github.com/jprodgers/jetcarp/issues/278))
 - **The installers' `--uninstall` names each folder it keeps and what it holds,** instead of "kept
   your settings, data and pictures" when only the pictures were left.
   ([#142](https://github.com/jprodgers/jetcarp/issues/142))
@@ -871,14 +891,22 @@ day later (0.4.2: 17 November here, 18 November there).
   computer* used to leave the world paused). Before measuring, each says plainly that games,
   video, builds and other simulations lower the score, and asks for them to be closed. A JETCARP
   program that can't hold still (`jetcarp run`, a script, another measuring) is named, and so is a
-  processor busy with something else (other programs at 15% or more of it) or, where Linux's
-  driver says, a GPU at 25% or more: the app and setup wait and measure once it has gone, with
+  processor busy with something else (other programs at 15% or more of it) or a GPU at 25% or
+  more, read on Windows (its GPU engine counters, every vendor's), macOS (IOKit's
+  `Device Utilization %`) and Linux (AMD's `gpu_busy_percent`, NVIDIA's NVML, or DRM `fdinfo` for
+  Intel and others), with where it was read kept beside the score, or *GPU load not read* and why:
+  the app and setup wait and measure once it has gone, with
   *Measure anyway*; `jetcarp score` asks in a terminal whether to wait, and otherwise measures
   anyway and says so, so scripts never wait on a question. A score measured anyway is marked as
   taken under load, with what was found, in the result, `machine.json` and the report; the limits
   never came from the score and are unchanged, and Fit to this computer's first guesses skip such
   a score. ([While it measures](../guides/this-computer.md#while-it-measures),
   [#301](https://github.com/jprodgers/jetcarp/issues/301))
+- **Setup says what measuring is for.** Its measuring page, `jetcarp setup` and its plan said
+  measuring gave the computer "limits that fit it", but the limits come from the hardware and your
+  own values, never the score. They now say the JETCARP Hardware Score is for comparing computers
+  and for Fit to this computer's first guess.
+  ([First run](../getting-started/first-run.md), [#301](https://github.com/jprodgers/jetcarp/issues/301))
 - **`jetcarp score`'s progress reads in a log.** With its output going to a file or a pipe, its
   steps ran together on one line, ended by a terminal's erase code. Each step is now a line of its
   own, with no escape codes; in a terminal the line is still redrawn in place. `jetcarp library

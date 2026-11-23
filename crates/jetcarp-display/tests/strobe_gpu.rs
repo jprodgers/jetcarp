@@ -856,6 +856,140 @@ fn the_gpu_guard_keeps_a_dense_period_2_field_under_the_limit() {
     }
 }
 
+/// A soup of Walled Cities (B45678/S2345) left to settle 1,000 generations: dense ash that keeps
+/// changing in part of each tile without coming back (#289), as JETCARP's renderer draws it at
+/// `px` pixels a cell in the default palette, `w` by `h`. Each call steps it one generation.
+struct RestlessAsh {
+    world: jetcarp_core::World,
+    px: f64,
+}
+
+impl RestlessAsh {
+    fn new(w: u32, h: u32, px: f64) -> RestlessAsh {
+        let (cw, ch) = (
+            (w as f64 / px).ceil() as u32 + 2,
+            (h as f64 / px).ceil() as u32 + 2,
+        );
+        let json = format!(
+            r#"{{"name": "ash", "tiling": {{"family": "square", "size": {{"rect": {{"w": {cw}, "h": {ch}}}}}, "boundary": "wrap"}}, "rng_state": 7, "cas": [{{"rule": "B45678/S2345", "palette": "Ember", "seed": {{"random": {{"density": 0.35}}}}}}]}}"#
+        );
+        let scene: jetcarp_core::Scene = serde_json::from_str(&json).unwrap();
+        let mut world = jetcarp_core::World::from_scene(&scene).unwrap();
+        for _ in 0..1000 {
+            world.step();
+        }
+        RestlessAsh { world, px }
+    }
+
+    /// The ash as drawn now, `w` by `h`.
+    fn draw(&self, w: u32, h: u32) -> Vec<u8> {
+        use jetcarp_core::render::{ViewOptions, render_view};
+        let b = self.world.topo.bounds;
+        let center = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
+        render_view(&self.world, w, h, center, self.px, &ViewOptions::default()).rgba
+    }
+}
+
+/// The guard on the GPU ([`GuardedGpu`]) keeps dense restless ash (#289) under the limit on
+/// screen from the start: what it shows, read back and measured pixel by pixel as WCAG defines a
+/// flash, makes two flashes a second at most, before the pace cap holds as after. Unguarded, it
+/// fails. The view is a
+/// window on a 1080p screen, as for the period-2 field. Drawn and measured offscreen only.
+#[test]
+fn the_gpu_guard_keeps_restless_ash_under_the_limit() {
+    use jetcarp_core::strobe::flash::{COUNT_CAP, EPSILON, Tracker};
+    use jetcarp_core::strobe::guard::Pace;
+    use jetcarp_core::strobe::{DARK_LIMIT, FLASH_DELTA, Viewing, luminance};
+    use jetcarp_display::strobe_gpu::GuardedGpu;
+    let Some(g) = gpu() else { return };
+    let (w, h) = (640u32, 480u32);
+    // Pixel by pixel over a square larger than the 10° field.
+    let allowed = Viewing::screen(1.0).flash_area();
+    let (rx, ry, rw) = (160u32, 90u32, 300u32);
+    let measure = |px: &mut Vec<Tracker>, rgba: &[u8], t: f64| {
+        let mut at_least = [0usize; COUNT_CAP as usize + 2];
+        for (i, tr) in px.iter_mut().enumerate() {
+            let (x, y) = (rx + i as u32 % rw, ry + i as u32 / rw);
+            let p = &rgba[((y * w + x) * 4) as usize..];
+            tr.update(
+                luminance([p[0], p[1], p[2]]),
+                t,
+                FLASH_DELTA,
+                EPSILON,
+                Some(DARK_LIMIT),
+            );
+            at_least[tr.count(t) as usize] += 1;
+        }
+        for k in (0..=COUNT_CAP as usize).rev() {
+            at_least[k] += at_least[k + 1];
+        }
+        (1..=COUNT_CAP)
+            .rev()
+            .find(|&k| at_least[k as usize] as f64 > allowed)
+            .unwrap_or(0)
+    };
+    let speed = 30.0f64;
+    for on in [false, true] {
+        let mut ash = RestlessAsh::new(w, h, 4.0);
+        let mut frame = ash.draw(w, h);
+        let mut tex = g.texture(&frame, w, h);
+        let screen = Some(1920.0 * 1080.0);
+        let mut gg = GuardedGpu::new(&g.device, Viewing::screen(1.0), screen, on);
+        let mut px = vec![Tracker::default(); (rw * rw) as usize];
+        let (mut due, mut gen_no, mut most) = (0.0f64, 0u64, 0);
+        for k in 0..(60 * 4) as u32 {
+            let t = k as f64 / 60.0;
+            let pace = gg.guard.cap().map_or(speed, |c| (c as f64).min(speed));
+            gg.update(
+                &g.device,
+                Pace {
+                    speed: speed as f32,
+                    reached: Some(pace as f32),
+                    frame_rate: 60.0,
+                },
+            );
+            if k > 0 && gg.guard.paused().is_none() {
+                due += pace / 60.0;
+                let next = (due + 1e-9).floor() as u64;
+                if next > gen_no {
+                    while gen_no < next {
+                        ash.world.step();
+                        gen_no += 1;
+                    }
+                    frame = ash.draw(w, h);
+                    tex = g.texture(&frame, w, h);
+                }
+            }
+            let mut enc = g.device.create_command_encoder(&Default::default());
+            let shown = gg.frame(&g.device, &g.queue, &mut enc, Some(&tex), t);
+            g.queue.submit([enc.finish()]);
+            gg.gpu.after_submit();
+            g.wait();
+            let out = match shown {
+                Shown::Softened => g.read(gg.gpu.softened_texture().expect("softened")),
+                Shown::Drawn => frame.clone(),
+            };
+            most = most.max(measure(&mut px, &out, t));
+        }
+        eprintln!(
+            "Walled Cities ash, 4-pixel cells at {speed} gen/s, guard {}: {most} transitions a \
+             second shown, pixel by pixel; {:?}",
+            if on { "on" } else { "off" },
+            gg.guard.report().action
+        );
+        if on {
+            assert!(
+                most <= 4,
+                "restless ash at {speed} generations a second: {most} transitions a second \
+                 shown ({:?})",
+                gg.guard.report()
+            );
+        } else {
+            assert!(most > 6, "restless ash unguarded: {most}");
+        }
+    }
+}
+
 /// Red flashes by either definition (#270): one only WCAG 2.0's working definition catches (two
 /// reds of one chromaticity), one only WCAG 2.2's (a dark red and a dark green, more than 0.2
 /// apart in CIE 1976 UCS chromaticity, under 20 apart in the 2.0 measure), and one both. Each,

@@ -331,6 +331,45 @@ fn fine_patterns_in_the_corpus() {
     }
 }
 
+/// How much of each scene's change in part of its tiles is restless (#289), as drawn (ignored;
+/// `--ignored --nocapture`): the most transitions by the area rule over its tiles' windows'
+/// changes made with their neighbours', whether or not the tiles oscillate, and over those of an
+/// oscillation.
+#[test]
+#[ignore]
+fn restless_change_in_the_corpus() {
+    for c in CASES {
+        let mut world = World::from_scene(&scene(c.scene)).unwrap();
+        let mut meter = FlashMeter::new(Viewing::screen(1.0), None);
+        let (mut restless, mut partial, mut tiles) = (0, 0, 0);
+        for k in 0..(c.secs * FPS) as u32 {
+            let due = (k as f64 * c.speed / FPS + 1e-9).floor();
+            while (world.generation as f64) < due {
+                world.step();
+            }
+            let (map, _) = reduce_both(&draw(&world, c), W, H);
+            let r = meter.update(&map, k as f64 / FPS);
+            restless = restless.max(r.restless_transitions);
+            partial = partial.max(r.partial_transitions);
+            tiles = tiles.max(
+                meter
+                    .tile_restless_counts()
+                    .iter()
+                    .filter(|&&n| n >= 2)
+                    .count(),
+            );
+        }
+        println!(
+            "{} at {} gen/s{}: restless {restless}, partial {partial}; tiles with a restless flash {tiles} (of {})",
+            c.scene,
+            c.speed,
+            c.cell_px
+                .map_or(String::new(), |p| format!(", {p} px a cell")),
+            (W / 16) * (H / 16)
+        );
+    }
+}
+
 /// The same through the guard as a screen shows it (ignored; `--ignored --nocapture`): the most
 /// tiles with a counted fine-pattern reversal, as drawn and as shown, and the most transitions in
 /// a second shown.

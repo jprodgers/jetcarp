@@ -27,6 +27,7 @@ mod research;
 mod script_cmd;
 mod search_cmd;
 mod setup_cmd;
+mod stop_signal;
 mod term;
 mod wallpaper_cmd;
 
@@ -902,7 +903,7 @@ fn run() -> Result<()> {
                         new_token,
                         allow_origins: allow_origin,
                     },
-                    jetcarp_mcp::http::stop_on_ctrl_c(),
+                    jetcarp_mcp::http::stop_on_signal(),
                 ),
             }
             .map_err(anyhow::Error::msg)?

@@ -339,8 +339,10 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
     let mut measure = !a.no_measure;
     if interactive && measure {
         eprintln!(
-            "\nMeasure this computer? About a minute of JETCARP's own work, with nothing drawn: its\n\
-             limits then fit it, and it gets a JETCARP Hardware Score (`jetcarp score` measures again)."
+            "\nMeasure this computer? About a minute of JETCARP's own work, with nothing drawn, for\n\
+             its JETCARP Hardware Score: to compare it with other computers, and for Fit to this\n\
+             computer's first guess. Its limits come from its hardware either way\n\
+             (`jetcarp score` measures again)."
         );
         measure = yes_no("Measure it?", true);
     }

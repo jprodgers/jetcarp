@@ -99,7 +99,7 @@ fn main() {
                 new_token,
                 allow_origins,
             },
-            jetcarp_mcp::http::stop_on_ctrl_c(),
+            jetcarp_mcp::http::stop_on_signal(),
         ),
     };
     jetcarp_core::machine::pool::stop();
