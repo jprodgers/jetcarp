@@ -109,8 +109,9 @@ The app can be used from the keyboard alone, as far as the toolkit it's built wi
 
 - **Moving about.** Tab and Shift+Tab reach every control in every window, in the order the window
   shows them, and scroll each into view. F6 and Shift+F6 move between the menu bar, each group of
-  panes, the grid, the status line and each floating window. F10 opens the menus. Esc closes the
-  tool window that has the keyboard, and dialogs open with their main button ready for Enter.
+  panes, the grid, the status line and each floating window. F10 opens the menus. Esc and Ctrl+W
+  (⌘W) close the tool window that has the keyboard, its × is a control Tab reaches, and dialogs
+  open with their main button ready for Enter.
 - **A ring in every theme** shows which control has the keyboard: two points wide in the standard
   themes, three in high contrast, at a contrast of at least 3:1 against every background.
 - **The grid.** With the keyboard on the grid, the arrow keys move a cursor from cell to cell on any

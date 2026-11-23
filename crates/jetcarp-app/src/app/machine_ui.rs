@@ -659,7 +659,7 @@ impl JetcarpApp {
         let Some(ask) = &self.machine.ask else { return };
         let message = ask.message.clone();
         let mut answer = None;
-        egui::Window::new("Over this machine's limit")
+        let shown = egui::Window::new("Over this machine's limit")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -689,6 +689,14 @@ impl JetcarpApp {
                     }
                 });
             });
+        // A part of the window F6 moves to, and Esc is Cancel (#219, #308).
+        if let Some(r) = &shown {
+            let layer = r.response.layer_id;
+            crate::a11y::window_region(ctx, "Over this machine's limit", layer, r.response.rect);
+            if answer.is_none() && crate::a11y::escape_closes_dialog(ctx, layer) {
+                answer = Some(false);
+            }
+        }
         let Some(yes) = answer else { return };
         let Some(ask) = self.machine.ask.take() else {
             return;

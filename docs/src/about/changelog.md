@@ -375,6 +375,9 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Changed
 
+- ***Tools → Start an explore search…*** (#310) opens the *Hunts* window at its explore form, with
+  the keyboard on the form's first box. The form was only a button inside the *Hunts* window, which
+  the menus didn't name; the button stays. ([Searching](../guides/searching.md#in-the-app))
 - **An explore search says, as it starts, that it isn't reproducible:** `jetcarp search explore`
   and `jetcarp quickstart build` print it (unless `--quiet`), the *Hunts* window's explore form
   shows it, and MCP's description of the strategy says it. What it finds depends on the computer
@@ -505,6 +508,24 @@ day later (0.4.2: 17 November here, 18 November there).
   ring, drawn round the whole scrolled text, showed nowhere. A control in view now counts only
   inside the part of a background in view, a thin bar (a scroll bar) never makes a widget a
   background, and the ring of a large widget goes round the part of it in view.
+- **Every tool window and dialog closes from the keyboard** (#308). A tool window opened from the
+  menu bar with the keyboard left the keyboard nowhere, so Esc did nothing; once Esc had left a
+  text box, Esc did nothing more; a floating pane didn't close with Esc at all; and the title
+  bar's ×, egui's own, came first in Tab's order, named only "Close window". A tool window opened
+  from the menus or by its key now has the keyboard on its first control, Esc closes the tool
+  window or floating pane whose control has the keyboard (from a text box, a second Esc), the × is
+  the window's own last control, named *Close* and the window's title, and
+  **Ctrl+W** (⌘W on macOS) closes the tool window or dialog that has the keyboard, or brings a
+  popped-out one back into the main window. In a docked pane, Esc takes the keyboard back to the
+  grid, and Esc is *Cancel* in *Over this machine's limit*.
+  ([Using the app from the keyboard](../guides/keyboard.md#moving-about))
+- **Setup's *What it searches* keeps the keyboard** (#309). ↓ jumped from row to row of its wrapped
+  check boxes, passing most of them by, and ↑ from the top of the page took the keyboard to the
+  main window's controls behind the setup window, where its ring couldn't be seen. ↓ and ↑ now go
+  through the choices one by one, as Tab and Shift+Tab do, there and in the *Hunts* window's
+  explore form (its tilings and rule families, with their *All*, *None* and *Default*), where ↓
+  had left the keyboard on the first box; and an arrow key never takes the keyboard out of the
+  floating window it is in.
 - **A world over the limit is asked about, never made smaller to fit.** The *Tiling* pane's
   *Width × height* fields stopped each side at 16,384, so 100,000 × 100,000 squares (about 75 GB)
   became 16,384 × 16,384 (about 2 GB) and were built with nothing said; the fields take any size

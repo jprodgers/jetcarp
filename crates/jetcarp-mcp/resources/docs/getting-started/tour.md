@@ -130,7 +130,7 @@ and *Window → Reset layout* puts everything back:
 | *Tiling* | The *Tiling* pane, *Family*, *Edges*, *Tiling catalog*, *Tile editor…*, *Unit cell editor…*, *Paste tile JSON…* |
 | *CA* | *Add from catalog*, *Add by notation…*, *Load rule table…*, the *CAs* and *Sequence* panes, *Palettes…* |
 | *Seed* | *Seed every CA*, *Random cells in every CA*, each automaton's seed, *Clear every CA*, *Reset*, the *Reseed* pane, *Reseed now*, *Auto reseed* |
-| *Tools* | The tool windows below, *Sweep this world…*, the *Objects* pane |
+| *Tools* | The tool windows below, *Sweep this world…*, *Start an explore search…*, the *Objects* pane |
 | *Window* | Every pane and tool window, *Hide all panes*, *Reset layout*, *Displays* |
 | *Settings* | *Safety…*: the [strobe guard](../guides/strobe-guard.md), what it is doing, and its switches; *Accessibility…*: reduced motion, the high-contrast theme, light or dark, and the palettes for scenes that name none ([Accessibility settings](../guides/accessibility-settings.md)) |
 | *Help* | *Setup…* (the setup window again), *Keyboard shortcuts…* (F1), *About JETCARP…* |
@@ -144,14 +144,15 @@ Space, Enter and the arrows belong to whatever control has the keyboard.
 
 Most tools open in windows of their own. Each floats over the world, and its ↗ button (or
 *In its own window* under its name in the *Window* menu) moves it to a separate window that can go
-on another monitor. Esc closes the tool window whose control has the keyboard.
+on another monitor. Its × closes it, and so do Esc and Ctrl+W (⌘W on macOS) while one of its
+controls has the keyboard; the × is its last control, reached with Tab.
 
-<img src="../images/getting-started/tour-tools-menu.webp" alt="The Tools menu: Scripts and sweeps, Sweep this world, Sweep results, Pattern library, Hunts, Catalog tools, Ants and turmites, Large sandpile, HashLife view, Objects, AI control and This computer" width="244">
+<img src="../images/getting-started/tour-tools-menu.webp" alt="The Tools menu: Scripts and sweeps, Sweep this world, Sweep results, Pattern library, Hunts, Start an explore search, Catalog tools, Ants and turmites, Large sandpile, HashLife view, Objects, AI control and This computer" width="244">
 
 | Window | Menu | What it is for |
 | --- | --- | --- |
 | *Pattern library* | *Tools* | Every pattern your searches found and your packs brought: browse, curate, paste into the world, promote to the Quick Start ([The pattern library](../guides/pattern-library.md)) |
-| *Hunts* | *Tools* | Start, watch, stop and resume searches, with each job's progress and finds ([Searching](../guides/searching.md#in-the-app)) |
+| *Hunts* | *Tools* | Start, watch, stop and resume searches, with each job's progress and finds; *Tools → Start an explore search…* opens it at the explore search's form ([Searching](../guides/searching.md#in-the-app)) |
 | *Ants and turmites* | *Tools* | Search for ant and turmite highways ([Langton's ant and turmites](../automata/turmites.md), [Searching](../guides/searching.md#the-other-strategies)) |
 | *Large sandpile* | *Tools* | Settle millions of sandpile grains on an unbounded grid ([Large sandpiles](../guides/large-sandpiles.md)) |
 | *HashLife view* | *Tools* | This world's pattern on the unbounded plane, jumped any distance ([HashLife](../guides/hashlife.md#in-the-app)) |

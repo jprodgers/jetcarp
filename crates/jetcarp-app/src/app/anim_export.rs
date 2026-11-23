@@ -115,9 +115,9 @@ impl JetcarpApp {
         }
         let mut open = true;
         let mut go = false;
+        // Its close button is drawn after its contents, as the tool windows' is (#308).
         let shown = egui::Window::new("Export animation")
             .id(anim_window_id())
-            .open(&mut open)
             .resizable(false)
             .show(ctx, |ui| {
                 ui.label("The view as it is now, then the generations after it.");
@@ -188,7 +188,10 @@ impl JetcarpApp {
             let layer = r.response.layer_id;
             crate::a11y::window_region(ctx, "Export animation", layer, r.response.rect);
             crate::a11y::mouse_only(ctx, anim_window_id().with("__title_click"));
-            if crate::a11y::escape_closes_dialog(ctx, layer) {
+            if crate::popout::close_button(ctx, &r.response, "Export animation")
+                || crate::a11y::escape_closes_dialog(ctx, layer)
+                || crate::a11y::close_key(ctx, layer)
+            {
                 open = false;
             }
         }

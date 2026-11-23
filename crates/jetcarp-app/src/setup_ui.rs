@@ -1508,35 +1508,43 @@ impl Wizard {
             "What it searches: Custom"
         };
         // A fixed id, so it stays open as its title changes.
-        egui::CollapsingHeader::new(title)
+        let shown = egui::CollapsingHeader::new(title)
             .id_salt("setup-quick-start-search")
             .show(ui, |ui| {
+                let mut ids = vec![];
                 let mut all = self.search_all();
-                if ui
+                let r = ui
                     .checkbox(&mut all, "All")
-                    .on_hover_text("Every tiling group and every rule family, isotropic rules too")
-                    .changed()
-                {
+                    .on_hover_text("Every tiling group and every rule family, isotropic rules too");
+                ids.push(r.id);
+                if r.changed() {
                     self.groups.iter_mut().for_each(|g| g.1 = all);
                     self.families.iter_mut().for_each(|f| f.1 = all);
                 }
                 ui.label(RichText::new("Tilings").small().strong());
                 ui.horizontal_wrapped(|ui| {
                     for (g, on) in &mut self.groups {
-                        ui.checkbox(on, crate::dash_ui::group_label(g))
+                        let r = ui
+                            .checkbox(on, crate::dash_ui::group_label(g))
                             .on_hover_text(crate::dash_ui::group_note(g));
+                        ids.push(r.id);
                     }
                 });
                 ui.label(RichText::new("Rule families").small().strong());
                 ui.horizontal_wrapped(|ui| {
                     for (f, on) in &mut self.families {
-                        ui.checkbox(on, crate::dash_ui::family_label(*f));
+                        ids.push(ui.checkbox(on, crate::dash_ui::family_label(*f)).id);
                     }
                 });
                 if let Some(p) = self.search_problem() {
                     ui.colored_label(ui.visuals().error_fg_color, p);
                 }
+                ids
             });
+        // ↓ and ↑ go through the choices one by one, as Tab does (#309).
+        if let Some(ids) = &shown.body_returned {
+            crate::a11y::arrow_list(ui.ctx(), Some(shown.header_response.id), ids);
+        }
     }
 
     fn progress_ui(&mut self, ui: &mut egui::Ui) {
