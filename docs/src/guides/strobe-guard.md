@@ -281,7 +281,10 @@ jetcarp guard --on       # both back on (or --on app, --on desktop)
 
 While the guard acts, the app's status bar says so (*Strobe guard: softening flashes over 40% of
 the view.*, *Strobe guard: slowed to 2 generations a second, because the scene flashed 4 or more
-times a second.*); clicking it opens Settings → Safety, which shows what the guard is doing now,
+times a second.*), its note first, ahead of any other (such as why a scene opened paused, which
+then follows it, cut short with "…" if the line is full). With the status bar off, its note shows
+over the grid's top left for a few seconds, any other note below it. Clicking it opens Settings →
+Safety, which shows what the guard is doing now,
 the readings behind it, and what it did lately. With the guard off, the status bar says when a scene
 flashes. The background host logs what the guard does (`jetcarp host status`), and each screen's
 `stage.strobe_guard` says what it is doing there; the MCP tool `app_display` and `jetcarp host
