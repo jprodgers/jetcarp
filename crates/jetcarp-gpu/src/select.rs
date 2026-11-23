@@ -794,7 +794,7 @@ fn rank(info: &wgpu::AdapterInfo, purpose: Purpose) -> (u8, u8) {
 /// WARP is not supported for users until Windows Update brings a WARP that compiles JETCARP's
 /// shaders, and even then only if supporting it breaks nothing else. The kernels are not reshaped
 /// to suit a WARP that can't.
-fn is_warp(info: &wgpu::AdapterInfo) -> bool {
+pub(crate) fn is_warp(info: &wgpu::AdapterInfo) -> bool {
     info.device_type == wgpu::DeviceType::Cpu
         && (info.backend == wgpu::Backend::Dx12 || info.name.contains("Microsoft Basic Render"))
 }

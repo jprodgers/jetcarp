@@ -673,8 +673,9 @@ job that hangs is stopped rather than left running for hours.
   ([#321](https://github.com/jprodgers/jetcarp/issues/321)). The Windows job downloads
   Microsoft's `Microsoft.Direct3D.WARP` 1.0.22 from NuGet, checks it against a pinned SHA-256, and
   puts its `d3d10warp.dll` beside every program the tests run, which load it before the system's;
-  `JETCARP_ALLOW_WARP=1` lets the tests choose it. It is a tool of CI's: nothing a release ships
-  is built there, and no release contains it. On all three systems, and in the release workflow's
+  `JETCARP_ALLOW_WARP=1` lets the tests choose it. WARP is slow at the soup hunt's kernel, so
+  there the hunt's GPU tests run an eighth of their soups. It is a tool of CI's: nothing a release
+  ships is built there, and no release contains it. On all three systems, and in the release workflow's
   tests, `JETCARP_REQUIRE_GPU=1` makes a GPU test that finds no adapter it can use (none, or one
   the GPU self-test turns down) fail, naming the adapter and why, rather than skip: there the GPU
   tests cannot pass without having run. On Linux the tests run once more with the default

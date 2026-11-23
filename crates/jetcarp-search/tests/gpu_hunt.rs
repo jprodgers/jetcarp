@@ -27,7 +27,19 @@ fn gpu() -> Option<Arc<GpuHunter>> {
     .clone()
 }
 
+/// How many of `n` soups to run: all of them, or an eighth (at least 16) on Windows' WARP, the
+/// software renderer Windows CI runs these on (#321), where they took 23 minutes in all on its
+/// four processors and timed out.
+fn soups(g: &GpuHunter, n: u64) -> u64 {
+    if g.name().contains("Microsoft Basic Render Driver") {
+        (n / 8).max(16)
+    } else {
+        n
+    }
+}
+
 fn check_prefixes(g: &GpuHunter, rule: &str, tiling: &str, n: u64) {
+    let n = soups(g, n);
     let t = jetcarp_core::pattern::tiling_from_key(tiling).unwrap();
     let spec = HuntSpec::default();
     let c = Census::new(rule, &t, None, spec.max_period).unwrap();
@@ -74,6 +86,7 @@ fn gpu_prefixes_equal_cpu_for_isotropic_rules() {
         ("B3-cnqy/S23-a", 300),
         ("B2a3-ckn/S1e2-in3/C4", 200),
     ] {
+        let n = soups(&g, n);
         let t = TilingSpec::new("square");
         let spec = HuntSpec::default();
         let c = Census::new(rule, &t, None, spec.max_period).unwrap();
@@ -153,7 +166,7 @@ fn gpu_hunt_equals_cpu_hunt() {
     let spec = HuntSpec {
         rules: vec!["B3/S23".into(), "B2/S34".into()],
         tilings: vec![TilingSpec::new("square"), TilingSpec::new("hex")],
-        soups: Some(400),
+        soups: Some(soups(&g, 400)),
         ..Default::default()
     };
     hunts_agree(&g, &spec);
@@ -166,7 +179,7 @@ fn gpu_hunt_equals_cpu_hunt_for_isotropic_rules() {
     let spec = HuntSpec {
         rules: vec!["B2-a/S12".into(), "B3/S2-i34q".into()],
         tilings: vec![TilingSpec::new("square")],
-        soups: Some(300),
+        soups: Some(soups(&g, 300)),
         ..Default::default()
     };
     hunts_agree(&g, &spec);
