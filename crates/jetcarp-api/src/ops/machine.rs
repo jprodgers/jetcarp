@@ -295,9 +295,17 @@ pub fn hardware_text(hw: &Hardware) -> String {
                 format!("{} own, may borrow {}", bytes_text(d), bytes_text(sh))
             }
             (Some(d), None, _) => format!("{} own", bytes_text(d)),
-            _ => "memory not reported".into(),
+            (None, Some(sh), _) => format!("none of its own, may borrow {}", bytes_text(sh)),
+            _ => match &g.not_read {
+                Some(why) => format!("memory not read ({why})"),
+                None => "memory not reported".into(),
+            },
         };
-        let _ = writeln!(s, "  {name}: {mem} ({})", g.source);
+        if g.source.is_empty() {
+            let _ = writeln!(s, "  {name}: {mem}");
+        } else {
+            let _ = writeln!(s, "  {name}: {mem} ({})", g.source);
+        }
     }
     s
 }
@@ -723,5 +731,48 @@ impl Op for MachineScore {
         // not is kept beside the score.
         let before = Before::check(a.quick);
         measure(cx, a, &before, p)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jetcarp_core::machine::GpuMemory;
+
+    /// Each GPU's line in `jetcarp doctor`: its memory and where it was read, or why it was not.
+    #[test]
+    fn a_gpu_s_line_says_where_its_memory_came_from_or_why_not() {
+        let hw = Hardware {
+            os: "linux".into(),
+            arch: "x86_64".into(),
+            cpu: "A processor".into(),
+            threads: 8,
+            memory_total: 32 << 30,
+            gpus: vec![
+                GpuMemory {
+                    vendor: 0x10de,
+                    device: 0x2684,
+                    dedicated: Some(24 << 30),
+                    source: "NVML".into(),
+                    ..Default::default()
+                },
+                GpuMemory {
+                    vendor: 0x10de,
+                    device: 0x2206,
+                    not_read: Some(jetcarp_core::machine::gpu_load::NO_NVML.into()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let t = hardware_text(&hw);
+        assert!(t.contains("\n  GPU 10de:2684: 24 GB own (NVML)\n"), "{t}");
+        assert!(
+            t.contains(
+                "\n  GPU 10de:2206: memory not read (the NVIDIA GPU's management library, \
+                 libnvidia-ml.so.1, could not be opened)\n"
+            ),
+            "{t}"
+        );
     }
 }

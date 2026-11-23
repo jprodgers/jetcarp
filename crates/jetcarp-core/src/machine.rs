@@ -26,6 +26,7 @@ pub mod nvml;
 pub mod pool;
 pub mod quiet;
 pub mod score;
+pub mod vulkan;
 
 pub use hardware::{GpuMemory, Hardware};
 pub use limits::{Entry, Id, Limits, OverLimit, Own, Source, Unit};

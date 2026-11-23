@@ -846,20 +846,27 @@ const GPU_OWN_ENOUGH: u64 = 2 * GIB;
 /// [`GPU_CELL_BYTES`] a cell. A GPU with memory enough of its own is judged by that; one with
 /// little (an integrated GPU) by that and the system memory it may borrow, within JETCARP's part.
 /// With none reported (or one sharing the system's memory, as on Apple silicon), JETCARP's part,
-/// said as an estimate. The GPU's own buffer limits come on top, where it opens.
+/// said as an estimate, with why the GPU's memory was not read where the system said. The GPU's
+/// own buffer limits come on top, where it opens.
 fn gpu_suggestion(hw: &Hardware, jetcarp: f64) -> (f64, String) {
     let usable = |g: &super::hardware::GpuMemory| -> Option<(u64, String)> {
-        let own = g.dedicated?;
+        // A GPU that only borrows (an integrated one whose Vulkan driver gave its heap) has
+        // none of its own.
+        let own = g.dedicated.or(g.shared.map(|_| 0))?;
         if own >= GPU_OWN_ENOUGH {
             return Some((own, format!("the GPU's {}", bytes_text(own))));
         }
         let borrow = g.shared.unwrap_or(0);
         let total = own.saturating_add(borrow).min(jetcarp as u64).max(own);
+        let what = if g.dedicated.is_some() {
+            format!("the GPU's {} and what it may borrow", bytes_text(own))
+        } else {
+            "what the GPU may borrow".into()
+        };
         Some((
             total,
             format!(
-                "the GPU's {} and what it may borrow, within the {} reserved for JETCARP",
-                bytes_text(own),
+                "{what}, within the {} reserved for JETCARP",
                 bytes_text(jetcarp as u64)
             ),
         ))
@@ -879,8 +886,13 @@ fn gpu_suggestion(hw: &Hardware, jetcarp: f64) -> (f64, String) {
         None => (
             ((jetcarp / 2.0) as u64 / GPU_CELL_BYTES) as f64,
             format!(
-                "an estimate: half of the {} reserved for JETCARP at {GPU_CELL_BYTES} bytes a cell, \
-                 within the GPU's buffer limits",
+                "an estimate{}: half of the {} reserved for JETCARP at {GPU_CELL_BYTES} bytes a \
+                 cell, within the GPU's buffer limits",
+                // Why the GPU's own memory was not read, where the system said (Linux).
+                hw.gpus
+                    .iter()
+                    .find_map(|g| g.not_read.as_deref())
+                    .map_or(String::new(), |w| format!(" ({w})")),
                 bytes_text(jetcarp as u64)
             ),
         ),
@@ -1100,6 +1112,7 @@ mod tests {
             unified: false,
             source: "sysfs".into(),
             name: String::new(),
+            not_read: None,
         });
         let l = Limits::compute(&hw, &Own::default());
         assert_eq!(l.gpu_world_cells(), 16 * GIB / GPU_CELL_BYTES);
@@ -1124,6 +1137,7 @@ mod tests {
             unified: false,
             source: "DXGI".into(),
             name: "An integrated GPU".into(),
+            not_read: None,
         });
         let l = Limits::compute(&hw, &Own::default());
         // Its 128 MB and the 8 GB it may borrow, held to JETCARP's 8 GB: half of that.
@@ -1137,6 +1151,31 @@ mod tests {
         hw.gpus[0].dedicated = Some(12 * GIB);
         let l = Limits::compute(&hw, &Own::default());
         assert_eq!(l.gpu_world_cells(), 6 * GIB / GPU_CELL_BYTES);
+    }
+
+    /// An integrated GPU whose Vulkan driver gives only the system memory it may borrow (no
+    /// memory of its own, on Linux): judged by that, within JETCARP's part, as one with a little
+    /// memory of its own is.
+    #[test]
+    fn a_gpu_that_only_borrows_is_judged_by_what_it_may_borrow() {
+        let mut hw = machine(16);
+        hw.gpus.push(super::super::hardware::GpuMemory {
+            vendor: 0x1d17,
+            device: 1,
+            shared: Some(12 * GIB),
+            source: "Vulkan".into(),
+            ..Default::default()
+        });
+        let l = Limits::compute(&hw, &Own::default());
+        // The 12 GB it may borrow, held to JETCARP's 8 GB: half of that.
+        assert_eq!(l.gpu_world_cells(), 4 * GIB / GPU_CELL_BYTES);
+        let why = &l.get(Id::GpuWorld).why;
+        assert!(
+            why.starts_with(
+                "half of what the GPU may borrow, within the 8 GB reserved for JETCARP"
+            ),
+            "{why}"
+        );
     }
 
     #[test]

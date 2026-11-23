@@ -1,9 +1,11 @@
 //! NVIDIA's management library, NVML, on Linux: how busy an NVIDIA GPU is
-//! ([`super::gpu_load`]). It comes with NVIDIA's driver (some distributions package it on its
-//! own) and is opened while running (`dlopen`), so JETCARP has no build dependency on it and runs
-//! where it is missing.
+//! ([`super::gpu_load`]) and how much memory it has ([`super::hardware`]). It comes with NVIDIA's
+//! driver (some distributions package it on its own) and is opened while running (`dlopen`), so
+//! JETCARP has no build dependency on it and runs where it is missing.
 //!
 //! Its calls are reached through [`Api`], so the tests stand in for them on every system.
+
+use super::hardware::{PciAddress, parse_pci_address};
 
 /// `nvmlUtilization_t`: the share of the last sample period (a sixth of a second to a second)
 /// in which a kernel ran, and the memory's.
@@ -12,6 +14,46 @@
 pub struct Utilization {
     pub gpu: u32,
     pub memory: u32,
+}
+
+/// `nvmlMemory_t`: the GPU's memory, in bytes.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Memory {
+    pub total: u64,
+    pub free: u64,
+    pub used: u64,
+}
+
+/// `nvmlPciInfo_t`, as `nvmlDeviceGetPciInfo_v3` writes it: where the GPU is on the PCI bus.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PciInfo {
+    /// `busIdLegacy`: `0000:01:00.0`, ending in NUL.
+    pub bus_id_legacy: [u8; 16],
+    pub domain: u32,
+    pub bus: u32,
+    pub device: u32,
+    /// `pciDeviceId`: the device's id in the high 16 bits, its vendor's in the low.
+    pub pci_device_id: u32,
+    pub pci_subsystem_id: u32,
+    /// `busId`: `00000000:01:00.0`, ending in NUL.
+    pub bus_id: [u8; 32],
+}
+
+impl PciInfo {
+    /// Its PCI address: from `busId`, else `busIdLegacy`, else its domain, bus and device.
+    pub fn address(&self) -> PciAddress {
+        let text = |b: &[u8]| {
+            let n = b.iter().position(|&c| c == 0).unwrap_or(b.len());
+            std::str::from_utf8(&b[..n])
+                .ok()
+                .and_then(parse_pci_address)
+        };
+        text(&self.bus_id)
+            .or_else(|| text(&self.bus_id_legacy))
+            .unwrap_or((self.domain, self.bus, self.device, 0))
+    }
 }
 
 /// A GPU's handle, NVML's own (`nvmlDevice_t`).
@@ -25,6 +67,10 @@ pub struct Api {
     pub handle: unsafe extern "C" fn(u32, *mut Device) -> i32,
     /// `nvmlDeviceGetUtilizationRates`.
     pub utilization: unsafe extern "C" fn(Device, *mut Utilization) -> i32,
+    /// `nvmlDeviceGetPciInfo_v3`.
+    pub pci: unsafe extern "C" fn(Device, *mut PciInfo) -> i32,
+    /// `nvmlDeviceGetMemoryInfo`.
+    pub memory: unsafe extern "C" fn(Device, *mut Memory) -> i32,
 }
 
 /// Each GPU's handle, of those NVML gives one.
@@ -56,12 +102,28 @@ pub fn busy(api: &Api) -> Option<f64> {
         .map(|p| (p as f64 / 100.0).clamp(0.0, 1.0))
 }
 
+/// Each NVIDIA GPU's PCI address and memory (`nvmlMemory_t`'s total, in bytes), in NVML's order,
+/// of the GPUs that give both.
+pub fn memory(api: &Api) -> Vec<(PciAddress, u64)> {
+    devices(api)
+        .into_iter()
+        .filter_map(|h| {
+            let mut p = PciInfo::default();
+            let mut m = Memory::default();
+            // SAFETY: each call writes only what it is given; the handle is NVML's own.
+            let ok = unsafe { (api.pci)(h, &mut p) == 0 && (api.memory)(h, &mut m) == 0 };
+            ok.then(|| (p.address(), m.total))
+        })
+        .collect()
+}
+
 #[cfg(target_os = "linux")]
 pub use lib::Session;
 
 #[cfg(target_os = "linux")]
 mod lib {
-    use super::{Api, Device, Utilization};
+    use super::{Api, Device, Memory, PciInfo, Utilization};
+    use crate::machine::hardware::PciAddress;
     use std::sync::OnceLock;
 
     struct Lib {
@@ -115,6 +177,14 @@ mod lib {
                         *mut libc::c_void,
                         unsafe extern "C" fn(Device, *mut Utilization) -> i32,
                     >(sym(c"nvmlDeviceGetUtilizationRates")?),
+                    pci: std::mem::transmute::<
+                        *mut libc::c_void,
+                        unsafe extern "C" fn(Device, *mut PciInfo) -> i32,
+                    >(sym(c"nvmlDeviceGetPciInfo_v3")?),
+                    memory: std::mem::transmute::<
+                        *mut libc::c_void,
+                        unsafe extern "C" fn(Device, *mut Memory) -> i32,
+                    >(sym(c"nvmlDeviceGetMemoryInfo")?),
                 },
             })
         }
@@ -134,6 +204,11 @@ mod lib {
         /// [`super::busy`].
         pub fn busy(&self) -> Option<f64> {
             super::busy(&self.0.api)
+        }
+
+        /// [`super::memory`].
+        pub fn memory(&self) -> Vec<(PciAddress, u64)> {
+            super::memory(&self.0.api)
         }
     }
 
@@ -178,13 +253,96 @@ mod tests {
     unsafe extern "C" fn none_say(_: Device, _: *mut Utilization) -> i32 {
         3
     }
+    unsafe extern "C" fn no_pci(_: Device, _: *mut PciInfo) -> i32 {
+        3
+    }
+    unsafe extern "C" fn no_memory(_: Device, _: *mut Memory) -> i32 {
+        3
+    }
 
     fn api() -> Api {
         Api {
             count: count3,
             handle: handle_of,
             utilization: util_of,
+            pci: no_pci,
+            memory: no_memory,
         }
+    }
+
+    /// NVML's text for a PCI address: `00000000:0A:00.0`, ending in NUL.
+    fn bus_id(text: &str) -> [u8; 32] {
+        let mut b = [0u8; 32];
+        b[..text.len()].copy_from_slice(text.as_bytes());
+        b
+    }
+    // Three GPUs: the first at 0000:0a:00.0 with 24 GB, the second can't say its memory
+    // (NVML_ERROR_NOT_SUPPORTED), the third gives no address in text, only in numbers (bus 1).
+    unsafe extern "C" fn pci_of(h: Device, p: *mut PciInfo) -> i32 {
+        let info = match h as usize {
+            1 => PciInfo {
+                bus_id: bus_id("00000000:0A:00.0"),
+                domain: 0,
+                bus: 10,
+                pci_device_id: 0x2684_10de,
+                ..Default::default()
+            },
+            2 => PciInfo {
+                bus_id: bus_id("00000000:0B:00.0"),
+                bus: 11,
+                ..Default::default()
+            },
+            _ => PciInfo {
+                bus: 1,
+                ..Default::default()
+            },
+        };
+        unsafe { *p = info };
+        0
+    }
+    unsafe extern "C" fn memory_of(h: Device, m: *mut Memory) -> i32 {
+        let total: u64 = match h as usize {
+            1 => 24 << 30,
+            2 => return 3,
+            _ => 8 << 30,
+        };
+        unsafe {
+            *m = Memory {
+                total,
+                free: total / 2,
+                used: total / 2,
+            }
+        };
+        0
+    }
+
+    #[test]
+    fn nvml_gives_each_gpu_s_memory_with_its_pci_address() {
+        let a = Api {
+            pci: pci_of,
+            memory: memory_of,
+            ..api()
+        };
+        assert_eq!(
+            memory(&a),
+            vec![((0, 0x0a, 0, 0), 24 << 30), ((0, 1, 0, 0), 8 << 30)]
+        );
+        // NVML that lists no GPU, or whose GPUs give no address, gives nothing.
+        assert_eq!(
+            memory(&Api {
+                count: count_fails,
+                ..a
+            }),
+            vec![]
+        );
+        assert_eq!(
+            memory(&Api {
+                pci: no_pci,
+                memory: memory_of,
+                ..api()
+            }),
+            vec![]
+        );
     }
 
     #[test]
