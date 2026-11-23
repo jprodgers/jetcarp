@@ -206,19 +206,109 @@ version without the `v`. Installing the release itself later replaces the candid
 
 ### What works on each system
 
-| | Linux | Windows | macOS |
-| --- | --- | --- | --- |
-| Release builds | x86_64 and ARM, with glibc 2.28 or newer (Debian 10, Ubuntu 20.04, Fedora 29 and later) | x86_64, on Windows 10 and 11 (and Windows on ARM through its x64 emulation) | Apple silicon and Intel, on macOS 11 or newer |
-| Tried by hand before each release ([how](../about/testing.md#release-candidates)) | Fedora 45 with GNOME, on x86_64 | Windows 11, on x86_64 | macOS 27, on Apple silicon |
-| [The GPU](../guides/gpu.md), with the same results as the processor, bit for bit | Vulkan | Vulkan or DirectX 12 | Metal |
-| [Live desktop background](../guides/wallpapers.md#what-works-on-which-system) | On GNOME, with JETCARP's extension (GNOME Shell 50 or 51), and its lock screen too; on other desktops, a window | Yes, and in the system's screen saver list | Yes, and in the system's screen saver list |
-| Paths JETCARP reads and writes | Shorter than 4,096 bytes | Shorter than 4,096 bytes | Shorter than 1,024 bytes, the system's own limit |
+JETCARP aims to do the same on every system. Where a system's own rules, or pieces it lacks, stop
+a feature, JETCARP keeps to them rather than break something else to get round them, and the
+tables below say what falls short and why. Each row links to the page with the details. Plain
+differences of name, such as ⌘ for Ctrl on macOS, are left out.
+
+<!-- A reason marked Q1 to Q7 is a best guess that awaits the maintainer's answer. -->
+
+#### Installing and builds
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| Release builds | x86_64 and ARM, with glibc 2.28 or newer (Debian 10, Ubuntu 20.04, Fedora 29 and later); none for musl systems such as Alpine | x86_64, on Windows 10 and 11; Windows on ARM runs it through its x64 emulation | Apple silicon and Intel, on macOS 11 or newer | Not built for the others yet; [cargo](#with-cargo) builds JETCARP there <!-- Q6 --> |
+| Signed ([Windows](#windows), [macOS](#macos)) | Linux makes no such check | Not yet: SmartScreen may stop a program from a zip that a browser downloaded | Not with an Apple Developer ID: macOS won't open an archive that a browser downloaded until you allow it | Signing takes a certificate from Apple, for a yearly fee, and one for Windows, which JETCARP doesn't have yet. The installers and the package managers download without the browser's mark <!-- Q1 --> |
+| [The installer](#the-installers) | One line in a terminal | Saved, then run; `jetcarp` then works in a new PowerShell window | One line in a terminal | Microsoft Defender can flag a downloaded script piped into `iex` as a trojan; the window you installed from can't see the new `PATH` |
+| [The system's screen saver](../guides/wallpapers.md#the-systems-screen-saver) from a [source build](#with-cargo) | Nothing more to build: the GNOME extension is inside the program | `jetcarpw.exe` is built only with `--features windows-launcher` | `libjetcarp_saver.dylib` is built only with `-p jetcarp-saver` | `cargo install jetcarp` builds one program; the Mac's saver is a library of its own, and the windowless launcher is built only when its feature is asked for <!-- Q7 --> |
+
+#### The desktop background and the screen saver
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| [Live desktop background](../guides/wallpapers.md#the-live-desktop-background) | GNOME, with JETCARP's extension; on other desktops, a window instead | Yes, under the desktop icons | Yes, behind the desktop icons, on every Space | Under Wayland, how an app can be the desktop's background differs from desktop to desktop, and on GNOME it takes an extension; GNOME's, on the desktop JETCARP is developed on, is the only one written <!-- Q2 --> |
+| [The GNOME extension](../guides/wallpapers.md#the-live-desktop-background) | GNOME Shell 50 and 51; a logout after installing, upgrading or removing it | — | — | GNOME loads an extension only on the versions of the Shell it names, and JETCARP's works inside the Shell's own code, which changes from version to version, so it names those it has been tried on. GNOME reads its extensions at login, and under Wayland the Shell can't restart without ending the session |
+| [Live lock screen](../guides/wallpapers.md#the-live-desktop-background) | GNOME, through the extension; not other desktops | No; the screen saver does the job | No; the screen saver does the job | Windows and macOS let no app draw on the lock screen, but their screen savers can ask for the password as they end. Other desktops: as for the live background |
+| [In the system's screen saver list](../guides/wallpapers.md#the-systems-screen-saver) | No: GNOME has none, and its lock screen's screensaver mode does the job; not other desktops | Yes, `JETCARP.scr` | Yes, `JETCARP.saver` | GNOME has no list of screen savers. Other desktops: as for the live background |
+| [The host's menu](../guides/wallpapers.md#the-background-host) | GNOME, in the top bar, from the extension, which can start a stopped host too; none on other desktops | In the notification area, while the host runs | In the menu bar, while the host runs | GNOME Shell has no notification area, so GNOME's menu comes with the extension, which is part of the Shell and stays when the host stops; on Windows and macOS the menu is the host's own. The tray library JETCARP uses needs GTK on Linux, which JETCARP leaves out |
+| [Still picture](../guides/wallpapers.md#still-picture) | GNOME, one picture for every monitor (the main monitor's); none on other desktops | One for each monitor | One for each monitor | GNOME has one background for every monitor. Other desktops: as for the live background |
+| [Start the host at login](../guides/wallpapers.md#start-at-login) | GNOME, yes; on other desktops the entry is written, but the host shows nothing | Yes, after the login entries before it (97 seconds after sign-in, in testing) | Yes; after an upgrade, once the app or `jetcarp host start` has run | Started at login, the host opens no windows, and other desktops have no live background for it. Windows runs login entries one at a time and waits for each. launchd refuses at login a program changed since its entry was registered, and each build is signed ad hoc, so its signature changes with each version ([#99](https://github.com/jprodgers/jetcarp/issues/99)) |
+| [The system's screen saver, after a change](../guides/wallpapers.md#the-systems-screen-saver) | — | At once: it reads JETCARP's settings each time it starts | Rebuilt within seconds while the app, the desktop background or an MCP server runs, else as the next command ends; a saver already showing keeps what it had until it next starts | macOS runs screen savers in a sandbox that can't read JETCARP's settings, so they are copied into the saver, with the seizure warning's answer and the strobe guard's setting |
+| [Removing the screen saver](../guides/wallpapers.md#the-systems-screen-saver) | — | Close *Screen Saver Settings* first | System Settings may list it until it is reopened | Windows won't delete a `.scr` while the dialog's preview runs it; System Settings keeps the list it found when it opened |
+
+#### Windows and monitors
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| [The app's window, at the next start](tour.md#a-world) | X11: its size and place; Wayland: its size only | Its size and place | Its size and place | Wayland gives an app no say in where its windows go, and doesn't tell it where they are: the desktop places them |
+| [The host's screens in windows](../guides/wallpapers.md#the-live-desktop-background), after `jetcarp host wallpaper off` | X11: each on its monitor; Wayland: where the desktop puts them | Each on its monitor | Each on its monitor | As above |
+| Monitors' places, for the app's outputs and the wallpaper export's [*Detected* layout](../guides/pictures.md#desktop-wallpapers) | X11: as the system says; Wayland: they can all read (0, 0), so the export lays them left to right, and the *Display* pane takes the outputs' places by hand | As the system says | As the system says | A Wayland desktop needn't tell an app where its monitors are |
+| [The window's icon](#open-the-app) | X11: yes; Wayland: once `jetcarp launcher install` has run | Yes | Yes | A Wayland desktop takes a window's icon from the applications menu entry named after it |
+| [Keeping the computer awake](../guides/wallpapers.md#screensaver-mode-in-the-app) | Through the desktop portal, `org.freedesktop.ScreenSaver` or GNOME's session manager; not on a desktop with none of them | Yes | Yes | Linux leaves it to the desktop, which may offer any of the three, or none |
+
+#### Accessibility
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| [The menus](../guides/keyboard.md#what-the-keyboard-and-screen-readers-cant-do) | Yes; F10 opens them | Yes; F10 opens them | Not in the system's menu bar, so VoiceOver's VO+M can't reach them; F10 does | egui, the toolkit the app is drawn with, draws its menus inside the window |
+| [The grid, to a screen reader](../guides/keyboard.md#with-a-screen-reader) | Yes | Narrator and NVDA may announce it as having "0 rows" ([#219](https://github.com/jprodgers/jetcarp/issues/219)) | Yes | AccessKit, which carries what the app shows to screen readers, gives Windows the grid with no count of its rows or columns |
+| [The system's reduced motion, high contrast, light or dark](../guides/accessibility-settings.md) | Through the desktop portal, or GNOME's own settings; a desktop with neither leaves reduced motion off and the app dark | Yes | Yes | Such a desktop offers an app nothing to read |
+
+#### The GPU
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| [The graphics API](../guides/gpu.md), with the same results as the processor, bit for bit | Vulkan | Vulkan or DirectX 12 | Metal | — |
+| [A software renderer](../guides/gpu.md#which-adapter), when asked for | Mesa's llvmpipe or lavapipe | None: Windows' own, WARP, is never used | None | macOS has none; JETCARP doesn't use WARP <!-- Q5 --> |
+
+#### This computer
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| [GPU memory](../guides/this-computer.md#what-jetcarp-reads) | Read from AMD's driver; other GPUs' estimated | Read, from DXGI | One pool with the processor's | AMD's driver writes it in `/sys/class/drm`, where any program can read it; the others don't <!-- Q4 --> |
+| [The GPU's load, before it measures](../guides/this-computer.md#while-it-measures) | AMD's: yes; NVIDIA's: with its management library; Intel's and others': your own programs only | Yes | Yes | Intel's and other drivers' figure comes from `fdinfo`, which shows only the programs you may read (their drivers' own counters need administrator rights); NVIDIA's management library comes with its driver, though some distributions package it apart |
+| [Held still while it measures](../guides/this-computer.md#while-it-measures) | The desktop background and GNOME's lock screen | The desktop background and the screen saver | The desktop background, not the screen saver | The Mac's screen saver can't read the runtime folder from its sandbox; it runs only while the Mac is idle |
+| Freed memory given back to the system, by the [host](../guides/wallpapers.md#the-background-host) and by [explore searches](../guides/searching.md#watch-stop-carry-on) | By both | JETCARP doesn't ask for it | By the host, not by explore searches | glibc's and macOS's allocators keep what is freed inside their heaps until asked ([#69](https://github.com/jprodgers/jetcarp/issues/69), [#111](https://github.com/jprodgers/jetcarp/issues/111)); Windows' heap gives large blocks back by itself <!-- Q3 --> |
+
+#### Stopping
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| [A command the system stops](../reference/folders.md#runtime-folder): `jetcarp search`, `jobs resume`, `script` and `mcp` | SIGTERM, SIGHUP and Ctrl-C stop it as Ctrl-C does, at its next checkpoint or step | Only Ctrl-C (or Ctrl-Break) does; closing its console ends it at once, and a search's job stays marked running until it is resumed | As on Linux | Windows has no SIGTERM or SIGHUP: closing a console, signing out and shutting down reach a program as console events and window messages, which JETCARP doesn't answer yet ([#319](https://github.com/jprodgers/jetcarp/issues/319)) |
+| The app and the host at logout or shutdown | They stop as their own *Quit* does, leaving nothing stale | Ended at once: their port, token and memory files stay until the next program clears them | As on Linux | As above ([#319](https://github.com/jprodgers/jetcarp/issues/319)) |
+
+#### Files
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| [Paths](../reference/folders.md) JETCARP reads and writes | Shorter than 4,096 bytes | Shorter than 4,096 bytes | Shorter than 1,024 bytes | macOS's own limit |
+| [The runtime folder](../reference/folders.md#runtime-folder), private to you | Mode 0700, its files 0600 | With your profile folder's permissions | Mode 0700, its files 0600 | Windows has no such modes: a new file takes its folder's permissions, and a profile folder's keep other users out |
+| [The output folder](../reference/folders.md#the-three-folders) | `~/Pictures/JETCARP` | `JETCARP` in your Pictures folder, which is in OneDrive, and synced, when OneDrive backs up Pictures | `~/Pictures/JETCARP` | Windows then moves the Pictures folder into OneDrive; `JETCARP_OUT` keeps the output out of it |
+| [The app's file dialogs](#linux) | The desktop portal's, else zenity's; with neither, none opens | Yes | Yes | Linux has no file dialog of its own: the desktop's portal shows one |
+
+#### What has been tried by hand
+
+| | Linux | Windows | macOS | Why |
+| --- | --- | --- | --- | --- |
+| [Before each release](../about/testing.md#release-candidates) | Fedora 45 with GNOME on Wayland, on x86_64 | Windows 11, on x86_64 | macOS 27, on Apple silicon | The three test machines |
+| Not yet tried | ARM; other distributions; desktops other than GNOME; X11 | ARM; Windows 10 | Intel Macs; macOS before 27 | The test machines are the three above |
+| [Graphics](../about/testing.md#what-this-testing-does-not-cover) | AMD's only, not NVIDIA's or Intel's | NVIDIA's and Intel's, not AMD's | Apple silicon's | The test machines' GPUs |
+| [The desktop background](../guides/wallpapers.md#what-has-been-tested) | Several monitors only in a headless GNOME session; on GNOME 51, the lock screen, the top-bar menu and keeping the host out of the overview not yet | Yes, with one monitor and two | Yes, with one monitor and two | The Linux test machine has one monitor; the rest is still to be done |
+| [Starting at a real login](../guides/wallpapers.md#what-has-been-tested) | Not yet | Yes, though not from a fresh boot | Yes | Still to be done |
+| [A screen reader](../about/accessibility.md#where-jetcarp-falls-short) | Orca on GNOME, with 0.4.3-rc.1 | Narrator and NVDA: not yet | VoiceOver: not yet | Still to be done ([#219](https://github.com/jprodgers/jetcarp/issues/219)) |
+| [The score and Fit's timings](../about/testing.md#the-test-machines-scores) | Measured | Not yet | Not yet | Wanted at 0.4.3's sittings |
+| [In CI](../about/testing.md#continuous-integration) | GPU tests on lavapipe, a software renderer | GPU tests skipped | GPU tests on the runner's virtual GPU | CI's runners have no GPU of their own, and Windows' have only WARP |
 
 For research (long searches, large libraries, deep folders of results), Linux is the system to
 choose: JETCARP is developed on it and tested on it most, and its file work has been quickest there
-in testing. For desktop art (live backgrounds, screen savers), use whichever system you already
-have; [the wallpapers table](../guides/wallpapers.md#what-works-on-which-system) shows what each one
-offers.
+in testing. A Mac is not recommended for serious research. macOS is the most restrictive of the
+three systems: a path can't be longer than 1,024 bytes, its screen saver runs in a sandbox that
+can't read JETCARP's settings, and it holds back a program that a browser downloaded unless a
+registered Apple developer has signed it, which JETCARP's builds aren't. JETCARP keeps to macOS's
+rules rather than working round them, and the Mac is the system JETCARP is tested on least. For
+desktop art (live backgrounds, screen savers), use whichever system you already have; the tables
+above and [the wallpapers table](../guides/wallpapers.md#what-works-on-which-system) say what each
+one offers.
 
 ### Linux
 
@@ -235,7 +325,8 @@ JETCARP runs on the processor; see [The GPU](../guides/gpu.md)):
 - for windows, `libwayland-client.so.0` on Wayland or `libX11.so.6`, `libX11-xcb.so.1`,
   `libxcb.so.1`, `libXcursor.so.1` and `libXi.so.6` on X11, and `libxkbcommon.so.0` (with
   `libxkbcommon-x11.so.0` on X11);
-- for the app's file dialogs, `libdbus-1.so.3` and an XDG desktop portal.
+- for the app's file dialogs, `libdbus-1.so.3` and an XDG desktop portal, or failing those
+  `zenity`; with none of them, no file dialog opens.
 
 `jetcarp doctor` shows the graphics adapters it found; with none, simulation runs on the CPU. It
 also shows what JETCARP read of the computer (processor, memory, GPU memory), its
