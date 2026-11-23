@@ -2503,6 +2503,7 @@ version = "0.4.3-rc.2"
 dependencies = [
  "bytemuck",
  "jetcarp-core",
+ "log",
  "pollster 0.4.0",
  "rayon",
  "serde",

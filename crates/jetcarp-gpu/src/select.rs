@@ -578,7 +578,7 @@ pub fn adapters_for(instance: &wgpu::Instance, want: &Want) -> Vec<wgpu::Adapter
 fn has_wanted(want: &Want, mut infos: impl Iterator<Item = wgpu::AdapterInfo>) -> bool {
     match want {
         Want::Best => true,
-        w => infos.any(|i| w.matches(&i) && !is_warp(&i)),
+        w => infos.any(|i| w.matches(&i) && !warp_refused(&i)),
     }
 }
 
@@ -651,7 +651,7 @@ pub(crate) fn pick_tested(
         Want::Best => (Want::Best, None),
         w if all
             .iter()
-            .any(|a| w.matches(&a.get_info()) && !is_warp(&a.get_info())) =>
+            .any(|a| w.matches(&a.get_info()) && !warp_refused(&a.get_info())) =>
         {
             (w.clone(), None)
         }
@@ -718,7 +718,7 @@ pub(crate) fn pick_tested(
             .collect::<Vec<_>>()
             .join(", ");
         if matches!(policy.want, Want::Software) {
-            if all.iter().any(|a| is_warp(&a.get_info())) {
+            if all.iter().any(|a| warp_refused(&a.get_info())) {
                 "no hardware graphics adapter, and the only software one is Windows' WARP, which \
                  the GPU simulation never uses"
                     .to_string()
@@ -780,6 +780,20 @@ fn is_warp(info: &wgpu::AdapterInfo) -> bool {
         && (info.backend == wgpu::Backend::Dx12 || info.name.contains("Microsoft Basic Render"))
 }
 
+/// The variable that lets tests choose WARP ([`warp_allowed`]).
+pub const ALLOW_WARP_ENV: &str = "JETCARP_ALLOW_WARP";
+
+/// Whether WARP may be chosen as other software adapters are, when asked for: for tests only,
+/// with `JETCARP_ALLOW_WARP=1` (#321).
+pub fn warp_allowed() -> bool {
+    std::env::var(ALLOW_WARP_ENV).is_ok_and(|v| v.trim() == "1")
+}
+
+/// WARP, unless the tests allow it ([`warp_allowed`]).
+fn warp_refused(info: &wgpu::AdapterInfo) -> bool {
+    is_warp(info) && !warp_allowed()
+}
+
 /// What the simulation needs of an adapter apart from the self-test. `want` lets a software
 /// adapter through when it asks for one, and any kind when it names that adapter (a name that
 /// matches another adapter lets nothing else through, so doctor never tests one it can't use).
@@ -790,7 +804,7 @@ pub fn requirements(
     want: &Want,
 ) -> Result<(), String> {
     use wgpu::DeviceType as D;
-    if is_warp(info) {
+    if warp_refused(info) {
         return Err(
             "Windows' software renderer (WARP), which the GPU simulation never uses".into(),
         );
@@ -1588,9 +1602,13 @@ mod tests {
         assert_eq!(calls.get(), 3);
         assert_eq!(got.len(), 1);
 
-        // WARP doesn't count as the software adapter asked for, as in the choice.
+        // WARP doesn't count as the software adapter asked for, as in the choice, unless the
+        // tests allow it (#321).
         let warp = info("Microsoft Basic Render Driver", D::Cpu, Backend::Dx12);
-        assert!(!has_wanted(&Want::Software, [warp].into_iter()));
+        assert_eq!(
+            has_wanted(&Want::Software, [warp].into_iter()),
+            warp_allowed()
+        );
     }
 
     fn info(name: &str, kind: wgpu::DeviceType, backend: wgpu::Backend) -> wgpu::AdapterInfo {
@@ -1677,8 +1695,13 @@ mod tests {
             assert!(ok(&gl, &Want::Named("llvmpipe".into())).is_err());
             assert!(ok(&gl, &Want::Named("radeonsi".into())).is_ok());
             let warp = info("Microsoft Basic Render Driver", D::Cpu, B::Dx12);
-            assert!(ok(&warp, &Want::Software).unwrap_err().contains("WARP"));
-            assert!(ok(&warp, &Want::Named("Microsoft".into())).is_err());
+            if warp_allowed() {
+                assert!(ok(&warp, &Want::Software).is_ok());
+                assert!(ok(&warp, &Want::Best).is_err());
+            } else {
+                assert!(ok(&warp, &Want::Software).unwrap_err().contains("WARP"));
+                assert!(ok(&warp, &Want::Named("Microsoft".into())).is_err());
+            }
             let virt = info("virtio", D::VirtualGpu, B::Vulkan);
             assert!(ok(&virt, &Want::Best).is_err());
             assert!(ok(&virt, &Want::Named("virtio".into())).is_ok());
