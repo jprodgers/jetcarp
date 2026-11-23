@@ -76,6 +76,10 @@ system asks for reduced motion it opens paused, with a note saying so, and Space
   and the frame rate. **The status bar** says whether the world is still changing, and counts its
   live cells and its tiles; when the world is too big for the view to draw every cell at once, it
   says so (see [Bigger than the view can draw](../guides/this-computer.md#bigger-than-the-view-can-draw)).
+- **The window** opens at the size it had when you quit, and on Windows, macOS and X11 in the same
+  place, moved whole onto a monitor when part of it would be off screen (a monitor unplugged, a
+  resolution lowered). Under Wayland the system chooses where windows go, so only the size comes
+  back.
 - **More room:** F9 hides the panes and brings them back, F11 (⌃⌘F on macOS) fills the screen, and
   F12 starts screensaver mode (Esc leaves it). On macOS, ⌘M minimises the window, and the world
   and [AI control](../tutorials/mcp.md) keep running while it is minimised or covered.

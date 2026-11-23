@@ -288,6 +288,8 @@ impl JetcarpApp {
                 egui::FontId::proportional(18.0),
                 Color32::LIGHT_RED,
             );
+            // Notes over the grid with the status bar off, without a GPU renderer too.
+            self.message_overlay(ui, rect);
         }
         if let Some(p) = resp.hover_pos().filter(|_| !self.saver_active()) {
             let wp = xf.to_world(p);

@@ -460,6 +460,15 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The window comes back whole on screen** (#306). It came back at its saved size but partly off
+  the screen to the left (GNOME, Wayland, one monitor). A saved place that would leave any part of
+  the window off every monitor is now moved so the whole window is on the nearest monitor (the
+  main one when its monitor is gone), shrinking it only when it can't fit at all. Under Wayland,
+  where the system places windows, JETCARP asks for no place: only the size comes back.
+- **Two notes at once are laid out one after the other** (#307). With reduced motion on, a
+  scene opened paused had its note drawn over the strobe guard's. Notes showing at once now share
+  the status line, the guard's first and the other cut short with "…"; with the status bar off,
+  they stack over the grid's top left, the guard's on top.
 - **The status line stays one line high** (#291). It wrapped onto a second line when its row grew too
   wide and fell back when it shrank, so on a busy scene (Brian's Brain on Penrose, in a small window)
   it grew and shrank in a loop and moved the whole window. Text too long for it is now cut short

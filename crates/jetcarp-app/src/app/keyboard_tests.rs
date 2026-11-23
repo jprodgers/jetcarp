@@ -1293,6 +1293,107 @@ fn child_changes_are_announced_to_a_screen_reader() {
 }
 
 #[test]
+fn the_guard_s_note_and_the_paused_note_are_laid_out_one_after_another() {
+    in_scratch(
+        "app::keyboard_tests::child_the_guard_s_note_and_the_paused_note_are_laid_out_one_after_another",
+    );
+}
+
+/// A scene opened paused for reduced motion while the strobe guard has a note (#307): both notes
+/// show, never drawn at the same place, the guard's first. In the status line they share its one
+/// line, side by side; over the grid, with the status bar off, they stack one below the other.
+#[test]
+#[ignore]
+fn child_the_guard_s_note_and_the_paused_note_are_laid_out_one_after_another() {
+    if !child() {
+        return;
+    }
+    use jetcarp_core::strobe::guard::{Action, Report};
+    const GUARD: &str = "Strobe guard: softening flashes over 40% of the view.";
+    let mut k = Kb::new();
+    // The guard is acting on what is drawn (kept fresh: no GPU view says otherwise here).
+    {
+        let mut out = k.app.strobe.out.lock().unwrap();
+        let now = k.app.started.elapsed().as_secs_f64();
+        out.views.insert(
+            view::TILE_VIEW,
+            crate::gpu::ViewOut {
+                at: now + 600.0,
+                report: Report {
+                    on: true,
+                    action: Action::Softening,
+                    note: Some(GUARD.into()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+    }
+    // A scene opened as from the Quick Start, with reduced motion on.
+    k.app.a11y.settings.reduced_motion = crate::a11y::Follow::On;
+    k.app.autoplay = true;
+    let scene = Scene::from_json(
+        r#"{"name": "Flashing", "tiling": {"family": "square", "size": {"rect": {"w": 40, "h": 30}}, "boundary": "wrap"}, "rng_state": 3, "cas": [{"rule": "B3/S23", "seed": "empty"}]}"#,
+    )
+    .unwrap();
+    k.app.load_scene(&scene);
+    k.frames(3);
+    assert!(!k.app.playing, "opened paused");
+    assert_eq!(
+        k.app.guard_status().map(|g| g.0).as_deref(),
+        Some(GUARD),
+        "the guard has its note"
+    );
+    // Where a text starting `start` is drawn, from the last frame's shapes.
+    fn walk(s: &egui::Shape, start: &str, out: &mut Vec<egui::Rect>) {
+        match s {
+            egui::Shape::Text(t) if t.galley.text().starts_with(start) => {
+                out.push(t.galley.rect.translate(t.pos.to_vec2()));
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, start, out)),
+            _ => {}
+        }
+    }
+    // Drawn once in `region` (the Scene pane shows the message too, in its own place).
+    let shown = |k: &Kb, start: &str, region: egui::Rect| -> egui::Rect {
+        let mut at = vec![];
+        for c in &k.shapes {
+            walk(&c.shape, start, &mut at);
+        }
+        at.retain(|r| region.contains(r.center()));
+        assert_eq!(at.len(), 1, "{start:?} drawn once in {region:?}: {at:?}");
+        at[0]
+    };
+    let grid = |k: &Kb| {
+        k.focusable()
+            .into_iter()
+            .map(|w| w.2)
+            .max_by(|a, b| a.area().total_cmp(&b.area()))
+            .unwrap()
+    };
+    let paused = &accessibility::PAUSED_NOTE[..20];
+    // The status line: one line, the guard's note first, then the reason it opened paused.
+    let below = grid(&k);
+    let line = egui::Rect::from_min_max(egui::pos2(0.0, below.max.y), egui::pos2(1e4, 1e4));
+    let (g, p) = (shown(&k, GUARD, line), shown(&k, paused, line));
+    assert!(!g.intersects(p), "status line: {g:?} and {p:?} overlap");
+    assert!(g.max.x <= p.min.x, "the guard's first: {g:?}, {p:?}");
+    assert!(
+        (g.center().y - p.center().y).abs() < 2.0,
+        "on one line: {g:?}, {p:?}"
+    );
+    assert!(p.max.x <= 1280.0, "the paused note is in sight: {p:?}");
+    // Over the grid, with the status bar off: one below the other, the guard's on top.
+    k.app.shell.status_bar = false;
+    k.frames(2);
+    let over = grid(&k);
+    let (g, p) = (shown(&k, GUARD, over), shown(&k, paused, over));
+    assert!(!g.intersects(p), "over the grid: {g:?} and {p:?} overlap");
+    assert!(g.max.y <= p.min.y, "the guard's on top: {g:?}, {p:?}");
+    done();
+}
+
+#[test]
 fn screen_reader_names_are_the_same_in_every_font() {
     in_scratch("app::keyboard_tests::child_screen_reader_names_are_the_same_in_every_font");
 }
