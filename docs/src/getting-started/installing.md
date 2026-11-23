@@ -263,17 +263,17 @@ differences of name, such as ⌘ for Ctrl on macOS, are left out.
 
 | | Linux | Windows | macOS | Why |
 | --- | --- | --- | --- | --- |
-| [GPU memory](../guides/this-computer.md#what-jetcarp-reads) | Read from AMD's driver; other GPUs' estimated | Read, from DXGI | One pool with the processor's | AMD's driver writes it in `/sys/class/drm`, where any program can read it; NVIDIA's and Intel's aren't read yet |
+| [GPU memory](../guides/this-computer.md#what-jetcarp-reads) | Read: AMD's from its driver, NVIDIA's from NVML, a discrete Intel GPU's on xe from the kernel's `dmem.capacity`, any other from its Vulkan driver; an integrated Intel GPU's estimated, since it shares the system's memory | Read, from DXGI | One pool with the processor's | AMD's driver writes it in `/sys/class/drm` and the kernel's dmem cgroup lists xe's, both readable by any program; NVIDIA's comes from its management library, i915's and nouveau's only through Vulkan; an integrated Intel GPU has no memory of its own to read |
 | [The GPU's load, before it measures](../guides/this-computer.md#while-it-measures) | AMD's: yes; NVIDIA's: with its management library; Intel's and others': your own programs only | Yes | Yes | Intel's and other drivers' figure comes from `fdinfo`, which shows only the programs you may read (their drivers' own counters need administrator rights); NVIDIA's management library comes with its driver, though some distributions package it apart |
 | [Held still while it measures](../guides/this-computer.md#while-it-measures) | The desktop background and GNOME's lock screen | The desktop background and the screen saver | The desktop background, not the screen saver | The Mac's screen saver can't read the runtime folder from its sandbox; it runs only while the Mac is idle |
-| Freed memory given back to the system, by the [host](../guides/wallpapers.md#the-background-host) and by [explore searches](../guides/searching.md#watch-stop-carry-on) | By both | JETCARP doesn't ask for it | By the host, not by explore searches | glibc's and macOS's allocators keep what is freed inside their heaps until asked ([#69](https://github.com/jprodgers/jetcarp/issues/69), [#111](https://github.com/jprodgers/jetcarp/issues/111)); Windows' heap gives large blocks back by itself |
+| Freed memory given back to the system, by the [host](../guides/wallpapers.md#the-background-host) and by [explore searches](../guides/searching.md#watch-stop-carry-on) | By both | JETCARP doesn't ask for it | By both | glibc's and macOS's allocators keep what is freed inside their heaps until asked ([#69](https://github.com/jprodgers/jetcarp/issues/69), [#111](https://github.com/jprodgers/jetcarp/issues/111)); Windows' heap gives large blocks back by itself |
 
 #### Stopping
 
 | | Linux | Windows | macOS | Why |
 | --- | --- | --- | --- | --- |
-| [A command the system stops](../reference/folders.md#runtime-folder): `jetcarp search`, `jobs resume`, `script` and `mcp` | SIGTERM, SIGHUP and Ctrl-C stop it as Ctrl-C does, at its next checkpoint or step | Only Ctrl-C (or Ctrl-Break) does; closing its console ends it at once, and a search's job stays marked running until it is resumed | As on Linux | Windows has no SIGTERM or SIGHUP: closing a console, signing out and shutting down reach a program as console events and window messages, which JETCARP doesn't answer yet ([#319](https://github.com/jprodgers/jetcarp/issues/319)) |
-| The app and the host at logout or shutdown | They stop as their own *Quit* does, leaving nothing stale | Ended at once: their port, token and memory files stay until the next program clears them | As on Linux | As above ([#319](https://github.com/jprodgers/jetcarp/issues/319)) |
+| [A command the system stops](../reference/folders.md#runtime-folder): `jetcarp search`, `jobs resume`, `script` and `mcp` | SIGTERM, SIGHUP and Ctrl-C stop it as Ctrl-C does, at its next checkpoint or step | Ctrl-C, closing its console, signing out, shutting down and `taskkill` without `/F` stop it the same way, within the 5 seconds Windows gives it | As on Linux | Windows ends a program 5 seconds after telling it to stop (unless that's changed): a search not at its checkpoint by then is ended as before, its job left marked running until `jetcarp jobs resume` carries it on ([#319](https://github.com/jprodgers/jetcarp/issues/319)) |
+| The app and the host at logout or shutdown | They stop as their own *Quit* does, leaving nothing stale | The same, within the 5 seconds Windows gives them | As on Linux | As above ([#319](https://github.com/jprodgers/jetcarp/issues/319)) |
 
 #### Files
 
@@ -295,7 +295,7 @@ differences of name, such as ⌘ for Ctrl on macOS, are left out.
 | [Starting at a real login](../guides/wallpapers.md#what-has-been-tested) | Not yet | Yes, though not from a fresh boot | Yes | Still to be done |
 | [A screen reader](../about/accessibility.md#where-jetcarp-falls-short) | Orca on GNOME, with 0.4.3-rc.1 | Narrator and NVDA: not yet | VoiceOver: not yet | Still to be done ([#219](https://github.com/jprodgers/jetcarp/issues/219)) |
 | [The score and Fit's timings](../about/testing.md#the-test-machines-scores) | Measured | Not yet | Not yet | Wanted at 0.4.3's sittings |
-| [In CI](../about/testing.md#continuous-integration) | GPU tests on lavapipe, a software renderer | GPU tests skipped | GPU tests on the runner's virtual GPU | CI's runners have no GPU of their own, and Windows' have only WARP |
+| [In CI](../about/testing.md#continuous-integration) | GPU tests on lavapipe, a software renderer | GPU tests skipped | GPU tests on the runner's virtual GPU; the Intel build is built, and the release runs its program once, under Rosetta | CI's runners have no GPU of their own, and Windows' have only WARP; no runner is an Intel Mac |
 
 For research (long searches, large libraries, deep folders of results), Linux is the system to
 choose: JETCARP is developed on it and tested on it most, and its file work has been quickest there
