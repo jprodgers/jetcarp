@@ -77,7 +77,7 @@ fn a_running_job_waits_while_jetcarp_measures() {
     let (t1, s1) = (Instant::now(), soups());
     wait("another step", &|| soups() > s1);
     let step = t1.elapsed().max(Duration::from_secs(1));
-    // The record goes stale after ten seconds, so it is written again every second.
+    // The record goes stale after ten seconds, so it is written again every half second.
     let hold_for = |d: Duration| {
         let t = Instant::now();
         while t.elapsed() < d {
@@ -86,23 +86,25 @@ fn a_running_job_waits_while_jetcarp_measures() {
         }
     };
     write();
-    // A step under way ends first: wait until the count has stood still for two steps' time.
-    let (t0, mut last, mut still) = (Instant::now(), soups(), Instant::now());
-    while still.elapsed() < step * 2 {
+    // A step under way ends first; between steps the hunt then waits, and its progress says so.
+    // (Waiting for the count to stand still instead was not enough: a hunt's batches grow, up
+    // to four times a step, so a step timed early on is shorter than a later one, and a count
+    // still for two early steps' time could be in the middle of a later one: Linux CI, #313.)
+    let waiting = || h.progress().get("waiting").is_some();
+    let t0 = Instant::now();
+    while !waiting() {
         assert!(
             t0.elapsed() < Duration::from_secs(120),
             "the hunt never held"
         );
         hold_for(Duration::from_millis(500));
-        let now = soups();
-        if now != last {
-            (last, still) = (now, Instant::now());
-        }
     }
     let a = soups();
-    // Long enough for three steps, had it run on.
-    hold_for(step * 3);
+    // Long enough for three steps, had it run on (and for more than one of the hunt's batches,
+    // which aim at about three seconds each, however short the first steps were).
+    hold_for((step * 3).max(Duration::from_secs(8)));
     let b = soups();
+    assert!(waiting(), "the hunt stopped waiting while JETCARP measured");
     assert_eq!(a, b, "the hunt ran on while JETCARP measured");
     // The measuring ends: the hunt carries on in this process, as it was.
     std::fs::remove_file(&record).unwrap();

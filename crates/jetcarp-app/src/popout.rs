@@ -89,6 +89,16 @@ pub fn os_title(title: &str) -> String {
     format!("JETCARP · {title}")
 }
 
+/// The egui id of `key`'s floating window.
+fn window_id(key: &str) -> Id {
+    Id::unique(("jetcarp-win", key))
+}
+
+/// The layer `key`'s floating window is drawn on.
+pub fn window_layer(key: &str) -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Middle, window_id(key))
+}
+
 /// The viewport id of `key`'s popped-out window.
 pub fn viewport_id(key: &str) -> ViewportId {
     ViewportId::from_hash_of(("jetcarp-popout", key))
@@ -152,6 +162,14 @@ pub fn show<R>(
         // A button pressed in any run counts (the contents can run twice in a frame).
         let mut ev = None;
         let (r, closed, size) = os_window(ctx, spec.key, builder, |ui, _class| {
+            // Ctrl+W (⌘W) closes it, as closing its OS window does (#308).
+            if ui.input_mut(|i| i.consume_shortcut(&crate::a11y::CLOSE_WINDOW)) {
+                ev = Some(if dockable {
+                    Chrome::Dock
+                } else {
+                    Chrome::Return
+                });
+            }
             egui::Panel::top(Id::unique(("popout-chrome", spec.key)))
                 .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(6, 2)))
                 .show(ui, |ui| {
@@ -211,10 +229,11 @@ pub fn show<R>(
         }
         return (Some(r), events);
     }
-    let id = Id::unique(("jetcarp-win", spec.key));
+    let id = window_id(spec.key);
+    // No `open` for egui: its close button would come first in Tab's order, named "Close window".
+    // Ours is drawn after the contents, so it is the window's last control, named for it (#308).
     let mut w = egui::Window::new(spec.title)
         .id(id)
-        .open(open)
         .default_size(spec.default_size);
     if let Some(c) = spec.configure {
         w = c(w);
@@ -223,16 +242,19 @@ pub fn show<R>(
     let mut out = None;
     if let Some(resp) = resp {
         let (layer, rect) = (resp.response.layer_id, resp.response.rect);
-        // The keyboard (#219): a part of the window F6 moves to; its title bar, which only the
-        // mouse uses, passed over; and Esc on one of a tool window's controls closes it (a pane
-        // floats until it is docked or hidden from the Window menu).
+        // The keyboard (#219, #308): a part of the window F6 moves to; its title bar, which only
+        // the mouse uses, passed over; and Esc on one of its controls, or Ctrl+W (⌘W), closes it,
+        // a floating pane's as well as a tool window's.
         crate::a11y::window_region(ctx, spec.title, layer, rect);
         crate::a11y::mouse_only(ctx, id.with("__title_click"));
-        if !spec.dockable && crate::a11y::escape_closes(ctx, layer) {
-            *open = false;
-        }
         if title_buttons(ctx, &resp.response, spec.dockable, &mut events) {
             state.popped = true;
+        }
+        if close_button(ctx, &resp.response, spec.title)
+            || crate::a11y::closes_window(ctx, layer)
+            || resp.response.should_close()
+        {
+            *open = false;
         }
         out = resp.inner;
     }
@@ -240,6 +262,49 @@ pub fn show<R>(
         events.push(Chrome::Close);
     }
     (out, events)
+}
+
+/// A floating window's close button, at the right of its title bar, drawn as egui draws its own
+/// (an ×) and named *Close <title>* for screen readers. Drawn after the window's contents and its
+/// other title-bar buttons, it is the last control Tab reaches in the window. True: pressed (a
+/// click, or Space or Enter while it has the keyboard).
+pub fn close_button(ctx: &egui::Context, win: &egui::Response, title: &str) -> bool {
+    let style = ctx.global_style();
+    let h = ctx.fonts_mut(|f| f.row_height(&egui::TextStyle::Heading.resolve(&style)));
+    let m = style.spacing.window_margin;
+    let rect = win.rect;
+    let right = rect.right() - m.right as f32;
+    let cell = egui::Rect::from_min_max(
+        egui::pos2(right - h, rect.top() + m.top as f32),
+        egui::pos2(right, rect.top() + m.top as f32 + h),
+    );
+    if cell.left() < rect.left() + 40.0 {
+        return false;
+    }
+    let icon = style.spacing.icon_width;
+    let at = cell.shrink2((cell.size() - egui::Vec2::splat(icon)).max(egui::Vec2::ZERO) * 0.5);
+    let ui = Ui::new(
+        ctx.clone(),
+        win.id.with("close-button"),
+        egui::UiBuilder::new().layer_id(win.layer_id).max_rect(cell),
+    );
+    let r = ui
+        .interact(at, win.id.with("close"), egui::Sense::click())
+        .on_hover_text(if cfg!(target_os = "macos") {
+            "Close (Esc, or ⌘W)"
+        } else {
+            "Close (Esc, or Ctrl+W)"
+        });
+    let name = format!("Close {title}");
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+    let visuals = ui.style().interact(&r);
+    let x = at.shrink(2.0).expand(visuals.expansion);
+    let stroke = visuals.fg_stroke;
+    ui.painter()
+        .line_segment([x.left_top(), x.right_bottom()], stroke);
+    ui.painter()
+        .line_segment([x.right_top(), x.left_bottom()], stroke);
+    r.clicked()
 }
 
 /// Small buttons in a floating window's title bar, left of its close button. True: pop out.

@@ -1714,3 +1714,569 @@ fn child_measuring_pauses_the_world_and_resumes_it_after() {
     );
     done();
 }
+
+#[test]
+fn each_tool_window_and_dialog_closes_from_the_keyboard() {
+    in_scratch("app::keyboard_tests::child_each_tool_window_and_dialog_closes_from_the_keyboard");
+}
+
+/// The window drawn on top (not the background): its layer, its title, and the first control below
+/// its title bar, where F6 lands.
+fn top_window(k: &Kb) -> Option<(egui::LayerId, String, egui::Id)> {
+    let layer = k
+        .focusable()
+        .iter()
+        .map(|w| w.1)
+        .rfind(|l| *l != egui::LayerId::background())?;
+    let region = crate::a11y::last_regions(&k.ctx)
+        .into_iter()
+        .find(|r| r.layer == layer)?;
+    let first = *crate::a11y::focusable_in(&k.ctx, &region).first()?;
+    Some((layer, region.name, first))
+}
+
+/// Each tool window and dialog, floating (#308): Esc on its first control closes it (from a text
+/// box, a second Esc: the first leaves the box); its last control in Tab's order is a button named
+/// *Close <its title>*, which Enter presses; and Ctrl+W (⌘W) closes it. A pane floated out of the
+/// dock closes the same ways, and Esc on a control of a docked pane takes the keyboard back to
+/// the grid. Esc only closed the windows that can't be docked, and the title bar's × was the only
+/// other way out.
+#[test]
+#[ignore = "started by each_tool_window_and_dialog_closes_from_the_keyboard, in a scratch process"]
+fn child_each_tool_window_and_dialog_closes_from_the_keyboard() {
+    if !child() {
+        return;
+    }
+    type Open = Box<dyn Fn(&mut Kb, bool)>;
+    type IsOpen = Box<dyn Fn(&Kb) -> bool>;
+    let mut windows: Vec<(String, Open, IsOpen)> = vec![];
+    for t in menu::ToolWin::ALL {
+        windows.push((
+            t.label().into(),
+            Box::new(move |k: &mut Kb, on| k.app.set_tool_open(t, on)),
+            Box::new(move |k: &Kb| k.app.tool_open(t)),
+        ));
+    }
+    windows.push((
+        "Setup".into(),
+        Box::new(|k: &mut Kb, on| {
+            if on {
+                k.app.setup.show_again()
+            } else {
+                k.app.setup.open = false
+            }
+        }),
+        Box::new(|k: &Kb| k.app.setup.open),
+    ));
+    windows.push((
+        "Export animation".into(),
+        Box::new(|k: &mut Kb, on| k.app.anim.open = on),
+        Box::new(|k: &Kb| k.app.anim.open),
+    ));
+    windows.push((
+        "The Tiling pane, floating".into(),
+        Box::new(|k: &mut Kb, on| {
+            let to = if on {
+                panes::Place::Floating
+            } else {
+                panes::Place::Docked
+            };
+            k.app.shell.layout.set_place("tiling", to)
+        }),
+        Box::new(|k: &Kb| k.app.shell.layout.place("tiling") == panes::Place::Floating),
+    ));
+    let ctrl_w = Modifiers {
+        ctrl: !cfg!(target_os = "macos"),
+        mac_cmd: cfg!(target_os = "macos"),
+        command: true,
+        ..Modifiers::NONE
+    };
+    let mut k = Kb::with_life();
+    let mut failures = vec![];
+    for (what, open, is_open) in &windows {
+        // Esc.
+        open(&mut k, true);
+        k.frames(4);
+        let Some((layer, title, first)) = top_window(&k) else {
+            failures.push(format!("{what}: no window drawn"));
+            open(&mut k, false);
+            continue;
+        };
+        k.ctx.memory_mut(|m| m.request_focus(first));
+        k.frames(2);
+        let first_name = k.focused_name();
+        let typing = k.ctx.text_edit_focused();
+        k.key(Key::Escape);
+        k.frames(1);
+        if typing && is_open(&k) {
+            k.key(Key::Escape);
+            k.frames(1);
+        }
+        if is_open(&k) {
+            failures.push(format!("{what}: Esc on {first_name:?} left it open"));
+            open(&mut k, false);
+            k.frames(1);
+        }
+        // Its Close button: the last of its controls that Tab reaches.
+        open(&mut k, true);
+        k.frames(4);
+        k.ctx.memory_mut(|m| m.request_focus(first));
+        k.frames(2);
+        let mut last = first;
+        for _ in 0..200 {
+            k.key(Key::Tab);
+            k.frames(1);
+            let mut f = k.focused();
+            if f.is_some() && f == Some(last) && k.ctx.text_edit_focused() {
+                // A box that keeps Tab for typing: Esc leaves it, and Tab goes on from it.
+                k.key(Key::Escape);
+                k.key(Key::Tab);
+                k.frames(1);
+                f = k.focused();
+            }
+            let in_window = f.is_some_and(|f| {
+                k.ctx
+                    .viewport(|v| v.prev_pass.widgets.get(f).map(|w| w.layer_id))
+                    == Some(layer)
+            });
+            if !in_window || f == Some(first) || !is_open(&k) {
+                break;
+            }
+            last = f.unwrap();
+        }
+        let last_name = k
+            .nodes
+            .get(&last.accesskit_id())
+            .map(|n| k.name(n))
+            .unwrap_or_default();
+        let want = format!("Close {title}");
+        if last_name != want {
+            failures.push(format!(
+                "{what}: the last control Tab reaches is {last_name:?}, not {want:?}"
+            ));
+        }
+        if is_open(&k)
+            && let Some(close) = k.widget_named(&want)
+        {
+            k.ctx.memory_mut(|m| m.request_focus(close));
+            k.frames(2);
+            k.key(Key::Enter);
+            k.frames(1);
+            if is_open(&k) {
+                failures.push(format!("{what}: Enter on {want:?} left it open"));
+            }
+        }
+        open(&mut k, false);
+        k.frames(1);
+        // Ctrl+W.
+        open(&mut k, true);
+        k.frames(4);
+        k.ctx.memory_mut(|m| m.request_focus(first));
+        k.frames(2);
+        k.key_with(Key::W, ctrl_w);
+        k.frames(1);
+        if is_open(&k) {
+            failures.push(format!("{what}: Ctrl+W left it open"));
+        }
+        open(&mut k, false);
+        k.frames(2);
+    }
+    // Opened from the menu bar with the keyboard (F10, the arrows, Enter), as in the live sitting:
+    // the window has the keyboard, so Esc closes it straight away.
+    for (menu_title, item, t) in [
+        ("Settings", "Accessibility…", menu::ToolWin::Accessibility),
+        ("Tools", "Scripts and sweeps…", menu::ToolWin::Scripts),
+        ("Tools", "Hunts…", menu::ToolWin::Hunts),
+        ("Tools", "This computer…", menu::ToolWin::Machine),
+    ] {
+        k.key(Key::F10);
+        k.frames(1);
+        for _ in 0..10 {
+            if k.focused_name() == menu_title {
+                break;
+            }
+            k.key(Key::ArrowRight);
+        }
+        for _ in 0..20 {
+            if k.focused_name() == item {
+                break;
+            }
+            k.key(Key::ArrowDown);
+        }
+        assert_eq!(k.focused_name(), item, "the {menu_title} menu");
+        k.key(Key::Enter);
+        k.frames(3);
+        assert!(k.app.tool_open(t), "Enter opened {item}");
+        let on = k.focused_name();
+        k.key(Key::Escape);
+        k.frames(1);
+        if k.app.tool_open(t) {
+            failures.push(format!(
+                "{item} opened from the menu bar: Esc left it open (the keyboard was on {on:?})"
+            ));
+            k.app.set_tool_open(t, false);
+        }
+        k.frames(2);
+    }
+    // Every tool window, opened as its menu item (or its key) opens it: Esc closes it at once.
+    for t in menu::ToolWin::ALL {
+        if !k.app.action_enabled(menu::Action::Tool(t)) {
+            continue;
+        }
+        k.app.run_action(&k.ctx.clone(), menu::Action::Tool(t));
+        k.frames(4);
+        let on = k.focused_name();
+        let typing = k.ctx.text_edit_focused();
+        k.key(Key::Escape);
+        k.frames(1);
+        if typing && k.app.tool_open(t) {
+            k.key(Key::Escape);
+            k.frames(1);
+        }
+        if k.app.tool_open(t) {
+            failures.push(format!(
+                "{}, opened from its menu item: Esc left it open (the keyboard was on {on:?})",
+                t.label()
+            ));
+            k.app.set_tool_open(t, false);
+        }
+        k.frames(2);
+    }
+    // Esc on a control of a docked pane: the keyboard goes back to the grid, the pane stays.
+    let grid = k.grid_widget();
+    let (pane, control) = crate::a11y::last_regions(&k.ctx)
+        .into_iter()
+        .filter(|r| {
+            r.layer == egui::LayerId::background() && panes::PANES.iter().any(|p| p.title == r.name)
+        })
+        .find_map(|r| {
+            let first = crate::a11y::focusable_in(&k.ctx, &r).first().copied();
+            first.map(|f| (r.name, f))
+        })
+        .expect("a control in a docked pane");
+    k.ctx.memory_mut(|m| m.request_focus(control));
+    k.frames(2);
+    let name = k.focused_name();
+    k.key(Key::Escape);
+    k.frames(1);
+    if k.focused() != Some(grid) {
+        failures.push(format!(
+            "Esc on {name:?} in the docked {pane} pane gave the keyboard to {:?}, not the grid",
+            k.focused_name()
+        ));
+    }
+    let id = panes::PANES.iter().find(|p| p.title == pane).unwrap().id;
+    assert_eq!(k.app.shell.layout.place(id), panes::Place::Docked);
+    assert!(failures.is_empty(), "{failures:#?}");
+    done();
+}
+
+#[test]
+fn setup_s_what_it_searches_choices_keep_the_keyboard() {
+    in_scratch("app::keyboard_tests::child_setup_s_what_it_searches_choices_keep_the_keyboard");
+}
+
+/// Setup's *What it searches* (#309): from its header, ↓ and Tab go through every choice in turn
+/// and ↑ and Shift+Tab come back through them, the keyboard on a choice all the way, ringed; ↑
+/// from the header leaves the keyboard in the window; Space ticks the one with the keyboard, and
+/// the title reads *Custom*. ↓ passed most choices by, and ↑ took the keyboard out of the window.
+#[test]
+#[ignore = "started by setup_s_what_it_searches_choices_keep_the_keyboard, in a scratch process"]
+fn child_setup_s_what_it_searches_choices_keep_the_keyboard() {
+    if !child() {
+        return;
+    }
+    let mut failures = vec![];
+    // A Framework 13's screen at 200 %, and two other sizes.
+    for (w, h) in [(1128.0, 752.0), (1280.0, 800.0), (900.0, 640.0)] {
+        for f in what_it_searches_from_the_keyboard(w, h) {
+            failures.push(format!("{w}x{h}: {f}"));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    done();
+}
+
+/// [`child_setup_s_what_it_searches_choices_keep_the_keyboard`] in a window of `w` × `h` points:
+/// what went wrong.
+fn what_it_searches_from_the_keyboard(w: f32, h: f32) -> Vec<String> {
+    let mut k = Kb::sized(w, h);
+    let scene = Scene::from_json(
+        r#"{"name": "Keyboard test", "tiling": {"family": "square", "size": {"rect": {"w": 40, "h": 30}}, "boundary": "wrap"}, "rng_state": 3, "cas": [{"rule": "B3/S23", "seed": "empty"}]}"#,
+    )
+    .unwrap();
+    k.app.load_scene(&scene);
+    k.app.playing = false;
+    k.frames(4);
+    k.app.setup.show_again();
+    let t = std::time::Instant::now();
+    while k.focused_name() != "Next" && t.elapsed().as_secs() < 20 {
+        k.frames(1);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    k.app
+        .setup
+        .choose(jetcarp_api::ops::setup::Profile::Explorer);
+    k.app.setup.go_to(crate::setup_ui::Page::Summary);
+    k.app.setup.build_on = true;
+    k.frames(4);
+    k.focus_named("What it searches: All");
+    k.key(Key::Enter);
+    k.frames(3);
+    let choices: Vec<String> = std::iter::once("All".to_string())
+        .chain(
+            k.app
+                .setup
+                .groups
+                .iter()
+                .map(|g| crate::dash_ui::group_label(g.0).to_string()),
+        )
+        .chain(
+            k.app
+                .setup
+                .families
+                .iter()
+                .map(|f| crate::dash_ui::family_label(f.0).to_string()),
+        )
+        .collect();
+    assert!(choices.len() > 4, "{choices:?}");
+    let mut failures = vec![];
+    // From the header, as a person comes to them: down into the choices and through each one,
+    // then back up through them to All.
+    let n = choices.len();
+    let want: Vec<&String> = choices.iter().chain(choices.iter().rev().skip(1)).collect();
+    for (forward, back, keys) in [
+        (
+            (Key::ArrowDown, Modifiers::NONE),
+            (Key::ArrowUp, Modifiers::NONE),
+            "↓ and ↑",
+        ),
+        (
+            (Key::Tab, Modifiers::NONE),
+            (Key::Tab, Modifiers::SHIFT),
+            "Tab and Shift+Tab",
+        ),
+    ] {
+        k.focus_named("What it searches: All");
+        let mut path = vec![];
+        let mut problems = vec![];
+        for (i, (key, m)) in std::iter::repeat_n(forward, n)
+            .chain(std::iter::repeat_n(back, n - 1))
+            .enumerate()
+        {
+            k.key_with(key, m);
+            k.frames(1);
+            let name = if k.focused().is_some() {
+                k.focused_name()
+            } else {
+                "(nothing)".into()
+            };
+            if &name != want[i] && problems.is_empty() {
+                problems.push(format!(
+                    "press {} went to {name:?}, not {:?}",
+                    i + 1,
+                    want[i]
+                ));
+            }
+            if let Some((rect, _)) = k.focused_rects()
+                && !k.ring_round(rect, 2.0)
+                && problems.is_empty()
+            {
+                problems.push(format!("press {}: no ring round {name:?}", i + 1));
+            }
+            path.push(name);
+        }
+        if !problems.is_empty() {
+            failures.push(format!("{keys}: {}; went {path:?}", problems.join("; ")));
+        }
+    }
+    // ↑ from the header and on: the keyboard stays in the setup window (egui's arrows took it
+    // to the main window's controls behind it, where its ring couldn't be seen).
+    k.focus_named("What it searches: All");
+    let header = k.focused().unwrap();
+    let layer_of = |k: &Kb, id: egui::Id| {
+        k.ctx
+            .viewport(|v| v.prev_pass.widgets.get(id).map(|w| w.layer_id))
+    };
+    let window = layer_of(&k, header);
+    for i in 0..8 {
+        k.key(Key::ArrowUp);
+        k.frames(1);
+        let f = k.focused();
+        if f.is_none() || layer_of(&k, f.unwrap()) != window {
+            failures.push(format!(
+                "↑ {} from the header took the keyboard out of the setup window, to {:?}",
+                i + 1,
+                k.focused_name()
+            ));
+            break;
+        }
+    }
+    // Space ticks the one with the keyboard: All becomes Custom.
+    k.focus_named(&choices[2]);
+    let was = k.app.setup.groups[1].1;
+    k.key(Key::Space);
+    k.frames(2);
+    if k.app.setup.groups[1].1 == was {
+        failures.push(format!("Space left {:?} as it was", choices[2]));
+    }
+    if k.widget_named("What it searches: Custom").is_none() {
+        failures.push(format!("the title isn't Custom: {:?}", k.names()));
+    }
+    if k.focused_name() != choices[2] {
+        failures.push(format!(
+            "after Space, the keyboard is on {:?}, not {:?}",
+            k.focused_name(),
+            choices[2]
+        ));
+    }
+    failures
+}
+
+#[test]
+fn tools_menu_starts_an_explore_search() {
+    in_scratch("app::keyboard_tests::child_tools_menu_starts_an_explore_search");
+}
+
+/// *Tools → Start an explore search…* (#310), from the keyboard alone: F10, → along to Tools, ↓
+/// down to it, Enter. The Hunts window opens with the explore form open and the keyboard on its
+/// first control. The form was only a button inside the Hunts window.
+#[test]
+#[ignore = "started by tools_menu_starts_an_explore_search, in a scratch process"]
+fn child_tools_menu_starts_an_explore_search() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::with_life();
+    k.key(Key::F10);
+    k.frames(1);
+    for _ in 0..10 {
+        if k.focused_name() == "Tools" {
+            break;
+        }
+        k.key(Key::ArrowRight);
+    }
+    assert_eq!(k.focused_name(), "Tools");
+    let entry = "Start an explore search…";
+    let mut seen = vec![];
+    for _ in 0..30 {
+        k.key(Key::ArrowDown);
+        let n = k.focused_name();
+        if n == entry || seen.contains(&n) {
+            break;
+        }
+        seen.push(n);
+    }
+    assert_eq!(k.focused_name(), entry, "the Tools menu: {seen:?}");
+    k.key(Key::Enter);
+    k.frames(4);
+    assert!(k.app.dash.open, "the Hunts window opened");
+    assert!(
+        k.widget_named("Start explore search").is_some(),
+        "the explore form is open: {:?}",
+        k.names()
+    );
+    let first = crate::dash_ui::group_label(k.app.dash.explore.groups[0].0);
+    assert_eq!(
+        k.focused_name(),
+        first,
+        "the keyboard is on the form's first control"
+    );
+    assert!(!egui::Popup::is_any_open(&k.ctx), "the menu closed");
+    done();
+}
+
+#[test]
+fn the_explore_form_s_choices_keep_the_keyboard() {
+    in_scratch("app::keyboard_tests::child_the_explore_form_s_choices_keep_the_keyboard");
+}
+
+/// The *Hunts* window's explore form, as setup's *What it searches* (#309): from its first box,
+/// ↓ goes through every tiling, the tilings' *All* and *None*, every rule family and the families'
+/// *All*, *None* and *Default* in turn, as Tab does, and ↑ comes back through them to the first,
+/// the keyboard on a choice all the way, ringed. ↓ jumped from row to row of the wrapped boxes.
+#[test]
+#[ignore = "started by the_explore_form_s_choices_keep_the_keyboard, in a scratch process"]
+fn child_the_explore_form_s_choices_keep_the_keyboard() {
+    if !child() {
+        return;
+    }
+    let mut failures = vec![];
+    // A Framework 13's screen at 200 %, and two other sizes.
+    for (w, h) in [(1128.0, 752.0), (1280.0, 800.0), (900.0, 640.0)] {
+        let mut k = Kb::sized(w, h);
+        k.app.dash.open_explore_form();
+        k.frames(4);
+        let f = &k.app.dash.explore;
+        let choices: Vec<String> = f
+            .groups
+            .iter()
+            .map(|g| crate::dash_ui::group_label(g.0).to_string())
+            .chain(["Tick every tiling group", "Clear every tiling group"].map(String::from))
+            .chain(
+                f.families
+                    .iter()
+                    .map(|f| crate::dash_ui::family_label(f.0).to_string()),
+            )
+            .chain(
+                [
+                    "Tick every rule family",
+                    "Clear every rule family",
+                    "Tick the default rule family choice",
+                ]
+                .map(String::from),
+            )
+            .collect();
+        if k.focused_name() != choices[0] {
+            failures.push(format!(
+                "{w}x{h}: the form opened with the keyboard on {:?}, not {:?}",
+                k.focused_name(),
+                choices[0]
+            ));
+            continue;
+        }
+        // Down from the first through each one to the last, then back up to the first.
+        let n = choices.len();
+        let want: Vec<&String> = choices
+            .iter()
+            .skip(1)
+            .chain(choices.iter().rev().skip(1))
+            .collect();
+        let mut path = vec![];
+        let mut problems = vec![];
+        for (i, key) in std::iter::repeat_n(Key::ArrowDown, n - 1)
+            .chain(std::iter::repeat_n(Key::ArrowUp, n - 1))
+            .enumerate()
+        {
+            k.key(key);
+            k.frames(1);
+            let name = if k.focused().is_some() {
+                k.focused_name()
+            } else {
+                "(nothing)".into()
+            };
+            if &name != want[i] && problems.is_empty() {
+                problems.push(format!(
+                    "press {} went to {name:?}, not {:?}",
+                    i + 1,
+                    want[i]
+                ));
+            }
+            if let Some((rect, _)) = k.focused_rects()
+                && !k.ring_round(rect, 2.0)
+                && problems.is_empty()
+            {
+                problems.push(format!("press {}: no ring round {name:?}", i + 1));
+            }
+            path.push(name);
+        }
+        if !problems.is_empty() {
+            failures.push(format!(
+                "{w}x{h}: ↓ and ↑: {}; went {path:?}",
+                problems.join("; ")
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    done();
+}
