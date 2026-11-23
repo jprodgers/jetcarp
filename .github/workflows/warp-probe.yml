@@ -34,7 +34,7 @@ jobs:
           key: warp-probe
           cache-on-failure: true
       - name: Build the GPU tests
-        run: cargo test --release -p jetcarp-gpu -p jetcarp-display -p jetcarp-search --no-run
+        run: cargo test --release -p jetcarp-gpu --no-run
       - name: WARP 1.0.22, the Agility SDK 1.620.2 (its debug layer) and DXC from NuGet
         shell: pwsh
         run: |

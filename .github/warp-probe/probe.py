@@ -25,12 +25,12 @@ def code_text(code):
     return f"{code} (0x{code & 0xFFFFFFFF:08X})"
 
 
-def run(label, cmd, env, timeout=1500):
+def run(label, cmd, env, timeout=1500, cwd=None):
     print(f"::group::{label}", flush=True)
     t0 = time.time()
     try:
         p = subprocess.run(cmd, env=env, timeout=timeout, stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT, text=True, errors="replace")
+                           stderr=subprocess.STDOUT, text=True, errors="replace", cwd=cwd)
         code, out = p.returncode, p.stdout
     except subprocess.TimeoutExpired as e:
         code = None
@@ -55,8 +55,8 @@ def test_exes(pkgs):
         except ValueError:
             continue
         if m.get("reason") == "compiler-artifact" and m.get("executable") and m["profile"]["test"]:
-            pkg = m["package_id"].rsplit("#", 1)[-1].split("@")[0]
-            exes.append((pkg, m["target"]["name"], m["executable"]))
+            exes.append((str(pathlib.Path(m["manifest_path"]).parent), m["target"]["name"],
+                         m["executable"]))
     return exes
 
 
@@ -180,33 +180,18 @@ def main():
         last = crashing[-1]
         under_cdb_jit(last, probe, base)
 
-    # The whole probe where WARP's compiler does not crash, with the debug layer and GPU-based
-    # validation: what they say of JETCARP's kernels as they run.
-    sweep("NuGet WARP, FXC, debug layer and GPU-based validation", dict(base, **checks),
-          new_probe, 3)
-    sweep("system WARP, DXC, debug layer and GPU-based validation", dict(dxc, **checks),
-          probe, 3)
+    # The whole probe on NuGet's WARP with the D3D12 debug layer (no GPU-based validation, which
+    # removed the device on NuGet's WARP and ran for over 25 minutes on the system's).
+    sweep("NuGet WARP, FXC, D3D12 debug layer", dict(base, **dict(checks, WGPU_GPU_BASED_VALIDATION="0")),
+          new_probe, 2)
 
-    run("exit [NuGet WARP]", [new_probe, "--ignored", "--nocapture", "--test-threads=1",
-                              "--exact", "exit_after_warp"], base)
-    run("exit [system WARP, DXC]", [probe, "--ignored", "--nocapture", "--test-threads=1",
-                                    "--exact", "exit_after_warp"], dxc)
+    # The suites that read files beside them, from their own folder as cargo runs them.
+    for cwd, name, exe in gpu_exes:
+        if name in ("equality", "families"):
+            run(f"tests [{name}, NuGet WARP]", [with_new_warp(exe), "--test-threads=1"], base,
+                cwd=cwd)
 
-    # Every GPU test there is, on NuGet's WARP.
-    for pkg, name, exe in gpu_exes:
-        if name != "warp_probe":
-            run(f"tests [{pkg} {name}, NuGet WARP]", [with_new_warp(exe), "--test-threads=1"],
-                base)
-    for pkg, name, exe in test_exes(["jetcarp-display"]):
-        if name in ("offscreen", "crop", "strobe_painter", "strobe_gpu"):
-            run(f"tests [{pkg} {name}, NuGet WARP]", [with_new_warp(exe), "--test-threads=1"],
-                base)
-    for pkg, name, exe in test_exes(["jetcarp-search"]):
-        if name == "gpu_explore":
-            run(f"tests [{pkg} {name}, NuGet WARP]", [with_new_warp(exe), "--test-threads=1"],
-                base)
-
-    print("\n==== JIT TABLE (system FXC | NuGet FXC | system DXC) ====")
+    print(f"\n==== JIT TABLE, {len(table)} cases (system FXC | NuGet FXC | system DXC) ====")
     for r in table:
         print(" | ".join(r))
     print("\n==== SUMMARY ====")

@@ -521,7 +521,8 @@ const AFTER_STEP: &str = "// JACA with a blast radius, part 1";
 const HALT: &str = "  if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }\n  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }\n";
 
 fn sim_variant(name: &str) -> String {
-    let mut s = include_str!("../src/sim.wgsl").to_string();
+    // A Windows checkout has CRLF line ends.
+    let mut s = include_str!("../src/sim.wgsl").replace("\r\n", "\n");
     for part in name.split('+') {
         s = match part {
             "full" => s,
@@ -536,6 +537,17 @@ fn sim_variant(name: &str) -> String {
             ),
             "no_tail" => cut(&s, TAIL, AFTER_STEP, "}\n\n"),
             "no_halt" => s.replacen(HALT, "", 1),
+            "no_flags" => cut(
+                &s,
+                "    if ((p.flags & 1u) != 0u) {",
+                "    if ((p.flags & 4u)",
+                "",
+            )
+            .replacen(
+                "    if ((p.flags & 4u) != 0u && val != was) { atomicAdd(&wg_chg, 1u); }\n",
+                "",
+                1,
+            ),
             p => panic!("no variant {p}"),
         };
     }
@@ -574,8 +586,47 @@ fn jit_cases() -> Vec<(String, String, &'static str, Groups)> {
         "only_case0+no_tail+no_halt",
         "only_case6+no_tail+no_halt",
         "no_case6+no_tail",
+        "only_case0+no_tail+no_halt+no_flags",
+        "only_case0+no_flags",
     ] {
         v.push((format!("sim step {name}"), sim_variant(name), "step", SIM));
+    }
+    // sim.wgsl's bindings and helpers, with an entry point of the probe's own.
+    let sim = include_str!("../src/sim.wgsl").replace("\r\n", "\n");
+    let helpers = &sim[..sim.find("@compute @workgroup_size(256)\nfn step(").unwrap()];
+    let head = "@compute @workgroup_size(256)\nfn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32) {\n  let i = (wg.y * u32(topo[8]) + wg.x) * WG + li;\n";
+    for (name, body) in [
+        (
+            "helpers gather",
+            "  var deg = 0u;\n  if (i < u32(topo[0])) { let g = gather(i, 1u, 1u, &deg); dst[i] = g.x + deg; }",
+        ),
+        (
+            "helpers gather+barrier",
+            "  var deg = 0u;\n  if (i < u32(topo[0])) { let g = gather(i, 1u, 1u, &deg); dst[i] = g.x + deg; atomicAdd(&wg_pop, g.x); }\n  workgroupBarrier();\n  if (li == 0u) { atomicAdd(&ctrl.m[0], atomicLoad(&wg_pop)); }",
+        ),
+        (
+            "helpers halt+gather",
+            "  if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }\n  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }\n  var deg = 0u;\n  if (i < u32(topo[0])) { let g = gather(i, 1u, 1u, &deg); dst[i] = g.x + deg; }",
+        ),
+        (
+            "helpers resolve",
+            "  if (i < u32(topo[0])) { dst[i] = u32(resolve(i32(i), 1, 0)); }",
+        ),
+        (
+            "helpers resolve+barrier",
+            "  if (i < u32(topo[0])) { atomicAdd(&wg_pop, u32(resolve(i32(i), 1, 0))); }\n  workgroupBarrier();\n  if (li == 0u) { atomicAdd(&ctrl.m[0], atomicLoad(&wg_pop)); }",
+        ),
+        (
+            "helpers loop over topo+barrier",
+            "  var t = 0u;\n  if (i < u32(topo[0])) { for (var o = 0; o < topo[1]; o = o + 1) { t += src[u32(topo[11] + o)]; } }\n  atomicAdd(&wg_pop, t);\n  workgroupBarrier();\n  if (li == 0u) { atomicAdd(&ctrl.m[0], atomicLoad(&wg_pop)); }",
+        ),
+    ] {
+        v.push((
+            name.to_string(),
+            format!("{helpers}{head}{body}\n}}\n"),
+            "main",
+            SIM,
+        ));
     }
     v.push((
         "edit edit".into(),
