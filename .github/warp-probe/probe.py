@@ -136,57 +136,33 @@ def main():
                   WGPU_DX12_AGILITY_SDK_REQUIRE="1", WGPU_VALIDATION="1", WGPU_DEBUG="1",
                   WGPU_GPU_BASED_VALIDATION="1")
 
-    gpu_exes = test_exes(["jetcarp-gpu"])
-    probe = next(e for p, n, e in gpu_exes if n == "warp_probe")
-    new_probe = with_new_warp(probe)
-
-    # Which kernels and which small shaders crash the system WARP's compiler, each in a process
-    # of its own; the same on NuGet's WARP and through DXC.
-    listing = subprocess.run([probe, "--ignored", "--nocapture", "--exact", "jit_child"],
-                             env=dict(base, JETCARP_WARP_JIT="list"), stdout=subprocess.PIPE,
-                             text=True).stdout
-    cases = re.findall(r"^CASE (.*)$", listing, re.M)
-    hlsl = TOOLS / "hlsl"
-    table = []
-    for case in cases:
-        row = [case]
-        for variant, exe, env in (("system FXC", probe, base), ("NuGet FXC", new_probe, base),
-                                  ("system DXC", probe, dxc)):
-            e = dict(env, JETCARP_WARP_JIT=case)
-            if variant == "system FXC":
-                e["JETCARP_WARP_HLSL_DIR"] = str(hlsl / re.sub(r"[^A-Za-z0-9]+", "_", case))
-            code, out = run(f"jit [{variant}] {case}",
-                            [exe, "--ignored", "--nocapture", "--exact", "jit_child"], e, 300)
-            row.append("ok" if code == 0 and "survived" in out else code_text(code))
-        table.append(row)
-    crashing = [r[0] for r in table if r[1] != "ok"]
-
-    # FXC's DXBC for each entry point the system WARP saw, as wgpu compiled it.
+    # The soup hunt's generated kernel, opened on WARP directly (no self-test).
+    hunt = next(e for c, n, e in test_exes(["jetcarp-search"]) if n == "warp_hunt_probe")
+    new_hunt = with_new_warp(hunt)
+    args = ["--ignored", "--nocapture", "--exact", "the_hunt_kernel_on_warp"]
+    code, _ = run("hunt [system FXC]", [hunt] + args, base, 900)
+    run("hunt [NuGet FXC]", [new_hunt] + args, base, 900)
+    run("hunt [system DXC]", [hunt] + args, dxc, 900)
+    if code != 0 and CDB.exists():
+        script = TOOLS / "cdb-hunt.txt"
+        script.write_text(
+            f".sympath srv*{TOOLS / 'symbols'}*https://msdl.microsoft.com/download/symbols\n"
+            'sxe -c ".echo FIRST-CHANCE AV; .lastevent; r; kn 12; gn" '
+            '-c2 ".echo SECOND-CHANCE AV; kn 12; q" av\n'
+            "g\n"
+        )
+        run("cdb hunt [system FXC]", [str(CDB), "-G", "-cf", str(script), hunt] + args, base, 1800)
+    # wgpu's HLSL of the hunt kernel and FXC's DXBC, for the record.
+    hl = TOOLS / "hlsl-hunt"
+    run("hunt [system FXC, HLSL kept]", [hunt] + args, dict(base, JETCARP_WARP_HLSL_DIR=str(hl)), 900)
     fxc = fxc_exe()
     asm = TOOLS / "asm"
     asm.mkdir(exist_ok=True)
-    if fxc:
-        for f in sorted(hlsl.glob("*/*.hlsl")):
-            out = asm / f"{f.parent.name}--{f.stem}.asm"
-            p = subprocess.run([str(fxc), "/nologo", "/T", "cs_5_1", "/E", f.stem, "/Ges",
-                                "/Fc", str(out), str(f)], stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, text=True)
-            shutil.copy2(f, asm / f"{f.parent.name}--{f.stem}.hlsl")
-            SUMMARY.append(f"fxc {f.parent.name}/{f.stem}: {p.returncode} {p.stdout.strip()[:200]}")
-    else:
-        SUMMARY.append("fxc: not found")
+    for f in sorted(hl.glob("*.hlsl")) if fxc else []:
+        subprocess.run([str(fxc), "/nologo", "/T", "cs_5_1", "/E", f.stem, "/Ges", "/Fc",
+                        str(asm / f"hunt--{f.stem}.asm"), str(f)])
+        shutil.copy2(f, asm / f"hunt--{f.stem}.hlsl")
 
-    for case in [c for c in crashing if c.startswith("mini")][:2] or crashing[-1:]:
-        under_cdb_jit(case, probe, base)
-
-    # The whole probe on NuGet's WARP with the D3D12 debug layer (no GPU-based validation, which
-    # removed the device on NuGet's WARP and ran for over 25 minutes on the system's).
-    sweep("NuGet WARP, FXC, D3D12 debug layer", dict(base, **dict(checks, WGPU_GPU_BASED_VALIDATION="0")),
-          new_probe, 1)
-
-    print(f"\n==== JIT TABLE, {len(table)} cases (system FXC | NuGet FXC | system DXC) ====")
-    for r in table:
-        print(" | ".join(r))
     print("\n==== SUMMARY ====")
     for line in SUMMARY:
         print(line)

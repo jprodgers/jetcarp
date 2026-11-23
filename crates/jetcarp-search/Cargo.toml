@@ -34,3 +34,7 @@ libc = "0.2.191"
 [dev-dependencies]
 # The GPU strategies' tests: a hunt and an explore search on the GPU equal the CPU's.
 jetcarp-gpu.workspace = true
+# TEMPORARY (#321): the WARP hunt probe.
+wgpu.workspace = true
+pollster.workspace = true
+log = "0.4"
