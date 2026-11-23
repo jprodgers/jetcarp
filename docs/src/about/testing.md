@@ -669,6 +669,8 @@ job that hangs is stopped rather than left running for hours.
   real program makes and removes the Start menu entry in the test's own `APPDATA`.
 - **Build only** for macOS on Intel and Linux on ARM, which nobody tests by hand yet, and the whole
   workspace with the oldest Rust it says it supports (1.95), so that the stated minimum stays true.
+  The Intel Mac is built at the end of the macOS test job, on the same Apple silicon runner, since
+  those runners are GitHub's scarcest; Linux on ARM has a job of its own.
 - **Checks:** formatting (`cargo fmt --check`), the third-party notices are current, the workflows
   and packaging scripts pass `actionlint`, every crate packages and builds on its own (a crates.io
   dry run), the generated reference pages match the program, and every file of the app icon matches

@@ -458,6 +458,10 @@ day later (0.4.2: 17 November here, 18 November there).
   ([The state hash](../research/reproducibility.md#the-state-hash),
   [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
+- **CI builds the Intel Mac in the macOS test job,** after its tests, on the same Apple silicon
+  runner, instead of in a job of its own: twice on 2026-11-23 that second job found no runner. A
+  pull request's checks take about ten minutes longer.
+
 ### Fixed
 
 - **The window comes back whole on screen** (#306). It came back at its saved size but partly off
