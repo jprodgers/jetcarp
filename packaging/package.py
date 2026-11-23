@@ -124,10 +124,19 @@ def cmd_set_version(a):
     text, n = re.subn(
         r'(^\[workspace\.package\][^\[]*?^version = ")[^"]+(")', rf"\g<1>{new}\2", text, count=1, flags=re.M | re.S
     )
-    # The workspace's own crates, pinned exactly in [workspace.dependencies].
+    # The workspace's own crates, pinned exactly in [workspace.dependencies] (with or without more
+    # fields after the version, such as `default-features = false`).
     text, pins = re.subn(
-        r'^(jetcarp(?:-[a-z]+)? = \{ path = "crates/[a-z-]+", version = "=)[^"]+(" \})$', rf"\g<1>{new}\2", text, flags=re.M
+        r'^(jetcarp(?:-[a-z]+)? = \{ path = "crates/[a-z-]+", version = "=)[^"]+(")', rf"\g<1>{new}\2", text, flags=re.M
     )
+    # Every pin must now name the new version: one left behind breaks the build.
+    stale = [
+        m.group(0)
+        for m in re.finditer(r'^jetcarp(?:-[a-z]+)? = \{[^\n]*version = "=([^"]+)"', text, flags=re.M)
+        if m.group(1) != new
+    ]
+    if stale:
+        die("set-version left these pins as they were:\n  " + "\n  ".join(stale))
     cargo.write_text(text, encoding="utf-8")
     lock = ROOT / "Cargo.lock"
     ltext = lock.read_text(encoding="utf-8")
