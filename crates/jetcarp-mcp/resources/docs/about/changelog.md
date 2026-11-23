@@ -461,6 +461,11 @@ day later (0.4.2: 17 November here, 18 November there).
 - **Parquet and Arrow 60.2.0** (from 60.1.0), for RUSTSEC-2026-0595: Parquet 60.1.0 wrote an
   encrypted file's Bloom filters in plaintext. JETCARP builds Parquet without its encryption, so
   it was never affected; the update keeps the dependency check clean.
+- **The release builds both Macs on one runner.** The Apple silicon and Intel Mac builds are made
+  one after the other on one Apple silicon runner, not on one each: GitHub's Apple silicon runners
+  are the scarcest, and v0.4.3-rc.2's first attempt found none for the second Mac job, so nothing
+  was published until it was run again. The Intel build's program is now also run once, under
+  Rosetta, where the runner has it; before, it was only built.
 
 ### Fixed
 
