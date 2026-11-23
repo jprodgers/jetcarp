@@ -929,10 +929,13 @@ day later (0.4.2: 17 November here, 18 November there).
   they give is kept in `machine.json` by each GPU's ids and PCI address, which sysfs gives without
   touching the GPU, and a plain start uses it, so a laptop's sleeping GPU is not woken; they are
   opened for a GPU with nothing kept (the first start, a changed GPU), and by `jetcarp doctor` and
-  measuring, which read afresh. A measured computer whose GPU is now read is noticed once as
-  changed, and the note now says what changed for any change: *its GPU 10de:2684's memory is now
-  read, 24 GB from NVIDIA's NVML*, *its memory changed from 96 GB to 64 GB*, where it said only
-  "its processor, memory, GPUs or system".
+  measuring, which read afresh. Only the `jetcarp` program saves these readings; code using
+  JETCARP's crates as a library, its tests among it, only reads them. A display adapter with no
+  render node (a firmware framebuffer, or a virtual machine's, such as Hyper-V's virtual VGA) is
+  not taken for a GPU, and nothing is opened for it. A measured computer whose GPU is now read is
+  noticed once as changed, and the note now says what changed for any change: *its GPU 10de:2684's
+  memory is now read, 24 GB from NVIDIA's NVML*, *its memory changed from 96 GB to 64 GB*, where it
+  said only "its processor, memory, GPUs or system".
   ([What JETCARP reads](../guides/this-computer.md#what-jetcarp-reads),
   [#213](https://github.com/jprodgers/jetcarp/issues/213))
 - **`jetcarp score`'s progress reads in a log.** With its output going to a file or a pipe, its
