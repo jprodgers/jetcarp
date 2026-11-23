@@ -137,12 +137,15 @@ It prints:
   the grids it keeps for reuse but is not using) and reads again, and pauses only once its memory
   has stayed over the cap for 10 seconds, so a moment's peak does not pause it but a lasting one
   does. It keeps the grids it has built for reuse, up to about 3 GB, so over hours its memory grows
-  towards that as it reaches more tilings; on Linux it gives the memory it has freed back to the
-  system every 30 seconds. "Memory" is the physical footprint on macOS, the figure Activity
+  towards that as it reaches more tilings; on Linux and macOS it gives the memory it has freed back
+  to the system every 30 seconds. "Memory" is the physical footprint on macOS, the figure Activity
   Monitor shows, and the resident size elsewhere (the working set on Windows).
 - **Stopping.** Ctrl-C, or `jetcarp jobs stop JOB` from another terminal, stops it at its next
   checkpoint. On Linux and macOS, so do SIGTERM (what `kill` sends, and a session as it ends) and
-  SIGHUP (the terminal it runs in closing); a second signal quits at once.
+  SIGHUP (the terminal it runs in closing); on Windows, closing the console it runs in, signing
+  out, shutting down and `taskkill` without `/F`. A second signal quits at once. Windows gives a
+  search 5 seconds (unless changed) to reach its checkpoint; one ended before then is left marked
+  running until `jetcarp jobs resume JOB` carries it on from its last checkpoint.
 - **Carrying on.** `jetcarp jobs resume JOB`, or the same search with `--resume JOB`, carries it on
   from there. It ends exactly where an uninterrupted run would have ended, at any thread count.
 - **In the background.** `--detach` runs a search in a process of its own and returns as soon as

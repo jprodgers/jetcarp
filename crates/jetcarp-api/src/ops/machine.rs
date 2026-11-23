@@ -25,7 +25,8 @@ use crate::error::ApiError;
 use crate::op::{NoInput, Op, Progress, Report};
 use jetcarp_core::machine::quiet::{self, Conditions, Hold, Load};
 use jetcarp_core::machine::{
-    self, Hardware, Id, Limits, MachineFile, Own, Score, Source, bench, bytes_text, limits,
+    self, GpuReading, Hardware, Id, Limits, MachineFile, Own, Score, Source, bench, bytes_text,
+    limits,
     pool::{self, Pool},
 };
 use schemars::JsonSchema;
@@ -34,11 +35,12 @@ use serde_json::Value;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-/// The hardware as read now (the process's reading when it made one).
-fn hardware() -> Hardware {
+/// The hardware: the process's reading when it made one, else read now, each GPU's memory as
+/// saved in `settings` where it was ([`machine::read_hardware`]).
+fn hardware(settings: Option<&Path>) -> Hardware {
     machine::hardware()
         .map(|h| (*h).clone())
-        .unwrap_or_else(Hardware::read)
+        .unwrap_or_else(|| machine::read_hardware(settings, GpuReading::Saved))
 }
 
 /// The limits on this machine with the own values in `settings` (none: the suggestions).
@@ -158,7 +160,7 @@ impl Op for MachineLimits {
     type Out = LimitsOut;
     fn run(cx: &Ctx, _: NoInput, _: &dyn Progress) -> Result<LimitsOut, ApiError> {
         let settings = cx.paths().settings;
-        let (l, _, note) = table(&hardware(), settings.as_deref());
+        let (l, _, note) = table(&hardware(settings.as_deref()), settings.as_deref());
         Ok(LimitsOut::of(l, settings.as_deref().map(Own::file), note))
     }
 }
@@ -202,12 +204,12 @@ impl Op for MachineLimitsSet {
     fn run(cx: &Ctx, a: LimitSetIn, _: &dyn Progress) -> Result<LimitsOut, ApiError> {
         let id = limit_id(&a.name)?;
         let dir = settings_dir(cx)?;
-        let (l, own, _) = table(&hardware(), Some(&dir));
+        let (l, own, _) = table(&hardware(Some(&dir)), Some(&dir));
         let v = limits::parse_value(id.unit(), &a.value).map_err(ApiError::invalid)?;
         let own = l.set(&own, id, v).map_err(ApiError::invalid)?;
         let file = own.save(&dir).map_err(ApiError::io)?;
         reload_if_ours(&dir);
-        let (l, _, note) = table(&hardware(), Some(&dir));
+        let (l, _, note) = table(&hardware(Some(&dir)), Some(&dir));
         Ok(LimitsOut::of(l, Some(file), note))
     }
 }
@@ -233,11 +235,11 @@ impl Op for MachineLimitsReset {
     fn run(cx: &Ctx, a: LimitResetIn, _: &dyn Progress) -> Result<LimitsOut, ApiError> {
         let id = a.name.as_deref().map(limit_id).transpose()?;
         let dir = settings_dir(cx)?;
-        let (_, own, _) = table(&hardware(), Some(&dir));
+        let (_, own, _) = table(&hardware(Some(&dir)), Some(&dir));
         let own = Limits::reset(&own, id);
         let file = own.save(&dir).map_err(ApiError::io)?;
         reload_if_ours(&dir);
-        let (l, _, note) = table(&hardware(), Some(&dir));
+        let (l, _, note) = table(&hardware(Some(&dir)), Some(&dir));
         Ok(LimitsOut::of(l, Some(file), note))
     }
 }
@@ -295,9 +297,17 @@ pub fn hardware_text(hw: &Hardware) -> String {
                 format!("{} own, may borrow {}", bytes_text(d), bytes_text(sh))
             }
             (Some(d), None, _) => format!("{} own", bytes_text(d)),
-            _ => "memory not reported".into(),
+            (None, Some(sh), _) => format!("none of its own, may borrow {}", bytes_text(sh)),
+            _ => match &g.not_read {
+                Some(why) => format!("memory not read ({why})"),
+                None => "memory not reported".into(),
+            },
         };
-        let _ = writeln!(s, "  {name}: {mem} ({})", g.source);
+        if g.source.is_empty() {
+            let _ = writeln!(s, "  {name}: {mem}");
+        } else {
+            let _ = writeln!(s, "  {name}: {mem} ({})", g.source);
+        }
     }
     s
 }
@@ -383,7 +393,20 @@ impl Op for MachineInfo {
 /// [`MachineInfo`]'s report.
 pub fn machine_info(cx: &Ctx) -> MachineOut {
     let settings = cx.paths().settings;
-    let hw = hardware();
+    let hw = hardware(settings.as_deref());
+    machine_info_of(cx, hw)
+}
+
+/// [`MachineInfo`]'s report as `jetcarp doctor` asks for it: each GPU's memory read afresh,
+/// opening NVML or Vulkan where a GPU needs them (and keeping what they say for the next start).
+pub fn machine_info_fresh(cx: &Ctx) -> MachineOut {
+    let settings = cx.paths().settings;
+    let hw = machine::read_hardware(settings.as_deref(), GpuReading::Fresh);
+    machine_info_of(cx, hw)
+}
+
+fn machine_info_of(cx: &Ctx, hw: Hardware) -> MachineOut {
+    let settings = cx.paths().settings;
     let (l, _, note) = table(&hw, settings.as_deref());
     let file = MachineFile::load(settings.as_deref());
     let stale = file.as_ref().and_then(|f| f.stale(&hw));
@@ -640,7 +663,8 @@ pub fn measure(
 ) -> Result<ScoreOut, ApiError> {
     let settings = cx.paths().settings;
     let data = cx.paths().data;
-    let hw = Hardware::read();
+    // Measuring reads each GPU's memory afresh.
+    let hw = machine::read_hardware(settings.as_deref(), GpuReading::Fresh);
     let mut gpus = vec![];
     let want_gpu = a
         .gpu
@@ -694,6 +718,8 @@ pub fn measure(
                 .map(|e| (e.name.clone(), e.suggestion))
                 .collect(),
             suggested_for: String::new(),
+            gpus: hw.gpus.clone(),
+            all_gpus: true,
         };
         machine_file = Some(f.save(dir).map_err(ApiError::io)?);
     }
@@ -723,5 +749,48 @@ impl Op for MachineScore {
         // not is kept beside the score.
         let before = Before::check(a.quick);
         measure(cx, a, &before, p)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jetcarp_core::machine::GpuMemory;
+
+    /// Each GPU's line in `jetcarp doctor`: its memory and where it was read, or why it was not.
+    #[test]
+    fn a_gpu_s_line_says_where_its_memory_came_from_or_why_not() {
+        let hw = Hardware {
+            os: "linux".into(),
+            arch: "x86_64".into(),
+            cpu: "A processor".into(),
+            threads: 8,
+            memory_total: 32 << 30,
+            gpus: vec![
+                GpuMemory {
+                    vendor: 0x10de,
+                    device: 0x2684,
+                    dedicated: Some(24 << 30),
+                    source: "NVML".into(),
+                    ..Default::default()
+                },
+                GpuMemory {
+                    vendor: 0x10de,
+                    device: 0x2206,
+                    not_read: Some(jetcarp_core::machine::gpu_load::NO_NVML.into()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let t = hardware_text(&hw);
+        assert!(t.contains("\n  GPU 10de:2684: 24 GB own (NVML)\n"), "{t}");
+        assert!(
+            t.contains(
+                "\n  GPU 10de:2206: memory not read (the NVIDIA GPU's management library, \
+                 libnvidia-ml.so.1, could not be opened)\n"
+            ),
+            "{t}"
+        );
     }
 }

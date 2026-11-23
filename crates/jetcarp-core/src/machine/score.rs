@@ -154,20 +154,27 @@ impl Score {
         );
         let _ = writeln!(s, "| Memory | {} |", super::bytes_text(hw.memory_total));
         for g in &hw.gpus {
+            let name = if g.name.is_empty() {
+                format!("{:04x}:{:04x} ", g.vendor, g.device)
+            } else {
+                format!("{} ", g.name)
+            };
+            if let (None, None, false, Some(why)) = (g.dedicated, g.shared, g.unified, &g.not_read)
+            {
+                let _ = writeln!(s, "| GPU memory | {name}not read ({why}) |");
+                continue;
+            }
+            let parts: Vec<String> = [
+                g.dedicated.map(|d| format!("{} own", super::bytes_text(d))),
+                g.shared.map(|d| format!("{} shared", super::bytes_text(d))),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
             let _ = writeln!(
                 s,
-                "| GPU memory | {}{}{} ({}) |",
-                if g.name.is_empty() {
-                    format!("{:04x}:{:04x} ", g.vendor, g.device)
-                } else {
-                    format!("{} ", g.name)
-                },
-                g.dedicated
-                    .map_or(String::new(), |d| format!("{} own", super::bytes_text(d))),
-                g.shared.map_or(String::new(), |d| format!(
-                    ", {} shared",
-                    super::bytes_text(d)
-                )),
+                "| GPU memory | {name}{} ({}) |",
+                parts.join(", "),
                 g.source
             );
         }
@@ -377,6 +384,42 @@ mod tests {
         )
         .unwrap();
         assert!(old.conditions.is_none() && !old.under_load());
+    }
+
+    /// The report's GPU memory rows: where each GPU's was read, or why it was not.
+    #[test]
+    fn the_report_says_where_each_gpu_s_memory_came_from() {
+        use crate::machine::GpuMemory;
+        let hw = crate::machine::Hardware {
+            gpus: vec![
+                GpuMemory {
+                    vendor: 0x10de,
+                    device: 0x2684,
+                    dedicated: Some(24 << 30),
+                    source: "NVML".into(),
+                    ..Default::default()
+                },
+                GpuMemory {
+                    vendor: 0x8086,
+                    device: 0xa7a0,
+                    not_read: Some(crate::machine::hardware::INTEGRATED.into()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let md = Score::default().markdown(&hw, &crate::machine::Limits::reference(), &[]);
+        assert!(
+            md.contains("| GPU memory | 10de:2684 24 GB own (NVML) |"),
+            "{md}"
+        );
+        assert!(
+            md.contains(
+                "| GPU memory | 8086:a7a0 not read (an integrated GPU, which shares the system's \
+                 memory) |"
+            ),
+            "{md}"
+        );
     }
 
     #[test]

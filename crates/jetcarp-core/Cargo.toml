@@ -25,13 +25,20 @@ image-webp.workspace = true
 # Reading the machine's memory, processor and GPU memory (`src/machine/hardware.rs`), and the
 # processor's and the GPU's load as the score is measured (`src/machine/quiet.rs`,
 # `src/machine/gpu_load.rs`: PDH's GPU engine counters on Windows, IOKit on macOS, NVML opened
-# with dlopen on Linux): bindings only, already in the dependency tree.
+# with dlopen on Linux), and on Windows the console's handler and a hidden window that hears the
+# session end (`src/quit_signal.rs`, #319): bindings only, already in the dependency tree.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Performance", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Console", "Win32_System_LibraryLoader", "Win32_System_Performance", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 windows = { version = "0.62.2", features = ["Win32_Graphics_Dxgi"] }
 
-# The Mac's memory figures (`src/machine/hardware.rs`), the GPU's load on Linux (NVML opened with
-# dlopen, `src/machine/gpu_load.rs`), and on Linux and macOS the signals that stop a program as its
-# own stop does (`src/quit_signal.rs`, #278): bindings only, already in the dependency tree.
+# The Mac's memory figures (`src/machine/hardware.rs`), the GPU's load and memory on Linux (NVML
+# opened with dlopen, `src/machine/nvml.rs`), and on Linux and macOS the signals that stop a program
+# as its own stop does (`src/quit_signal.rs`, #278): bindings only, already in the dependency tree.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.191"
+
+# A GPU's memory from its Vulkan driver on Linux, where nothing else gives it
+# (`src/machine/vulkan.rs`): the Vulkan bindings wgpu uses, which open the system's loader while
+# running; already in the dependency tree.
+[target.'cfg(target_os = "linux")'.dependencies]
+ash = "0.38.0"

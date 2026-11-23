@@ -51,6 +51,8 @@ libc = "0.2.191"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Console"] }
-# Windows: Ctrl-C stops `jetcarp search` and `jetcarp script` at their next checkpoint or step. On
-# Linux and macOS, `jetcarp_core::quit_signal` does, for SIGTERM and SIGHUP too (#278).
-ctrlc = "3.5.2"
+
+# The Windows tests of a sign-out (`tests/session_end.rs`, #319) find a program's hidden session
+# window and send it what Windows sends: bindings only, the dependency above.
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

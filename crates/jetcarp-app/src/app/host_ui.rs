@@ -13,7 +13,6 @@
 //! (*Edit*, *New*, and *Show just this scene*: see `rotation_ui.rs`).
 
 use super::*;
-use egui_wgpu::wgpu;
 use jetcarp_display::autostart;
 use jetcarp_display::caption::{CaptionSettings, Corner};
 use jetcarp_display::gnome::{self, ExtensionState};
@@ -191,9 +190,7 @@ impl HostPanel {
             let _ = std::thread::Builder::new()
                 .name("jetcarp-gpu-pick".into())
                 .spawn(move || {
-                    let instance = wgpu::Instance::new(
-                        wgpu::InstanceDescriptor::new_without_display_handle_from_env(),
-                    );
+                    let instance = select::new_instance();
                     let name = match select::pick(&instance, select::Purpose::Display, None) {
                         Ok(c) => c.label(),
                         Err(e) => format!("none ({e})"),

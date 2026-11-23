@@ -54,8 +54,9 @@ included). `jetcarp paths` shows where it is; set `JETCARP_OUT` to keep the outp
 **This computer's limits and score** are in the settings folder too: `limits.json` holds only
 the limits you set yourself (`jetcarp limits set`, or Tools → This computer…), and `machine.json`
 the last [JETCARP Hardware Score](../guides/this-computer.md) with its parts and the hardware it was
-measured on. Deleting `limits.json` puts every limit back to the machine's suggestion; deleting
-`machine.json` forgets the score.
+measured on, and the memory of each GPU that only NVML or Vulkan gives, as last read. Deleting
+`limits.json` puts every limit back to the machine's suggestion; deleting `machine.json` forgets
+the score, and the next start reads those GPUs afresh.
 
 **A data folder of your own.** A large library can live on another disk: the
 [first-run setup](../getting-started/first-run.md) (its data folder page, or
@@ -162,14 +163,17 @@ every copy of JETCARP you run, whatever folders the others point at, so there is
 host per user (the host's `host.lock` is here) and `jetcarp host` and `jetcarp mcp --app` reach the
 one running; `JETCARP_RUNTIME_DIR` gives a copy a runtime folder of its own. `jetcarp paths` and
 `jetcarp doctor` show the one in use. Each program removes its port and token file and its memory
-record as it quits. On Linux and macOS the app, the background host, `jetcarp mcp` (over stdio or
-HTTP), `jetcarp search` and `jetcarp script` do so too when they are sent SIGTERM (what `kill`
-sends, launchd at logout on the Mac, a Linux session as it ends, and the system as it shuts down),
-SIGHUP, or Ctrl-C in the terminal they were started from: the app closes as its window's close
-button closes it, the host stops as `jetcarp host stop` stops it, the MCP server as a closed
-session stops it, a search at its next checkpoint and a script at its next step. So logging out
-leaves nothing stale here. A second signal ends any of them at once, and leaves its files for
-`jetcarp uninstall` or the next program of its kind to clear.
+record as it quits. The app, the background host, `jetcarp mcp` (over stdio or HTTP), `jetcarp
+search` and `jetcarp script` do so too when they are stopped from outside: on Linux and macOS by
+SIGTERM (what `kill` sends, launchd at logout on the Mac, a Linux session as it ends, and the
+system as it shuts down), SIGHUP, or Ctrl-C in the terminal they were started from; on Windows by
+signing out, shutting down, `taskkill` without `/F`, and Ctrl-C in the console they were started
+from or closing it. The app closes as its window's close button closes it, the host stops as
+`jetcarp host stop` stops it, the MCP server as a closed session stops it, a search at its next
+checkpoint and a script at its next step. So logging out leaves nothing stale here. On Windows a
+program has as long as Windows gives one that does not answer (5 seconds unless changed), and one
+still stopping then is ended as before. A second signal ends any of them at once, and leaves its
+files for `jetcarp uninstall` or the next program of its kind to clear.
 `jetcarp uninstall` removes whatever is left once no program uses it, then the folder (see
 [Uninstalling](../guides/uninstalling.md)). On Windows it is also the default data folder, so the
 data folder holds these files beside the library; setup still takes it as a new data folder when

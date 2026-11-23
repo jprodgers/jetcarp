@@ -12,8 +12,10 @@ The server runs over standard input and output: the assistant starts `jetcarp mc
 as long as it runs. A client that connects to a URL instead uses the server [over HTTP](#over-http).
 When the assistant closes the session, the searches running on the server's own threads stop at
 their next checkpoint, paused and resumable, and the server exits. On Linux and macOS, SIGTERM
-(what `kill` sends, and a session as it ends), SIGHUP and Ctrl-C stop it the same way; a second
-signal ends it at once. A call still running when a signal stops it [is cut short](#calls-cut-short).
+(what `kill` sends, and a session as it ends), SIGHUP and Ctrl-C stop it the same way; on
+Windows, Ctrl-C, closing its console, signing out, shutting down and `taskkill` without `/F`. A
+second signal ends it at once. A call still running when a signal stops it
+[is cut short](#calls-cut-short).
 
 - **Claude Code:** `claude mcp add --scope user jetcarp -- jetcarp mcp` (for every folder; check
   it with `/mcp`, remove it with `claude mcp remove jetcarp`)
@@ -52,7 +54,8 @@ signal ends it at once. A call still running when a signal stops it [is cut shor
 that connect to a URL rather than start a program (Postman, web-based tools, remote setups). It runs
 until Ctrl-C, which stops it as a closed stdio session does: its searches at their next checkpoint,
 paused and resumable, and its `mcp-http-endpoint.json` removed. On Linux and macOS, SIGTERM (what
-`kill` sends, and a session as it ends) and SIGHUP stop it the same way; a second signal ends it at
+`kill` sends, and a session as it ends) and SIGHUP stop it the same way; on Windows, closing its
+console, signing out, shutting down and `taskkill` without `/F`. A second signal ends it at
 once. The app serves the same endpoint for the world in its window, from its AI
 control window ([Over HTTP](../tutorials/mcp.md#over-http) in the tutorial).
 

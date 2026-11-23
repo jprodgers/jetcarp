@@ -97,17 +97,11 @@ pub const MEMORY_S: f64 = 0.5;
 /// pause a search whose cap is near its steady level (#81).
 pub const CAP_HOLD_S: f64 = 10.0;
 
-/// Give the memory allocator's free pages back to the system. glibc keeps what the search frees
-/// (each GPU batch's frames, a few hundred MB, and the grids the cache lets go) in its arenas,
-/// which give memory back only from their top, so a long search's memory grew with the tilings
-/// it reached, though what it holds is capped (#53). Elsewhere this does nothing.
-fn release_free_memory() {
-    #[cfg(all(target_os = "linux", target_env = "gnu"))]
-    // SAFETY: malloc_trim only returns free memory; it is safe to call at any time.
-    unsafe {
-        libc::malloc_trim(0);
-    }
-}
+// Give the memory allocator's free pages back to the system, on Linux and macOS: what the search
+// frees (each GPU batch's frames, a few hundred MB, and the grids the cache lets go) would
+// otherwise stay counted as its memory, growing with the tilings it reached though what it holds
+// is capped (#53). The host gives back the same way (#111).
+use jetcarp_core::machine::pool::release_free_memory;
 
 /// The computer's cores (logical processors this process may use).
 pub fn cores() -> usize {
@@ -693,15 +687,23 @@ impl Meter {
         self.read = Instant::now();
     }
 
+    /// Give the allocator's free pages back if the last time was [`RELEASE_S`] or more ago.
+    /// True when it did.
+    fn release_when_due(&mut self) -> bool {
+        if self.released.elapsed().as_secs_f64() < RELEASE_S {
+            return false;
+        }
+        release_free_memory();
+        self.released = Instant::now();
+        true
+    }
+
     /// Read the memory now, giving the allocator's free pages back first when it is time to.
     /// Over `cap`, give back what can be (the free pages, and the grids `search` is not using)
     /// and read again; still over, note since when, and once that is [`CAP_HOLD_S`] ago, say
     /// why (the note) and return true: the run is to stop.
     fn check(&mut self, cap: Option<f64>, search: &Search) -> bool {
-        if self.released.elapsed().as_secs_f64() >= RELEASE_S {
-            release_free_memory();
-            self.released = Instant::now();
-        }
+        self.release_when_due();
         self.take(rss_gb());
         let Some(cap) = cap else { return false };
         if self.rss <= cap {
@@ -1163,4 +1165,30 @@ pub fn line(p: &ExploreProgress) -> String {
         d(p.tilings),
         p.backend
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The allocator's free pages are given back every [`RELEASE_S`], during a step as between
+    /// them, on every system that can (Linux with glibc, and macOS since 0.4.3).
+    #[test]
+    fn freed_memory_is_given_back_every_30_seconds() {
+        let ago = |s: f64| {
+            Instant::now()
+                .checked_sub(Duration::from_secs_f64(s))
+                .expect("the clock goes back that far")
+        };
+        let mut m = Meter::new();
+        // Just started: not yet.
+        assert!(!m.release_when_due());
+        // RELEASE_S ago: now, and not again until RELEASE_S from now.
+        m.released = ago(RELEASE_S);
+        assert!(m.release_when_due());
+        assert!(!m.release_when_due());
+        // A second short of it: not yet.
+        m.released = ago(RELEASE_S - 1.0);
+        assert!(!m.release_when_due());
+    }
 }
