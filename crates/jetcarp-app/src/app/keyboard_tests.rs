@@ -2084,3 +2084,98 @@ fn child_tools_menu_starts_an_explore_search() {
     assert!(!egui::Popup::is_any_open(&k.ctx), "the menu closed");
     done();
 }
+
+#[test]
+fn the_explore_form_s_choices_keep_the_keyboard() {
+    in_scratch("app::keyboard_tests::child_the_explore_form_s_choices_keep_the_keyboard");
+}
+
+/// The *Hunts* window's explore form, as setup's *What it searches* (#309): from its first box,
+/// ↓ goes through every tiling, the tilings' *All* and *None*, every rule family and the families'
+/// *All*, *None* and *Default* in turn, as Tab does, and ↑ comes back through them to the first,
+/// the keyboard on a choice all the way, ringed. ↓ jumped from row to row of the wrapped boxes.
+#[test]
+#[ignore = "started by the_explore_form_s_choices_keep_the_keyboard, in a scratch process"]
+fn child_the_explore_form_s_choices_keep_the_keyboard() {
+    if !child() {
+        return;
+    }
+    let mut failures = vec![];
+    // A Framework 13's screen at 200 %, and two other sizes.
+    for (w, h) in [(1128.0, 752.0), (1280.0, 800.0), (900.0, 640.0)] {
+        let mut k = Kb::sized(w, h);
+        k.app.dash.open_explore_form();
+        k.frames(4);
+        let f = &k.app.dash.explore;
+        let choices: Vec<String> = f
+            .groups
+            .iter()
+            .map(|g| crate::dash_ui::group_label(g.0).to_string())
+            .chain(["Tick every tiling group", "Clear every tiling group"].map(String::from))
+            .chain(
+                f.families
+                    .iter()
+                    .map(|f| crate::dash_ui::family_label(f.0).to_string()),
+            )
+            .chain(
+                [
+                    "Tick every rule family",
+                    "Clear every rule family",
+                    "Tick the default rule family choice",
+                ]
+                .map(String::from),
+            )
+            .collect();
+        if k.focused_name() != choices[0] {
+            failures.push(format!(
+                "{w}x{h}: the form opened with the keyboard on {:?}, not {:?}",
+                k.focused_name(),
+                choices[0]
+            ));
+            continue;
+        }
+        // Down from the first through each one to the last, then back up to the first.
+        let n = choices.len();
+        let want: Vec<&String> = choices
+            .iter()
+            .skip(1)
+            .chain(choices.iter().rev().skip(1))
+            .collect();
+        let mut path = vec![];
+        let mut problems = vec![];
+        for (i, key) in std::iter::repeat_n(Key::ArrowDown, n - 1)
+            .chain(std::iter::repeat_n(Key::ArrowUp, n - 1))
+            .enumerate()
+        {
+            k.key(key);
+            k.frames(1);
+            let name = if k.focused().is_some() {
+                k.focused_name()
+            } else {
+                "(nothing)".into()
+            };
+            if &name != want[i] && problems.is_empty() {
+                problems.push(format!(
+                    "press {} went to {name:?}, not {:?}",
+                    i + 1,
+                    want[i]
+                ));
+            }
+            if let Some((rect, _)) = k.focused_rects()
+                && !k.ring_round(rect, 2.0)
+                && problems.is_empty()
+            {
+                problems.push(format!("press {}: no ring round {name:?}", i + 1));
+            }
+            path.push(name);
+        }
+        if !problems.is_empty() {
+            failures.push(format!(
+                "{w}x{h}: ↓ and ↑: {}; went {path:?}",
+                problems.join("; ")
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    done();
+}
