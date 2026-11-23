@@ -40,7 +40,9 @@ administrator rights:
   may borrow.
 - **NVIDIA** (NVIDIA's driver): NVIDIA's management library, NVML (`libnvidia-ml.so.1`), the same
   one that says how busy the GPU is. NVML numbers its GPUs its own way, so each is matched to its
-  card by its PCI address. It comes with NVIDIA's driver, though some distributions package it on
+  card by its PCI address. A GPU with no DRM card (nvidia-drm not loaded, as on many compute
+  servers) is found in the driver's own list, `/proc/driver/nvidia/gpus`, and read the same way,
+  each GPU counted once. NVML comes with NVIDIA's driver, though some distributions package it on
   its own; without it, the GPU's Vulkan driver gives its memory (see below), and without either
   the GPU's limit stays the estimate, and `jetcarp doctor` says why: *memory not read (the NVIDIA
   GPU's management library, libnvidia-ml.so.1, could not be opened)*.
@@ -58,6 +60,16 @@ administrator rights:
   (`vkGetPhysicalDeviceMemoryProperties`), found by its PCI address. Vulkan is opened for this only
   when a GPU needs it, and an integrated GPU's heap is the system's memory, so it counts as memory
   the GPU may borrow, not its own.
+
+**NVML and Vulkan are not opened at every start.** What they give, or that they gave nothing, is
+kept in `machine.json` beside each GPU's ids and PCI address, which JETCARP reads from sysfs at
+every start without touching the GPU. A plain start takes a GPU's memory from there; it opens NVML
+or Vulkan only for a GPU it has nothing for, the first time or after a GPU was changed, added or
+moved to another slot. `jetcarp doctor` and measuring read every GPU afresh, and keep what they
+find. So a laptop's NVIDIA GPU, asleep while the integrated one drives the screen, is not woken
+just because a JETCARP program started (opening NVML or Vulkan would wake it, as `nvidia-smi`
+does). Should a GPU's memory change without the GPU changing (NVML installed since), `jetcarp
+doctor` reads it again.
 
 `jetcarp doctor` shows what it read, the score and the limits that matter most:
 
@@ -315,8 +327,10 @@ short run, until the computer is measured again with nothing else busy.
 The benchmark is **versioned**. A JETCARP that changes the workloads raises the version, and an
 older score is then shown as from an older benchmark, with a suggestion to measure again. A computer
 that changed (another processor, memory, GPU or system, or a new firmware split of its memory) is
-noticed when the app starts, and the status line suggests measuring again, once. Neither runs the
-benchmark by itself.
+noticed when the app starts, and the status line suggests measuring again, once, saying what
+changed: *this computer has changed since it was measured (its GPU 10de:2684's memory is now read,
+24 GB from NVIDIA's NVML)*, *(its memory changed from 96 GB to 64 GB)*. `jetcarp doctor` says the
+same. Neither runs the benchmark by itself.
 
 ```text
 $ jetcarp score --report report
@@ -397,7 +411,8 @@ part, so a computer whose memory changes keeps what the system was given:
 ```
 
 The score and its parts are kept in `machine.json` beside it, with the hardware it was measured on
-and how it was taken (`conditions`).
+and how it was taken (`conditions`), and each GPU as last read afresh (`gpus`, see
+[What JETCARP reads](#what-jetcarp-reads)).
 `host.json`'s `max_cells` and `max_memory_mb` give way to `host-cells` and `host-memory`, unless
 they were edited by hand, when the edited value still applies. `JETCARP_HUNT_CACHE_MB` still sets
 the hunt caches over everything.

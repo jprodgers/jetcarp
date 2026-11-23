@@ -923,9 +923,17 @@ day later (0.4.2: 17 November here, 18 November there).
   when a GPU needs it. An integrated Intel GPU, which works in the system's memory, keeps the
   estimate, which fits it. A GPU whose memory is still not read is listed in `jetcarp doctor`,
   *This computer* and the score's report with the reason (without NVML, in the words the GPU's
-  load gives), and `jetcarp limits` gives it beside the estimate. AMD's GPUs read as before. A
-  measured computer whose GPU is now read is noticed once as changed, as for any change in its
-  GPUs. ([What JETCARP reads](../guides/this-computer.md#what-jetcarp-reads),
+  load gives), and `jetcarp limits` gives it beside the estimate. NVIDIA's GPUs with no DRM card
+  (nvidia-drm not loaded, as on compute servers) are found in the driver's own list and read
+  through NVML too. AMD's GPUs read as before. NVML and Vulkan are not opened at every start: what
+  they give is kept in `machine.json` by each GPU's ids and PCI address, which sysfs gives without
+  touching the GPU, and a plain start uses it, so a laptop's sleeping GPU is not woken; they are
+  opened for a GPU with nothing kept (the first start, a changed GPU), and by `jetcarp doctor` and
+  measuring, which read afresh. A measured computer whose GPU is now read is noticed once as
+  changed, and the note now says what changed for any change: *its GPU 10de:2684's memory is now
+  read, 24 GB from NVIDIA's NVML*, *its memory changed from 96 GB to 64 GB*, where it said only
+  "its processor, memory, GPUs or system".
+  ([What JETCARP reads](../guides/this-computer.md#what-jetcarp-reads),
   [#213](https://github.com/jprodgers/jetcarp/issues/213))
 - **`jetcarp score`'s progress reads in a log.** With its output going to a file or a pipe, its
   steps ran together on one line, ended by a terminal's erase code. Each step is now a line of its

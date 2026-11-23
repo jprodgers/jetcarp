@@ -107,9 +107,16 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   and one on i915 (its reason); and, where none of those gives it, stand-in Vulkan GPUs: an NVIDIA
   card on nouveau (NVML not asked), the i915 card found by its ids, an NVIDIA card without NVML,
   and another vendor's integrated GPU, whose heap counts as memory it may borrow, with Vulkan
-  asked once, and not at all for an integrated Intel GPU. A live test reads the Vulkan drivers here:
-  on Linux with an AMD GPU, RADV must list it at its card's PCI address. The doctor's lines and the
-  score report must say where each GPU's memory came from, or why it was not read.
+  asked once, and not at all for an integrated Intel GPU. NVIDIA GPUs with no DRM card, in a
+  stand-in of NVIDIA's driver's list, must be read through NVML too, one that has a card counted
+  once. With figures saved from an earlier reading, stand-ins that count their opens must show
+  neither NVML nor Vulkan opened; with nothing saved, another GPU at the same address or the same
+  GPU at another, each is opened once. `machine.info` must read the saved figures, and doctor and
+  measuring afresh, with what they read kept beside the score. A live test reads the Vulkan drivers
+  here: on Linux with an AMD GPU, RADV must list it at its card's PCI address. The doctor's lines
+  and the score report must say where each GPU's memory came from, or why it was not read, and the
+  note that the computer changed what changed (a GPU's memory now read and where from, a new GPU,
+  one gone, the memory, the processor).
 - **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
   person's own values, the two linked memory values and the ceilings; a world over the limit is
   refused before anything is built, naming the limit and where it came from, and never made
