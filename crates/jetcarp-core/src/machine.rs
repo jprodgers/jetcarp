@@ -147,6 +147,18 @@ thread_local! {
     static LAST_READING: std::cell::Cell<Option<GpuReading>> = const { std::cell::Cell::new(None) };
 }
 
+/// Whether a fresh reading is kept in `machine.json` ([`keep_readings`]); off until a program asks.
+static KEEP_READINGS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Keep what NVML or Vulkan said of each GPU in the settings folder's `machine.json`, so a later
+/// start need not open them. The `jetcarp` program turns this on when it starts, as it does for
+/// the GPU self-test's results (`jetcarp_gpu::select::keep_checks`). Code that uses this crate as
+/// a library (the test suites among it) only reads what is kept, so it never writes to the user's
+/// own settings folder.
+pub fn keep_readings(on: bool) {
+    KEEP_READINGS.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// How this thread last read the hardware ([`read_hardware`]), for the tests.
 pub fn last_reading() -> Option<GpuReading> {
     LAST_READING.with(|c| c.get())
@@ -155,8 +167,9 @@ pub fn last_reading() -> Option<GpuReading> {
 /// This machine's hardware, read now, its GPUs' memory as `how` says. A plain start
 /// ([`GpuReading::Saved`]) takes a GPU's memory from what `settings`' `machine.json` keeps for a
 /// GPU of the same ids and PCI address, so NVML and Vulkan are opened (and a laptop's sleeping
-/// GPU woken) only for a GPU it has nothing for: a new or changed one, or the first start. A
-/// reading that opened either is kept there for the next start.
+/// GPU woken) only for a GPU it has nothing for: a new or changed one, or the first start. In the
+/// `jetcarp` program ([`keep_readings`]), a reading that opened either is kept there for the next
+/// start.
 pub fn read_hardware(settings: Option<&Path>, how: GpuReading) -> Hardware {
     LAST_READING.with(|c| c.set(Some(how)));
     let saved = match how {
@@ -166,7 +179,10 @@ pub fn read_hardware(settings: Option<&Path>, how: GpuReading) -> Hardware {
         GpuReading::Fresh => vec![],
     };
     let (hw, opened) = Hardware::read_with(&saved);
-    if opened && let Some(dir) = settings {
+    if opened
+        && KEEP_READINGS.load(std::sync::atomic::Ordering::Relaxed)
+        && let Some(dir) = settings
+    {
         keep_gpus(dir, &hw.gpus);
     }
     hw

@@ -61,12 +61,17 @@ administrator rights:
   when a GPU needs it, and an integrated GPU's heap is the system's memory, so it counts as memory
   the GPU may borrow, not its own.
 
+A display adapter with no render node (a firmware framebuffer, or a virtual machine's, such as
+Hyper-V's virtual VGA or QEMU's) is not a GPU JETCARP can run on: it is left out, and nothing is
+opened for it.
+
 **NVML and Vulkan are not opened at every start.** What they give, or that they gave nothing, is
 kept in `machine.json` beside each GPU's ids and PCI address, which JETCARP reads from sysfs at
 every start without touching the GPU. A plain start takes a GPU's memory from there; it opens NVML
 or Vulkan only for a GPU it has nothing for, the first time or after a GPU was changed, added or
 moved to another slot. `jetcarp doctor` and measuring read every GPU afresh, and keep what they
-find. So a laptop's NVIDIA GPU, asleep while the integrated one drives the screen, is not woken
+find. Only the `jetcarp` program keeps it; code using JETCARP's crates as a library, its tests
+among it, only reads it. So a laptop's NVIDIA GPU, asleep while the integrated one drives the screen, is not woken
 just because a JETCARP program started (opening NVML or Vulkan would wake it, as `nvidia-smi`
 does). Should a GPU's memory change without the GPU changing (NVML installed since), `jetcarp
 doctor` reads it again.

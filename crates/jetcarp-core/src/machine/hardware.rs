@@ -315,6 +315,17 @@ fn uevent(dev: &std::path::Path, key: &str) -> Option<String> {
         .map(|v| v.trim().to_string())
 }
 
+/// The device has a render node (`device/drm/renderD128`): it can draw and compute, which a
+/// display adapter alone (a firmware framebuffer, a virtual machine's: Hyper-V's virtual VGA,
+/// QEMU's bochs) cannot.
+fn render_node(dev: &std::path::Path) -> bool {
+    std::fs::read_dir(dev.join("drm"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|e| e.file_name().to_string_lossy().starts_with("renderD"))
+}
+
 /// A card's PCI address: its `uevent`'s `PCI_SLOT_NAME`, else the name of the folder its
 /// `device` link leads to.
 fn pci_slot(dev: &std::path::Path) -> Option<PciAddress> {
@@ -353,8 +364,9 @@ fn from_nvml_or_vulkan(g: &GpuMemory) -> bool {
 /// of these gives is listed with why ([`GpuMemory::not_read`]), so its limit is the estimate:
 /// NVIDIA's without NVML in the words its load gives ([`super::gpu_load::NO_NVML`]); an
 /// integrated Intel GPU, which shares the system's memory ([`INTEGRATED`]), and for which
-/// neither is opened; one whose memory neither its driver nor Vulkan gives. A card with neither
-/// memory files nor a PCI vendor (a firmware framebuffer's, simpledrm) is not a GPU, and left out.
+/// neither is opened; one whose memory neither its driver nor Vulkan gives. A card without memory
+/// files and without a render node is a display adapter, not a GPU (a firmware framebuffer's,
+/// simpledrm; a virtual machine's, as on CI's runners), and is left out, nothing opened for it.
 pub fn read_gpus(dir: &std::path::Path, src: &Sources<'_>) -> Vec<GpuMemory> {
     let mut names: Vec<String> = std::fs::read_dir(dir)
         .into_iter()
@@ -403,7 +415,7 @@ pub fn read_gpus(dir: &std::path::Path, src: &Sources<'_>) -> Vec<GpuMemory> {
             .map(|v| v as u32)
             .or(listed.map(|_| NVIDIA))
             .unwrap_or(0);
-        if vram.is_none() && vendor == 0 {
+        if vram.is_none() && (vendor == 0 || listed.is_none() && !render_node(&dev)) {
             continue;
         }
         let real = std::fs::canonicalize(&dev).unwrap_or(dev.clone());
@@ -769,8 +781,22 @@ mod tests {
         assert_eq!(parse_sysfs_number("n/a"), None);
     }
 
-    /// A stand-in DRM folder (`/sys/class/drm`): each card's `device` folder with its files.
+    /// A stand-in DRM folder (`/sys/class/drm`): each card's `device` folder with its files, and
+    /// the GPU's render node (`device/drm/renderD128`), as a GPU that can draw and compute has.
     fn drm(name: &str, cards: &[(&str, &[(&str, &str)])]) -> crate::scratch::ScratchDir {
+        let d = display_only(name, cards);
+        for (i, (card, _)) in cards.iter().enumerate() {
+            let node = d
+                .join(card)
+                .join("device/drm")
+                .join(format!("renderD{}", 128 + i));
+            std::fs::create_dir_all(node).unwrap();
+        }
+        d
+    }
+
+    /// The same with no render nodes: display adapters only.
+    fn display_only(name: &str, cards: &[(&str, &[(&str, &str)])]) -> crate::scratch::ScratchDir {
         let d = crate::scratch::ScratchDir::new(name);
         for (card, files) in cards {
             let dev = d.join(card).join("device");
@@ -1003,6 +1029,54 @@ mod tests {
             g[1].not_read.as_deref(),
             Some("neither its driver, xe, nor Vulkan says its memory")
         );
+    }
+
+    /// A display adapter with no render node is not a GPU JETCARP can run on: a virtual
+    /// machine's (Hyper-V's virtual VGA, as on CI's runners; QEMU's bochs), whose memory no driver
+    /// says. It is left out, and neither NVML nor Vulkan is opened for it.
+    #[test]
+    fn a_display_only_card_is_not_a_gpu() {
+        let d = display_only(
+            "machine-drm-virtual",
+            &[
+                (
+                    "card0",
+                    &[
+                        ("vendor", "0x1414\n"),
+                        ("device", "0x5353\n"),
+                        ("uevent", "DRIVER=hyperv_drm\nPCI_SLOT_NAME=0000:00:08.0\n"),
+                    ],
+                ),
+                (
+                    "card1",
+                    &[
+                        ("vendor", "0x1234\n"),
+                        ("device", "0x1111\n"),
+                        ("uevent", "DRIVER=bochs-drm\nPCI_SLOT_NAME=0000:00:02.0\n"),
+                    ],
+                ),
+            ],
+        );
+        let opens = Opens::new();
+        let g = read_gpus(
+            &d,
+            &Sources {
+                dmem: None,
+                nvml: &|| {
+                    opens.nvml.set(opens.nvml.get() + 1);
+                    None
+                },
+                vulkan: &|| {
+                    opens.vulkan.set(opens.vulkan.get() + 1);
+                    vec![]
+                },
+                saved: &[],
+                nvidia: None,
+                pci: None,
+            },
+        );
+        assert_eq!(g, vec![]);
+        assert_eq!(opens.both(), (0, 0));
     }
 
     /// A card with no PCI vendor and no memory files, as a firmware framebuffer's (simpledrm): not
@@ -1377,7 +1451,9 @@ mod tests {
 
     /// NVIDIA's GPUs with no DRM card (nvidia-drm not loaded, as on a compute server), found in
     /// NVIDIA's driver's own list: read through NVML too, as GPUs of their own, by PCI address,
-    /// and one with a card counted once.
+    /// and one with a card counted once. Linux's own: its stand-in folders are named by PCI
+    /// address, as the driver's are, and Windows allows no `:` in a file name.
+    #[cfg(target_os = "linux")]
     #[test]
     fn nvidia_gpus_with_no_drm_card_are_read_too() {
         let d = drm(

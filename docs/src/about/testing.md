@@ -111,7 +111,10 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   stand-in of NVIDIA's driver's list, must be read through NVML too, one that has a card counted
   once. With figures saved from an earlier reading, stand-ins that count their opens must show
   neither NVML nor Vulkan opened; with nothing saved, another GPU at the same address or the same
-  GPU at another, each is opened once. `machine.info` must read the saved figures, and doctor and
+  GPU at another, each is opened once. A virtual machine's display adapters, with no render node
+  (Hyper-V's virtual VGA, as on CI's runners, and QEMU's bochs), must be left out with nothing
+  opened. Only the `jetcarp` program keeps what NVML or Vulkan said, so no test writes it into the
+  user's settings folder (CI's step with the default folders checks that). `machine.info` must read the saved figures, and doctor and
   measuring afresh, with what they read kept beside the score. A live test reads the Vulkan drivers
   here: on Linux with an AMD GPU, RADV must list it at its card's PCI address. The doctor's lines
   and the score report must say where each GPU's memory came from, or why it was not read, and the

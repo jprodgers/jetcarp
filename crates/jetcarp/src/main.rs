@@ -514,6 +514,8 @@ fn main() -> Result<()> {
     // GPU self-test results are kept in the settings folder by the program, never by code that
     // uses the GPU crate as a library (the test suites).
     jetcarp_gpu::select::keep_checks(true);
+    // So is what NVML or Vulkan said of each GPU's memory, so a later start need not open them.
+    jetcarp_core::machine::keep_readings(true);
     // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
     // command was writing.
     broken_pipe::install();
