@@ -103,14 +103,18 @@ An adapter must be decent to simulate on: a discrete or integrated GPU, with com
 least 9 storage buffers per shader stage, storage bindings of at least 128 MiB, and a passed
 self-test. Software adapters (llvmpipe, lavapipe, SwiftShader) are slow and used only when asked
 for, with `software` or by name, and so is an adapter the system calls neither discrete nor
-integrated (such as an OpenGL one), by name. Windows' software renderer (WARP) is never used: the
-WARP that comes with Windows crashes while it compiles the world stepper's kernel (and the soup
-hunt's), taking the program down with it before a self-test could turn it down. The fault is in
-WARP's own shader compiler, which fails on a workgroup barrier after an early return or in an `if`
-that ends the shader; the newer WARP Microsoft publishes for developers compiles and runs every
-kernel, bit for bit with the processor ([#321](https://github.com/jprodgers/jetcarp/issues/321)).
-With no decent adapter, everything runs on the processor, and windows still draw on whatever adapter
-can, WARP among them.
+integrated (such as an OpenGL one), by name. With no decent adapter, everything runs on the
+processor, and windows still draw on whatever adapter can.
+
+Windows' software renderer, WARP, is not supported, and never used to simulate (windows still draw
+on it). The WARP that comes with Windows crashes while it compiles the world stepper's kernel (and
+the soup hunt's), taking the program down with it before a self-test could turn it down. The fault
+is in WARP's own shader compiler, which fails on a workgroup barrier after an early return or in an
+`if` that ends the shader. The newer WARP Microsoft publishes for developers compiles and runs every
+kernel, bit for bit with the processor, and JETCARP's Windows CI runs the GPU tests on it
+([#321](https://github.com/jprodgers/jetcarp/issues/321)). WARP won't be supported until Windows
+Update brings a WARP that compiles JETCARP's shaders, and even then only if supporting it breaks
+nothing else; the kernels won't be reshaped to suit a WARP that can't.
 
 JETCARP looks for adapters through every graphics interface wgpu has: Vulkan, Metal, DirectX 12
 and OpenGL (OpenGL ES on Linux, where it draws when there is no Vulkan). On Windows it leaves

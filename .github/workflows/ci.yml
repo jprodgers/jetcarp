@@ -29,14 +29,19 @@ jobs:
   test:
     name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    # Windows also runs the GPU tests on WARP, a software renderer, which lengthens its test step.
+    timeout-minutes: 180
     env:
       # The runners have no GPU: run the GPU tests on a software adapter (Mesa's lavapipe on
-      # Linux), which JETCARP uses only when asked for. Windows' WARP is never used, so the GPU
-      # tests skip there; macOS uses the runner's own GPU.
+      # Linux, WARP on Windows), which JETCARP uses only when asked for; macOS uses the runner's
+      # own GPU.
       JETCARP_GPU: software
-      # Where a GPU is expected (Linux's lavapipe, macOS's own GPU), a GPU test that finds no
-      # adapter it can use, or one the self-test turns down, fails rather than skipping.
+      # Windows: the tests may choose WARP (JETCARP_ALLOW_WARP, for tests only). Users never get
+      # it: the WARP that comes with Windows crashes compiling JETCARP's kernels (#321), so the
+      # tests run on Microsoft's newer WARP 1.0.22, put beside the test programs below.
+      JETCARP_ALLOW_WARP: ${{ matrix.allow_warp }}
+      # Where a GPU is expected (Linux's lavapipe, Windows' WARP, macOS's own GPU), a GPU test that
+      # finds no adapter it can use, or one the self-test turns down, fails rather than skipping.
       JETCARP_REQUIRE_GPU: ${{ matrix.require_gpu }}
       # The folder rules' tests make links: on Windows directory junctions and symbolic links
       # (the runner may make both). A link that cannot be made fails the test here, rather than
@@ -46,9 +51,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: Linux x86_64, os: ubuntu-24.04, features: "", require_gpu: "1" }
-          - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher", require_gpu: "" }
-          - { name: macOS arm64, os: macos-latest, features: "", require_gpu: "1" }
+          - { name: Linux x86_64, os: ubuntu-24.04, features: "", require_gpu: "1", allow_warp: "" }
+          - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher", require_gpu: "1", allow_warp: "1" }
+          - { name: macOS arm64, os: macos-latest, features: "", require_gpu: "1", allow_warp: "" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
@@ -113,6 +118,32 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           powershell -NoProfile -ExecutionPolicy Bypass -File packaging\test-install-ps1.ps1 -Installer "$env:RUNNER_TEMP\installers\jetcarp-installer.ps1" -Program target\release\jetcarp.exe
           exit $LASTEXITCODE
+      - name: WARP 1.0.22 beside every program the tests run, so the GPU tests run on Windows (CI only; #321)
+        # The WARP that comes with Windows crashes compiling JETCARP's kernels; Microsoft's newer
+        # one, from NuGet's Microsoft.Direct3D.WARP, runs them. A program loads d3d10warp.dll from
+        # its own folder before the system's, so a copy goes beside each one the build made. It is
+        # for the tests only: nothing a release ships is built or packaged here, and this comes
+        # after the installer's test, which packages jetcarp.exe on its own.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = "1.0.22"
+          $sum = "AFC058F4D1066EDC4231A38F3AB3592B1930F7287D4AC700E6A056E0874BB0BE"
+          $pkg = "$env:RUNNER_TEMP\warp-$v.nupkg"
+          Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.direct3d.warp/$v/microsoft.direct3d.warp.$v.nupkg" -OutFile $pkg
+          $got = (Get-FileHash -Algorithm SHA256 $pkg).Hash
+          if ($got -ne $sum) { Write-Host "::error::Microsoft.Direct3D.WARP $v is $got, not $sum"; exit 1 }
+          Expand-Archive $pkg -DestinationPath "$env:RUNNER_TEMP\warp-$v"
+          $dll = "$env:RUNNER_TEMP\warp-$v\build\native\bin\x64\d3d10warp.dll"
+          # The same build as the test step (the workspace, the same features), so nothing rebuilds.
+          $exes = cargo test --workspace --release --no-run --message-format=json ${{ matrix.features }} |
+            ForEach-Object { try { $_ | ConvertFrom-Json } catch { } } |
+            Where-Object { $_.reason -eq "compiler-artifact" -and $_.executable } |
+            ForEach-Object { $_.executable }
+          if ($LASTEXITCODE -ne 0 -or -not $exes) { Write-Host "::error::no test programs listed"; exit 1 }
+          $dirs = $exes | ForEach-Object { Split-Path -Parent $_ } | Sort-Object -Unique
+          foreach ($d in $dirs) { Copy-Item -LiteralPath $dll -Destination $d }
+          Write-Host "WARP $v ($((Get-Item $dll).VersionInfo.FileVersion)) beside $(@($exes).Count) programs in $(@($dirs).Count) folders"
       - name: A temp folder of the tests' own, to check they leave nothing in it (#121)
         shell: bash
         run: |

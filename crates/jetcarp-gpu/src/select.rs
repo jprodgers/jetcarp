@@ -789,7 +789,11 @@ fn rank(info: &wgpu::AdapterInfo, purpose: Purpose) -> (u8, u8) {
 /// shader of a few lines (an atomic, then a barrier in a closing `if`) crashes it too. The same
 /// kernels compiled by DXC run on the same WARP, WARP 1.0.22 (Microsoft's NuGet package) runs
 /// FXC's, and every kernel then matches the processor bit for bit: the fault is WARP's compiler's,
-/// not the kernels'.
+/// not the kernels'. Windows CI runs the GPU tests on WARP 1.0.22 (`.github/workflows/ci.yml`).
+///
+/// WARP is not supported for users until Windows Update brings a WARP that compiles JETCARP's
+/// shaders, and even then only if supporting it breaks nothing else. The kernels are not reshaped
+/// to suit a WARP that can't.
 fn is_warp(info: &wgpu::AdapterInfo) -> bool {
     info.device_type == wgpu::DeviceType::Cpu
         && (info.backend == wgpu::Backend::Dx12 || info.name.contains("Microsoft Basic Render"))
