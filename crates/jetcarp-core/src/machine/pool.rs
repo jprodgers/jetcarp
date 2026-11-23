@@ -210,11 +210,27 @@ pub fn stop() {
     }
 }
 
+/// How the program ends once its record is removed, when it is not `std::process::exit`
+/// ([`end_with`]).
+static END: OnceLock<fn(i32) -> !> = OnceLock::new();
+
 /// End the program with `code`, its record removed first ([`stop`]): every early exit of a
-/// program that records goes through here, so none leaves a record behind.
+/// program that records goes through here, so none leaves a record behind. It ends as
+/// [`end_with`] says, else through `std::process::exit`.
 pub fn exit(code: i32) -> ! {
     stop();
-    std::process::exit(code)
+    match END.get() {
+        Some(end) => end(code),
+        None => std::process::exit(code),
+    }
+}
+
+/// From now on, [`exit`] ends the program through `end`: the `jetcarp` program's ends through
+/// `jetcarp_display::exit::end_process` once it has used the GPU (#315), so a second Ctrl-C, a
+/// closed pipe or a script's stop doesn't end it while a graphics driver's threads run. Once per
+/// process; a later call does nothing.
+pub fn end_with(end: fn(i32) -> !) {
+    let _ = END.set(end);
 }
 
 /// The pool as it stands: its size, what the other programs hold, and what this one does.

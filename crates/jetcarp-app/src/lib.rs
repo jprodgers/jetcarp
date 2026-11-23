@@ -84,7 +84,15 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
     // (instances) and storage bindings over 128 MB (the GPU simulation's neighbour lists): ask for
     // what the adapter allows.
     let mut wgpu_options = eframe::NativeOptions::default().wgpu_options;
+    // The window's instance is eframe's: the program ends through `jetcarp_display::exit` either
+    // way (`on_exit`), and a second Ctrl-C does too (#315).
+    jetcarp_gpu::select::opening();
     if let egui_wgpu::WgpuSetup::CreateNew(c) = &mut wgpu_options.wgpu_setup {
+        // The backends every JETCARP program opens (`jetcarp_gpu::select::backends`, #315): on
+        // Windows, OpenGL is left out unless an adapter is asked for by name; elsewhere eframe's
+        // own choice stands.
+        c.instance_descriptor.backends &=
+            jetcarp_gpu::select::backends(&jetcarp_gpu::select::Policy::load().want);
         // The adapter driving the screen, under the GPU policy: the host and the screen savers
         // choose the same way (`jetcarp_gpu::select`).
         c.native_adapter_selector = Some(std::sync::Arc::new(|adapters, surface| {

@@ -527,19 +527,53 @@ fn main() -> Result<()> {
     if let Some(n) = note {
         eprintln!("note: {n}");
     }
+    // An early end (a second Ctrl-C, a closed pipe, a stopped script) ends as the program does.
+    jetcarp_core::machine::pool::end_with(end);
     let r = run();
-    // The macOS screen saver has what it shows baked in (#287): a command that changed any of it
-    // (the strobe guard, the seizure warning's answer, a rotation, the caption) brings it up to
-    // date as it ends. The app and the background host keep it up to date while they run.
+    finish(r)
+}
+
+/// How the program ends once its command has run. The macOS screen saver has what it shows baked
+/// in (#287): a command that changed any of it (the strobe guard, the seizure warning's answer, a
+/// rotation, the caption) brings it up to date as it ends; the app and the background host keep
+/// it up to date while they run. Then this program's record in JETCARP's memory pool goes.
+///
+/// A command that has opened the GPU ends here through `jetcarp_display::exit::end_process`, as
+/// the app and the host do, after saying its error as `main` would (#315): nothing destroys its
+/// GPU instance or runs what the libraries leave to run at exit, which ends a program while a
+/// graphics driver's threads may still run (`jobs refit` crashed so in NVIDIA's driver on
+/// Windows). Every other command returns, as before.
+fn finish(r: Result<()>) -> Result<()> {
     saver_note(jetcarp_display::saver_update::keep_current());
-    // This program's record in JETCARP's memory pool goes with it.
-    jetcarp_core::machine::pool::stop();
     if let Err(e) = &r
         && broken_pipe::is_broken(e)
     {
         broken_pipe::exit();
     }
+    if jetcarp_gpu::select::opened() {
+        let code = match &r {
+            Ok(()) => 0,
+            Err(e) => {
+                use std::io::Write;
+                // As `main` says an error it returns.
+                let _ = writeln!(std::io::stderr(), "Error: {e:?}");
+                1
+            }
+        };
+        jetcarp_display::exit::end_process(code);
+    }
+    jetcarp_core::machine::pool::stop();
     r
+}
+
+/// How the program ends early, its record in the memory pool removed
+/// (`jetcarp_core::machine::pool::exit`): through `end_process` once it has opened the GPU, as
+/// [`finish`] ends it.
+fn end(code: i32) -> ! {
+    if jetcarp_gpu::select::opened() {
+        jetcarp_display::exit::end_process(code)
+    }
+    std::process::exit(code)
 }
 
 /// What keeping the macOS screen saver up to date did, on the error stream (never in the way of
@@ -577,7 +611,11 @@ fn program_name(cmd: &Option<Cmd>) -> String {
 }
 
 fn run() -> Result<()> {
-    let cli = Cli::parse_from(args());
+    run_cli(Cli::parse_from(args()))
+}
+
+/// The command `cli` asks for, run.
+fn run_cli(cli: Cli) -> Result<()> {
     // Every JETCARP program records the memory it holds, so each sees what the others leave of
     // the one pool reserved for JETCARP (`jetcarp_core::machine::pool`). All but `uninstall` and
     // `launcher`, which build nothing and are over in a moment: `uninstall` removes the records'

@@ -84,8 +84,7 @@ impl SharedGpu {
 
     /// The same, with those of `optional` the adapter has (the tuner's timestamp queries).
     pub fn headless_with(optional: wgpu::Features) -> Option<SharedGpu> {
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+        let instance = select::new_instance();
         let choice = select::pick(&instance, select::Purpose::Display, None).ok()?;
         let mut g = SharedGpu::on_with(choice.adapter, optional)?;
         g.fallback = choice.fallback;

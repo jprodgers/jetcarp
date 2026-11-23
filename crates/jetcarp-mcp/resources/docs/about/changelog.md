@@ -457,6 +457,17 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **Commands that use the GPU end cleanly on Windows** (#315). `jetcarp jobs refit` crashed as it
+  ended on a laptop with an NVIDIA GPU (0xC0000005 in `nvoglv64.dll`, NVIDIA's Vulkan and OpenGL
+  driver, once it had been unloaded), and the test suite failed with it, now and then: the
+  command's GPU device went with its only GPU instance, which unloaded the driver while a thread
+  of the driver's own still ran. A program now keeps its first GPU instance to its end, and every
+  command that has opened the GPU ends as the app and the background host do, without destroying
+  it or running the code its libraries leave to run at exit. On Windows, OpenGL is left out of the
+  adapters JETCARP looks through (it loaded the card's OpenGL driver into every program that opened
+  the GPU, though DirectX 12 or Vulkan was used), unless `JETCARP_GPU` or the saved setting names
+  an adapter. ([The GPU](../guides/gpu.md#which-adapter),
+  [#315](https://github.com/jprodgers/jetcarp/issues/315))
 - **The window comes back whole on screen** (#306). It came back at its saved size but partly off
   the screen to the left (GNOME, Wayland, one monitor). A saved place that would leave any part of
   the window off every monitor is now moved so the whole window is on the nearest monitor (the
