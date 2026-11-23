@@ -25,13 +25,42 @@ impl log::Log for Logger {
     fn enabled(&self, m: &log::Metadata) -> bool {
         m.level() <= log::Level::Warn
             || (m.level() <= log::Level::Info && m.target().starts_with("wgpu_hal"))
+            || (m.target() == "wgpu_hal::dx12::device" && hlsl_dir().is_some())
     }
     fn log(&self, r: &log::Record) {
-        if self.enabled(r.metadata()) {
-            eprintln!("[{} {}] {}", r.level(), r.target(), r.args());
+        if !self.enabled(r.metadata()) {
+            return;
+        }
+        let text = r.args().to_string();
+        // wgpu's HLSL for each entry point, kept for FXC's disassembly.
+        if let Some(rest) = text.strip_prefix("Naga generated shader for \"")
+            && let Some(dir) = hlsl_dir()
+        {
+            let entry = rest.split('"').next().unwrap_or("x").to_string();
+            let body = rest.split_once('\n').map_or("", |(_, b)| b);
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join(format!("{entry}.hlsl")), body);
+            eprintln!("[hlsl] {entry}: {} bytes", body.len());
+            return;
+        }
+        if r.level() <= log::Level::Info {
+            eprintln!("[{} {}] {text}", r.level(), r.target());
         }
     }
     fn flush(&self) {}
+}
+
+fn hlsl_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("JETCARP_WARP_HLSL_DIR").map(Into::into)
+}
+
+fn logger() {
+    let _ = log::set_logger(&Logger);
+    log::set_max_level(if hlsl_dir().is_some() {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    });
 }
 
 fn say(s: &str) {
@@ -200,8 +229,7 @@ fn items() -> (Vec<Grid>, Vec<(String, Item)>) {
 #[test]
 #[ignore]
 fn every_kernel_on_warp() {
-    let _ = log::set_logger(&Logger);
-    log::set_max_level(log::LevelFilter::Info);
+    logger();
     let instance = select::new_instance();
     let Some(a) = adapter(&instance, true) else {
         say("no WARP adapter here");
@@ -456,4 +484,279 @@ fn exit_after_warp() {
         }
     }
     say(&summary.join("\n"));
+}
+
+/// The bindings of a JIT case: per group, (binding, kind): `r` read-only storage, `w` read-write
+/// storage, `u` uniform, `d` uniform with a dynamic offset.
+type Groups = &'static [&'static [(u32, char)]];
+
+const SIM: Groups = &[
+    &[(0, 'r'), (1, 'r'), (2, 'r'), (3, 'w'), (4, 'd')],
+    &[(0, 'r'), (1, 'w'), (2, 'w')],
+    &[(0, 'w')],
+];
+const EDIT: Groups = &[&[(0, 'r')], &[(0, 'r'), (1, 'w'), (2, 'w')]];
+const BATCH: Groups = &[
+    &[(0, 'u'), (1, 'd'), (2, 'r'), (3, 'r'), (4, 'r'), (5, 'w')],
+    &[(0, 'r'), (1, 'w')],
+    &[(0, 'r'), (1, 'w')],
+];
+const PILE: Groups = &[&[(0, 'r'), (1, 'w'), (2, 'r'), (3, 'r'), (4, 'w'), (5, 'd')]];
+const ONE: Groups = &[&[(0, 'w')]];
+
+/// `src` without the text from `from` (included) to `to` (left), with `put` in its place.
+fn cut(src: &str, from: &str, to: &str, put: &str) -> String {
+    let a = src.find(from).unwrap_or_else(|| panic!("no {from:?}"));
+    let b = a + src[a..].find(to).unwrap_or_else(|| panic!("no {to:?}"));
+    format!("{}{put}{}", &src[..a], &src[b..])
+}
+
+const C0: &str = "      // Life-like and Generations: only state-1 neighbours count";
+const C1: &str = "      // WireWorld: ages are left as they are.";
+const C6: &str = "      // Priority table: the first row whose own state matches";
+const C7: &str = "      // JACA (jaca.rs): birth/survive";
+const CDEF: &str = "      default: {}";
+const TAIL: &str = "  if (p.flags != 0u || p.stat != NONE) {\n    workgroupBarrier();";
+const AFTER_STEP: &str = "// JACA with a blast radius, part 1";
+const HALT: &str = "  if (li == 0u) { wg_halt = atomicLoad(&ctrl.halted); }\n  if (workgroupUniformLoad(&wg_halt) != 0u) { return; }\n";
+
+fn sim_variant(name: &str) -> String {
+    let mut s = include_str!("../src/sim.wgsl").to_string();
+    for part in name.split('+') {
+        s = match part {
+            "full" => s,
+            "no_case6" => cut(&s, C6, C7, ""),
+            "only_case0" => cut(&s, C1, CDEF, ""),
+            "only_case6" => cut(&cut(&s, C7, CDEF, ""), C0, C6, ""),
+            "only_case7" => cut(
+                &cut(&s, C0, C7, ""),
+                "      // B0 Life-like rules",
+                CDEF,
+                "",
+            ),
+            "no_tail" => cut(&s, TAIL, AFTER_STEP, "}\n\n"),
+            "no_halt" => s.replacen(HALT, "", 1),
+            p => panic!("no variant {p}"),
+        };
+    }
+    s
+}
+
+const SMALL_HEAD: &str = "@group(0) @binding(0) var<storage, read_write> b: array<u32>;\nvar<workgroup> s: atomic<u32>;\nvar<workgroup> h: u32;\nfn bump(c: ptr<function, array<u32, 8>>, k: u32) { (*c)[k] = (*c)[k] + 1u; }\n";
+
+fn small(body: &str) -> String {
+    format!(
+        "{SMALL_HEAD}@compute @workgroup_size(256)\nfn main(@builtin(local_invocation_index) li: u32) {{\n{body}\n}}\n"
+    )
+}
+
+/// Every JIT case: (name, WGSL, entry point, bindings).
+fn jit_cases() -> Vec<(String, String, &'static str, Groups)> {
+    let mut v: Vec<(String, String, &'static str, Groups)> = Vec::new();
+    for e in ["step", "pack", "control", "contact", "dilate"] {
+        v.push((
+            format!("sim {e}"),
+            include_str!("../src/sim.wgsl").into(),
+            e,
+            SIM,
+        ));
+    }
+    for name in [
+        "no_case6",
+        "only_case0",
+        "only_case6",
+        "only_case7",
+        "no_tail",
+        "no_halt",
+        "no_tail+no_halt",
+        "only_case0+no_tail",
+        "only_case0+no_halt",
+        "only_case0+no_tail+no_halt",
+        "only_case6+no_tail+no_halt",
+        "no_case6+no_tail",
+    ] {
+        v.push((format!("sim step {name}"), sim_variant(name), "step", SIM));
+    }
+    v.push((
+        "edit edit".into(),
+        include_str!("../src/edit.wgsl").into(),
+        "edit",
+        EDIT,
+    ));
+    for e in ["step", "contact", "dilate"] {
+        v.push((
+            format!("batch {e}"),
+            include_str!("../src/batch.wgsl").into(),
+            e,
+            BATCH,
+        ));
+    }
+    v.push((
+        "pile sweep".into(),
+        include_str!("../src/pile.wgsl").into(),
+        "sweep",
+        PILE,
+    ));
+    let arr = "  var c = array<u32, 8>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);\n  let k = b[li] % 8u;\n";
+    for (name, body) in [
+        (
+            "small array+barrier",
+            format!("{arr}  c[k] = c[k] + 1u;\n  atomicAdd(&s, c[b[li + 1u] % 8u]);\n  workgroupBarrier();\n  if (li == 0u) {{ b[0] = atomicLoad(&s); }}"),
+        ),
+        (
+            "small array, no barrier",
+            format!("{arr}  c[k] = c[k] + 1u;\n  b[li] = c[b[li + 1u] % 8u];"),
+        ),
+        (
+            "small barrier, no array",
+            "  atomicAdd(&s, b[li]);\n  workgroupBarrier();\n  if (li == 0u) { b[0] = atomicLoad(&s); }".to_string(),
+        ),
+        (
+            "small constant-index array+barrier",
+            format!("{arr}  c[3] = k;\n  atomicAdd(&s, c[3] + c[2]);\n  workgroupBarrier();\n  if (li == 0u) {{ b[0] = atomicLoad(&s); }}"),
+        ),
+        (
+            "small array by pointer+barrier",
+            format!("{arr}  bump(&c, k);\n  atomicAdd(&s, c[b[li + 1u] % 8u]);\n  workgroupBarrier();\n  if (li == 0u) {{ b[0] = atomicLoad(&s); }}"),
+        ),
+        (
+            "small array live across barrier",
+            format!("{arr}  c[k] = c[k] + 1u;\n  workgroupBarrier();\n  b[li] = c[b[li + 1u] % 8u];"),
+        ),
+        (
+            "small uniform load+return, then array",
+            format!("  if (li == 0u) {{ h = b[1000]; }}\n  if (workgroupUniformLoad(&h) != 0u) {{ return; }}\n{arr}  c[k] = c[k] + 1u;\n  b[li] = c[b[li + 1u] % 8u];"),
+        ),
+        (
+            "small uniform load+return, no array",
+            "  if (li == 0u) { h = b[1000]; }\n  if (workgroupUniformLoad(&h) != 0u) { return; }\n  b[li] = b[li] + 1u;".to_string(),
+        ),
+        (
+            "small loop+barrier",
+            "  var t = 0u;\n  for (var e = 0u; e < b[0]; e = e + 1u) { t += b[e + 1u]; }\n  atomicAdd(&s, t);\n  workgroupBarrier();\n  if (li == 0u) { b[0] = atomicLoad(&s); }".to_string(),
+        ),
+        (
+            "small array in loop+barrier",
+            format!("{arr}  for (var e = 0u; e < b[0]; e = e + 1u) {{ c[b[e + 1u] % 8u] += 1u; }}\n  atomicAdd(&s, c[k]);\n  workgroupBarrier();\n  if (li == 0u) {{ b[0] = atomicLoad(&s); }}"),
+        ),
+    ] {
+        v.push((name.to_string(), small(&body), "main", ONE));
+    }
+    v
+}
+
+/// One JIT case (`JETCARP_WARP_JIT=<name>`; `list` names them all): its pipeline made, one
+/// workgroup dispatched and waited for, then a second for WARP's compile tasks to finish.
+#[test]
+#[ignore]
+fn jit_child() {
+    let Ok(want) = std::env::var("JETCARP_WARP_JIT") else {
+        return;
+    };
+    let cases = jit_cases();
+    if want == "list" {
+        for (name, ..) in &cases {
+            println!("CASE {name}");
+        }
+        return;
+    }
+    logger();
+    let (_, src, entry, groups) = cases
+        .into_iter()
+        .find(|c| c.0 == want)
+        .unwrap_or_else(|| panic!("no case {want}"));
+    let instance = select::new_instance();
+    let a = adapter(&instance, false).expect("WARP");
+    let (device, queue) = select::open_device(&a, "jit probe").expect("device");
+    device.on_uncaptured_error(Arc::new(|e| say(&format!("UNCAPTURED GPU ERROR: {e}"))));
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some(&want),
+        source: wgpu::ShaderSource::Wgsl(src.into()),
+    });
+    let mut layouts = Vec::new();
+    let mut binds = Vec::new();
+    let mut keep = Vec::new();
+    for g in groups {
+        let entries: Vec<wgpu::BindGroupLayoutEntry> = g
+            .iter()
+            .map(|&(b, k)| wgpu::BindGroupLayoutEntry {
+                binding: b,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: match k {
+                        'r' => wgpu::BufferBindingType::Storage { read_only: true },
+                        'w' => wgpu::BufferBindingType::Storage { read_only: false },
+                        _ => wgpu::BufferBindingType::Uniform,
+                    },
+                    has_dynamic_offset: k == 'd',
+                    min_binding_size: None,
+                },
+                count: None,
+            })
+            .collect();
+        let l = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &entries,
+        });
+        let bufs: Vec<wgpu::Buffer> = g
+            .iter()
+            .map(|&(_, k)| {
+                device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: if k == 'u' || k == 'd' { 256 } else { 1 << 16 },
+                    usage: if k == 'u' || k == 'd' {
+                        wgpu::BufferUsages::UNIFORM
+                    } else {
+                        wgpu::BufferUsages::STORAGE
+                    },
+                    mapped_at_creation: false,
+                })
+            })
+            .collect();
+        let bg_entries: Vec<wgpu::BindGroupEntry> = g
+            .iter()
+            .zip(&bufs)
+            .map(|(&(b, _), buf)| wgpu::BindGroupEntry {
+                binding: b,
+                resource: buf.as_entire_binding(),
+            })
+            .collect();
+        binds.push(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &l,
+            entries: &bg_entries,
+        }));
+        layouts.push(l);
+        keep.push(bufs);
+    }
+    let refs: Vec<Option<&wgpu::BindGroupLayout>> = layouts.iter().map(Some).collect();
+    let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &refs,
+        immediate_size: 0,
+    });
+    say(&format!("JIT {want}: making the pipeline"));
+    let pipe = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some(&want),
+        layout: Some(&pl),
+        module: &module,
+        entry_point: Some(entry),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+    say(&format!("JIT {want}: dispatching"));
+    let mut enc = device.create_command_encoder(&Default::default());
+    {
+        let mut p = enc.begin_compute_pass(&Default::default());
+        p.set_pipeline(&pipe);
+        for (i, (bg, g)) in binds.iter().zip(groups.iter()).enumerate() {
+            let dynamic: Vec<u32> = g.iter().filter(|(_, k)| *k == 'd').map(|_| 0).collect();
+            p.set_bind_group(i as u32, bg, &dynamic);
+        }
+        p.dispatch_workgroups(1, 1, 1);
+    }
+    queue.submit([enc.finish()]);
+    let _ = device.poll(wgpu::PollType::wait_indefinitely());
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    say(&format!("JIT {want}: survived"));
 }
