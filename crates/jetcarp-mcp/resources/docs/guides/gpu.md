@@ -103,9 +103,14 @@ An adapter must be decent to simulate on: a discrete or integrated GPU, with com
 least 9 storage buffers per shader stage, storage bindings of at least 128 MiB, and a passed
 self-test. Software adapters (llvmpipe, lavapipe, SwiftShader) are slow and used only when asked
 for, with `software` or by name, and so is an adapter the system calls neither discrete nor
-integrated (such as an OpenGL one), by name. Windows' software renderer (WARP) is never used. With
-no decent adapter, everything runs on the processor, and windows still draw on whatever adapter
-can.
+integrated (such as an OpenGL one), by name. Windows' software renderer (WARP) is never used: the
+WARP that comes with Windows crashes while it compiles the world stepper's kernel (and the soup
+hunt's), taking the program down with it before a self-test could turn it down. The fault is in
+WARP's own shader compiler, which fails on a workgroup barrier inside an `if` or after an early
+return; the newer WARP Microsoft publishes for developers compiles and runs every kernel, bit for
+bit with the processor ([#321](https://github.com/jprodgers/jetcarp/issues/321)). With no decent
+adapter, everything runs on the processor, and windows still draw on whatever adapter can, WARP
+among them.
 
 JETCARP looks for adapters through every graphics interface wgpu has: Vulkan, Metal, DirectX 12
 and OpenGL (OpenGL ES on Linux, where it draws when there is no Vulkan). On Windows it leaves

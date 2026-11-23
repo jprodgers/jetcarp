@@ -16,7 +16,9 @@
 //! - **Decent** ([`requirements`]): a discrete or integrated GPU with compute shaders, at least
 //!   [`MIN_STORAGE_BUFFERS`] storage buffers per shader stage and storage bindings of at least
 //!   [`MIN_STORAGE_BINDING`] bytes, which passes the self-test ([`self_test`]). Software adapters
-//!   (llvmpipe, lavapipe, SwiftShader) are used only when asked for; Windows' WARP never is.
+//!   (llvmpipe, lavapipe, SwiftShader) are used only when asked for; Windows' WARP never is (its
+//!   shader compiler crashes on the world stepper and the soup hunt, #321) unless the tests allow
+//!   it ([`warp_allowed`]).
 //!
 //! The self-test runs every world kernel and the explore batch stepper on a small lattice and an
 //! aperiodic patch, on the GPU and on the CPU, and compares the hashes. The result is kept in the
@@ -773,8 +775,20 @@ fn rank(info: &wgpu::AdapterInfo, purpose: Purpose) -> (u8, u8) {
     (kind, backend)
 }
 
-/// Windows' software renderer, which crashes in the simulation's compute shaders
-/// (0xC0000005 in d3d10warp.dll, stepping Life).
+/// Windows' software renderer, which the GPU simulation never uses (unless the tests allow it:
+/// [`warp_allowed`]).
+///
+/// The WARP that comes with Windows crashes as it compiles the world stepper's `step` and
+/// `contact` kernels, and the soup hunt's (#321): 0xC0000005 in `d3d10warp.dll`'s
+/// `ComputeShaderTransformer::ConstructLoadStoreSets`, on a thread of WARP's own that compiles a
+/// shader for its first dispatch, so the process ends before the self-test can turn WARP down.
+/// It crashed so on the Acer (Windows 11 24H2, WARP 10.0.26100.9818) and on CI's Windows Server
+/// 2025 (10.0.26100.33648), where a debugger showed where. That compiler fails on any compute
+/// shader, as FXC compiles it, with a workgroup barrier inside an `if` or after an early return:
+/// each of those kernels has one, in uniform control flow as WGSL requires, and a shader of a few
+/// lines (an atomic, then a barrier in an `if`) crashes it too. The same kernels compiled by DXC
+/// run on the same WARP, WARP 1.0.22 (Microsoft's NuGet package) runs FXC's, and every kernel then
+/// matches the processor bit for bit: the fault is WARP's compiler's, not the kernels'.
 fn is_warp(info: &wgpu::AdapterInfo) -> bool {
     info.device_type == wgpu::DeviceType::Cpu
         && (info.backend == wgpu::Backend::Dx12 || info.name.contains("Microsoft Basic Render"))
@@ -783,8 +797,10 @@ fn is_warp(info: &wgpu::AdapterInfo) -> bool {
 /// The variable that lets tests choose WARP ([`warp_allowed`]).
 pub const ALLOW_WARP_ENV: &str = "JETCARP_ALLOW_WARP";
 
-/// Whether WARP may be chosen as other software adapters are, when asked for: for tests only,
-/// with `JETCARP_ALLOW_WARP=1` (#321).
+/// Whether WARP may be chosen as other software adapters are, when asked for
+/// (`JETCARP_GPU=software` or by name): with `JETCARP_ALLOW_WARP=1`, for tests only, to try a WARP
+/// on JETCARP's kernels (#321). The system's WARP crashes on them (`is_warp` says why); WARP
+/// 1.0.22's `d3d10warp.dll`, put beside a test program, runs every one of this crate's GPU tests.
 pub fn warp_allowed() -> bool {
     std::env::var(ALLOW_WARP_ENV).is_ok_and(|v| v.trim() == "1")
 }

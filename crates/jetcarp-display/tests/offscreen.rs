@@ -25,7 +25,8 @@ fn gpu() -> Option<Gpu> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     // The display adapter as JETCARP chooses it: a software one only with JETCARP_GPU=software
-    // (Mesa's software Vulkan in CI); Windows' WARP, which crashes these tests, never.
+    // (Mesa's software Vulkan in CI); Windows' WARP, whose shader compiler crashes on the world
+    // stepper, never, unless JETCARP_ALLOW_WARP=1 allows it (#321).
     // No usable adapter skips these tests, or fails them under JETCARP_REQUIRE_GPU=1.
     let choice =
         match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {

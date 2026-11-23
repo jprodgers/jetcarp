@@ -6,18 +6,24 @@
 //! OpenGL both free it), but the driver may still have threads of its own running, which then run
 //! code that is no longer there. On the Acer (NVIDIA, Windows 11) the app ended once in three with
 //! 0xC0000005 in `nvoglv64.dll_unloaded`, exception data 8: an attempt to execute code in the
-//! unloaded driver. The headless host on Windows CI (WARP, no GPU) ended with 0xC0000005 the same
-//! way. `jetcarp jobs refit` ended so too on the Acer (in `nvoglv64.dll` again, NVIDIA's Vulkan
-//! driver as well as its OpenGL one), as its GPU device went and with it the process's only
-//! instance. The program can join its own threads, but not the driver's.
+//! unloaded driver. `jetcarp jobs refit` ended so too on the Acer (in `nvoglv64.dll` again,
+//! NVIDIA's Vulkan driver as well as its OpenGL one), as its GPU device went and with it the
+//! process's only instance. The program can join its own threads, but not the driver's.
+//!
+//! Windows' software renderer, WARP, is not one of those drivers. On CI's Windows runner a
+//! process that had computed on WARP (a small shader on the system's WARP; 100 generations of
+//! Life on the world stepper on WARP 1.0.22, and on the system's through DXC) ended cleanly every
+//! way it was tried, 5 times in 5 each: everything dropped, its only instance last; its first
+//! instance kept; ended at once. The headless host draws on WARP there and ends cleanly too. Its
+//! crashes on that runner in 0.4.0, taken then for this one, most likely came from WARP's shader
+//! compiler, as the host began stepping Life on WARP (#321), which JETCARP no longer does.
 //!
 //! So the programs end in two steps. First everything of their own that isn't on the GPU is put
 //! in order: settings saved, jobs stopped at a checkpoint, the link closed and its endpoint file
 //! removed. Then [`end_process`] ends the process at once. Nothing on the GPU is touched: no
 //! buffer is dropped, no device waited on, and the device and the instance are never destroyed,
-//! so the driver is never unloaded while it runs. (Dropping the host's GPU buffers and waiting on
-//! its device before ending still crashed WARP on Windows CI.) A command line's devices come and
-//! go as it runs, so the process keeps its first instance to its end instead
+//! so the driver is never unloaded while it runs. A command line's devices come and go as it
+//! runs, so the process keeps its first instance to its end instead
 //! (`jetcarp_gpu::select::new_instance`), which keeps the drivers loaded. The system reclaims the
 //! memory, handles and GPU work of a process that has ended; browsers and game engines end the
 //! same way.
