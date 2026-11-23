@@ -129,13 +129,14 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   menus and close dialogs and tool windows; every tool window and dialog, and a floating pane, must
   close with Esc, with Ctrl+W and through its *Close* button, the last control Tab reaches in it,
   every tool window opened from its menu item must close with Esc at once, and Esc in a docked
-  pane must take the keyboard back to the grid; in the setup window's *What it
-  searches*, at three window sizes, ↓ and ↑, Tab and Shift+Tab must go through every choice and
-  back, an arrow must never take the keyboard out of the window, and Space must tick the choice
-  with the keyboard; *Tools → Start an explore search…*, chosen with F10, the arrows and Enter, must
-  open the explore form with the keyboard on its first box; the grid's cell cursor must draw,
-  erase, select and move a pattern. In every window, every control must have a role, a name that says something and
-  a value that reads, and the status line must be a live region. Each runs in a process of its
+  pane must take the keyboard back to the grid; in the setup window's *What it searches*, at three
+  window sizes, ↓ and ↑, Tab and Shift+Tab must go through every choice and back, an arrow must
+  never take the keyboard out of the window, and Space must tick the choice with the keyboard; in
+  the *Hunts* window's explore form, at the same sizes, ↓ and ↑ must go through every choice and
+  back; *Tools → Start an explore search…*, chosen with F10, the arrows and Enter, must open the
+  explore form with the keyboard on its first box; the grid's cell cursor must draw, erase, select
+  and move a pattern. In every window, every control must have a role, a name that says something
+  and a value that reads, and the status line must be a live region. Each runs in a process of its
   own with scratch folders (`crates/jetcarp-app/src/app/keyboard_tests.rs`); the cell cursor's
   next cell is checked on thirteen tilings (`cell_cursor.rs`), and an ignored test reads the tree
   again with the starter pack's cards, patterns and ant runs in the windows

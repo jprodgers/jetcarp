@@ -489,8 +489,10 @@ day later (0.4.2: 17 November here, 18 November there).
 - **Setup's *What it searches* keeps the keyboard** (#309). ↓ jumped from row to row of its wrapped
   check boxes, passing most of them by, and ↑ from the top of the page took the keyboard to the
   main window's controls behind the setup window, where its ring couldn't be seen. ↓ and ↑ now go
-  through the choices one by one, as Tab and Shift+Tab do, and an arrow key never takes the
-  keyboard out of the floating window it is in.
+  through the choices one by one, as Tab and Shift+Tab do, there and in the *Hunts* window's
+  explore form (its tilings and rule families, with their *All*, *None* and *Default*), where ↓
+  had left the keyboard on the first box; and an arrow key never takes the keyboard out of the
+  floating window it is in.
 - **A world over the limit is asked about, never made smaller to fit.** The *Tiling* pane's
   *Width × height* fields stopped each side at 16,384, so 100,000 × 100,000 squares (about 75 GB)
   became 16,384 × 16,384 (about 2 GB) and were built with nothing said; the fields take any size

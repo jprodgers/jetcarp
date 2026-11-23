@@ -34,7 +34,8 @@ has the keyboard; in an open list, the arrows move and Enter chooses. On a slide
 change its value; a number box takes typing once it has the keyboard. Elsewhere the arrows go to
 the nearest control that way, and stay in the window they start in: at the top of a floating
 window, ↑ leaves the keyboard where it is. In a list of check boxes, such as the setup window's
-*What it searches*, ↓ and ↑ go through the boxes one by one, as Tab and Shift+Tab do.
+*What it searches* and the *Hunts* window's explore form, ↓ and ↑ go through the boxes (and the
+form's *All*, *None* and *Default*) one by one, as Tab and Shift+Tab do.
 
 **Esc** leaves a text box, closes a menu or a list, closes *Export animation* and the two
 confirmations, and closes the tool window or floating pane whose control has the keyboard, the
