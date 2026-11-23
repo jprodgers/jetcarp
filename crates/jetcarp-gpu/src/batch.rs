@@ -401,7 +401,8 @@ impl BatchSim {
         Ok(BatchSim::new(device, queue, name))
     }
 
-    pub(crate) fn new(device: wgpu::Device, queue: wgpu::Queue, name: String) -> BatchSim {
+    #[doc(hidden)]
+    pub fn new(device: wgpu::Device, queue: wgpu::Queue, name: String) -> BatchSim {
         let lim = device.limits();
         let max_bytes = lim.max_storage_buffer_binding_size.min(lim.max_buffer_size);
         let max_cells = (max_bytes / 4).min(u32::MAX as u64 / 2) as usize;

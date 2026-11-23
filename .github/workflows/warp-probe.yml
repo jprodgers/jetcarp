@@ -1,0 +1,72 @@
+# TEMPORARY (#321): JETCARP's GPU code on Windows' WARP, on the investigation branch only. To be
+# deleted before its pull request is ready.
+name: WARP probe
+
+on:
+  push:
+    branches: [warp-investigate-0.4.3]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: warp-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: never
+  JETCARP_CONFIG_DIR: ${{ github.workspace }}/.ci/config
+  JETCARP_DATA_DIR: ${{ github.workspace }}/.ci/data
+  JETCARP_OUT: ${{ github.workspace }}/.ci/out
+  JETCARP_LIBRARY: ${{ github.workspace }}/.ci/library
+  JETCARP_RUNTIME_DIR: ${{ github.workspace }}/.ci/run
+
+jobs:
+  probe:
+    name: WARP probe (Windows x86_64)
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: warp-probe
+          cache-on-failure: true
+      - name: Build the GPU tests
+        run: cargo test --release -p jetcarp-gpu --no-run
+      - name: WARP 1.0.22, the Agility SDK 1.620.2 (its debug layer) and DXC from NuGet
+        shell: pwsh
+        run: |
+          $t = "$env:RUNNER_TEMP\warp-tools"
+          New-Item -ItemType Directory -Force $t | Out-Null
+          foreach ($p in @(@("microsoft.direct3d.warp", "1.0.22", "warp"),
+                           @("microsoft.direct3d.d3d12", "1.620.2", "d3d12"),
+                           @("microsoft.direct3d.dxc", "1.9.2609.5", "dxc"))) {
+            $url = "https://api.nuget.org/v3-flatcontainer/$($p[0])/$($p[1])/$($p[0]).$($p[1]).nupkg"
+            Invoke-WebRequest -Uri $url -OutFile "$t\$($p[2]).zip"
+            Write-Host "$($p[0]) $($p[1]): $((Get-FileHash "$t\$($p[2]).zip").Hash)"
+            Expand-Archive "$t\$($p[2]).zip" -DestinationPath "$t\$($p[2])"
+          }
+          "WARP_TOOLS=$t" >> $env:GITHUB_ENV
+      - name: The system
+        shell: pwsh
+        run: |
+          Get-CimInstance Win32_OperatingSystem | Format-List Caption, Version, BuildNumber
+          Get-CimInstance Win32_Processor | Format-List Name, NumberOfCores, NumberOfLogicalProcessors
+          foreach ($f in @("C:\Windows\System32\d3d10warp.dll", "C:\Windows\System32\d3d12.dll",
+                           "C:\Windows\System32\D3D12Core.dll", "C:\Windows\System32\d3d12SDKLayers.dll",
+                           "C:\Windows\System32\d3dcompiler_47.dll",
+                           "$env:WARP_TOOLS\warp\build\native\bin\x64\d3d10warp.dll")) {
+            if (Test-Path $f) { "$f $((Get-Item $f).VersionInfo.FileVersion)" } else { "${f}: none" }
+          }
+          "cdb: $(Test-Path 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe')"
+      - name: Probe
+        run: python .github/warp-probe/probe.py
+      - name: FXC's disassembly of the kernels, and wgpu's HLSL
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: warp-probe-asm
+          path: ${{ runner.temp }}/warp-tools/asm
+          if-no-files-found: warn

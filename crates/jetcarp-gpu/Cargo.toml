@@ -19,3 +19,6 @@ pollster.workspace = true
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+log = "0.4"
