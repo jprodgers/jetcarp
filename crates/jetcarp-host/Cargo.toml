@@ -44,8 +44,6 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_System_LibraryLoader",
-    # The GPU Engine counters, for Fit on an adapter without GPU timestamps (src/gpu_engine.rs).
-    "Win32_System_Performance",
     "Win32_System_Power",
     "Win32_System_RemoteDesktop",
     "Win32_System_Threading",

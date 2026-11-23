@@ -112,6 +112,19 @@ cells of 3 pixels, and a field over WCAG's quarter must never read under it. A s
 a few at a time and at different moments, so its tiles seldom come back where they were: soups,
 still lifes, gliders and Life's ash are read as before.
 
+<a id="restless-change"></a>**Restless change.** Some rules settle into dense ash that keeps
+changing in part of each tile without coming back: Walled Cities, 34 Life and Long Life, and soups
+that stay chaotic, such as Seeds, Replicator and Fredkin, change two fifths to two thirds of their
+cells every generation. Counted pixel by pixel, WCAG counts such ash as flashing, and concurrently:
+in each frame the pixels changing, each flashing more than three times in the last second, cover
+more than a quarter of a 10° field. IRIS, which takes the mean of the whole frame, does not, since
+its mean hardly moves. So a tile's windows' changes also count apart, oscillating or not, where its
+mean moved much less than they did and neighbouring tiles changed too, each window's over the
+whole last second; and the area rule counts them alone, as it counts change in part of a tile.
+Busy scenes whose change is spread out in time are not flashing by this count, nor by WCAG counted
+pixel by pixel together: a Life soup's or Brian's Brain's pixels change often, but those changing
+in any one frame cover well under a quarter of a field.
+
 **Stripes.** Regular high-contrast stripes can trigger seizures as flashes can (ITU-R BT.1702,
 [ITU-R 2023](../research/bibliography.md#itu2023bt1702); Ofcom's guidance on flashing images and
 regular patterns, [Ofcom 2017](../research/bibliography.md#ofcom2017flashing)). The guard looks
@@ -176,6 +189,11 @@ cannot hold its pixels to three transitions a second, so where such change flash
 of a 10° field, those tiles and the tiles around them are veiled at once; where the whole of a tile
 changes with its neighbours in turn (large cells, one tile up as the next goes down), it is
 softened. Either way the scene is slowed, and the veil lets go once it no longer flashes.
+[Restless change](#restless-change) is veiled the same way, at once, where it flashes on its own
+twice a second over a quarter of a 10° field, well before the seven transitions that fail: before,
+it was only softened, which holds a tile's mean and not its pixels, and up to 2.7 seconds of
+flashing reached the screen before the scene was slowed. A Life soup and Brian's Brain at 30
+generations a second count 3 at most this way, so they are left to the softening.
 
 The guard changes only what is shown and how fast generations are shown. A world computes the same
 generations whatever the guard does, and a scene's hash is the same.
@@ -317,8 +335,8 @@ The softened version is, when showing each frame up to four times longer brings 
 one flash a second and it has no strong stripes, the animation slowed: every frame stays as drawn,
 so an oscillator's few phases do not blur into one.
 Otherwise it is the guard's softening carried out on the frames: every tile that flashes anywhere in
-the loop is softened throughout, fine patterns that reverse and change in part of a tile are veiled
-where they flash, and stripes are veiled where they were found; the softener goes
+the loop is softened throughout, fine patterns that reverse, change in part of a tile and restless
+change are veiled where they flash, and stripes are veiled where they were found; the softener goes
 round the loop twice and keeps the second time, so the end flows into the start. What is saved is
 what is checked: a GIF has at most 256 colours, and squeezing a fade into them could turn it back
 into a flip, so the saved file is read back and checked again. If it still fails, each frame is
@@ -335,14 +353,16 @@ and 0.29 ms at 3840 × 2160 (1.7%); with neither it took 0.03 and 0.11 ms. On a 
 GPU, perhaps a tenth as fast, it should stay under 5% of a frame at 1080p (not yet measured). Its
 readings come back to the processor, 80 bytes a tile (2.6 MB a frame at 3840 × 2160), in about
 0.15 ms. Counting the transitions in them takes the processor (a Ryzen AI Max+ 395) about
-0.9 ms a frame at 3840 × 2160 (0.6 ms with neither), for the frames as drawn and again as shown;
-2 to 3.5 ms while the whole screen flashes, and up to 8 ms in the frames the whole screen changes
-in part of every tile, every frame, until the scene is slowed. Comparing each tile's windows with
-the frame before ([Change in part of a tile](#partial-change)) doubled these, from 0.5, 0.35 and
-1.5 ms. Softening costs more, 0.15 ms a frame at 1080p on the same GPU,
-but only while it acts. The stripe check takes about 3 ms of one processor core for a 1080p frame,
-four times a second. On a surface the guard cannot read in place, each frame is drawn into a
-texture and copied to the screen.
+1 ms a frame at 3840 × 2160 (0.7 ms with neither), for the frames as drawn and again as shown;
+2 to 3.5 ms while the whole screen flashes every few frames, and up to 11 ms in the frames the
+whole screen changes in part of every tile, every frame, until the scene is slowed. Comparing each
+tile's windows with the frame before ([Change in part of a tile](#partial-change)) doubled these,
+from 0.5, 0.35 and 1.5 ms; keeping a second of each tile's windows' changes, for
+[restless change](#restless-change), added about a tenth, and a quarter to the frames that change
+everywhere every frame, and takes about 28 MB more a meter at 3840 × 2160. Softening costs more,
+0.15 ms a frame at 1080p on the same GPU, but only while it acts. The stripe check takes about
+3 ms of one processor core for a 1080p frame, four times a second. On a surface the guard cannot
+read in place, each frame is drawn into a texture and copied to the screen.
 
 ## What it cannot do
 
@@ -352,11 +372,15 @@ texture and copied to the screen.
   with larger pixels than 96 an inch at its scale factor, makes a 10° field fewer pixels than it
   assumes. On a screen with a scale factor above 1, a fine pattern of 3-pixel squares counts,
   though there they are under 0.1°: stricter than WCAG.
-- It sees each tile through 49 windows of 4 by 4 pixels. A change in part of a tile counts where
-  the tile oscillates; change that does not come back counts only where it moves the tiles' means,
-  and softening, which holds a tile's mean, does not hold each of its pixels: the dense, restless
-  ash some rules settle into (Walled Cities and 3-4 Life at 4 pixels a cell) can show a second or
-  so of flashing before the scene is slowed. Since the windows' part of a tile is counted 30%
+- It sees each tile through 49 windows of 4 by 4 pixels, which see cells of 3 pixels only in part.
+  So restless change in cells of 3 pixels counts more slowly than it happens, and where it is
+  veiled, the veil's coming on can be one transition too many: chaotic soups of Seeds, Replicator
+  and Fredkin at 3 pixels a cell in a dark palette can show a frame or two over the limit, counted
+  pixel by pixel, before they are veiled. Restless change sparse enough that WCAG, pixel by pixel,
+  does not count it as flashing together (DotLife's ash at 3 and 4 pixels a cell, Lava's at 3) is
+  left to the softening, which holds a tile's mean and not each of its pixels, so it may show up
+  to a second of flicker that counts as flashing when each pixel's changes are counted over a
+  second, whenever they came (see below). Since the windows' part of a tile is counted 30%
   larger than they show, a sparser field of small cells flipping in part can read as flashing
   where WCAG would pass it (a blinker every 4 cells at 7 to 10 pixels a cell, or every 5 cells at
   3 to 6, a fifth or a sixth of it flipping): stricter than WCAG. Cells of 1 and 2 pixels, under 0.1°, are mostly not seen in part,

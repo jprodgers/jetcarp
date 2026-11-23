@@ -62,6 +62,16 @@
 //! softening its mean cannot calm them: the area rule over those alone is
 //! [`FlashReading::partial_transitions`], and the guard veils them.
 //!
+//! **Restless change** (#289). Dense ash that keeps changing in part of each tile without coming
+//! back (Walled Cities, 34 Life, a Seeds soup) does not oscillate, but WCAG, pixel by pixel, counts
+//! it as flashing concurrently. So the area rule also counts, apart, every window's change in part
+//! of its tile made where neighbouring tiles changed too, oscillating or not ([`Kind::Restless`]):
+//! [`FlashReading::restless_transitions`]. Each window's changes are counted over the whole last
+//! second ([`FLIPS_RING`]), as a tile of such ash changes with every generation. A Life soup's or
+//! Brian's Brain's windows change often too, but those changing in any one frame cover well under
+//! a quarter of a field, and this count stays low; the guard veils restless change only where it
+//! reaches [`super::guard::RESTLESS_ACT`].
+//!
 //! **Red, by either definition** (#270). A tile's red transitions are WCAG 2.0's (its mean red
 //! measure, tracked as luminance is) and WCAG 2.2's (its mean colour's chromaticity moving more than
 //! [`RED_CHROMA_DELTA`] from where its run began, to or from a saturated red: [`ChromaTracker`]),
@@ -332,27 +342,48 @@ impl Change {
     }
 }
 
+/// The changes of a tile's windows [`Flips`] keeps: a second's, where the tile changes with every
+/// generation at thirty a second, so that a window's count over the last second is not cut short
+/// where each change moves only some of the tile's windows (#289).
+pub const FLIPS_RING: usize = 32;
+
 /// A tile's windows that changed ([`Change`]) in the last second, with when, so that the windows
 /// that changed `k` times can be told; and which changed in the latest frame read.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Flips {
-    times: [f64; RING],
-    masks: [u64; RING],
+    times: [f64; FLIPS_RING],
+    masks: [u64; FLIPS_RING],
     /// Each change in part of the tile ([`PARTIAL`]); each made where neighbouring tiles changed
     /// too; and each counted, a part of the tile's oscillation; a bit each.
-    partial: u8,
-    coherent: u8,
-    counted: u8,
+    partial: u32,
+    coherent: u32,
+    counted: u32,
     n: u8,
     /// The windows that changed in the latest frame (none if none counted), the share of the
     /// tile they stand for, and whether in part of it.
     now: u64,
     now_share: f32,
     now_partial: bool,
-    /// Each window's counted changes in the last second, as four bit planes of a count (of all
-    /// changes, and of those in part of the tile), and the most of any window.
-    planes: [[u64; 4]; 2],
-    most: [u8; 2],
+    /// The windows that changed in the latest frame in part of the tile, where neighbouring
+    /// tiles changed too, whether or not the tile oscillates (#289; none if not).
+    now_restless: u64,
+    /// Each window's changes in the last second, as four bit planes of a count, and the most of
+    /// any window: of the counted changes, of those in part of the tile, and of every change in
+    /// part of the tile made where neighbouring tiles changed too ([`Kind`]).
+    planes: [[u64; 4]; 3],
+    most: [u8; 3],
+}
+
+/// Which of a tile's windows' changes ([`Flips`]) a count is of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// The changes of an oscillation, made where neighbouring tiles changed too.
+    Counted,
+    /// Those of them in part of the tile ([`PARTIAL`]).
+    Partial,
+    /// Every change in part of the tile made where neighbouring tiles changed too, oscillating
+    /// or not: restless change, such as the ash of Walled Cities (#289).
+    Restless,
 }
 
 impl Flips {
@@ -368,12 +399,14 @@ impl Flips {
             cycle,
         } = changed;
         self.now = 0;
+        self.now_restless = 0;
         self.now_share = share;
         self.now_partial = partial;
         // Forget what is over a second old (as a transition's count does, [`Tracker::count`]),
         // and the oldest change if there is no room.
+        let mut moved = false;
         while self.n > 0
-            && (self.times[0] <= t - 1.0 + 1e-6 || (mask != 0 && self.n as usize == RING))
+            && (self.times[0] <= t - 1.0 + 1e-6 || (mask != 0 && self.n as usize == FLIPS_RING))
         {
             self.times.rotate_left(1);
             self.masks.rotate_left(1);
@@ -381,14 +414,16 @@ impl Flips {
             self.coherent >>= 1;
             self.counted >>= 1;
             self.n -= 1;
+            moved = true;
         }
         if mask != 0 {
+            moved = true;
             let k = self.n as usize;
-            let bit = 1u8 << k;
+            let bit = 1u32 << k;
             self.times[k] = t;
             self.masks[k] = mask;
-            self.partial = (self.partial & !bit) | ((partial as u8) << k);
-            self.coherent = (self.coherent & !bit) | ((coherent as u8) << k);
+            self.partial = (self.partial & !bit) | ((partial as u32) << k);
+            self.coherent = (self.coherent & !bit) | ((coherent as u32) << k);
             self.counted &= !bit;
             self.n += 1;
             if cycle > 0 {
@@ -400,32 +435,62 @@ impl Flips {
             if self.counted & bit != 0 {
                 self.now = mask;
             }
-        }
-        if self.counted == 0 {
-            (self.planes, self.most) = ([[0; 4]; 2], [0, 0]);
-        } else {
-            for p in [false, true] {
-                let planes = self.count(p);
-                self.planes[p as usize] = planes;
-                self.most[p as usize] = (1..=RING as u32)
-                    .rev()
-                    .find(|&k| Self::at_least(planes, k) != 0)
-                    .unwrap_or(0) as u8;
+            if coherent && partial {
+                self.now_restless = mask;
             }
+        }
+        // The counts change only with the changes held; kinds of the same changes (all of a
+        // period-2 field's, say) share theirs.
+        if !moved {
+            return;
+        }
+        let mut last: Option<(u32, [u64; 4], u8)> = None;
+        for kind in [Kind::Counted, Kind::Partial, Kind::Restless] {
+            let of = self.of(kind);
+            let (planes, most) = match last {
+                Some((o, p, m)) if o == of => (p, m),
+                _ => {
+                    let p = self.count(of);
+                    let m = (1..=RING as u32)
+                        .rev()
+                        .find(|&k| Self::at_least(p, k) != 0)
+                        .unwrap_or(0) as u8;
+                    (p, m)
+                }
+            };
+            last = Some((of, planes, most));
+            self.planes[kind as usize] = planes;
+            self.most[kind as usize] = most;
         }
     }
 
-    /// Each window's counted changes (only those in part of the tile, if `partial`), as four bit
-    /// planes of a count.
-    fn count(&self, partial: bool) -> [u64; 4] {
+    /// The changes a count of `kind` is of, a bit each.
+    fn of(&self, kind: Kind) -> u32 {
+        match kind {
+            Kind::Counted => self.counted,
+            Kind::Partial => self.counted & self.partial,
+            Kind::Restless => self.coherent & self.partial,
+        }
+    }
+
+    /// Each window's changes among those `of` (a bit each), as four bit planes of a count (at
+    /// most 15).
+    fn count(&self, of: u32) -> [u64; 4] {
         let mut p = [0u64; 4];
+        if of == 0 {
+            return p;
+        }
         for k in 0..self.n as usize {
-            if self.counted >> k & 1 == 1 && (!partial || self.partial >> k & 1 == 1) {
+            if of >> k & 1 == 1 {
                 let mut carry = self.masks[k];
                 for b in p.iter_mut() {
                     let c = *b & carry;
                     *b ^= carry;
                     carry = c;
+                }
+                // Past 15 a count stays at 15.
+                for b in p.iter_mut() {
+                    *b |= carry;
                 }
             }
         }
@@ -452,11 +517,27 @@ impl Flips {
     /// times in the last second (only changes in part of the tile, if `partial`), counted
     /// [`WINDOW_MARGIN`] larger.
     pub fn share(&self, k: u32, partial: bool) -> f32 {
-        if self.now == 0 || (partial && !self.now_partial) {
+        self.share_of(
+            k,
+            if partial {
+                Kind::Partial
+            } else {
+                Kind::Counted
+            },
+        )
+    }
+
+    /// The same for changes of `kind`.
+    pub fn share_of(&self, k: u32, kind: Kind) -> f32 {
+        let now = match kind {
+            Kind::Restless => self.now_restless,
+            _ => self.now,
+        };
+        if now == 0 || (kind == Kind::Partial && !self.now_partial) {
             return 0.0;
         }
-        let all = window_share(self.now);
-        let some = window_share(self.now & Self::at_least(self.planes[partial as usize], k));
+        let all = window_share(now);
+        let some = window_share(now & Self::at_least(self.planes[kind as usize], k));
         if all > 0.0 {
             (self.now_share * some / all * WINDOW_MARGIN).min(1.0)
         } else {
@@ -467,13 +548,22 @@ impl Flips {
     /// The most times any window changed in the last second (only changes in part of the tile,
     /// if `partial`).
     pub fn most(&self, partial: bool) -> u32 {
-        self.most[partial as usize] as u32
+        self.most_of(if partial {
+            Kind::Partial
+        } else {
+            Kind::Counted
+        })
+    }
+
+    /// The same for changes of `kind`.
+    pub fn most_of(&self, kind: Kind) -> u32 {
+        self.most[kind as usize] as u32
     }
 
     /// Whether it holds any change, or one in the latest frame: a frame with no change must still
     /// be taken, to forget old ones.
     pub fn held(&self) -> bool {
-        self.n > 0 || self.now != 0
+        self.n > 0 || self.now != 0 || self.now_restless != 0
     }
 }
 
@@ -688,6 +778,10 @@ pub struct FlashReading {
     /// than they did (#275; general and red, whichever is more): what softening a tile's mean
     /// cannot calm.
     pub partial_transitions: u32,
+    /// The same over every change of a tile's windows in part of it, made where neighbouring
+    /// tiles changed too, whether or not the tile oscillates (#289; general and red, whichever is
+    /// more): restless change, such as dense ash that keeps changing without repeating.
+    pub restless_transitions: u32,
     /// Red flashes: the same for red, by either of WCAG's definitions (2.0's red measure, 2.2's
     /// chromaticity).
     pub red_transitions: u32,
@@ -786,6 +880,8 @@ pub struct FlashMeter {
     partial_counts: Vec<u8>,
     /// The same for all of its windows' changes.
     change_counts: Vec<u8>,
+    /// The same for its windows' restless changes ([`Kind::Restless`]).
+    restless_counts: Vec<u8>,
     flips: Vec<Flips>,
     red_flips: Vec<Flips>,
     flips_raw: Vec<f64>,
@@ -835,6 +931,7 @@ impl FlashMeter {
             seen: vec![],
             partial_counts: vec![],
             change_counts: vec![],
+            restless_counts: vec![],
             flips: vec![],
             red_flips: vec![],
             flips_raw: vec![],
@@ -896,6 +993,13 @@ impl FlashMeter {
         &self.change_counts
     }
 
+    /// Each tile's windows' restless changes (#289) in the last second, the most of any one
+    /// window ([`Kind::Restless`], of luminance or of the red measure, whichever made more): change
+    /// in part of the tile, made where neighbouring tiles changed too, oscillating or not.
+    pub fn tile_restless_counts(&self) -> &[u8] {
+        &self.restless_counts
+    }
+
     /// Tiles across and down, as of the last frame.
     pub fn tiles(&self) -> (u32, u32) {
         (self.cols, self.rows)
@@ -930,6 +1034,7 @@ impl FlashMeter {
             self.red_change = vec![Change::default(); n];
             self.partial_counts = vec![0; n];
             self.change_counts = vec![0; n];
+            self.restless_counts = vec![0; n];
             self.flips = vec![Flips::default(); n];
             self.red_flips = vec![Flips::default(); n];
             self.flips_raw = vec![f64::NEG_INFINITY; n];
@@ -1075,7 +1180,7 @@ impl FlashMeter {
             }
         }
         let (mut any, mut any_red, mut any_fine, mut any_chroma) = (false, false, false, false);
-        let (mut any_flips, mut any_red_flips) = (false, false);
+        let (mut any_flips, mut any_red_flips, mut any_restless) = (false, false, false);
         for i in 0..n {
             let c = self.lum[i].count(t) as u8;
             let r = self.red[i].count(t) as u8;
@@ -1084,8 +1189,13 @@ impl FlashMeter {
                 self.flips[i].most(true).max(self.red_flips[i].most(true)) as u8;
             self.change_counts[i] =
                 self.flips[i].most(false).max(self.red_flips[i].most(false)) as u8;
+            self.restless_counts[i] = self.flips[i]
+                .most_of(Kind::Restless)
+                .max(self.red_flips[i].most_of(Kind::Restless))
+                as u8;
             any_flips |= self.flips[i].now != 0;
             any_red_flips |= self.red_flips[i].now != 0;
+            any_restless |= self.flips[i].now_restless != 0 || self.red_flips[i].now_restless != 0;
             let h = self.chroma_times[i].count(t) as u8;
             self.counts[i] = c;
             self.red_counts[i] = r;
@@ -1117,8 +1227,8 @@ impl FlashMeter {
         let screen_red = self.screen_red.count(t);
         // A tile's transitions count its whole area; a tile with fewer counts the pixels under
         // its windows that changed in this frame, `k` times in the last second (#275).
-        let flips = [(&self.flips[..], false)];
-        let red_flips = [(&self.red_flips[..], false)];
+        let flips = [(&self.flips[..], Kind::Counted)];
+        let red_flips = [(&self.red_flips[..], Kind::Counted)];
         let (area, flash_share) = if any || any_flips {
             self.area_rule(map, &self.counts, if any_flips { &flips } else { &[] })
         } else {
@@ -1140,9 +1250,23 @@ impl FlashMeter {
         } else {
             0
         };
-        let partial = [(&self.flips[..], true), (&self.red_flips[..], true)];
+        let partial = [
+            (&self.flips[..], Kind::Partial),
+            (&self.red_flips[..], Kind::Partial),
+        ];
         let partial_transitions = if (any_flips || any_red_flips) && (area > 0 || red_area > 0) {
             self.area_rule(map, &vec![0; n], &partial).0
+        } else {
+            0
+        };
+        // Restless change (#289) counts over the area on its own: such change may leave every
+        // tile's mean where it was.
+        let restless = [
+            (&self.flips[..], Kind::Restless),
+            (&self.red_flips[..], Kind::Restless),
+        ];
+        let restless_transitions = if any_restless {
+            self.area_rule(map, &vec![0; n], &restless).0
         } else {
             0
         };
@@ -1171,6 +1295,7 @@ impl FlashMeter {
             screen_transitions,
             fine_transitions,
             partial_transitions,
+            restless_transitions,
             red_transitions,
             chroma_transitions,
             share: flash_share,
@@ -1197,8 +1322,8 @@ impl FlashMeter {
     /// `k` transitions cover more than [`AREA_SHARE`] of some field, and the largest share
     /// covered by tiles with at least two. A tile with fewer counts the share of it under windows
     /// that changed in this frame and `k` times in the last second, by any of `flips` (each with
-    /// whether only changes in part of a tile count).
-    fn area_rule(&self, map: &TileMap, counts: &[u8], flips: &[(&[Flips], bool)]) -> (u32, f32) {
+    /// the kind of change that counts).
+    fn area_rule(&self, map: &TileMap, counts: &[u8], flips: &[(&[Flips], Kind)]) -> (u32, f32) {
         let side = self.viewing.field_tiles() as i64;
         let field_px = self.viewing.field_area();
         let share = |k: u8| {
@@ -1212,7 +1337,7 @@ impl FlashMeter {
                     } else {
                         let s = flips
                             .iter()
-                            .map(|(f, partial)| f[i].share(k as u32, *partial))
+                            .map(|(f, kind)| f[i].share_of(k as u32, *kind))
                             .fold(0.0, f32::max);
                         s * px
                     }
@@ -1730,7 +1855,7 @@ mod tests {
     /// How long the meter takes over a 4K screen's tiles, a frame at a time, with the fine
     /// patterns and without (ignored; run with `--ignored --nocapture`). Every tile reverses
     /// (a whole screen of 4-pixel squares) or none does; or every tile's windows change, half of
-    /// them (a period-2 agar).
+    /// them (a period-2 agar), or a third of them without coming back (restless ash, #289).
     #[test]
     #[ignore]
     fn meter_cost() {
@@ -1783,11 +1908,46 @@ mod tests {
             crate::strobe::frame::reduce(&v, w, h)
         };
         let agars = [agar(0), agar(1)];
+        // A whole screen of restless ash of 4-pixel cells (#289): a third of the cells, chosen
+        // at random, flipping in each of eight frames that do not come back within four.
+        let restless: Vec<TileMap> = {
+            let (cw, ch) = (w / 4, h / 4);
+            let mut cells = vec![false; (cw * ch) as usize];
+            let mut seed = 0x2545_f491_4f6c_dd1du64;
+            let mut next = move || {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                seed
+            };
+            (0..8)
+                .map(|_| {
+                    for c in cells.iter_mut() {
+                        if next() % 3 == 0 {
+                            *c = !*c;
+                        }
+                    }
+                    let mut v = Vec::with_capacity((w * h * 4) as usize);
+                    for y in 0..h {
+                        for x in 0..w {
+                            let c = if cells[((y / 4) * cw + x / 4) as usize] {
+                                255
+                            } else {
+                                0
+                            };
+                            v.extend_from_slice(&[c, c, c, 255]);
+                        }
+                    }
+                    crate::strobe::frame::reduce(&v, w, h)
+                })
+                .collect()
+        };
         for (name, ms) in [
             ("with fine patterns", &maps[..]),
             ("without", &plain[..]),
             ("the whole field flipping", &field[..]),
             ("a period-2 agar", &agars[..]),
+            ("restless ash", &restless[..]),
         ] {
             for (what, every) in [
                 ("reversing every 6 frames", 6),
@@ -1797,7 +1957,7 @@ mod tests {
                 let mut m = meter();
                 let t = std::time::Instant::now();
                 for f in 0..240u32 {
-                    m.update(&ms[((f / every) % 2) as usize], f as f64 / 60.0);
+                    m.update(&ms[((f / every) as usize) % ms.len()], f as f64 / 60.0);
                 }
                 println!(
                     "4K, {name}, {what}: {:.2} ms a frame",
@@ -1931,6 +2091,57 @@ mod tests {
     /// 4-pixel cells flipping each generation, no tile's mean moving and no fine pattern reversing,
     /// fails, and by the changes of its windows in part of each tile; a single blinker in a corner
     /// does not.
+    /// Restless change (#289): 4-pixel cells, a share of them chosen at random flipping each
+    /// generation at thirty a second, never coming back as they were. Where a third flip, the
+    /// restless count is over the limit though no tile oscillates; where one in fifty does, it is
+    /// under a flash a second.
+    #[test]
+    fn restless_change_counts_by_its_windows_where_it_is_dense() {
+        for (one_in, dense) in [(3u64, true), (50, false)] {
+            let (cw, ch) = (W / 4, H / 4);
+            let mut cells = vec![false; (cw * ch) as usize];
+            let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+            let mut next = move || {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                seed
+            };
+            let maps: Vec<TileMap> = (0..30)
+                .map(|_| {
+                    for c in cells.iter_mut() {
+                        if next() % one_in == 0 {
+                            *c = !*c;
+                        }
+                    }
+                    let mut v = Vec::with_capacity((W * H * 4) as usize);
+                    for y in 0..H {
+                        for x in 0..W {
+                            let on = cells[((y / 4) * cw + x / 4) as usize];
+                            let c = if on { 230 } else { 20 };
+                            v.extend_from_slice(&[c, c, c, 255]);
+                        }
+                    }
+                    crate::strobe::frame::reduce(&v, W, H)
+                })
+                .collect();
+            let mut m = meter();
+            let (mut restless, mut partial) = (0, 0);
+            for f in 0..60u32 {
+                let r = m.update(&maps[(f / 2) as usize], f as f64 / 60.0);
+                restless = restless.max(r.restless_transitions);
+                partial = partial.max(r.partial_transitions);
+            }
+            if dense {
+                assert!(restless > MAX_TRANSITIONS, "{restless}");
+                assert!(partial < restless, "{partial}: it does not oscillate");
+                assert!(m.tile_restless_counts().iter().all(|&c| c >= 2));
+            } else {
+                assert!(restless < 2, "{restless}");
+            }
+        }
+    }
+
     #[test]
     fn a_dense_period_2_field_flashes_by_its_windows() {
         const PHASES: [&[u8]; 2] = [b"ooo.oo.o.o..o...", b"..o....o.oooo.oo"];

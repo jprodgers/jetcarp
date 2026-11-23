@@ -31,6 +31,7 @@ pub mod schema;
 mod script_tools;
 mod search_tools;
 pub mod stdio;
+pub mod stopping;
 pub mod tools;
 mod util;
 mod world_tools;

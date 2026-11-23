@@ -100,18 +100,19 @@ signed.
 
 **This computer** (every profile). Setup measures your computer first, unless you untick **Measure
 this computer first**: about a minute of JETCARP's own work, with nothing drawn but a progress bar,
-for the [JETCARP Hardware Score](../guides/this-computer.md) and limits that fit the computer. It
+for its [JETCARP Hardware Score](../guides/this-computer.md): to compare it with other computers,
+and for *Fit to this computer*'s first guess. It
 runs before the jobs start, so they do not slow it, and the rest of JETCARP holds still while it
 measures (the app's world, the desktop background, other searches and jobs), carrying on after. The
 page asks you to close other heavy programs first: games, video, builds and other simulations lower
 the score. If something would still lower it (a JETCARP program that can't hold still, or a
 processor or GPU busy with something else), the progress page says so and waits for it to go, with
 **Measure anyway** and **Skip measuring**; a score measured anyway is marked as taken under load
-([While it measures](../guides/this-computer.md#while-it-measures)). Without measuring, the limits
-come from the computer's memory alone, and **Tools → This computer…** measures it whenever you
-like.
+([While it measures](../guides/this-computer.md#while-it-measures)). Measured or not, the limits
+come from the computer's memory and your own values, never the score; **Tools → This computer…**
+measures it whenever you like.
 
-<img src="../images/getting-started/setup-5b-measure.webp" alt="The This computer page: Measure this computer first, ticked, the request to close other heavy programs first, and what the limits are without measuring: 8 GB reserved for JETCARP, worlds of up to 4 GB" width="600">
+<img src="../images/getting-started/setup-5b-measure.webp" alt="The This computer page: what the JETCARP Hardware Score is for, Measure this computer first, ticked, the request to close other heavy programs first, and the limits, which come from the memory measured or not: 8 GB reserved for JETCARP, worlds of up to 4 GB" width="600">
 
 **Summary.** What setup will do: the data folder, the packs, whether it measures the computer first,
 and the Quick Start build, which you can switch off (Explorer) or lengthen and shorten, from 1
@@ -183,7 +184,7 @@ It prints:
 saved your answer to the photosensitive seizure warning: no epilepsy or seizure disorder
 
 setting up JETCARP as Explorer:
-  1. measure this computer: about a minute of JETCARP's own work, for its JETCARP Hardware Score and limits that fit it
+  1. measure this computer: about a minute of JETCARP's own work, for its JETCARP Hardware Score, to compare it with other computers and for Fit to this computer's first guess
   2. record the profile Explorer in /home/ada/.config/jetcarp/setup.json
   3. import JETCARP starter pack (26 patterns, 79 Quick Start entries, 8 ant runs, 1.5 MB), signed by Jimmie Rodgers, key SHA256:0J4+ipNwh5xr…; the pack came with JETCARP
   4. search for 1 minute on the GPU (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), then add its best runs to the Quick Start

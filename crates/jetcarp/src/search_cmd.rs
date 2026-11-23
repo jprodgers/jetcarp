@@ -2,8 +2,8 @@
 //! operation `search.start`. Each strategy keeps the flags of the command it replaces (`hunt`,
 //! `library search`, `ants search`, `census`, `movers track --window --job`, `pile`, `library
 //! collide`, `evolve`, `explore run`); `jetcarp pile` is the same as `jetcarp search pile`. The
-//! job runs here until it ends, Ctrl-C stops it at its next checkpoint (resumable with `jetcarp
-//! jobs resume JOB`), or its budget (`--minutes`, `--until`, `--limit`) runs out; `--detach` runs
+//! job runs here until it ends, Ctrl-C (or SIGTERM or SIGHUP) stops it at its next checkpoint
+//! (resumable with `jetcarp jobs resume JOB` or `--resume JOB`), or its budget (`--minutes`, `--until`, `--limit`) runs out; `--detach` runs
 //! it in a process of its own. `jetcarp search try` runs one configuration now, measured as the
 //! explore search measures its runs (`search.try`; not a job).
 
@@ -19,8 +19,8 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 #[derive(clap::Args)]
@@ -676,8 +676,8 @@ fn spec<T: Serialize>(t: &T) -> Value {
 }
 
 /// Progress on standard error: one line rewritten in place on a terminal, else a line every
-/// five seconds; the person's own lines (`hunt job 3 in ...`) on lines of their own; Ctrl-C
-/// stops the job at its next checkpoint.
+/// five seconds; the person's own lines (`hunt job 3 in ...`) on lines of their own; Ctrl-C,
+/// SIGTERM and SIGHUP stop the job at its next checkpoint.
 pub(crate) struct CliProgress {
     tty: bool,
     quiet: bool,
@@ -685,27 +685,35 @@ pub(crate) struct CliProgress {
     last: Mutex<(Option<Instant>, bool)>,
 }
 
+/// Set by the first SIGTERM, SIGHUP or Ctrl-C (#278), so the job stops at its next checkpoint, as
+/// `jetcarp jobs stop` stops it: one flag for the process, however many [`CliProgress`] it makes.
+fn stop_flag() -> Arc<AtomicBool> {
+    static STOP: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+    STOP.get_or_init(|| {
+        let stop = Arc::new(AtomicBool::new(false));
+        let s = stop.clone();
+        crate::stop_signal::on_stop(move |sig| {
+            s.store(true, Ordering::SeqCst);
+            // Never `eprintln!`, which panics when standard error has gone (SIGHUP from a
+            // terminal that closed).
+            let _ = writeln!(
+                std::io::stderr(),
+                "\n{}: stopping at the next checkpoint ({}; `jetcarp jobs resume JOB` continues)",
+                crate::stop_signal::shown(sig),
+                crate::stop_signal::again(sig)
+            );
+        });
+        stop
+    })
+    .clone()
+}
+
 impl CliProgress {
     pub(crate) fn new(quiet: bool) -> CliProgress {
-        let stop = Arc::new(AtomicBool::new(false));
-        let presses = Arc::new(AtomicU32::new(0));
-        {
-            let (stop, presses) = (stop.clone(), presses.clone());
-            let _ = ctrlc::set_handler(move || {
-                if presses.fetch_add(1, Ordering::SeqCst) == 0 {
-                    stop.store(true, Ordering::SeqCst);
-                    eprintln!(
-                        "\nCtrl-C: stopping at the next checkpoint (press Ctrl-C again to quit now; `jetcarp jobs resume JOB` continues)"
-                    );
-                } else {
-                    jetcarp_core::machine::pool::exit(130);
-                }
-            });
-        }
         CliProgress {
             tty: std::io::stderr().is_terminal(),
             quiet,
-            stop,
+            stop: stop_flag(),
             last: Mutex::new((Some(Instant::now()), false)),
         }
     }

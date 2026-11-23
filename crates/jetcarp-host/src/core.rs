@@ -885,6 +885,10 @@ impl Core {
     /// screen that is not due is neither stepped nor drawn, so one screen's 60 frames a second
     /// do not make another's 30 draw 60.
     pub fn tick(&mut self) {
+        // A signal asked the host to stop: it stops as `jetcarp host stop` asks it to (#278).
+        if crate::signalled() {
+            self.quit = true;
+        }
         let requests = self.listener.as_ref().map_or(vec![], |l| l.poll());
         for p in requests {
             self.answer(p);

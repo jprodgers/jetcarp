@@ -330,7 +330,12 @@ impl Server {
                 });
                 let caught = std::panic::catch_unwind(run);
                 self.cancels.lock().unwrap().remove(&key);
+                // Cancelled because the server is stopping, not by the client: the answer says
+                // so (#278).
+                let cut = crate::stopping::is_stopping()
+                    && flag.load(std::sync::atomic::Ordering::SeqCst);
                 match caught {
+                    Ok(out) if cut => Ok(tool_result(crate::stopping::cut_short(out))),
                     Ok(out) => Ok(tool_result(out)),
                     Err(p) => {
                         let msg = p
