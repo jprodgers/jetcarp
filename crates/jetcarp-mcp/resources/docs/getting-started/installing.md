@@ -211,22 +211,20 @@ a feature, JETCARP keeps to them rather than break something else to get round t
 tables below say what falls short and why. Each row links to the page with the details. Plain
 differences of name, such as ⌘ for Ctrl on macOS, are left out.
 
-<!-- A reason marked Q1 to Q7 is a best guess that awaits the maintainer's answer. -->
-
 #### Installing and builds
 
 | | Linux | Windows | macOS | Why |
 | --- | --- | --- | --- | --- |
-| Release builds | x86_64 and ARM, with glibc 2.28 or newer (Debian 10, Ubuntu 20.04, Fedora 29 and later); none for musl systems such as Alpine | x86_64, on Windows 10 and 11; Windows on ARM runs it through its x64 emulation | Apple silicon and Intel, on macOS 11 or newer | Not built for the others yet; [cargo](#with-cargo) builds JETCARP there <!-- Q6 --> |
-| Signed ([Windows](#windows), [macOS](#macos)) | Linux makes no such check | Not yet: SmartScreen may stop a program from a zip that a browser downloaded | Not with an Apple Developer ID: macOS won't open an archive that a browser downloaded until you allow it | Signing takes a certificate from Apple, for a yearly fee, and one for Windows, which JETCARP doesn't have yet. The installers and the package managers download without the browser's mark <!-- Q1 --> |
+| Release builds | x86_64 and ARM, with glibc 2.28 or newer (Debian 10, Ubuntu 20.04, Fedora 29 and later); none for musl systems such as Alpine | x86_64, on Windows 10 and 11; Windows on ARM runs it through its x64 emulation | Apple silicon and Intel, on macOS 11 or newer | None of JETCARP's test machines runs either: [cargo](#with-cargo) builds JETCARP on a musl system, and a native Windows on ARM build, tested on GitHub's ARM runners, is planned ([#322](https://github.com/jprodgers/jetcarp/issues/322)) |
+| Signed ([Windows](#windows), [macOS](#macos)) | Linux makes no such check | Not yet: SmartScreen may stop a program from a zip that a browser downloaded | Not with an Apple Developer ID: macOS won't open an archive that a browser downloaded until you allow it | Signing costs money the project can't fund yet: Apple's Developer ID is $99 a year, and Microsoft's signing a monthly fee. The builds will be signed once it can. The installers and the package managers download without the browser's mark |
 | [The installer](#the-installers) | One line in a terminal | Saved, then run; `jetcarp` then works in a new PowerShell window | One line in a terminal | Microsoft Defender can flag a downloaded script piped into `iex` as a trojan; the window you installed from can't see the new `PATH` |
-| [The system's screen saver](../guides/wallpapers.md#the-systems-screen-saver) from a [source build](#with-cargo) | Nothing more to build: the GNOME extension is inside the program | `jetcarpw.exe` is built only with `--features windows-launcher` | `libjetcarp_saver.dylib` is built only with `-p jetcarp-saver` | `cargo install jetcarp` builds one program; the Mac's saver is a library of its own, and the windowless launcher is built only when its feature is asked for <!-- Q7 --> |
+| [The system's screen saver](../guides/wallpapers.md#the-systems-screen-saver) from a [source build](#with-cargo) | Nothing more to build: the GNOME extension is inside the program | `jetcarpw.exe` is built only with `--features windows-launcher` | `libjetcarp_saver.dylib` is built only with `-p jetcarp-saver` | Cargo can't build a program for one system only, so on Windows the windowless launcher is asked for with `cargo install jetcarp --features windows-launcher`; the Mac's saver is a library of its own |
 
 #### The desktop background and the screen saver
 
 | | Linux | Windows | macOS | Why |
 | --- | --- | --- | --- | --- |
-| [Live desktop background](../guides/wallpapers.md#the-live-desktop-background) | GNOME, with JETCARP's extension; on other desktops, a window instead | Yes, under the desktop icons | Yes, behind the desktop icons, on every Space | Under Wayland, how an app can be the desktop's background differs from desktop to desktop, and on GNOME it takes an extension; GNOME's, on the desktop JETCARP is developed on, is the only one written <!-- Q2 --> |
+| [Live desktop background](../guides/wallpapers.md#the-live-desktop-background) | GNOME, with JETCARP's extension; on other desktops, a window instead | Yes, under the desktop icons | Yes, behind the desktop icons, on every Space | Under Wayland, how an app can be the desktop's background differs from desktop to desktop, and on GNOME it takes an extension; JETCARP is developed on GNOME, with three test machines, one for each system, so GNOME's is the only one written so far |
 | [The GNOME extension](../guides/wallpapers.md#the-live-desktop-background) | GNOME Shell 50 and 51; a logout after installing, upgrading or removing it | — | — | GNOME loads an extension only on the versions of the Shell it names, and JETCARP's works inside the Shell's own code, which changes from version to version, so it names those it has been tried on. GNOME reads its extensions at login, and under Wayland the Shell can't restart without ending the session |
 | [Live lock screen](../guides/wallpapers.md#the-live-desktop-background) | GNOME, through the extension; not other desktops | No; the screen saver does the job | No; the screen saver does the job | Windows and macOS let no app draw on the lock screen, but their screen savers can ask for the password as they end. Other desktops: as for the live background |
 | [In the system's screen saver list](../guides/wallpapers.md#the-systems-screen-saver) | No: GNOME has none, and its lock screen's screensaver mode does the job; not other desktops | Yes, `JETCARP.scr` | Yes, `JETCARP.saver` | GNOME has no list of screen savers. Other desktops: as for the live background |
@@ -259,16 +257,16 @@ differences of name, such as ⌘ for Ctrl on macOS, are left out.
 | | Linux | Windows | macOS | Why |
 | --- | --- | --- | --- | --- |
 | [The graphics API](../guides/gpu.md), with the same results as the processor, bit for bit | Vulkan | Vulkan or DirectX 12 | Metal | — |
-| [A software renderer](../guides/gpu.md#which-adapter), when asked for | Mesa's llvmpipe or lavapipe | None: Windows' own, WARP, is never used | None | macOS has none; JETCARP doesn't use WARP <!-- Q5 --> |
+| [A software renderer](../guides/gpu.md#which-adapter), when asked for | Mesa's llvmpipe or lavapipe | None: Windows' own, WARP, is never used | None | macOS has none. WARP crashed in the simulation's shaders; whether the cause is JETCARP's is being looked into ([#321](https://github.com/jprodgers/jetcarp/issues/321)) |
 
 #### This computer
 
 | | Linux | Windows | macOS | Why |
 | --- | --- | --- | --- | --- |
-| [GPU memory](../guides/this-computer.md#what-jetcarp-reads) | Read from AMD's driver; other GPUs' estimated | Read, from DXGI | One pool with the processor's | AMD's driver writes it in `/sys/class/drm`, where any program can read it; the others don't <!-- Q4 --> |
+| [GPU memory](../guides/this-computer.md#what-jetcarp-reads) | Read from AMD's driver; other GPUs' estimated | Read, from DXGI | One pool with the processor's | AMD's driver writes it in `/sys/class/drm`, where any program can read it; NVIDIA's and Intel's aren't read yet |
 | [The GPU's load, before it measures](../guides/this-computer.md#while-it-measures) | AMD's: yes; NVIDIA's: with its management library; Intel's and others': your own programs only | Yes | Yes | Intel's and other drivers' figure comes from `fdinfo`, which shows only the programs you may read (their drivers' own counters need administrator rights); NVIDIA's management library comes with its driver, though some distributions package it apart |
 | [Held still while it measures](../guides/this-computer.md#while-it-measures) | The desktop background and GNOME's lock screen | The desktop background and the screen saver | The desktop background, not the screen saver | The Mac's screen saver can't read the runtime folder from its sandbox; it runs only while the Mac is idle |
-| Freed memory given back to the system, by the [host](../guides/wallpapers.md#the-background-host) and by [explore searches](../guides/searching.md#watch-stop-carry-on) | By both | JETCARP doesn't ask for it | By the host, not by explore searches | glibc's and macOS's allocators keep what is freed inside their heaps until asked ([#69](https://github.com/jprodgers/jetcarp/issues/69), [#111](https://github.com/jprodgers/jetcarp/issues/111)); Windows' heap gives large blocks back by itself <!-- Q3 --> |
+| Freed memory given back to the system, by the [host](../guides/wallpapers.md#the-background-host) and by [explore searches](../guides/searching.md#watch-stop-carry-on) | By both | JETCARP doesn't ask for it | By the host, not by explore searches | glibc's and macOS's allocators keep what is freed inside their heaps until asked ([#69](https://github.com/jprodgers/jetcarp/issues/69), [#111](https://github.com/jprodgers/jetcarp/issues/111)); Windows' heap gives large blocks back by itself |
 
 #### Stopping
 
