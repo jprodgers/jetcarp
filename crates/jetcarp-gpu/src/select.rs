@@ -783,12 +783,13 @@ fn rank(info: &wgpu::AdapterInfo, purpose: Purpose) -> (u8, u8) {
 /// `ComputeShaderTransformer::ConstructLoadStoreSets`, on a thread of WARP's own that compiles a
 /// shader for its first dispatch, so the process ends before the self-test can turn WARP down.
 /// It crashed so on the Acer (Windows 11 24H2, WARP 10.0.26100.9818) and on CI's Windows Server
-/// 2025 (10.0.26100.33648), where a debugger showed where. That compiler fails on any compute
-/// shader, as FXC compiles it, with a workgroup barrier inside an `if` or after an early return:
-/// each of those kernels has one, in uniform control flow as WGSL requires, and a shader of a few
-/// lines (an atomic, then a barrier in an `if`) crashes it too. The same kernels compiled by DXC
-/// run on the same WARP, WARP 1.0.22 (Microsoft's NuGet package) runs FXC's, and every kernel then
-/// matches the processor bit for bit: the fault is WARP's compiler's, not the kernels'.
+/// 2025 (10.0.26100.33648), where a debugger showed where. That compiler fails on a compute
+/// shader, as FXC compiles it, with a workgroup barrier after an early return or in an `if` that
+/// ends the shader: each of those kernels has one, in uniform control flow as WGSL requires, and a
+/// shader of a few lines (an atomic, then a barrier in a closing `if`) crashes it too. The same
+/// kernels compiled by DXC run on the same WARP, WARP 1.0.22 (Microsoft's NuGet package) runs
+/// FXC's, and every kernel then matches the processor bit for bit: the fault is WARP's compiler's,
+/// not the kernels'.
 fn is_warp(info: &wgpu::AdapterInfo) -> bool {
     info.device_type == wgpu::DeviceType::Cpu
         && (info.backend == wgpu::Backend::Dx12 || info.name.contains("Microsoft Basic Render"))
