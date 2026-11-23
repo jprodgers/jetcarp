@@ -1142,14 +1142,16 @@ const DATA_FILES: &[&str] = &[
 /// The folders JETCARP keeps in a data folder: the library's job locks, its media
 /// (`media/ab/<sha256>.<ext>`), its searches (`searches/<uuid>/`), the search databases'
 /// folder ([`jetcarp_core::paths::explore_dir`]), and, on Windows, where the data folder is also
-/// the runtime folder, the memory pool's records (`memory/<pid>.json`) and the Start menu entry's
-/// launcher (`launcher/`, `jetcarp_display::launcher::stable_dir`).
+/// the runtime folder, the memory pool's records (`memory/<pid>.json`), a measurement's hold
+/// (`measuring/<pid>.json`, #301) and the Start menu entry's launcher (`launcher/`,
+/// `jetcarp_display::launcher::stable_dir`).
 const DATA_FOLDERS: &[(&str, Inside)] = &[
     ("library.sqlite-jobs", Inside::Files),
     ("media", Inside::HexFolders),
     ("searches", Inside::UuidFolders),
     ("explore", Inside::Anything),
     (jetcarp_core::machine::pool::DIR, Inside::Files),
+    (jetcarp_core::machine::quiet::DIR, Inside::Files),
     (LAUNCHER_DIR, Inside::Named(LAUNCHER_FILES)),
 ];
 
@@ -1161,7 +1163,8 @@ const LAUNCHER_FILES: &[&str] = &["jetcarpw.exe", "jetcarp-program"];
 
 /// Whether `name`, at the top of the runtime folder, is something JETCARP's running programs keep
 /// there: the host's and the tuner's locks, the app's and the host's endpoint files, the HTTP
-/// endpoints' files (as in [`DATA_FILES`]), the memory pool's records, and on Windows (where the
+/// endpoints' files (as in [`DATA_FILES`]), the memory pool's records, a measurement's hold
+/// (`measuring/`, #301), and on Windows (where the
 /// runtime folder is also the data folder, the screen saver's and the Start menu entry's)
 /// `JETCARP.scr` and the launcher's folder. `uninstall` removes the first ones
 /// ([`RUNTIME_LOCKS`], [`RUNTIME_ENDPOINTS`], [`POOL_DIR`]) once their programs have gone.
@@ -1170,6 +1173,7 @@ pub(crate) fn runtime_entry(name: &str) -> bool {
         || RUNTIME_ENDPOINTS.contains(&name)
         || name == "JETCARP.scr"
         || name == POOL_DIR
+        || name == jetcarp_core::machine::quiet::DIR
         || name == LAUNCHER_DIR
 }
 
