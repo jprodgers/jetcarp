@@ -22,6 +22,7 @@ pub mod cost;
 pub mod gpu_load;
 pub mod hardware;
 pub mod limits;
+pub mod nvml;
 pub mod pool;
 pub mod quiet;
 pub mod score;
