@@ -98,18 +98,21 @@ impl Home {
 
     /// Job `job` as `jetcarp jobs status JOB --json` shows it.
     fn job(&self, job: i64) -> Value {
-        let job = job.to_string();
+        self.job_if_there(job)
+            .unwrap_or_else(|e| panic!("jobs status {job}: {e}"))
+    }
+
+    /// The same, or what `jetcarp jobs status` said instead (before the job is made).
+    fn job_if_there(&self, job: i64) -> Result<Value, String> {
         let out = self
-            .jetcarp(&["jobs", "status", &job, "--json"])
+            .jetcarp(&["jobs", "status", &job.to_string(), "--json"])
             .stdout(Stdio::piped())
             .output()
             .unwrap();
-        assert!(
-            out.status.success(),
-            "jobs status {job}: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        serde_json::from_slice(&out.stdout).unwrap()
+        if !out.status.success() {
+            return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+        }
+        serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())
     }
 }
 
@@ -291,7 +294,8 @@ fn search_at_a_checkpoint(home: &Home) -> (Running, PathBuf) {
     let record = home.record(search.pid());
     search.wait_until("memory record", || record.exists());
     search.wait_until("a checkpoint", || {
-        home.job(1)["done"].as_u64().unwrap_or(0) > 0
+        home.job_if_there(1)
+            .is_ok_and(|v| v["done"].as_u64().unwrap_or(0) > 0)
     });
     (search, record)
 }
