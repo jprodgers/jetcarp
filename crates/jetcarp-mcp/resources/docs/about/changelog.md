@@ -467,6 +467,12 @@ day later (0.4.2: 17 November here, 18 November there).
   was published until it was run again. The Intel build's program is now also run once, under
   Rosetta, where the runner has it; before, it was only built.
 
+- **The per-system tables say what rc.3's changes did:** Windows now stops a command, the app and
+  the host at a checkpoint when its console closes or at sign-out or shutdown (#319); Linux reads
+  NVIDIA's and Intel's GPU memory; macOS's explore searches give freed memory back; the release
+  runs the Intel Mac's program under Rosetta. The comparison with IRIS was run again on
+  v0.4.3-rc.2, and its one moved count is brought up to date.
+
 ### Fixed
 
 - **On Windows, closing a command's console, signing out and shutting down stop it at a

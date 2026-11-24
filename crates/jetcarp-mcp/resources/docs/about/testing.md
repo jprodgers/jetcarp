@@ -490,7 +490,10 @@ JETCARP neither ships nor builds IRIS; this is how the comparison was run, and w
 
 **Results.** Transitions are the most in any one second (JETCARP stops counting at 8, past a
 failure); IRIS's pattern column is the frames it failed for a pattern. *JETCARP, at-risk rule* is
-the verdict by the stricter stripe rule for someone who answered the warning at risk.
+the verdict by the stricter stripe rule for someone who answered the warning at risk. Run again on
+v0.4.3-rc.2 (the Linux desktop, 2026-11-23): every IRIS result the same, and one JETCARP count
+moved, `desktop-risk-seeds-soup`'s, from 1 / 0 to 2 / 0 with #289's restless-ash veil (a pass
+either way).
 
 | Recording | IRIS | IRIS transitions (light / red) | IRIS pattern frames failed | JETCARP | JETCARP, at-risk rule | JETCARP transitions (light / red) |
 |---|---|---|---|---|---|---|
@@ -527,7 +530,7 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 | `desktop-risk-live-field-4.37px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
 | `desktop-risk-live-field-7.7px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
 | `desktop-risk-maze` | pass | 0 / 0 | 0 | pass | pass | 1 / 0 |
-| `desktop-risk-seeds-soup` | pass | 0 / 0 | 0 | pass | pass | 1 / 0 |
+| `desktop-risk-seeds-soup` | pass | 0 / 0 | 0 | pass | pass | 2 / 0 |
 | `desktop-risk-stripes-still` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
 | `desktop-risk-tron-blob` | pass, warning | 5 / 0 | 0 | pass, warning | pass, warning | 4 / 0 |
 | `desktop-risk-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 3 / 0 |
