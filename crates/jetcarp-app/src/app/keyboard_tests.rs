@@ -2280,3 +2280,91 @@ fn child_the_explore_form_s_choices_keep_the_keyboard() {
     assert!(failures.is_empty(), "{failures:#?}");
     done();
 }
+
+#[test]
+fn panes_not_about_a_world_open_from_the_quick_start() {
+    in_scratch("app::keyboard_tests::child_panes_not_about_a_world_open_from_the_quick_start");
+}
+
+/// The panes that aren't about a world open on the Quick Start too (#331): with no world open,
+/// *View*'s Desktop background, Screensaver and Display entries work, each pane opens as a window
+/// over the Quick Start that takes the keyboard and closes with Esc, and the panes that are about
+/// a world stay greyed out there. A pane still open when a world opens goes into the layout.
+/// Before, every pane's entry was greyed out until a world was open.
+#[test]
+#[ignore = "started by panes_not_about_a_world_open_from_the_quick_start, in a scratch process"]
+fn child_panes_not_about_a_world_open_from_the_quick_start() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::new();
+    assert!(
+        k.app.screen == Screen::Start,
+        "the test starts on the Quick Start"
+    );
+    for (id, title) in [
+        ("desktop", "Desktop background"),
+        ("screensaver", "Screensaver"),
+        ("display", "Display"),
+    ] {
+        assert!(
+            k.app.action_enabled(menu::Action::Pane(id)),
+            "{title}: greyed out on the Quick Start"
+        );
+        k.app.run_action(&k.ctx.clone(), menu::Action::Pane(id));
+        k.frames(4);
+        let (layer, name, first) =
+            top_window(&k).unwrap_or_else(|| panic!("{title}: no window over the Quick Start"));
+        assert!(
+            name.contains(title),
+            "{title}: the window on top is {name:?}"
+        );
+        let focus = k.focused();
+        let in_window = |w: Option<egui::Id>| {
+            w.is_some_and(|w| k.focusable().iter().any(|f| f.0 == w && f.1 == layer))
+        };
+        assert!(in_window(focus), "{title}: the keyboard isn't in it");
+        k.ctx.memory_mut(|m| m.request_focus(first));
+        k.frames(2);
+        let typing = k.ctx.text_edit_focused();
+        k.key(Key::Escape);
+        k.frames(1);
+        if typing {
+            k.key(Key::Escape);
+            k.frames(1);
+        }
+        k.frames(2);
+        assert!(
+            top_window(&k).is_none_or(|w| w.0 != layer),
+            "{title}: Esc left it open"
+        );
+    }
+    for id in ["scene", "tiling", "draw", "cas"] {
+        assert!(
+            !k.app.action_enabled(menu::Action::Pane(id)),
+            "{id}: enabled on the Quick Start, with no world to show"
+        );
+        assert!(
+            k.app.disabled_why(menu::Action::Pane(id)).is_some(),
+            "{id}: greyed out on the Quick Start with no reason given"
+        );
+    }
+    assert!(k.app.disabled_why(menu::Action::Pane("desktop")).is_none());
+    // Left open, it goes into the layout when a world opens.
+    k.app
+        .run_action(&k.ctx.clone(), menu::Action::Pane("desktop"));
+    k.frames(3);
+    let scene = Scene::from_json(
+        r#"{"name": "Keyboard test", "tiling": {"family": "square", "size": {"rect": {"w": 40, "h": 30}}, "boundary": "wrap"}, "rng_state": 3, "cas": [{"rule": "B3/S23", "seed": "empty"}]}"#,
+    )
+    .unwrap();
+    k.app.load_scene(&scene);
+    k.app.playing = false;
+    k.frames(4);
+    assert!(k.app.screen == Screen::Sim);
+    assert!(
+        k.widget_named("Show on the desktop").is_some(),
+        "the Desktop background pane isn't shown once the world opens"
+    );
+    done();
+}

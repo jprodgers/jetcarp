@@ -125,7 +125,7 @@ and *Window → Reset layout* puts everything back:
 | --- | --- |
 | *File* | *Quick Start*, *New empty world*, *Open scene…* and *Save scene…*, the picture exports (*Export the world as PNG…*, *Export the view as PNG…*, *Export animation (GIF or WebP)…*, *Export contact sheet…*, *Export wallpaper…*), *Quit* |
 | *Edit* | *Reset* (R: clear and seed every automaton again), *Clear every CA*, *Copy state hash*, *Copy as RLE* (the pattern for Golly, LifeViewer and the forums, see [Copy as RLE](../guides/pattern-library.md#copy-as-rle)), *Paste a library pattern…* |
-| *View* | *Fit* and zoom, *Cell outlines*, the status bar and an auto-hiding menu bar, *Hide all panes*, *Pixel-exact zoom*, *Fill the canvas*, *Full screen*, *Show on outputs*, *Screensaver mode* and its settings, *Desktop background settings…*, *Keep awake*, the *Display* pane |
+| *View* | *Fit* and zoom, *Cell outlines*, the status bar and an auto-hiding menu bar, *Hide all panes*, *Pixel-exact zoom*, *Fill the canvas*, *Full screen*, *Show on outputs*, *Screensaver mode* and its settings, *Desktop background settings…*, *Keep awake*, the *Display* pane (those three panes open from the Quick Start too) |
 | *Run* | *Run / Pause*, *Step*, *Jump*, *Speed*, *Max speed*, *GPU simulation*, *GPU adapter* |
 | *Tiling* | The *Tiling* pane, *Family*, *Edges*, *Tiling catalog*, *Tile editor…*, *Unit cell editor…*, *Paste tile JSON…* |
 | *CA* | *Add from catalog*, *Add by notation…*, *Load rule table…*, the *CAs* and *Sequence* panes, *Palettes…* |

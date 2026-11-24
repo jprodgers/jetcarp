@@ -790,8 +790,10 @@ impl JetcarpApp {
         match a {
             SaveScene | ExportPng | ExportView | ExportAnim | Reset | ClearAll | CopyHash
             | CopyRle | Fit | ZoomIn | ZoomOut | RunPause | Step | SeedAll | RandomAll
-            | SweepThisWorld | AddByNotation | LoadRuleTable | TileJson | Pane(_) | PixelZoom
+            | SweepThisWorld | AddByNotation | LoadRuleTable | TileJson | PixelZoom
             | FillCanvas | AutoReseed => sim,
+            // The panes not about a world open over the Quick Start too (#331).
+            Pane(id) => sim || panes::WORLD_FREE.contains(&id),
             ExportSheet => sim && self.sheet_ca().is_some(),
             StopPasting => self.paste.is_some(),
             GpuSim => self.sim.available(),
@@ -801,6 +803,17 @@ impl JetcarpApp {
             Tool(ToolWin::CellEditor) => sim && !self.aperiodic_family(),
             HidePanes => sim,
             _ => true,
+        }
+    }
+
+    /// Why an entry is greyed out, shown when the pointer is over it: a pane that is about the
+    /// world on screen, from the Quick Start (#331).
+    pub(super) fn disabled_why(&self, a: Action) -> Option<&'static str> {
+        match a {
+            Action::Pane(_) if self.screen != Screen::Sim && !self.action_enabled(a) => {
+                Some("Open a world first: this pane works on the world on screen")
+            }
+            _ => None,
         }
     }
 
@@ -1001,6 +1014,17 @@ impl JetcarpApp {
                     Pane(id) => id,
                     _ => unreachable!(),
                 };
+                if self.screen != Screen::Sim {
+                    // Over the Quick Start, as a window that takes the keyboard (#331, #308).
+                    if panes::WORLD_FREE.contains(&id) {
+                        if !self.start_panes.contains(&id) {
+                            self.start_panes.push(id);
+                        }
+                        let key = panes::start_pane_key(id);
+                        self.kb.focus_window = Some((crate::popout::window_layer(&key), 10));
+                    }
+                    return;
+                }
                 self.shell.panes_hidden = false;
                 self.shell.layout.show_pane(id);
             }
@@ -1151,6 +1175,9 @@ impl JetcarpApp {
             r = r.on_hover_text(self.sim.hint());
         } else if !a.hint().is_empty() {
             r = r.on_hover_text(a.hint());
+        }
+        if let Some(why) = self.disabled_why(a) {
+            r = r.on_disabled_hover_text(why);
         }
         if r.clicked() {
             let ctx = ui.ctx().clone();

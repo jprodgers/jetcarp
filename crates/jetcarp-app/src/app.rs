@@ -235,6 +235,9 @@ pub struct JetcarpApp {
     a11y: accessibility::A11yRt,
     /// The keyboard: the grid's cell cursor, F6's parts of the window, the menu bar (`keyboard.rs`).
     kb: keyboard::KeyboardRt,
+    /// Panes open as windows over the Quick Start: only those not about a world
+    /// ([`panes::WORLD_FREE`], #331). A world opening takes them into the layout.
+    start_panes: Vec<&'static str>,
 }
 
 /// What the status and menu bars show about the world, kept until its revision changes.
@@ -358,6 +361,7 @@ impl JetcarpApp {
             pending_launch: None,
             a11y: Default::default(),
             kb: Default::default(),
+            start_panes: Vec::new(),
         };
         let settings = app.shell.store.load();
         app.apply_settings(&cc.egui_ctx, settings);
