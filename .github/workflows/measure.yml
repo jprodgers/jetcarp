@@ -91,7 +91,8 @@ jobs:
   coverage:
     name: Test coverage
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    # Instrumented, the suite runs several times slower than CI's Linux tests (about 40 minutes).
+    timeout-minutes: 240
     env:
       # As CI's Linux tests: a GPU test that cannot run on lavapipe fails rather than skips.
       JETCARP_REQUIRE_GPU: "1"
