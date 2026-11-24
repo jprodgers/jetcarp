@@ -41,7 +41,7 @@ epaint_default_fonts = "0.37.0"
 skrifa = { version = "0.44.0", default-features = false, features = ["std"] }
 # The caption's letters drawn from their outlines: the rasteriser egui draws the app's words with,
 # already in the tree through epaint (without its text and PNG parts, which JETCARP doesn't use).
-vello_cpu = { version = "0.2.0", default-features = false, features = ["std", "u8_pipeline"] }
+vello_cpu = { version = "0.4.0", default-features = false, features = ["std", "u8_pipeline"] }
 
 [dev-dependencies]
 pollster.workspace = true
