@@ -458,9 +458,14 @@ day later (0.4.2: 17 November here, 18 November there).
   ([The state hash](../research/reproducibility.md#the-state-hash),
   [#173](https://github.com/jprodgers/jetcarp/issues/173))
 
+- **CI builds the Intel Mac in the macOS test job,** after its tests, on the same Apple silicon
+  runner, instead of in a job of its own: twice on 2026-11-23 that second job found no runner. A
+  pull request's checks take about ten minutes longer.
+
 - **Parquet and Arrow 60.2.0** (from 60.1.0), for RUSTSEC-2026-0595: Parquet 60.1.0 wrote an
   encrypted file's Bloom filters in plaintext. JETCARP builds Parquet without its encryption, so
   it was never affected; the update keeps the dependency check clean.
+
 - **The release builds both Macs on one runner.** The Apple silicon and Intel Mac builds are made
   one after the other on one Apple silicon runner, not on one each: GitHub's Apple silicon runners
   are the scarcest, and v0.4.3-rc.2's first attempt found none for the second Mac job, so nothing

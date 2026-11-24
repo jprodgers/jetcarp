@@ -48,10 +48,15 @@ jobs:
         include:
           - { name: Linux x86_64, os: ubuntu-24.04, features: "", require_gpu: "1" }
           - { name: Windows x86_64, os: windows-latest, features: "--features jetcarp/windows-launcher", require_gpu: "" }
-          - { name: macOS arm64, os: macos-latest, features: "", require_gpu: "1" }
+          # The Intel Mac is built here too, after the tests, on the same runner: GitHub's Apple
+          # silicon runners are its scarcest, and a second job for it lost its runner twice on
+          # 2026-11-23 (the release's and #328's).
+          - { name: macOS arm64, os: macos-latest, features: "", require_gpu: "1", also_build: x86_64-apple-darwin }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          targets: ${{ matrix.also_build }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run, zlib for Golly, librsvg for the icons' check, and desktop-file-validate for the menu entry's)
         if: runner.os == 'Linux'
@@ -173,6 +178,10 @@ jobs:
             echo "$left"
             exit 1
           fi
+      - name: Build (${{ matrix.also_build }}), a target nobody can test by hand, so it doesn't rot
+        # Run even when a test failed, so both results show; not when the run was cancelled.
+        if: ${{ !cancelled() && matrix.also_build != '' }}
+        run: cargo build --workspace --release --target ${{ matrix.also_build }}
       - name: The generated book pages, the keyboard page's table, the rule notation table and the app icon's files match their sources
         if: runner.os == 'Linux'
         run: |
@@ -318,7 +327,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: macOS x86_64, os: macos-latest, target: x86_64-apple-darwin }
           - { name: Linux aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
