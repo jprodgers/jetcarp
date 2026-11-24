@@ -22,15 +22,41 @@ pub fn stamp() -> String {
     chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string()
 }
 
-/// Local time as RFC 3339, for records.
+/// [`stamp`] at `secs` seconds since 1970-01-01 UTC.
+pub fn stamp_at(secs: i64) -> String {
+    local_at(secs).format("%Y-%m-%d_%H-%M-%S").to_string()
+}
+
 /// A count and its noun: `1 row`, `3 rows`.
 pub fn count(n: impl Into<u64>, one: &str, many: &str) -> String {
     let n = n.into();
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
+/// Local time as RFC 3339 to the second, `2026-11-05T14:30:02-05:00`, for records.
 pub fn now_rfc3339() -> String {
     chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
+}
+
+/// [`now_rfc3339`] at `secs` seconds since 1970-01-01 UTC.
+pub fn rfc3339_at(secs: i64) -> String {
+    local_at(secs).to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
+}
+
+/// Local time to the minute, `2026-11-05 14:30`: the date of a machine's score.
+pub fn date_and_minute() -> String {
+    chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()
+}
+
+/// [`date_and_minute`] at `secs` seconds since 1970-01-01 UTC.
+pub fn date_and_minute_at(secs: i64) -> String {
+    local_at(secs).format("%Y-%m-%d %H:%M").to_string()
+}
+
+fn local_at(secs: i64) -> chrono::DateTime<chrono::Local> {
+    chrono::DateTime::from_timestamp(secs, 0)
+        .unwrap_or_default()
+        .with_timezone(&chrono::Local)
 }
 
 /// A label made safe for a file name: letters, digits, `-`, `_`, `.`; spaces and anything else
@@ -456,6 +482,146 @@ mod tests {
         assert!(resolve(&out.join("loop-a/x")).is_err());
         assert!(!g.allows(&out.join("loop-a/x")));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Days from 1970-01-01 to `y`-`m`-`d` (the proleptic Gregorian calendar).
+    fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+        let y = if m <= 2 { y - 1 } else { y };
+        let era = y.div_euclid(400);
+        let yoe = y - era * 400;
+        let doy = (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+        era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468
+    }
+
+    /// The moment an RFC 3339 time stamp such as `2026-11-05T14:30:02-05:00` names, in seconds
+    /// since 1970-01-01 UTC.
+    fn moment(rfc: &str) -> i64 {
+        let n = |r: std::ops::Range<usize>| rfc[r].parse::<i64>().unwrap();
+        assert_eq!(rfc.len(), 25, "{rfc}");
+        let local = days_from_civil(n(0..4), n(5..7), n(8..10)) * 86_400
+            + n(11..13) * 3600
+            + n(14..16) * 60
+            + n(17..19);
+        let offset = n(20..22) * 3600 + n(23..25) * 60;
+        match &rfc[19..20] {
+            "+" => local - offset,
+            "-" => local + offset,
+            s => panic!("{s} in {rfc}"),
+        }
+    }
+
+    /// Seconds since 1970-01-01 UTC now.
+    fn now_secs() -> i64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+    }
+
+    /// The local times JETCARP writes (output folders' names, records, a machine's score) say
+    /// the moment they were made, in this system's time zone, whatever it is, and agree with each
+    /// other: the same date and time, written three ways.
+    #[test]
+    fn local_time_stamps_name_the_moment() {
+        for secs in [1_000_000_000, 1_793_907_002, 1_772_953_200, 4_102_444_799] {
+            let rfc = rfc3339_at(secs);
+            assert_eq!(moment(&rfc), secs, "{rfc}");
+            let stamp = format!("{}_{}", &rfc[..10], rfc[11..19].replace(':', "-"));
+            assert_eq!(stamp_at(secs), stamp);
+            assert_eq!(
+                date_and_minute_at(secs),
+                format!("{} {}", &rfc[..10], &rfc[11..16])
+            );
+        }
+        // Now, in the second before or after.
+        let before = now_secs();
+        let (stamp, rfc, minute) = (stamp(), now_rfc3339(), date_and_minute());
+        let after = now_secs();
+        assert!((before..=after).any(|s| stamp_at(s) == stamp), "{stamp}");
+        assert!((before..=after).any(|s| rfc3339_at(s) == rfc), "{rfc}");
+        assert!(
+            (before..=after).any(|s| date_and_minute_at(s) == minute),
+            "{minute}"
+        );
+    }
+
+    /// Set in a twin's process by [`in_time_zone`].
+    #[cfg(unix)]
+    const TZ_CHILD: &str = "JETCARP_OUT_TIME_ZONE_TEST";
+
+    /// Moments, and the local time stamps of each in time zone `TZ`: [`stamp_at`],
+    /// [`rfc3339_at`] and [`date_and_minute_at`]. Either side of daylight saving time's start and
+    /// end, of midnight at the new year, and of 1970; zones with half and three-quarter hours, one
+    /// set as a rule.
+    #[cfg(unix)]
+    #[rustfmt::skip]
+    const IN_ZONES: &[(&str, i64, &str, &str, &str)] = &[
+        ("America/New_York", 1_793_907_002, "2026-11-05_14-30-02", "2026-11-05T14:30:02-05:00", "2026-11-05 14:30"),
+        ("America/New_York", 1_772_953_199, "2026-03-08_01-59-59", "2026-03-08T01:59:59-05:00", "2026-03-08 01:59"),
+        ("America/New_York", 1_772_953_200, "2026-03-08_03-00-00", "2026-03-08T03:00:00-04:00", "2026-03-08 03:00"),
+        ("America/New_York", 1_793_512_799, "2026-11-01_01-59-59", "2026-11-01T01:59:59-04:00", "2026-11-01 01:59"),
+        ("America/New_York", 1_793_512_800, "2026-11-01_01-00-00", "2026-11-01T01:00:00-05:00", "2026-11-01 01:00"),
+        ("America/New_York", 1_798_779_599, "2026-12-31_23-59-59", "2026-12-31T23:59:59-05:00", "2026-12-31 23:59"),
+        ("America/New_York", 1_798_779_600, "2027-01-01_00-00-00", "2027-01-01T00:00:00-05:00", "2027-01-01 00:00"),
+        ("America/New_York", -1, "1969-12-31_18-59-59", "1969-12-31T18:59:59-05:00", "1969-12-31 18:59"),
+        ("EST5EDT,M3.2.0,M11.1.0", 1_772_953_200, "2026-03-08_03-00-00", "2026-03-08T03:00:00-04:00", "2026-03-08 03:00"),
+        ("EST5EDT,M3.2.0,M11.1.0", 1_793_512_800, "2026-11-01_01-00-00", "2026-11-01T01:00:00-05:00", "2026-11-01 01:00"),
+        ("Asia/Kathmandu", 1_793_907_002, "2026-11-06_01-15-02", "2026-11-06T01:15:02+05:45", "2026-11-06 01:15"),
+        ("America/St_Johns", 1_768_478_400, "2026-01-15_08-30-00", "2026-01-15T08:30:00-03:30", "2026-01-15 08:30"),
+        ("America/St_Johns", 1_782_907_200, "2026-07-01_09-30-00", "2026-07-01T09:30:00-02:30", "2026-07-01 09:30"),
+        ("Europe/London", 1_768_478_400, "2026-01-15_12-00-00", "2026-01-15T12:00:00+00:00", "2026-01-15 12:00"),
+        ("Europe/London", 1_782_907_200, "2026-07-01_13-00-00", "2026-07-01T13:00:00+01:00", "2026-07-01 13:00"),
+        ("UTC", 1_793_907_002, "2026-11-05_19-30-02", "2026-11-05T19:30:02+00:00", "2026-11-05 19:30"),
+    ];
+
+    /// The local time stamps in each zone of [`IN_ZONES`], each set with `TZ` in a process of its
+    /// own ([`twin_local_time_stamps_in_one_zone`]), are as written before.
+    #[cfg(unix)]
+    #[test]
+    fn local_time_stamps_in_these_time_zones() {
+        let mut zones: Vec<&str> = IN_ZONES.iter().map(|z| z.0).collect();
+        zones.dedup();
+        for tz in zones {
+            let out = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "out::tests::twin_local_time_stamps_in_one_zone",
+                    "--exact",
+                    "--ignored",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .env(TZ_CHILD, "1")
+                .env("TZ", tz)
+                .output()
+                .expect("start the test's own process");
+            let text = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert!(
+                out.status.success() && text.contains("1 passed"),
+                "TZ={tz}:\n{text}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "a twin: local_time_stamps_in_these_time_zones runs it with TZ set"]
+    fn twin_local_time_stamps_in_one_zone() {
+        if std::env::var_os(TZ_CHILD).is_none() {
+            return;
+        }
+        let tz = std::env::var("TZ").unwrap();
+        let mut seen = 0;
+        for (_, secs, stamp, rfc, minute) in IN_ZONES.iter().filter(|z| z.0 == tz) {
+            assert_eq!(stamp_at(*secs), *stamp, "{secs} in {tz}");
+            assert_eq!(rfc3339_at(*secs), *rfc, "{secs} in {tz}");
+            assert_eq!(date_and_minute_at(*secs), *minute, "{secs} in {tz}");
+            seen += 1;
+        }
+        assert!(seen > 0, "{tz}");
     }
 
     #[test]

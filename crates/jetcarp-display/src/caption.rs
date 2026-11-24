@@ -1194,6 +1194,215 @@ mod tests {
         assert_eq!(none.glyph('中').1.0, 0);
     }
 
+    /// The caption's fonts with `bytes` chosen as a font file, copied as `name` into `dir`.
+    fn chosen(dir: &std::path::Path, name: &str, bytes: &[u8]) -> CaptionFont {
+        std::fs::create_dir_all(dir).unwrap();
+        let path = dir.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        let choice = FontChoice::File {
+            family: name.into(),
+            path,
+            index: 0,
+        };
+        CaptionFont::for_choice(&choice).unwrap()
+    }
+
+    /// The pixels of a caption picture `w` wide that are mostly letter: left, top, right, bottom.
+    fn lit(img: &[u8], w: u32) -> [u32; 4] {
+        let mut b = [u32::MAX, u32::MAX, 0, 0];
+        for (i, p) in img.as_chunks::<4>().0.iter().enumerate() {
+            let (x, y) = (i as u32 % w, i as u32 / w);
+            if p[0] >= 128 {
+                b = [b[0].min(x), b[1].min(y), b[2].max(x + 1), b[3].max(y + 1)];
+            }
+        }
+        b
+    }
+
+    /// The caption's sizes and layout, pinned as they were drawn before 0.4.3-rc.3 (#186): in
+    /// Atkinson Hyperlegible Next, egui's Ubuntu Light, Hack and Atkinson Hyperlegible Mono, its
+    /// line heights, the widths of lines with accents and with a Greek letter drawn in the font
+    /// behind, the picture's size, with lines cut to fit, and where its letters fall (to a pixel,
+    /// for a rasteriser's antialiasing).
+    #[test]
+    fn the_caption_s_sizes_and_layout_are_pinned() {
+        let dir = jetcarp_core::scratch::ScratchDir::new("caption-pins");
+        let fonts = [
+            ("Next", CaptionFont::default()),
+            (
+                "Ubuntu",
+                CaptionFont::for_choice(&FontChoice::Egui).unwrap(),
+            ),
+            (
+                "Hack",
+                chosen(&dir, "Hack.ttf", epaint_default_fonts::HACK_REGULAR),
+            ),
+            ("Mono", chosen(&dir, "Mono.ttf", crate::fonts::MONO_REGULAR)),
+        ];
+        let font = |name: &str| &fonts.iter().find(|f| f.0 == name).unwrap().1;
+        let texts = [
+            "Life · B3/S23",
+            "Square grid · 480 × 270 · wraps",
+            "généré λ…",
+        ];
+        // Ascent, descent and line gap at 12, 20 and 37.5 pixels; each text's width at each.
+        #[rustfmt::skip]
+        let sizes: [(&str, f32, [f32; 3], [f32; 3]); 12] = [
+            ("Next", 12.0, [9.083_077, -2.916_923, 0.0], [52.956_924, 129.147_69, 42.383_65]),
+            ("Next", 20.0, [15.138_461, -4.861_538, 0.0], [88.261_55, 215.246_17, 70.639_42]),
+            ("Next", 37.5, [28.384_615, -9.115_385, 0.0], [165.490_39, 403.586_58, 132.448_91]),
+            ("Ubuntu", 12.0, [9.976_807, -2.023_194, 0.299_732], [59.550_407, 145.284_58, 52.196_25]),
+            ("Ubuntu", 20.0, [16.628_01, -3.371_989, 0.499_554], [99.250_67, 242.140_9, 86.993_76]),
+            ("Ubuntu", 37.5, [31.177_52, -6.322_48, 0.936_664], [186.095_02, 454.014_28, 163.113_3]),
+            ("Hack", 12.0, [9.568_791, -2.431_208, 0.0], [80.682_884, 192.397_64, 55.857_38]),
+            ("Hack", 20.0, [15.947_987, -4.052_013, 0.0], [134.471_5, 320.662_84, 93.095_64]),
+            ("Hack", 37.5, [29.902_473, -7.597_525, 0.0], [252.134_05, 601.242_6, 174.554_34]),
+            ("Mono", 12.0, [9.083_077, -2.916_923, 0.0], [75.840_004, 180.849_24, 51.937_5]),
+            ("Mono", 20.0, [15.138_461, -4.861_538, 0.0], [126.399_994, 301.415_5, 86.562_49]),
+            ("Mono", 37.5, [28.384_615, -9.115_385, 0.0], [237.000_05, 565.153_93, 162.304_69]),
+        ];
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
+        for (name, px, metrics, widths) in sizes {
+            let (a, d, g) = font(name).metrics(px);
+            assert!(
+                near(a, metrics[0]) && near(d, metrics[1]) && near(g, metrics[2]),
+                "{name} at {px}: {a} {d} {g}, not {metrics:?}"
+            );
+            for (text, want) in texts.into_iter().zip(widths) {
+                let w = font(name).line_width(text, px);
+                assert!(near(w, want), "{name} at {px}: {text} is {w}, not {want}");
+            }
+        }
+        // The caption of three lines at 12, 20 and 40 pixels in room enough, and at 20 in 200
+        // pixels: the picture's width and height, and the pixels its letters cover.
+        let lines: Vec<String> = [
+            "Life · B3/S23",
+            "Square grid · 480 × 270 · wraps",
+            "Wolfram series · 31 of 256 · generation 1,234",
+        ]
+        .map(String::from)
+        .to_vec();
+        #[rustfmt::skip]
+        let pictures = [
+            ("Next", 12.0, 2000.0, [153, 46], [8, 10, 144, 37]),
+            ("Next", 20.0, 2000.0, [252, 74], [12, 16, 238, 61]),
+            ("Next", 40.0, 2000.0, [503, 148], [25, 32, 478, 121]),
+            ("Next", 20.0, 200.0, [200, 74], [12, 16, 187, 61]),
+            ("Ubuntu", 12.0, 2000.0, [177, 47], [8, 10, 167, 38]),
+            ("Ubuntu", 20.0, 2000.0, [291, 76], [13, 15, 278, 63]),
+            ("Ubuntu", 40.0, 2000.0, [582, 151], [25, 29, 556, 126]),
+            ("Ubuntu", 20.0, 200.0, [199, 76], [13, 15, 185, 61]),
+            ("Hack", 12.0, 2000.0, [226, 46], [8, 10, 217, 38]),
+            ("Hack", 20.0, 2000.0, [374, 74], [12, 15, 360, 62]),
+            ("Hack", 40.0, 2000.0, [747, 148], [24, 30, 721, 123]),
+            ("Hack", 20.0, 200.0, [195, 74], [12, 15, 182, 59]),
+            ("Mono", 12.0, 2000.0, [213, 46], [8, 10, 204, 37]),
+            ("Mono", 20.0, 2000.0, [353, 74], [12, 16, 339, 61]),
+            ("Mono", 40.0, 2000.0, [705, 148], [24, 32, 679, 121]),
+            ("Mono", 20.0, 200.0, [200, 74], [12, 16, 186, 58]),
+        ];
+        for (name, px, room, size, letters) in pictures {
+            let (img, w, h) = font(name).rasterize(&lines, px, room);
+            assert_eq!([w, h], size, "{name} at {px} in {room}");
+            let got = lit(&img, w);
+            assert!(
+                got.iter().zip(letters).all(|(&g, l)| g.abs_diff(l) <= 1),
+                "{name} at {px} in {room}: letters in {got:?}, not {letters:?}"
+            );
+        }
+        // Where a line is cut to fit.
+        let long = "Wolfram series · 31 of 256 · generation 1,234";
+        let cuts = [
+            ("Next", "Wolfram series · 31 …"),
+            ("Hack", "Wolfram serie…"),
+        ];
+        for (name, want) in cuts {
+            assert_eq!(font(name).fit(long, 20.0, 150.0), want, "{name}");
+        }
+    }
+
+    /// Captions drawn into `JETCARP_CAPTION_SHOTS` (`--ignored`), as PNGs of the picture the
+    /// caption painter shows (premultiplied, over its backdrop), for comparing two builds' pixels:
+    /// several scenes' captions at five sizes in Atkinson Hyperlegible Next and Mono, Ubuntu Light,
+    /// and each font file in `JETCARP_CAPTION_SHOT_FONTS`; and a line of characters those lack, in
+    /// the font behind and in the installed fonts of `JETCARP_FONT_DIRS` (both separated as `PATH`
+    /// is).
+    #[test]
+    #[ignore = "draws captions into JETCARP_CAPTION_SHOTS, for comparing builds"]
+    fn draw_captions_for_comparison() {
+        let Some(out) = std::env::var_os("JETCARP_CAPTION_SHOTS").map(PathBuf::from) else {
+            eprintln!("skipped: set JETCARP_CAPTION_SHOTS to a folder");
+            return;
+        };
+        std::fs::create_dir_all(&out).unwrap();
+        let paths = |var: &str| -> Vec<PathBuf> {
+            std::env::var_os(var).map_or_else(Vec::new, |v| std::env::split_paths(&v).collect())
+        };
+        let last = LastResort::ready(Fallbacks::find(&paths("JETCARP_FONT_DIRS")));
+        let dir = jetcarp_core::scratch::ScratchDir::new("caption-shots");
+        let mut fonts = vec![
+            ("next".to_string(), CaptionFont::default()),
+            (
+                "mono".into(),
+                chosen(&dir, "Mono.ttf", crate::fonts::MONO_REGULAR),
+            ),
+            (
+                "ubuntu".into(),
+                CaptionFont::for_choice(&FontChoice::Egui).unwrap(),
+            ),
+        ];
+        for path in paths("JETCARP_CAPTION_SHOT_FONTS") {
+            let name = path.file_stem().unwrap().to_string_lossy().to_lowercase();
+            let choice = FontChoice::File {
+                family: name.clone(),
+                path,
+                index: 0,
+            };
+            fonts.push((name, CaptionFont::for_choice(&choice).unwrap()));
+        }
+        let square = TilingSpec::rect("square", 480, 270, topology::Boundary::Wrap);
+        let hex = TilingSpec::rect("hex", 200, 120, topology::Boundary::Dead);
+        let penrose = TilingSpec::new("penrose-rhomb").with_size(SizeSpec::Level(3));
+        let wolfram = Place {
+            rotation: "Wolfram series",
+            number: 31,
+            count: 256,
+        };
+        let mut generations = world("W110", square.clone());
+        generations.generation = 1_234_567;
+        let scenes: Vec<(&str, Vec<String>)> = vec![
+            ("life", lines(&world("B3/S23", square), None, false)),
+            ("wolfram", lines(&generations, Some(wolfram), true)),
+            ("hex", lines(&world("B2/S34H", hex), None, false)),
+            ("penrose", lines(&world("B3/S23", penrose), None, true)),
+            (
+                "fallback",
+                vec![
+                    "生命游戏 · λόγος · ⌘ ⌥".into(),
+                    "Rotation 中文 · ελληνικά".into(),
+                ],
+            ),
+        ];
+        let mut n = 0;
+        for (name, font) in &fonts {
+            let font = font.clone().with_last_resort(Arc::clone(&last));
+            for (scene, text) in &scenes {
+                for px in [12.0, 16.0, 20.0, 28.0, 40.0] {
+                    let (rgba, width, height) = font.rasterize(text, px, 1600.0);
+                    let img = jetcarp_core::render::Image {
+                        width,
+                        height,
+                        rgba,
+                    };
+                    let file = out.join(format!("{name}-{scene}-{px}.png"));
+                    jetcarp_core::render::write_png(&file, &img, &[]).unwrap();
+                    n += 1;
+                }
+            }
+        }
+        eprintln!("{n} captions drawn into {}", out.display());
+    }
+
     #[test]
     fn numbers_are_grouped() {
         assert_eq!(grouped(0), "0");

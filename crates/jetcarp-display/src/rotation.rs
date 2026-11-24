@@ -51,9 +51,19 @@ impl Clock {
 }
 
 impl Clock {
+    /// The local date and time now.
     pub fn local() -> Clock {
+        Clock::of(chrono::Local::now())
+    }
+
+    /// The local date and time `secs` seconds after 1970-01-01 UTC.
+    pub fn at(secs: i64) -> Clock {
+        let t = chrono::DateTime::from_timestamp(secs, 0).unwrap_or_default();
+        Clock::of(t.with_timezone(&chrono::Local))
+    }
+
+    fn of(t: chrono::DateTime<chrono::Local>) -> Clock {
         use chrono::{Datelike, Timelike};
-        let t = chrono::Local::now();
         Clock {
             weekday: t.weekday().num_days_from_monday() as u8,
             minute: t.hour() * 60 + t.minute(),
