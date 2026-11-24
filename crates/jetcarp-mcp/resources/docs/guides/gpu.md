@@ -114,11 +114,11 @@ is in WARP's own shader compiler, which fails on a workgroup barrier after an ea
 and explore batches bit for bit with the processor, and JETCARP's Windows CI runs the GPU tests on
 it; it takes minutes to compile each of the soup hunt's kernels, though, and gets Generations rules
 wrong in them, so the hunter never runs on WARP
-([#321](https://github.com/jprodgers/jetcarp/issues/321)). WARP isn't supported for now, and only
-will be if supporting it breaks nothing else. In 0.4.4 the kernels get their barriers moved to the
-top level, where every thread reaches them, with results bit for bit the same: that shape is the
-most portable there is, so it guards against compiler bugs like WARP's on hardware and drivers
-JETCARP can't test, and it may let the WARP in Windows run them too
+([#321](https://github.com/jprodgers/jetcarp/issues/321)). WARP isn't supported for now. In 0.4.4
+the kernels get their barriers moved to the top level, where every thread reaches them, with
+results bit for bit the same: that shape is the most portable there is, so it guards against
+compiler bugs like WARP's on hardware and drivers JETCARP can't test, and it may let the WARP in
+Windows run them too. Whether WARP is supported is decided once that has been tested
 ([#334](https://github.com/jprodgers/jetcarp/issues/334)).
 
 JETCARP looks for adapters through every graphics interface wgpu has: Vulkan, Metal, DirectX 12
