@@ -480,6 +480,12 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The publisher key is made safely by two programs at once** (#332). `jetcarp pack key`, or
+  anything that makes the key on first use, could fail with "File exists" when another program
+  made it at the same moment, or read it before its text was all written. The key is now written
+  whole into a file of its own, then linked into place, and a program that loses the race uses
+  the key the other made. Found by a test in CI that makes the key from three tests at once.
+
 - **On Windows, closing a command's console, signing out and shutting down stop it at a
   checkpoint** (#319), where Windows ended it at once: a search's job was left marked running and
   its memory record behind. `jetcarp search`, `jetcarp jobs resume`, `jetcarp script` and
