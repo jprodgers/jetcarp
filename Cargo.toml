@@ -67,7 +67,7 @@ winit = { version = "0.30.13", default-features = false }
 bytemuck = { version = "1", features = ["derive"] }
 wgpu = "30.0.1"
 pollster = "0.4.0"
-rfd = "0.17.2"
+rfd = "0.18.0"
 dirs = "7.0.0"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 flate2 = "1.1.10"
