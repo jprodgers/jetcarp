@@ -586,18 +586,30 @@ is dated more closely than that.
   those will have a visual indicator, worked out with the puzzles.
 - **Stands.**
 
-### D-47. Dependabot keeps the crates and the actions' pins current
+### D-47. Dependabot keeps the dependencies current, and Clippy is required, on the release's Rust
 
-- **Decided:** Jimmie, 24 November 2026, approving the plan for 0.4.3-rc.3's CI checks
-  ([#183](https://github.com/jprodgers/jetcarp/issues/183)).
+- **Decided:** Jimmie, 24 November 2026, on the pull request for 0.4.3-rc.3's CI checks
+  ([#336](https://github.com/jprodgers/jetcarp/pull/336), for
+  [#183](https://github.com/jprodgers/jetcarp/issues/183)).
 - **The decision:** Dependabot looks for new versions of the crates and of the workflows' actions
-  every week, and opens pull requests for them: each ecosystem's minor and patch updates together,
-  and each major update on its own. They go through CI and are reviewed like any other pull
-  request. This replaces D-38's update by hand at the start of each cycle, for every action
-  Dependabot can follow; the action that installs Rust (pinned to a branch with no releases) and
-  the Rust a release is built with still move by hand, at the start of each cycle.
-- **Why:** updating the pins by hand once a cycle was for convenience, never a rule.
-- **Claude's part:** the Dependabot file and its settings, from the audit's issue.
+  every week, and opens pull requests for them: each ecosystem's patch updates together, and each
+  minor and each major update on its own, since a minor update of a 0.x crate can break the build.
+  A new version waits five days before it is proposed; security updates don't. Its pull requests
+  go through CI and are reviewed like any other pull request. This replaces D-38's update by hand
+  at the start of each cycle, for every action Dependabot can follow; the action that installs Rust
+  (pinned to a branch with no releases) and the Rust a release is built with still move by hand, at
+  the start of each cycle.
+- **The notices:** on Dependabot's crate updates, a workflow makes `THIRD_PARTY_LICENSES.html` again
+  and pushes it to the pull request's branch through a deploy key (so CI runs again on it); it runs
+  none of the pull request's code. "Having it automated so we don't have to think about it would be
+  good."
+- **Clippy:** a check that must pass before `main` moves, run with the Rust releases are built
+  with (`.github/rust-release`, the one place that version is set), not the newest stable, so a new
+  Rust's lints arrive only when that version is moved on at the start of a cycle.
+- **Why:** "updating the pins by hand once a cycle was for convenience, never a rule."
+- **Claude's part:** the Dependabot file, the notices workflow and the Clippy job, from the audit's
+  issue; the questions on the pull request (whether Clippy is required and on which Rust, the
+  grouping, the cooldown, automating the notices) were Claude's, and the answers Jimmie's.
 - **Stands.**
 
 ## People

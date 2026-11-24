@@ -472,21 +472,24 @@ day later (0.4.2: 17 November here, 18 November there).
   was published until it was run again. The Intel build's program is now also run once, under
   Rosetta, where the runner has it; before, it was only built.
 
-- **Clippy in CI.** A new job, *Clippy*, runs
-  `cargo clippy --workspace --all-targets --locked -- -D warnings` on Linux, and for Windows and
-  macOS from Linux, so a clippy or compiler warning fails it. The lint policy is written down in the root `Cargo.toml`
-  (`[workspace.lints.clippy]`, taken up by every crate): `too_many_arguments`, `type_complexity`,
-  `needless_range_loop` and `manual_is_multiple_of` are allowed, each with its reason, in place of
-  31 allows scattered through the code. The 72 warnings clippy 1.100 gave were fixed (31) or
-  allowed (39 by the policy, 2 at the one place each), and an unused import in a test on Windows
-  and macOS went; no behaviour changed. One fix shows in the API docs: `jetcarp-api`'s list of
-  modules had lost its `error` item, read as a link definition.
-  ([Contributing](contributing.md#code-style), [#183](https://github.com/jprodgers/jetcarp/issues/183))
+- **Clippy in CI, required before `main` moves.** A new job, *Clippy*, runs `cargo clippy
+  --workspace --all-targets --locked -- -D warnings` on Linux, and for Windows and macOS from Linux,
+  so a clippy or compiler warning fails it. It lints with the Rust releases are built with, so a new
+  Rust's lints arrive when that version is moved on, at the start of a cycle. The lint policy is
+  written down in the root `Cargo.toml` (`[workspace.lints.clippy]`, taken up by every crate):
+  `too_many_arguments`, `type_complexity`, `needless_range_loop` and `manual_is_multiple_of` are
+  allowed, each with its reason, in place of 31 allows scattered through the code. The 72 warnings
+  clippy 1.100 gave were fixed (31) or allowed (39 by the policy, 2 at the one place each), and an
+  unused import in a test on Windows and macOS went; no behaviour changed. One fix shows in the API
+  docs: `jetcarp-api`'s list of modules had lost its `error` item, read as a link definition.
+  ([Contributing](contributing.md#code-style),
+  [#183](https://github.com/jprodgers/jetcarp/issues/183))
 
-- **A release is built with a named Rust, 1.100.0,** set once in the release workflow for all its
-  jobs, rather than whatever stable Rust was current that day, so a release can be built again
-  exactly. It moves on by hand at the start of each cycle. CI's other jobs stay on the newest
-  stable, so a new Rust's warnings show up there first.
+- **A release is built with a named Rust, 1.100.0,** rather than whatever stable Rust was current
+  that day, so a release can be built again exactly. The version is in one file,
+  `.github/rust-release`, which the release workflow, the workflow that finishes a crates.io publish
+  and the Clippy job read. It moves on by hand at the start of each cycle. CI's tests stay on the
+  newest stable, so a new Rust's warnings show up there first.
   ([Continuous integration](testing.md#continuous-integration),
   [#183](https://github.com/jprodgers/jetcarp/issues/183))
 
@@ -498,10 +501,14 @@ day later (0.4.2: 17 November here, 18 November there).
   `ttf-parser` everywhere, and the three `zbus` crates on Linux.
   ([#186](https://github.com/jprodgers/jetcarp/issues/186))
 
-- **Dependabot** opens a weekly pull request for the crates and one for the workflows' actions (every
-  minor and patch update together; each major update on its own), which go through CI and are
-  reviewed like any other. It keeps the actions' pinned commits current, with the version in the
-  comment beside each. ([Continuous integration](testing.md#continuous-integration),
+- **Dependabot** opens weekly pull requests for the crates and for the workflows' actions: each
+  ecosystem's patch updates together, and each minor and each major update on its own, since a 0.x
+  crate's minor update can break the build. A version is proposed once it is five days old; security
+  updates don't wait. Its pull requests go through CI and are reviewed like any other. It keeps the
+  actions' pinned commits current, with the version in the comment beside each. On its crate
+  updates, a workflow makes the third-party notices again and pushes them to the pull request, so
+  the notices check passes without anyone running `packaging/notices.sh`.
+  ([Continuous integration](testing.md#continuous-integration),
   [#183](https://github.com/jprodgers/jetcarp/issues/183))
 
 - **Benchmarks and coverage, measured weekly.** A new workflow, run once a week and by hand, never

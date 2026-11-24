@@ -220,8 +220,9 @@ claims more than its evidence: novelty only as set out in
   up (`[lints] workspace = true`): four lints are allowed throughout, each with its reason. Anywhere
   else, fix the warning, or, where clippy is wrong about one place, allow its lint there with
   `#[allow(clippy::…)]` and a comment saying why. A lint allowed in many places belongs in the
-  policy, with its reason, rather than in each. CI runs clippy on the newest stable Rust, so a lint
-  a new Rust brings fails there the week it is out: fix it in its own pull request.
+  policy, with its reason, rather than in each. CI runs clippy with the Rust releases are built
+  with, named in `.github/rust-release`; a newer clippy may warn about more, so to see what CI sees,
+  run that version (`rustup toolchain install 1.100.0`, then `cargo +1.100.0 clippy …`).
 - Commit messages start with a short summary, often prefixed by the area (`cli:`, `jobs:`, `Docs:`),
   followed by a paragraph on what changed and why.
 

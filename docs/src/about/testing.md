@@ -691,13 +691,16 @@ release workflow. The workflows name each action they use by its commit, with it
 so a tag that moves cannot change what runs. Every job has a time limit, about twice its usual length or more, so a
 job that hangs is stopped rather than left running for hours.
 
-CI's jobs build with the newest stable Rust, so that a new Rust's warnings and lints show up the
-week it comes out, and one job with the oldest Rust JETCARP supports. A release is built with one
-named version instead (Rust 1.100.0 for 0.4.3), set once in the release workflow for all its jobs,
-so that a release can be built again exactly as it was. It is moved on by hand at the start of each
-release cycle, to that day's stable Rust: Dependabot updates a Rust version only in a
-`rust-toolchain.toml` file, and one in the repository would make every contributor's own builds use
-that version too.
+CI's tests build with the newest stable Rust, so that a new Rust's warnings show up the week it
+comes out, and one job with the oldest Rust JETCARP supports. A release is built with one named
+version instead, so that it can be built again exactly as it was: Rust 1.100.0 for 0.4.3, named in
+`.github/rust-release`, the one place it is set. The release workflow, the workflow that finishes a
+crates.io publish, and the Clippy job read it there. It is moved on by hand at the start of each
+release cycle: change the version in that file to that day's stable Rust (`rustup check` names it),
+move the pin of the action that installs Rust in the same pull request, and fix or allow the lints
+the new clippy brings, which the Clippy job on that pull request shows. Dependabot can't do it: it
+updates a Rust version only in a `rust-toolchain.toml` file, and one in the repository would make
+every contributor's own builds use that version too.
 
 - **Build and test** the whole workspace on Linux (x86_64), Windows (x86_64) and macOS (Apple
   silicon). The runners have no GPU of their own, so on Linux the GPU tests run on Mesa's software
@@ -728,11 +731,13 @@ that version too.
   --check`: each PNG rendered again by librsvg, whose pixels may differ only by another version's
   antialiasing, and the `.ico`, the `.icns` and the copies the program embeds byte for byte).
 - **Clippy:** `cargo clippy --workspace --all-targets --locked -- -D warnings`, so any clippy or
-  compiler warning fails the job: on Linux with every program (the Windows launcher's feature on),
-  and for Windows and macOS too, checked from Linux, since clippy reads the code without linking it.
-  The lints allowed, and why, are listed in the root `Cargo.toml` (`[workspace.lints.clippy]`), which
-  every crate takes up; an allow in the code is for one place only. See
-  [Contributing](contributing.md#code-style).
+  compiler warning fails the job, which must pass before `main` moves: on Linux with every program
+  (the Windows launcher's feature on), and for Windows and macOS too, checked from Linux, since
+  clippy reads the code without linking it. It runs with the release's Rust (above), not the newest
+  stable, so a new Rust's lints arrive only when that version is moved on, never on someone else's
+  pull request. The lints allowed, and why, are listed in the root `Cargo.toml`
+  (`[workspace.lints.clippy]`), which every crate takes up; an allow in the code is for one place
+  only. See [Contributing](contributing.md#code-style).
 - **The dependencies,** with [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) (`deny.toml`),
   on every push to `main`, every pull request and once a week, since an advisory can be published
   without anything in JETCARP changing. Each target JETCARP is released for is checked on its own,
@@ -744,28 +749,40 @@ that version too.
   comes in unplanned while [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md)
   says JETCARP makes no network connections, and on any crate from somewhere other than crates.io. A notice that a crate
   is no longer maintained is shown as a warning, and never fails it.
-- **Dependabot** looks for new versions every Monday, of the crates and of the workflows' actions,
-  and opens a pull request for each ecosystem's minor and patch updates together and one for each
-  major update. Its pull requests go through CI and are reviewed like any other; none merges by itself. It
-  moves an action's pinned commit to the new release's and rewrites the version in the comment
-  beside it. Two pins it cannot follow, and they move by hand with the release's Rust: the action
-  that installs Rust, pinned to a branch with no releases, and the Rust version itself. A crate
-  update that changes `Cargo.lock` needs the third-party notices made again (`packaging/notices.sh`)
-  before the notices check passes.
+- **Dependabot** looks for new versions every Monday, of the crates and of the workflows' actions.
+  Each ecosystem's patch updates come together in one pull request, and each minor and each major
+  update in one of its own: a minor update of a 0.x crate can break the build, so it never holds up
+  the rest. A version is proposed only once it is five days old, so one that is withdrawn soon after
+  its release never is; security updates don't wait. Its pull requests go through CI and are
+  reviewed like any other; none merges by itself. It moves an action's pinned commit to the new
+  release's and rewrites the version in the comment beside it. Two pins it cannot follow, and they
+  move by hand at the start of each cycle: the action that installs Rust, pinned to a branch with no
+  releases, and the release's Rust itself.
+- **The notices on Dependabot's pull requests:** a crate update that changes `Cargo.lock` changes
+  the third-party notices, so a workflow (*Dependabot's notices*) makes them again: on Dependabot's
+  pull requests only, it runs `packaging/notices.sh` with a checked release of cargo-about, and if
+  `THIRD_PARTY_LICENSES.html` changed, commits that file alone, *Notices: regenerated for this
+  update*, and pushes it to the pull request's branch. It builds and runs nothing of the pull
+  request's, and stops if the pull request changes anything but Cargo's manifests. It pushes through
+  a deploy key that only Dependabot's own runs receive, so the push starts CI again as any push
+  does, while its token can only read; run again on its own push, it finds the notices current and
+  does nothing. Once that commit is on a pull request, Dependabot no longer rebases it by itself:
+  commenting `@dependabot rebase` asks it to, and the notices are made again on the result.
 - **Benchmarks and coverage,** once a week and when started by hand, never on a pull request and
   never a check that must pass (the *Benchmarks and coverage* workflow). `tools/bench.py` runs every
   benchmark in the repository with fixed arguments, in release, the GPU's on lavapipe: the engine's
   (HashLife, exact aperiodic patches, sandpiles, sliding windows), the GPU's (Life and every rule
   family on the CPU and the GPU, the batch stepper), the soup hunter's, and the benchmark behind the
-  [JETCARP Hardware Score](../guides/this-computer.md#the-benchmark-and-the-score). Each number
-  goes into the run's summary and into `bench.json` and `bench.csv`, with the commit, the date, the runner and the Rust that built it;
-  `python3 tools/bench.py compare OLD.json NEW.json` shows how two runs differ, and a run started by
-  hand compares itself with an earlier one whose id it is given. Coverage is the whole test suite
-  again, instrumented by [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov): the share of
-  JETCARP's lines, functions and regions the tests run is in the summary, and the lcov file is kept
-  with the run. Nothing is sent to an outside service. The runners are shared machines, whose times
-  vary by 10% or so from run to run, and their GPU is a software renderer: the numbers show a change
-  in JETCARP's own speed, not a machine's.
+  [JETCARP Hardware Score](../guides/this-computer.md#the-benchmark-and-the-score). Each number goes
+  into the run's summary and into `bench.json` and `bench.csv`, with the commit, the date, the
+  runner and the Rust that built it; `python3 tools/bench.py compare OLD.json NEW.json` shows how
+  two runs differ, and a run started by hand compares itself with an earlier one whose id it is
+  given. Coverage is the whole test suite again, instrumented by
+  [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov): the share of JETCARP's lines,
+  functions and regions the tests run is in the summary, and the lcov file is kept with the run.
+  Nothing is sent to an outside service. The runners are shared machines, whose times vary by 10% or
+  so from run to run, and their GPU is a software renderer: the numbers show a change in JETCARP's
+  own speed, not a machine's.
 - **The book** builds, its internal links all resolve, and its scripting reference matches the
   program.
 - **Golly:** the Linux job builds Golly's `bgolly` 4.0 and 5.0 from their source (Ubuntu packages
