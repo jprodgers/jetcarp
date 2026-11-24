@@ -16,7 +16,9 @@
 //! - **Decent** ([`requirements`]): a discrete or integrated GPU with compute shaders, at least
 //!   [`MIN_STORAGE_BUFFERS`] storage buffers per shader stage and storage bindings of at least
 //!   [`MIN_STORAGE_BINDING`] bytes, which passes the self-test ([`self_test`]). Software adapters
-//!   (llvmpipe, lavapipe, SwiftShader) are used only when asked for; Windows' WARP never is.
+//!   (llvmpipe, lavapipe, SwiftShader) are used only when asked for; Windows' WARP never is (its
+//!   shader compiler crashes on the world stepper and the soup hunt, #321) unless the tests allow
+//!   it ([`warp_allowed`]).
 //!
 //! The self-test runs every world kernel and the explore batch stepper on a small lattice and an
 //! aperiodic patch, on the GPU and on the CPU, and compares the hashes. The result is kept in the
@@ -578,7 +580,7 @@ pub fn adapters_for(instance: &wgpu::Instance, want: &Want) -> Vec<wgpu::Adapter
 fn has_wanted(want: &Want, mut infos: impl Iterator<Item = wgpu::AdapterInfo>) -> bool {
     match want {
         Want::Best => true,
-        w => infos.any(|i| w.matches(&i) && !is_warp(&i)),
+        w => infos.any(|i| w.matches(&i) && !warp_refused(&i)),
     }
 }
 
@@ -651,7 +653,7 @@ pub(crate) fn pick_tested(
         Want::Best => (Want::Best, None),
         w if all
             .iter()
-            .any(|a| w.matches(&a.get_info()) && !is_warp(&a.get_info())) =>
+            .any(|a| w.matches(&a.get_info()) && !warp_refused(&a.get_info())) =>
         {
             (w.clone(), None)
         }
@@ -718,7 +720,7 @@ pub(crate) fn pick_tested(
             .collect::<Vec<_>>()
             .join(", ");
         if matches!(policy.want, Want::Software) {
-            if all.iter().any(|a| is_warp(&a.get_info())) {
+            if all.iter().any(|a| warp_refused(&a.get_info())) {
                 "no hardware graphics adapter, and the only software one is Windows' WARP, which \
                  the GPU simulation never uses"
                     .to_string()
@@ -773,11 +775,47 @@ fn rank(info: &wgpu::AdapterInfo, purpose: Purpose) -> (u8, u8) {
     (kind, backend)
 }
 
-/// Windows' software renderer, which crashes in the simulation's compute shaders
-/// (0xC0000005 in d3d10warp.dll, stepping Life).
-fn is_warp(info: &wgpu::AdapterInfo) -> bool {
+/// Windows' software renderer, which the GPU simulation never uses (unless the tests allow it:
+/// [`warp_allowed`]).
+///
+/// The WARP that comes with Windows crashes as it compiles the world stepper's `step` and
+/// `contact` kernels, and the soup hunt's (#321): 0xC0000005 in `d3d10warp.dll`'s
+/// `ComputeShaderTransformer::ConstructLoadStoreSets`, on a thread of WARP's own that compiles a
+/// shader for its first dispatch, so the process ends before the self-test can turn WARP down.
+/// It crashed so on the Acer (Windows 11 24H2, WARP 10.0.26100.9818) and on CI's Windows Server
+/// 2025 (10.0.26100.33648), where a debugger showed where. That compiler fails on a compute
+/// shader, as FXC compiles it, with a workgroup barrier after an early return or in an `if` that
+/// ends the shader: each of those kernels has one, in uniform control flow as WGSL requires, and a
+/// shader of a few lines (an atomic, then a barrier in a closing `if`) crashes it too. The same
+/// kernels compiled by DXC run on the same WARP and match the processor bit for bit, and WARP
+/// 1.0.22 (Microsoft's NuGet package) runs FXC's world stepper and explore batches so too: the
+/// fault is WARP's compiler's, not the kernels'. Windows CI runs the GPU tests on WARP 1.0.22
+/// (`.github/workflows/ci.yml`), all but the soup hunt's, which that WARP compiles too slowly and,
+/// for Generations rules, wrongly (`hunt::NOT_ON_WARP`).
+///
+/// WARP is not supported for users for now. In 0.4.4 the kernels get their barriers at the top
+/// level, reached by every thread, with results bit for bit the same (#334): the most portable
+/// shape, against compiler bugs like this one on drivers JETCARP can't test, which may let the
+/// system WARP run them too. Whether WARP is supported is decided once that has been tested.
+pub(crate) fn is_warp(info: &wgpu::AdapterInfo) -> bool {
     info.device_type == wgpu::DeviceType::Cpu
         && (info.backend == wgpu::Backend::Dx12 || info.name.contains("Microsoft Basic Render"))
+}
+
+/// The variable that lets tests choose WARP ([`warp_allowed`]).
+pub const ALLOW_WARP_ENV: &str = "JETCARP_ALLOW_WARP";
+
+/// Whether WARP may be chosen as other software adapters are, when asked for
+/// (`JETCARP_GPU=software` or by name): with `JETCARP_ALLOW_WARP=1`, for tests only, to try a WARP
+/// on JETCARP's kernels (#321). The system's WARP crashes on them (`is_warp` says why); WARP
+/// 1.0.22's `d3d10warp.dll`, put beside a test program, runs every one of this crate's GPU tests.
+pub fn warp_allowed() -> bool {
+    std::env::var(ALLOW_WARP_ENV).is_ok_and(|v| v.trim() == "1")
+}
+
+/// WARP, unless the tests allow it ([`warp_allowed`]).
+fn warp_refused(info: &wgpu::AdapterInfo) -> bool {
+    is_warp(info) && !warp_allowed()
 }
 
 /// What the simulation needs of an adapter apart from the self-test. `want` lets a software
@@ -790,7 +828,7 @@ pub fn requirements(
     want: &Want,
 ) -> Result<(), String> {
     use wgpu::DeviceType as D;
-    if is_warp(info) {
+    if warp_refused(info) {
         return Err(
             "Windows' software renderer (WARP), which the GPU simulation never uses".into(),
         );
@@ -1588,9 +1626,13 @@ mod tests {
         assert_eq!(calls.get(), 3);
         assert_eq!(got.len(), 1);
 
-        // WARP doesn't count as the software adapter asked for, as in the choice.
+        // WARP doesn't count as the software adapter asked for, as in the choice, unless the
+        // tests allow it (#321).
         let warp = info("Microsoft Basic Render Driver", D::Cpu, Backend::Dx12);
-        assert!(!has_wanted(&Want::Software, [warp].into_iter()));
+        assert_eq!(
+            has_wanted(&Want::Software, [warp].into_iter()),
+            warp_allowed()
+        );
     }
 
     fn info(name: &str, kind: wgpu::DeviceType, backend: wgpu::Backend) -> wgpu::AdapterInfo {
@@ -1677,8 +1719,13 @@ mod tests {
             assert!(ok(&gl, &Want::Named("llvmpipe".into())).is_err());
             assert!(ok(&gl, &Want::Named("radeonsi".into())).is_ok());
             let warp = info("Microsoft Basic Render Driver", D::Cpu, B::Dx12);
-            assert!(ok(&warp, &Want::Software).unwrap_err().contains("WARP"));
-            assert!(ok(&warp, &Want::Named("Microsoft".into())).is_err());
+            if warp_allowed() {
+                assert!(ok(&warp, &Want::Software).is_ok());
+                assert!(ok(&warp, &Want::Best).is_err());
+            } else {
+                assert!(ok(&warp, &Want::Software).unwrap_err().contains("WARP"));
+                assert!(ok(&warp, &Want::Named("Microsoft".into())).is_err());
+            }
             let virt = info("virtio", D::VirtualGpu, B::Vulkan);
             assert!(ok(&virt, &Want::Best).is_err());
             assert!(ok(&virt, &Want::Named("virtio".into())).is_ok());

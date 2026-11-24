@@ -53,8 +53,14 @@ installs `pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev l
 libvulkan1`, plus `mesa-vulkan-drivers` so that the GPU tests can run on a software renderer (which
 JETCARP uses only when asked for, with `JETCARP_GPU=software`). GPU tests are skipped, with a note, on a
 machine with no usable graphics adapter, or with only one the GPU self-test turns down. With
-`JETCARP_REQUIRE_GPU=1` they fail instead, naming the adapter and why, as on CI's Linux and macOS
-runners: set it when you mean the GPU tests to run, so that a missing driver cannot pass for a pass.
+`JETCARP_REQUIRE_GPU=1` they fail instead, naming the adapter and why, as on CI's runners: set it when you mean the GPU tests to run, so that a missing driver cannot pass for a pass.
+On Windows, `JETCARP_ALLOW_WARP=1` lets them choose Windows' software renderer, WARP, which JETCARP
+otherwise never uses (see [The GPU](../guides/gpu.md#which-adapter)): with `JETCARP_GPU=software`,
+the GPU tests then run on it. The WARP that comes with Windows crashes compiling JETCARP's kernels;
+a newer one from Microsoft's
+[`Microsoft.Direct3D.WARP`](https://www.nuget.org/packages/Microsoft.Direct3D.WARP) package, its
+`d3d10warp.dll` put beside the test program, runs them, as Windows CI does
+([Testing](testing.md#continuous-integration)), all but the soup hunt's, which never runs on WARP.
 A few slow surveys are marked `#[ignore]` and run only when asked (`cargo test … -- --ignored`).
 
 On Windows the tests of the folder rules make directory junctions and symbolic links. Symbolic links

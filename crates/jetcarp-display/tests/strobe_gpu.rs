@@ -23,6 +23,8 @@ struct Gpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
     timestamps: bool,
+    /// How long [`Gpu::wait`] waits for the GPU's work.
+    patience: std::time::Duration,
 }
 
 /// The GPU, or None after [`jetcarp_gpu::no_gpu`] (which fails the test instead under
@@ -58,11 +60,17 @@ fn gpu() -> Option<Gpu> {
             return None;
         }
     };
-    eprintln!("adapter: {}", adapter.get_info().name);
+    let info = adapter.get_info();
+    eprintln!("adapter: {}", info.name);
+    // Windows' WARP, on which Windows CI runs these (WARP 1.0.22, #321), is slow at this pass:
+    // waits there ran past 10 seconds.
+    let warp = info.device_type == wgpu::DeviceType::Cpu && info.backend == wgpu::Backend::Dx12;
+    let patience = std::time::Duration::from_secs(if warp { 300 } else { 10 });
     Some(Gpu {
         device,
         queue,
         timestamps,
+        patience,
     })
 }
 
@@ -111,7 +119,7 @@ impl Gpu {
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: None,
-                timeout: Some(std::time::Duration::from_secs(10)),
+                timeout: Some(self.patience),
             })
             .unwrap();
     }

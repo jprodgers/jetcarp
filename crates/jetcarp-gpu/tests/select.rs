@@ -4,16 +4,17 @@
 
 use jetcarp_gpu::select::{self, Policy, Purpose, Want};
 
-/// Windows' software renderer, which the GPU simulation never uses.
-fn is_warp(info: &wgpu::AdapterInfo) -> bool {
-    info.name.contains("Microsoft Basic Render Driver")
+/// Windows' software renderer, which the GPU simulation never uses unless the tests allow it
+/// (`JETCARP_ALLOW_WARP=1`, #321).
+fn warp_refused(info: &wgpu::AdapterInfo) -> bool {
+    info.name.contains("Microsoft Basic Render Driver") && !select::warp_allowed()
 }
 
-/// A software adapter the GPU simulation would use when asked (not WARP).
+/// A software adapter the GPU simulation would use when asked (not WARP, unless allowed).
 fn usable_software(all: &[wgpu::Adapter]) -> bool {
     all.iter().any(|a| {
         let i = a.get_info();
-        i.device_type == wgpu::DeviceType::Cpu && !is_warp(&i)
+        i.device_type == wgpu::DeviceType::Cpu && !warp_refused(&i)
     })
 }
 

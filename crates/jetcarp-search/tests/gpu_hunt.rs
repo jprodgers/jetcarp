@@ -19,6 +19,12 @@ fn gpu() -> Option<Arc<GpuHunter>> {
             eprintln!("GPU hunter tests on {}", g.name());
             Some(Arc::new(g))
         }
+        // WARP, on which Windows CI runs the GPU tests, is the one adapter the hunter turns
+        // down on purpose: these skip there, saying why, even under JETCARP_REQUIRE_GPU=1.
+        Err(e) if e == jetcarp_gpu::hunt::NOT_ON_WARP => {
+            eprintln!("note: skipping the GPU hunter tests: {e}");
+            None
+        }
         Err(e) => {
             jetcarp_gpu::no_gpu("GPU hunter tests", &e);
             None

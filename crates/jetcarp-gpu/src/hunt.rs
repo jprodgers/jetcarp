@@ -113,10 +113,21 @@ struct Params {
     pad1: u32,
 }
 
+/// Why the soup hunter never runs on Windows' WARP, which only tests may choose (#321). On CI's
+/// runner WARP 1.0.22 took from a minute to over ten to compile each rule's kernel, and gave
+/// Generations rules the wrong cells as FXC compiles them (the right ones through DXC); the WARP
+/// that comes with Windows crashes compiling them. Hunts there run on the processor.
+pub const NOT_ON_WARP: &str = "Windows' WARP compiles the soup hunt's kernels too slowly, and \
+                               Generations rules' wrongly (#321)";
+
 impl GpuHunter {
-    /// Open the compute adapter the policy chooses ([`crate::select`]), without a window.
+    /// Open the compute adapter the policy chooses ([`crate::select`]), without a window; never
+    /// WARP ([`NOT_ON_WARP`]).
     pub fn headless() -> Result<GpuHunter, String> {
         let (device, queue, name) = crate::select::compute_device("jetcarp-gpu hunter")?;
+        if crate::select::is_warp(&device.adapter_info()) {
+            return Err(NOT_ON_WARP.into());
+        }
         Ok(GpuHunter::new(device, queue, name))
     }
 
