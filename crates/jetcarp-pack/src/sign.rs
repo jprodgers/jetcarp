@@ -189,39 +189,130 @@ pub fn load_or_create(path: Option<&Path>, create: bool) -> Result<(Signer, bool
     if !create {
         return Err("no publisher key yet: `jetcarp pack key` makes one".into());
     }
+    make_at(&p)
+}
+
+/// Make a new key at `p` (none was there when looked for), with its `.pub` beside it. Two
+/// programs may do this at once (#332): the key is written whole into a file of this program's
+/// own, then linked into place, which fails if the name is taken, so `p` never holds half a key,
+/// and the program that loses uses the key the other made (returned as not made now).
+fn make_at(p: &Path) -> Result<(Signer, bool), String> {
     let s = Signer::generate("jetcarp publisher")?;
-    if let Some(d) = p.parent() {
-        std::fs::create_dir_all(d).map_err(|e| format!("{}: {e}", d.display()))?;
+    let dir = p.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let at = |e: std::io::Error| format!("{}: {e}", p.display());
+    let private = s.private_openssh()?;
+    let tmp = own_name(p);
+    write_private(&tmp, &private).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    let placed = std::fs::hard_link(&tmp, p);
+    let _ = std::fs::remove_file(&tmp);
+    match placed {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return made_by_another(p),
+        // A folder that can't hold a hard link: make the file in place, as before.
+        Err(_) => match write_private(p, &private) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                return made_by_another(p);
+            }
+            Err(e) => return Err(at(e)),
+        },
     }
-    write_private(&p, &s.private_openssh()?)?;
-    std::fs::write(p.with_extension("pub"), format!("{}\n", s.public_openssh()))
-        .map_err(|e| format!("{}: {e}", p.display()))?;
+    // The public half, beside it: written whole, then moved into place.
+    let public = p.with_extension("pub");
+    let tmp = own_name(&public);
+    std::fs::write(&tmp, format!("{}\n", s.public_openssh()))
+        .and_then(|()| std::fs::rename(&tmp, &public))
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            format!("{}: {e}", public.display())
+        })?;
     Ok((s, true))
 }
 
-fn write_private(p: &Path, text: &str) -> Result<(), String> {
+/// The key another program made at `p` while this one was making its own.
+fn made_by_another(p: &Path) -> Result<(Signer, bool), String> {
+    let text = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
+    Ok((Signer::from_openssh(&text)?, false))
+}
+
+/// A name beside `p` that only this call of this program uses.
+fn own_name(p: &Path) -> PathBuf {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("key");
+    p.with_file_name(format!(".{name}.{}-{n}.tmp", std::process::id()))
+}
+
+/// Write `text` to a new file `p` (failing if there is one), readable by this user only.
+fn write_private(p: &Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create_new(true);
     #[cfg(unix)]
     {
-        use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(p)
-            .map_err(|e| format!("{}: {e}", p.display()))?;
-        f.write_all(text.as_bytes())
-            .map_err(|e| format!("{}: {e}", p.display()))
+        o.mode(0o600);
     }
-    #[cfg(not(unix))]
-    {
-        std::fs::write(p, text).map_err(|e| format!("{}: {e}", p.display()))
-    }
+    o.open(p)?.write_all(text.as_bytes())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Programs making the key at once in one folder (#332): each ends with the same key, none
+    /// fails ("File exists"), and none reads the file before its text is all there.
+    #[test]
+    fn a_key_made_at_once_by_many_is_one_key() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-key-race-{}", std::process::id()));
+        for round in 0..20 {
+            let _ = std::fs::remove_dir_all(&dir);
+            let p = dir.join(format!("r{round}")).join("publisher_ed25519");
+            let go = std::sync::Arc::new(std::sync::Barrier::new(16));
+            let hands: Vec<_> = (0..16)
+                .map(|_| {
+                    let (p, go) = (p.clone(), go.clone());
+                    std::thread::spawn(move || {
+                        go.wait();
+                        if p.exists() {
+                            let text = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
+                            return Signer::from_openssh(&text).map(|s| (s, false));
+                        }
+                        make_at(&p)
+                    })
+                })
+                .collect();
+            let got: Vec<_> = hands.into_iter().map(|h| h.join().unwrap()).collect();
+            let errs: Vec<_> = got.iter().filter_map(|r| r.as_ref().err()).collect();
+            assert!(errs.is_empty(), "round {round}: {errs:?}");
+            let on_disk = Signer::from_openssh(&std::fs::read_to_string(&p).unwrap()).unwrap();
+            for (s, _) in got.iter().map(|r| r.as_ref().unwrap()) {
+                assert_eq!(s.fingerprint(), on_disk.fingerprint(), "round {round}");
+            }
+            let made = got.iter().filter(|r| r.as_ref().unwrap().1).count();
+            assert_eq!(made, 1, "round {round}: {made} said they made it");
+            let public = std::fs::read_to_string(p.with_extension("pub")).unwrap();
+            assert_eq!(public.trim(), on_disk.public_openssh(), "round {round}");
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
+                assert_eq!(mode, 0o600, "round {round}: the key is readable by others");
+            }
+            let left: Vec<_> = std::fs::read_dir(p.parent().unwrap())
+                .unwrap()
+                .flatten()
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+                .collect();
+            assert!(
+                left.is_empty(),
+                "round {round}: {} files of its own left",
+                left.len()
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn signatures_verify_and_name_their_key() {
