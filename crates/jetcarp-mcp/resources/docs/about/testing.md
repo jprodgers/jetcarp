@@ -244,14 +244,26 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
 - **Local times.** The output folders' names (`2026-11-05_14-30-02`), records' times
   (`2026-11-05T14:30:02-05:00`), a machine score's date and the rotations' clock must name the
   moment in the computer's own time zone, whatever it is, and agree with each other. Each is pinned,
-  in a process of its own with `TZ` set (Linux and macOS), in New York either side of both of
-  2026's daylight saving changes, midnight at the new year and 1970, in Kathmandu (+05:45), St
-  John's (−03:30), Lord Howe Island (whose clocks go back half an hour), London, UTC and a POSIX
-  rule; and in New York the rotation's decisions at those moments: a schedule's window opening and
-  closing on the minute, an item ending at 02:30 on the night that time never comes, one ending at
-  01:30 on the night it comes twice, and one an hour keeping its item through that hour
+  in a process of its own with `TZ` set (on every system, Windows included), in New York either
+  side of both of 2026's daylight saving changes, midnight at the new year and 1970, in Kathmandu
+  (+05:45), St John's (−03:30), Lord Howe Island (whose clocks go back half an hour), London, UTC
+  and a POSIX rule; and in New York the rotation's decisions at those moments: a schedule's
+  window opening and closing on the minute, an item ending at 02:30 on the night that time never
+  comes, one ending at 01:30 on the night it comes twice, and one an hour keeping its item through
+  that hour
   (`jetcarp-api/src/out.rs`, `jetcarp-display/tests/rotation.rs`). The pins were written with
-  chrono and pass unchanged on jiff, which JETCARP uses since 0.4.3 (#186).
+  chrono and pass unchanged on jiff, which JETCARP uses since 0.4.3 (#186). A `TZ` that names no
+  zone (`Not/A_Zone`, a misspelt `America/Boston`, an empty value) must give the same time stamps as
+  no `TZ` at all, through a year, never UTC, with one warning naming the value and the zone used
+  (`an_unreadable_tz_gives_the_system_s_time_zone_not_utc`; red before the fix, which took it as
+  UTC). `jetcarp doctor`, text and JSON, must say the zone and where it came from: from a `TZ` that
+  names one, the system's with none, and the system's, the same offset, with a `TZ` that names none,
+  which it names (`doctor_says_the_time_zone_and_where_it_came_from`, in
+  `jetcarp/tests/cli_json.rs`). The rule itself is tested with stand-ins for the system's zone; the
+  system's zone read without `TZ` from `/etc/localtime` as a link and as a file; and Windows'
+  settings made POSIX rules, for zones with daylight saving time in either hemisphere and without,
+  which must give the IANA zones' offsets through 2026 and 2027
+  (`jetcarp-core/src/time_zone.rs`).
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the

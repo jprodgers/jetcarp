@@ -58,7 +58,15 @@ all hour), and a program started again shows the same item:
 - An item that cannot be shown at all (a scene that won't build) gives way to the next, as in any
   rotation, until the day or the hour changes.
 
-The clock is the computer's local time, in its own time zone (`TZ`, where it is set, decides it).
+The clock is local time. A `TZ` environment variable that names a time zone (an IANA name such
+as `America/New_York`, or a rule such as `EST5EDT,M3.2.0,M11.1.0`) decides the zone, on every
+system; without one, the computer's own setting does. A `TZ` that names no zone JETCARP can read
+(a misspelt name, an empty value) is ignored, never taken as UTC: the computer's setting is used,
+and the program's log says so once. `jetcarp doctor` shows the zone in use and where it came from
+(`time zone: America/New_York, -05:00 now (the system's)`). A time zone changed in the system's
+settings reaches a running program within five minutes; daylight saving time, part of the zone's
+rules, changes the clock at once. Output folders' names and records' times follow the same zone.
+
 On the night the clocks go forward, a time of day that never comes (an item ending at 02:30, say)
 counts as passed when the clock jumps over it. On the night they go back, the hour that comes
 twice is one hour for *One an hour*, and an item ending at a time in it can end both times.

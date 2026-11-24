@@ -494,7 +494,13 @@ day later (0.4.2: 17 November here, 18 November there).
   score's date and the rotations' clock. They are written exactly as before, which tests now pin
   in several time zones, either side of daylight saving time's changes, midnight and 1970. jiff is
   pure Rust; on Windows it carries its own copy of the time zone database. chrono stays in the tree
-  through Arrow and Parquet until they move off it.
+  through Arrow and Parquet until they move off it. One rule now holds on every system: a `TZ`
+  that names a time zone decides it (on Windows too, where chrono read only Windows' own setting),
+  and without one the computer's setting does. A `TZ` that names no zone JETCARP can read is
+  ignored, never taken as UTC: the computer's setting is used, and the program warns once, naming
+  the value and the zone used instead. `jetcarp doctor` shows the time zone in use and where it
+  came from, in its text and its JSON (`time_zone`). A zone changed in the system's settings
+  reaches a running program within five minutes; daylight saving time changes the clock at once.
   ([When a rotation moves on](../guides/rotations.md#when-a-rotation-moves-on),
   [#186](https://github.com/jprodgers/jetcarp/issues/186))
 
