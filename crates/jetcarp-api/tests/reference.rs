@@ -190,8 +190,16 @@ fn paths_and_doctor() {
             "machine",
             "os",
             "threads",
+            "time_zone",
             "version"
         ]
+    );
+    // The time zone local times are in, and where it came from (#186).
+    assert!(t.contains("\n  time zone: "), "{t}");
+    assert!(
+        ["tz", "system", "none"].contains(&v["time_zone"]["from"].as_str().unwrap()),
+        "{}",
+        v["time_zone"]
     );
     assert!(v["folders"].get("library_bytes").is_none());
     assert!(v["gpu_policy"].is_null());

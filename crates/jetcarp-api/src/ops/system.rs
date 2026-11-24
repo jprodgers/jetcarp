@@ -341,6 +341,39 @@ pub struct DoctorFolders {
     pub data_chosen_missing: bool,
 }
 
+/// The time zone local times are in (output folders' names, records' times, a score's date, the
+/// rotations' clock), and where it came from ([`jetcarp_core::time_zone`]).
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct DoctorTimeZone {
+    /// Its IANA name (`America/New_York`); the rule `TZ` gives; or, for Windows' own setting
+    /// read with an unreadable `TZ` set, Windows' name for it.
+    pub name: String,
+    /// `tz` (the `TZ` variable), `system` (the system's own setting), or `none` (neither could
+    /// be read: UTC).
+    pub from: String,
+    /// Its offset from UTC now, as `-05:00`.
+    pub offset_now: String,
+    /// A `TZ` that is set but names no time zone JETCARP can read, and so is ignored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tz_ignored: Option<String>,
+    /// The line the text gives, after `time zone: `.
+    #[serde(skip)]
+    pub text: String,
+}
+
+impl DoctorTimeZone {
+    fn now() -> DoctorTimeZone {
+        let z = jetcarp_core::time_zone::current();
+        DoctorTimeZone {
+            name: z.name.clone(),
+            from: z.from.key().to_string(),
+            offset_now: z.offset_now(),
+            tz_ignored: z.tz_ignored.clone(),
+            text: z.describe(),
+        }
+    }
+}
+
 /// What JETCARP sees on this machine.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct DoctorReport {
@@ -351,6 +384,8 @@ pub struct DoctorReport {
     /// The machine: its hardware, its JETCARP Hardware Score and its limits
     /// (`machine.info`).
     pub machine: crate::ops::machine::MachineOut,
+    /// The time zone local times are in, and where it came from.
+    pub time_zone: DoctorTimeZone,
     pub folders: DoctorFolders,
     pub gpu: Vec<GpuAdapter>,
     /// The GPU policy, and the adapter each purpose uses and why (none: no GPU support here).
@@ -368,6 +403,7 @@ impl Report for DoctorReport {
             self.version, self.os, self.arch, self.threads
         );
         s.push_str(&machine_text(&self.machine));
+        let _ = writeln!(s, "  time zone: {}", self.time_zone.text);
         s.push('\n');
         s.push_str("Folders\n");
         let paths = Paths {
@@ -652,6 +688,7 @@ impl Op for SystemDoctor {
                 .unwrap_or(1),
             // Doctor reads each GPU's memory afresh.
             machine: crate::ops::machine::machine_info_fresh(cx),
+            time_zone: DoctorTimeZone::now(),
             folders: DoctorFolders {
                 data_size_bytes: folder_size(&paths.data),
                 settings: paths.settings,

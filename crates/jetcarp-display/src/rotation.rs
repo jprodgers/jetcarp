@@ -51,13 +51,24 @@ impl Clock {
 }
 
 impl Clock {
+    /// The local date and time now.
     pub fn local() -> Clock {
-        use chrono::{Datelike, Timelike};
-        let t = chrono::Local::now();
+        Clock::of(jiff::Timestamp::now())
+    }
+
+    /// The local date and time `secs` seconds after 1970-01-01 UTC.
+    pub fn at(secs: i64) -> Clock {
+        Clock::of(jiff::Timestamp::from_second(secs).unwrap_or(jiff::Timestamp::UNIX_EPOCH))
+    }
+
+    /// The date and time at `t` in the time zone in use ([`jetcarp_core::time_zone`]).
+    fn of(t: jiff::Timestamp) -> Clock {
+        let t = t.to_zoned_datetime(jetcarp_core::time_zone::local());
         Clock {
-            weekday: t.weekday().num_days_from_monday() as u8,
-            minute: t.hour() * 60 + t.minute(),
-            day: t.date_naive().num_days_from_ce() as i64 - 719_163,
+            weekday: t.weekday().to_monday_zero_offset() as u8,
+            minute: t.hour() as u32 * 60 + t.minute() as u32,
+            // The local date's day: the moment moved by the zone's offset, in whole days.
+            day: (t.timestamp().as_second() + i64::from(t.offset().seconds())).div_euclid(86_400),
         }
     }
 }

@@ -764,7 +764,6 @@ pub mod stand_in {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ab_glyph::{Font, FontRef};
 
     /// The files are the ones `fonts/README.md` names, byte for byte.
     #[test]
@@ -783,16 +782,17 @@ mod tests {
                 line.contains(&jetcarp_core::sha256::sha256_hex(bytes)),
                 "{file}'s SHA-256 is not the README's: {line}"
             );
-            assert!(FontRef::try_from_slice(bytes).is_ok(), "{file} parses");
+            assert!(crate::caption::can_draw_in(bytes, 0), "{file} parses");
         }
     }
 
     #[test]
     fn the_fonts_draw_basic_latin() {
         for bytes in [NEXT_REGULAR, NEXT_BOLD, MONO_REGULAR] {
-            let f = FontRef::try_from_slice(bytes).unwrap();
+            let f = skrifa::FontRef::new(bytes).unwrap();
             for c in (0x21u8..0x7f).map(char::from) {
-                assert_ne!(f.glyph_id(c).0, 0, "{c:?}");
+                let g = f.charmap().map(c);
+                assert!(g.is_some_and(|g| g != skrifa::GlyphId::NOTDEF), "{c:?}");
             }
         }
     }
