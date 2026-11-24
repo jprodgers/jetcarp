@@ -478,6 +478,26 @@ day later (0.4.2: 17 November here, 18 November there).
   runs the Intel Mac's program under Rosetta. The comparison with IRIS was run again on
   v0.4.3-rc.2, and its one moved count is brought up to date.
 
+- **The caption is drawn with skrifa and vello_cpu, egui's own font reader and rasteriser,
+  instead of ab_glyph,** which reads fonts with ttf-parser, a crate the RustSec database marks
+  unmaintained (RUSTSEC-2026-0192). On Windows and macOS the caption was the only thing that brought
+  ttf-parser in; on Linux winit's window decorations still do, until winit moves off it. Both
+  crates were in the tree already through egui, so nothing new comes in. The caption keeps its
+  fonts and its look: its line heights, spacing and kerning are worked out as ab_glyph worked them
+  out, and its curves cut into lines as ab_glyph cut them, so 125 captions drawn both ways (five
+  scenes' captions in five fonts, with Chinese, Greek and key symbols from the fonts behind, at 12
+  to 40 pixels) are the same size, and 355 of their 3.1 million pixels differ, each by one level.
+  ([Font](../guides/accessibility-settings.md#font),
+  [#186](https://github.com/jprodgers/jetcarp/issues/186))
+- **JETCARP's own dates and times come from jiff instead of chrono,** which the RustSec database
+  marks unmaintained (RUSTSEC-2026-0543): the output folders' names, records' times, a machine
+  score's date and the rotations' clock. They are written exactly as before, which tests now pin
+  in several time zones, either side of daylight saving time's changes, midnight and 1970. jiff is
+  pure Rust; on Windows it carries its own copy of the time zone database. chrono stays in the tree
+  through Arrow and Parquet until they move off it.
+  ([When a rotation moves on](../guides/rotations.md#when-a-rotation-moves-on),
+  [#186](https://github.com/jprodgers/jetcarp/issues/186))
+
 ### Fixed
 
 - **The publisher key is made safely by two programs at once** (#332). `jetcarp pack key`, or

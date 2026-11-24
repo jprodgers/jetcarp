@@ -205,7 +205,13 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   the app's font setting in `app.json`: a font file chosen there from the next check without a
   restart and at the next start, egui's original, then Atkinson again; and with the chosen file
   removed, Atkinson, with a note that names the file and no folder
-  (`jetcarp-display/src/caption.rs`). Installing the macOS screen saver, in a scratch folder on any
+  (`jetcarp-display/src/caption.rs`). The caption's sizes and layout are pinned as they were
+  before it moved from ab_glyph to skrifa and vello_cpu in 0.4.3 (#186): its line heights, the
+  widths of lines with accents and with a Greek letter from the font behind, the picture's size
+  with lines cut to fit, and where its letters fall, to a pixel, in Atkinson Hyperlegible Next and
+  Mono, Ubuntu Light and Hack (`the_caption_s_sizes_and_layout_are_pinned`); an ignored test draws
+  captions into a folder for comparing two builds pixel by pixel
+  (`draw_captions_for_comparison`). Installing the macOS screen saver, in a scratch folder on any
   system, must record the font chosen and copy its file whole into the bundle's Resources (a
   collection with its face), and copy nothing for Atkinson or egui's original; a chosen font that
   is gone or isn't a font must give Atkinson and a warning that names the file and no folder; a
@@ -235,6 +241,17 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   doctor`, and not be tried again until the next change; and a change to the guard or the answer
   must reach the bundle without installing again, while a change that bakes the same leaves it
   alone (`jetcarp-display/tests/saver_update.rs`).
+- **Local times.** The output folders' names (`2026-11-05_14-30-02`), records' times
+  (`2026-11-05T14:30:02-05:00`), a machine score's date and the rotations' clock must name the
+  moment in the computer's own time zone, whatever it is, and agree with each other. Each is pinned,
+  in a process of its own with `TZ` set (Linux and macOS), in New York either side of both of
+  2026's daylight saving changes, midnight at the new year and 1970, in Kathmandu (+05:45), St
+  John's (−03:30), Lord Howe Island (whose clocks go back half an hour), London, UTC and a POSIX
+  rule; and in New York the rotation's decisions at those moments: a schedule's window opening and
+  closing on the minute, an item ending at 02:30 on the night that time never comes, one ending at
+  01:30 on the night it comes twice, and one an hour keeping its item through that hour
+  (`jetcarp-api/src/out.rs`, `jetcarp-display/tests/rotation.rs`). The pins were written with
+  chrono and pass unchanged on jiff, which JETCARP uses since 0.4.3 (#186).
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the

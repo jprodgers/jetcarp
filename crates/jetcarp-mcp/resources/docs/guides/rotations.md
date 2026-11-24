@@ -58,6 +58,11 @@ all hour), and a program started again shows the same item:
 - An item that cannot be shown at all (a scene that won't build) gives way to the next, as in any
   rotation, until the day or the hour changes.
 
+The clock is the computer's local time, in its own time zone (`TZ`, where it is set, decides it).
+On the night the clocks go forward, a time of day that never comes (an item ending at 02:30, say)
+counts as passed when the clock jumps over it. On the night they go back, the hour that comes
+twice is one hour for *One an hour*, and an item ending at a time in it can end both times.
+
 ## Make a rotation in the app
 
 For the desktop background, open the *Desktop background* pane (*View → Desktop background

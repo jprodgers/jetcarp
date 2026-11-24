@@ -143,7 +143,9 @@ Without a font that has it, a character is still drawn as a box.
 
 **The caption on the desktop background follows the Font setting** (its first list): the desktop
 background reads it from `app.json` when it starts and again every couple of seconds, so a font
-chosen in the app shows on the desktop without a restart. Behind the chosen font, the caption
+chosen in the app shows on the desktop without a restart. It is drawn with egui's own font reader
+and rasteriser (skrifa and vello_cpu), as the app's words are, its letters sized and spaced as they
+were before 0.4.3. Behind the chosen font, the caption
 has Ubuntu Light, as the app has (with egui's original choice it is drawn in Ubuntu Light alone),
 and the same last resort: a character neither has, such as a rotation named in Chinese, is drawn
 in an installed font that has it. The desktop background reads which characters the installed
