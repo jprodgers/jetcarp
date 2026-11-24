@@ -793,9 +793,10 @@ fn rank(info: &wgpu::AdapterInfo, purpose: Purpose) -> (u8, u8) {
 /// (`.github/workflows/ci.yml`), all but the soup hunt's, which that WARP compiles too slowly and,
 /// for Generations rules, wrongly (`hunt::NOT_ON_WARP`).
 ///
-/// WARP is not supported for users until Windows Update brings a WARP that compiles JETCARP's
-/// shaders, and even then only if supporting it breaks nothing else. The kernels are not reshaped
-/// to suit a WARP that can't.
+/// WARP is not supported for users for now, and only will be if supporting it breaks nothing
+/// else. In 0.4.4 the kernels get their barriers at the top level, reached by every thread, with
+/// results bit for bit the same (#334): the most portable shape, against compiler bugs like this
+/// one on drivers JETCARP can't test, which may let the system WARP run them too.
 pub(crate) fn is_warp(info: &wgpu::AdapterInfo) -> bool {
     info.device_type == wgpu::DeviceType::Cpu
         && (info.backend == wgpu::Backend::Dx12 || info.name.contains("Microsoft Basic Render"))

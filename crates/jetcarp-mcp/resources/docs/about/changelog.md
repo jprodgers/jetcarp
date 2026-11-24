@@ -463,8 +463,9 @@ day later (0.4.2: 17 November here, 18 November there).
   it compiles the world stepper's kernel (and the soup hunt's). The fault is in WARP's own shader
   compiler, which fails on a workgroup barrier after an early return or in an `if` that ends the
   shader; the newer WARP Microsoft publishes for developers runs the world stepper and explore
-  batches bit for bit with the processor. WARP won't be supported until Windows Update brings one
-  that compiles JETCARP's shaders, and then only if that breaks nothing else. Drawing on WARP, as
+  batches bit for bit with the processor. WARP isn't supported for now, and only will be if that
+  breaks nothing else; 0.4.4 moves the kernels' barriers to the top level, with results bit for bit
+  the same, against such compiler bugs on hardware JETCARP can't test (#334). Drawing on WARP, as
   the background host does on a virtual machine, was never affected, and a program that has used
   WARP ends cleanly. Windows CI now runs the GPU tests on that newer WARP, which it downloads and
   checks, all but the soup hunt's: it compiles the hunt's kernels too slowly and gets Generations
