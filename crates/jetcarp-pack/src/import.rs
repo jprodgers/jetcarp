@@ -561,10 +561,7 @@ pub fn import(lib: &Library, opts: &Options, log: &dyn Fn(&str)) -> Result<Impor
             .collect();
         let mut ok = vec![];
         for r in ready {
-            match r {
-                Ok(x) => ok.push(x),
-                Err(e) => return Err(e),
-            }
+            ok.push(r?);
         }
         let ids: Vec<String> = ok.iter().map(|x| x.0.id.clone()).collect();
         let res = lib.add_many_each(ok, 0, false)?;

@@ -871,6 +871,8 @@ impl Wizard {
 
     fn buttons(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            // Each page's button is drawn in its arm, not in a match guard.
+            #[allow(clippy::collapsible_match)]
             match self.page {
                 Page::Welcome | Page::Profile => {
                     if ui
@@ -1786,9 +1788,7 @@ mod tests {
         ] {
             assert!(std::env::var_os(v).is_some(), "set {v}");
         }
-        let Some(o) = Offscreen::new(690, 640) else {
-            return None;
-        };
+        let o = Offscreen::new(690, 640)?;
         app_fonts(&o.ctx);
         let mk: MakeCtx =
             Arc::new(|| Ctx::new().with_platform(Arc::new(crate::window_job::AppPlatform)));

@@ -8,7 +8,7 @@
 //!   by name ([`call_json`]); [`ops`] holds the operations and their registry ([`ops::OPS`]).
 //! - [`ctx`]: what an operation runs with ([`Ctx`]: folders, [`Limits`], [`FsPolicy`], and the
 //!   machine as the program sees it, [`Platform`]).
-//! - [`error`]: [`ApiError`].
+//! - [`error`]: the error type, [`ApiError`].
 //!
 //! And what the front ends shared or had copied between them: the argument parsers ([`args`]),
 //! output folders and PNG files ([`out`]), the world a front end acts on ([`world`]), cell

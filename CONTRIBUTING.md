@@ -45,6 +45,7 @@ email), not in a public issue: see [SECURITY.md](SECURITY.md).
 
   ```bash
   cargo fmt --all
+  cargo clippy --workspace --all-targets --locked -- -D warnings
   cargo test --workspace --release
   python3 docs/tools/check-links.py          # if you changed the book
   python3 docs/tools/gen-cli.py --check      # if you changed the command line's help

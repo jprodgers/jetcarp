@@ -11,6 +11,9 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 default = ["api"]
 # Scripts with the whole host API: worlds, the library, searches, media, and every operation.

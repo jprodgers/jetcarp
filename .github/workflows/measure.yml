@@ -1,0 +1,156 @@
+# How fast JETCARP is and how much of it the tests run, measured once a week and on demand, and
+# recorded: never on a pull request, and never a check that must pass. Nothing is sent anywhere:
+# the numbers are in each run's summary and its artifacts (`benchmarks`, `coverage`).
+#
+# - Benchmarks: tools/bench.py runs every benchmark in the repository with fixed arguments, in
+#   release, the GPU's on Mesa's lavapipe (a software renderer, so they measure the kernels on a
+#   processor, not a GPU). Each number is recorded with the commit, the date, the runner and the
+#   Rust that built it (bench.json and bench.csv). Run by hand, it can compare itself with an
+#   earlier run: give that run's id (`compare_with`), and the summary lists what moved.
+#   Or download two runs' `benchmarks` and run `python3 tools/bench.py compare OLD.json NEW.json`.
+# - Coverage: the whole test suite once more, instrumented by cargo-llvm-cov, in release, the GPU
+#   tests on lavapipe. The share of lines, functions and regions run is in the summary; the lcov
+#   file (lcov.info) and the per-file table are the artifact.
+name: Benchmarks and coverage
+
+on:
+  schedule:
+    # Sundays at 09:43 UTC (4:43 AM EST).
+    - cron: "43 9 * * 0"
+  workflow_dispatch:
+    inputs:
+      compare_with:
+        description: "Optional: the id of an earlier run of this workflow, to compare the benchmarks with"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: measure-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  # As CI: the GPU on Mesa's lavapipe, and nothing near the runner's own folders.
+  JETCARP_GPU: software
+  JETCARP_CONFIG_DIR: ${{ github.workspace }}/.ci/config
+  JETCARP_DATA_DIR: ${{ github.workspace }}/.ci/data
+  JETCARP_OUT: ${{ github.workspace }}/.ci/out
+  JETCARP_LIBRARY: ${{ github.workspace }}/.ci/library
+
+jobs:
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      # To download an earlier run's numbers (compare_with).
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan for the GPU's benchmarks)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+      - name: The benchmarks
+        run: python3 tools/bench.py run --out bench-out
+      - name: Their numbers, in the run's summary
+        if: ${{ !cancelled() }}
+        run: cat bench-out/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: benchmarks
+          path: bench-out/
+          retention-days: 90
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: ${{ inputs.compare_with != '' }}
+        with:
+          name: benchmarks
+          path: baseline
+          run-id: ${{ inputs.compare_with }}
+          github-token: ${{ github.token }}
+      - name: The change from the earlier run
+        if: ${{ inputs.compare_with != '' }}
+        env:
+          EARLIER: ${{ inputs.compare_with }}
+        run: |
+          {
+            echo "## Compared with run $EARLIER"
+            echo
+            python3 tools/bench.py compare --changed baseline/bench.json bench-out/bench.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  coverage:
+    name: Test coverage
+    runs-on: ubuntu-24.04
+    # Instrumented, the suite runs several times slower than CI's Linux tests (about 40 minutes).
+    timeout-minutes: 240
+    env:
+      # As CI's Linux tests: a GPU test that cannot run on lavapipe fails rather than skips.
+      JETCARP_REQUIRE_GPU: "1"
+      # Coverage needs no debug information, and the instrumented build is large enough without.
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          components: llvm-tools
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1 mesa-vulkan-drivers
+      - name: cargo-llvm-cov 0.9.1, checked against its release's checksum
+        run: |
+          v=0.9.1
+          f=cargo-llvm-cov-x86_64-unknown-linux-musl.tar.gz
+          curl -fsSLO "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v$v/$f"
+          echo "3fca950394a3c49457657c158b1619cec8dfd2647ae5b48746734c0ab969a522  $f" | sha256sum -c -
+          tar -xzf "$f" -C "$HOME/.cargo/bin" cargo-llvm-cov
+          cargo llvm-cov --version
+      - name: The tests, instrumented
+        # Instrumented code runs slower, so a test that times something can fail here and pass in
+        # CI's own test jobs, which are what decide whether a test passes. A failure is reported in
+        # the summary and does not stop the report.
+        id: tests
+        continue-on-error: true
+        run: cargo llvm-cov --workspace --release --locked --no-fail-fast --no-report
+      - name: The report (the tests' own files and the examples left out)
+        if: ${{ !cancelled() }}
+        env:
+          TESTS: ${{ steps.tests.outcome }}
+        run: |
+          mkdir -p coverage
+          ignore='(^|/)(tests|examples)/'
+          cargo llvm-cov report --release --ignore-filename-regex "$ignore" --lcov --output-path coverage/lcov.info
+          cargo llvm-cov report --release --ignore-filename-regex "$ignore" --summary-only --json --output-path coverage/summary.json
+          # The table of every file (llvm-cov's own report) goes to standard output.
+          cargo llvm-cov report --release --ignore-filename-regex "$ignore" > coverage/files.txt
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          t = json.load(open("coverage/summary.json"))["data"][0]["totals"]
+          print("## Test coverage\n")
+          print("| | Covered | Of | Share |\n| --- | ---: | ---: | ---: |")
+          for k in ("lines", "functions", "regions"):
+              v = t[k]
+              print(f"| {k.capitalize()} | {v['covered']:,} | {v['count']:,} | {v['percent']:.1f}% |")
+          print("\nJETCARP's own code, the tests' files and the examples left out; per file in the artifact (files.txt).")
+          if os.environ["TESTS"] != "success":
+              print("\n**Some tests failed** when instrumented (see the step's log): the figures count what ran.")
+          EOF
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 90

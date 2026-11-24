@@ -53,6 +53,7 @@ on:
     paths:
       - "packaging/**"
       - ".github/workflows/release.yml"
+      - ".github/rust-release"
       - "pyproject.toml"
       - "Cargo.toml"
   release:
@@ -198,7 +199,20 @@ jobs:
       JETCARP_REQUIRE_GPU: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The Rust releases are built with (.github/rust-release)
+        # Named exactly, so that a release can be built again as it was; the file says how it moves.
+        id: rust
+        shell: bash
+        run: |
+          v=$(sed 's/#.*//' .github/rust-release | tr -d '[:space:]')
+          if ! [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::.github/rust-release should name one Rust version, such as 1.100.0, not '$v'"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          toolchain: ${{ steps.rust.outputs.version }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
         run: |
@@ -239,8 +253,20 @@ jobs:
       PACKS: ${{ needs.verify.outputs.packs == 'true' && 'starter-pack' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The Rust releases are built with (.github/rust-release)
+        # Named exactly, so that a release can be built again as it was; the file says how it moves.
+        id: rust
+        shell: bash
+        run: |
+          v=$(sed 's/#.*//' .github/rust-release | tr -d '[:space:]')
+          if ! [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::.github/rust-release should name one Rust version, such as 1.100.0, not '$v'"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
         with:
+          toolchain: ${{ steps.rust.outputs.version }}
           targets: ${{ matrix.target }}${{ matrix.also && format(',{0}', matrix.also) || '' }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -457,7 +483,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.release.tag_name }}
+      - name: The Rust releases are built with (.github/rust-release)
+        # Named exactly, so that a release can be built again as it was; the file says how it moves.
+        id: rust
+        shell: bash
+        run: |
+          v=$(sed 's/#.*//' .github/rust-release | tr -d '[:space:]')
+          if ! [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::.github/rust-release should name one Rust version, such as 1.100.0, not '$v'"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          toolchain: ${{ steps.rust.outputs.version }}
       - name: Linux libraries (crates.io's verification builds the window and display crates)
         run: |
           sudo apt-get update

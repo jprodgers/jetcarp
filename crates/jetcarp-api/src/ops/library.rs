@@ -340,7 +340,7 @@ impl Op for LibraryQuery {
         match a.kind.as_deref().unwrap_or("pattern") {
             "pattern" => {
                 let q = a.pattern_query()?;
-                let matching = lib.count(&q).map_err(catalog_err)? as u64;
+                let matching = lib.count(&q).map_err(catalog_err)?;
                 let patterns = if a.count_only {
                     Vec::new()
                 } else {

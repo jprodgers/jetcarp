@@ -173,7 +173,7 @@ impl JetcarpApp {
     }
 
     fn save_scene_to(&mut self, path: &Path) {
-        match std::fs::write(&path, self.current_scene().to_json()) {
+        match std::fs::write(path, self.current_scene().to_json()) {
             Ok(()) => {
                 self.message = Some((
                     format!("Saved {} (hash {})", path.display(), self.world.hash_hex()),

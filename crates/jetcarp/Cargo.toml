@@ -13,6 +13,9 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "jetcarp"
 path = "src/main.rs"

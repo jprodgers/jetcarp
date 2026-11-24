@@ -411,7 +411,10 @@ fn a_caption_draws_in_its_corner_and_nowhere_else() {
     assert_eq!(lit(&px, true, false), 0);
 
     let px = shot(&mut painter, &settings, 0.0);
-    assert!(px.chunks_exact(4).all(|p| p[..3] == [0, 0, 0]), "invisible");
+    assert!(
+        px.as_chunks::<4>().0.iter().all(|p| p[..3] == [0, 0, 0]),
+        "invisible"
+    );
 
     // Another font (the app's setting changed): the same words are laid out again in it.
     let atkinson = shot(&mut painter, &settings, 1.0);

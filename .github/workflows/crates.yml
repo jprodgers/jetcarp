@@ -33,7 +33,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag }}
+      - name: The Rust the release was built with (.github/rust-release, at its tag)
+        # A tag made before the file existed (0.4.2 and earlier) builds with the newest stable.
+        id: rust
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ ! -f .github/rust-release ]; then
+            echo "::warning::$TAG has no .github/rust-release; using the newest stable"
+            echo "version=stable" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          v=$(sed 's/#.*//' .github/rust-release | tr -d '[:space:]')
+          if ! [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::.github/rust-release should name one Rust version, such as 1.100.0, not '$v'"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          toolchain: ${{ steps.rust.outputs.version }}
       - name: Linux libraries (the window and display crates build against them)
         run: |
           sudo apt-get update

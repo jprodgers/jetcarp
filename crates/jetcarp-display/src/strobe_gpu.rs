@@ -559,13 +559,12 @@ fn decoding_view(tex: &wgpu::Texture) -> wgpu::TextureView {
     let f = tex.format();
     let s = f.add_srgb_suffix();
     if s.is_srgb() {
-        let v = tex.create_view(&wgpu::TextureViewDescriptor {
+        tex.create_view(&wgpu::TextureViewDescriptor {
             label: Some("strobe guard: decoding view"),
             format: Some(s),
             usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
             ..Default::default()
-        });
-        v
+        })
     } else {
         tex.create_view(&Default::default())
     }
@@ -673,8 +672,10 @@ impl StrobeGpu {
             let mut words: Vec<u32> = jetcarp_core::strobe::decode_tables().to_vec();
             words.extend(
                 jetcarp_core::strobe::soften::encode_table()
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])),
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b)),
             );
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("strobe guard tables"),
@@ -860,7 +861,7 @@ impl StrobeGpu {
         }
         let bytes = s.w as u64 * s.h as u64 * 8;
         let limits = device.limits();
-        if bytes > limits.max_storage_buffer_binding_size as u64 || bytes > limits.max_buffer_size {
+        if bytes > limits.max_storage_buffer_binding_size || bytes > limits.max_buffer_size {
             self.too_large = true;
             return false;
         }
@@ -939,7 +940,6 @@ impl StrobeGpu {
     ///
     /// [`scene_target`]: Self::scene_target
     /// [`after_submit`]: Self::after_submit
-    #[allow(clippy::too_many_arguments)]
     pub fn process(
         &mut self,
         device: &wgpu::Device,

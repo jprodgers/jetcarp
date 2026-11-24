@@ -185,7 +185,6 @@ impl Painter {
     }
 
     /// Draws `stage` onto `target`, `size` pixels with `scale` pixels per point, at time `now`.
-    #[allow(clippy::too_many_arguments)]
     pub fn paint(
         &mut self,
         device: &wgpu::Device,
@@ -201,7 +200,6 @@ impl Painter {
     }
 
     /// The same, writing GPU timestamps at the start and end of the drawing (the tuner's).
-    #[allow(clippy::too_many_arguments)]
     pub fn paint_timed(
         &mut self,
         device: &wgpu::Device,

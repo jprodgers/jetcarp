@@ -165,7 +165,6 @@ fn job_of(tx: &Transaction, job: i64) -> Result<(String, String), String> {
 /// Write a record's provenance row 0 (nothing if it has one). `found_with` is the engine that
 /// found it, which row 0 names only for a record found elsewhere ([`Origin::found_elsewhere`]:
 /// then its `imported` row 1 is written too).
-#[allow(clippy::too_many_arguments)]
 pub(super) fn first_in(
     tx: &Transaction,
     target_kind: &str,

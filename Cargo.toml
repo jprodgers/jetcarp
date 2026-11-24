@@ -19,6 +19,22 @@ categories = ["science", "simulation", "mathematics"]
 # Naming the registry also tells cargo-about (packaging/about.toml) that these are JETCARP's own.
 publish = ["crates-io"]
 
+# Clippy's policy for every crate (each says `[lints] workspace = true`). CI runs
+# `cargo clippy --workspace --all-targets --locked -- -D warnings`, so every lint clippy warns
+# about by default is fixed, allowed here for the whole workspace, or allowed with
+# `#[allow(clippy::…)]` at the one place it is wrong about. Only these four are allowed throughout:
+[workspace.lints.clippy]
+# Geometry, rendering and search functions take a tiling, a rule, a field and their settings as
+# separate parameters; a struct made only to carry them would not read better.
+too_many_arguments = "allow"
+# Callbacks, and maps from a tuple to a list of tuples, are written out where they are used.
+type_complexity = "allow"
+# A cell's index is also its id in the tiling: loops over `0..n` use it as both.
+needless_range_loop = "allow"
+# `g % 2 == 0` is the arithmetic as written down, and rustfmt spreads the one-line
+# `if g.is_multiple_of(2) { a } else { b }` over five lines.
+manual_is_multiple_of = "allow"
+
 # The workspace's own crates carry their exact version, which crates.io needs, so a published
 # jetcarp always builds with the crates it was released with.
 [workspace.dependencies]

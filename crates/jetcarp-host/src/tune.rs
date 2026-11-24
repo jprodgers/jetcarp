@@ -325,7 +325,6 @@ fn reads_per_cell(scene: &jetcarp_core::Scene) -> Option<f64> {
 /// A screen's scenes as a fit sees them: a series' rules as one scene (#109), each with its
 /// sizes on `canvas` at `scale` (at most `max_cells` cells), its cost, and the frame rate it is
 /// held to. `reads` caches the neighbour reads of each tiling and set of rules.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn plan_scenes(
     slots: &[Slot],
     lookup: &Lookup,
@@ -536,7 +535,6 @@ impl ScreenFit {
     /// ([`tuning::scenes_to_measure`]), and where each search starts (a size chosen before, else the
     /// one recommended last time, kept while it stays within the noise, #94; else the score's
     /// guess).
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn plan(
         job: &Job,
         share: f64,
@@ -1034,7 +1032,6 @@ fn tune(args: &TuneArgs, out: &Out) -> Result<(), String> {
 }
 
 /// `--pick` from the last fit, nothing measured (#77).
-#[allow(clippy::too_many_arguments)]
 fn place_saved(
     saved: &[(usize, Tuning)],
     pick: Pick,

@@ -541,8 +541,7 @@ fn ltl_counts_above_the_square_grids_neighbourhood_count() {
 #[test]
 fn ltl_refuses_counts_past_the_limit() {
     let e = jetcarp_core::rules::Rule::parse("R2,C2,S2-3,B3-99999")
-        .err()
-        .expect("a count of 99,999 is refused");
+        .expect_err("a count of 99,999 is refused");
     assert!(e.contains("99999") && e.contains("at most"), "{e}");
 }
 

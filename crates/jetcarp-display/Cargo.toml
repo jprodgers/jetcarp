@@ -11,6 +11,9 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 default = ["library"]
 # Quick Start entries a rotation names are found in the user's library (the background host;

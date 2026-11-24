@@ -3,7 +3,11 @@
 # packaging/about.toml handles them.
 #
 # The crates checked are the ones built for the targets JETCARP releases for (release.yml), with
-# every feature on and with the tests' dev-dependencies: what cargo would build for any of them.
+# every feature on and with the tests' dev-dependencies. CI checks each target on its own
+# (`cargo deny --target <target> check`, once for each target below): given them all at once,
+# cargo-deny merges them into one graph, and reports crates that no target builds: the tray icon's
+# GTK crates, say, since the tray icon is built only for Windows and macOS, and its GTK crates
+# only for Linux (#186).
 
 [graph]
 targets = [
@@ -19,17 +23,16 @@ all-features = true
 # check, and so does unsoundness anywhere in the tree, not only in direct dependencies. A notice
 # that a crate is unmaintained is not a vulnerability: CI runs the check with
 # `--warn unmaintained`, so those are warnings in its log and never fail it (#186 lists them).
-# Run it the same way: `cargo deny check --warn unmaintained advisories bans sources`.
+# Run it the same way, once for each target above:
+# `cargo deny --target <target> check --warn unmaintained advisories bans sources`.
 [advisories]
 unmaintained = "all"
 unsound = "all"
 yanked = "deny"
+# An ignored advisory that the check no longer meets fails it, so no ignore outlives its reason.
+# The check runs once for each target: an ignore for a crate only some targets build fails the
+# others.
 unused-ignored-advisory = "deny"
-ignore = [
-    # On Linux the tray icon pulls in gtk 0.18 and glib 0.18; JETCARP never uses the iterator
-    # the notice is about (#119).
-    { id = "RUSTSEC-2024-0429", reason = "glib 0.18's VariantStrIter, which JETCARP never uses: #119" },
-]
 
 # SECURITY.md says that JETCARP makes no network connections, and that the only network sockets
 # it opens are local, on 127.0.0.1. So that no networking comes in by accident (a dependency

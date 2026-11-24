@@ -374,7 +374,7 @@ fn every_profile_applies() {
             );
             assert_eq!(build.fraction, Some(1.0));
         } else {
-            assert!(qs.get("pack").is_none(), "{p:?}");
+            assert!(!qs.contains_key("pack"), "{p:?}");
         }
         if p.chooses_data_dir() {
             assert_eq!(

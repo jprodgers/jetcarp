@@ -666,7 +666,6 @@ type RunOut = (Vec<Image>, Vec<u64>, [f64; 4], f64, f64);
 /// Run a world (made fresh by `make`), drawing the generations in `shown` (every `every`) in a
 /// fixed window, or (`None`) in a window around every live cell of those generations, found by
 /// a first run. Frames are drawn while stepping, so memory stays at one world.
-#[allow(clippy::too_many_arguments)]
 fn run_world(
     make: &dyn Fn() -> Result<World, String>,
     shown: std::ops::Range<u64>,
