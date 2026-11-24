@@ -118,17 +118,25 @@ jobs:
           tar -xzf "$f" -C "$HOME/.cargo/bin" cargo-llvm-cov
           cargo llvm-cov --version
       - name: The tests, instrumented
+        # Instrumented code runs slower, so a test that times something can fail here and pass in
+        # CI's own test jobs, which are what decide whether a test passes. A failure is reported in
+        # the summary and does not stop the report.
+        id: tests
+        continue-on-error: true
         run: cargo llvm-cov --workspace --release --locked --no-fail-fast --no-report
       - name: The report (the tests' own files and the examples left out)
         if: ${{ !cancelled() }}
+        env:
+          TESTS: ${{ steps.tests.outcome }}
         run: |
           mkdir -p coverage
           ignore='(^|/)(tests|examples)/'
           cargo llvm-cov report --release --ignore-filename-regex "$ignore" --lcov --output-path coverage/lcov.info
           cargo llvm-cov report --release --ignore-filename-regex "$ignore" --summary-only --json --output-path coverage/summary.json
-          cargo llvm-cov report --release --ignore-filename-regex "$ignore" --text --summary-only --output-path coverage/files.txt
+          # The table of every file (llvm-cov's own report) goes to standard output.
+          cargo llvm-cov report --release --ignore-filename-regex "$ignore" > coverage/files.txt
           python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          import json
+          import json, os
           t = json.load(open("coverage/summary.json"))["data"][0]["totals"]
           print("## Test coverage\n")
           print("| | Covered | Of | Share |\n| --- | ---: | ---: | ---: |")
@@ -136,6 +144,8 @@ jobs:
               v = t[k]
               print(f"| {k.capitalize()} | {v['covered']:,} | {v['count']:,} | {v['percent']:.1f}% |")
           print("\nJETCARP's own code, the tests' files and the examples left out; per file in the artifact (files.txt).")
+          if os.environ["TESTS"] != "success":
+              print("\n**Some tests failed** when instrumented (see the step's log): the figures count what ran.")
           EOF
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
