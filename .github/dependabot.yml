@@ -1,15 +1,18 @@
-# Dependabot: a weekly pull request for the crates and one for the workflows' actions, each with
-# every minor and patch update in it, and a pull request of its own for each major update. Its
-# pull requests go through CI and are reviewed like any other; nothing merges on its own.
+# Dependabot: once a week, one pull request with the crates' patch updates together, one with the
+# actions' patch updates together, and a pull request of its own for each minor and each major
+# update (a minor update of a 0.x crate can break the build, so it never holds up the others). Its
+# pull requests go through CI and are reviewed like any other; nothing merges on its own. A new
+# version is proposed only once it is five days old (`cooldown`), so a release that is pulled soon
+# after it comes out never is; security updates are not held back by it.
 #
 # The actions stay pinned by commit, with the version in a comment (`@<commit> # v7.0.1`):
 # Dependabot moves the commit to the new release's and rewrites the version in the comment.
 # dtolnay/rust-toolchain has no releases (it is pinned to a commit of its `stable` branch, which
-# its author rebuilds), and the Rust the release is built with is a version in release.yml:
+# its author rebuilds), and the Rust a release is built with is in .github/rust-release:
 # Dependabot updates neither, so both are moved on by hand at the start of a cycle.
 #
-# A pull request that changes Cargo.lock also needs THIRD_PARTY_LICENSES.html made again
-# (`packaging/notices.sh`), or CI's notices check fails.
+# A pull request that changes Cargo.lock also needs THIRD_PARTY_LICENSES.html made again:
+# dependabot-notices.yml makes it and pushes it to the pull request's branch.
 version: 2
 updates:
   - package-ecosystem: cargo
@@ -19,10 +22,13 @@ updates:
       day: monday
       time: "05:00"
       timezone: America/New_York
-    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 5
+    # Minor updates come one to a pull request, so more may be open at once than for the actions.
+    open-pull-requests-limit: 10
     groups:
       crates:
-        update-types: [minor, patch]
+        update-types: [patch]
     labels: [dependencies]
     commit-message:
       prefix: Dependencies
@@ -34,10 +40,12 @@ updates:
       day: monday
       time: "05:00"
       timezone: America/New_York
+    cooldown:
+      default-days: 5
     open-pull-requests-limit: 5
     groups:
       actions:
-        update-types: [minor, patch]
+        update-types: [patch]
     labels: [dependencies]
     commit-message:
       prefix: CI
