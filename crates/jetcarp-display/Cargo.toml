@@ -38,7 +38,7 @@ epaint_default_fonts = "0.37.0"
 # Reading fonts: installed fonts' names and character maps, a chosen font file's check
 # (`src/fonts.rs`), and the caption's letters, their sizes and outlines (`src/caption.rs`). egui's
 # own font reader, already in the tree through epaint, so this adds no new crates.
-skrifa = { version = "0.44.0", default-features = false, features = ["std"] }
+skrifa = { version = "0.50.0", default-features = false, features = ["std"] }
 # The caption's letters drawn from their outlines: the rasteriser egui draws the app's words with,
 # already in the tree through epaint (without its text and PNG parts, which JETCARP doesn't use).
 vello_cpu = { version = "0.2.0", default-features = false, features = ["std", "u8_pipeline"] }
