@@ -76,15 +76,29 @@ export JETCARP_LIBRARY=/scratch/jetcarp/library
 CI builds and tests the whole workspace on Linux (x86_64), Windows (x86_64) and macOS (Apple
 silicon), and builds it for macOS on Intel and Linux on ARM.
 
+The benchmarks run with one command, which builds them in release, runs each with the arguments
+the weekly workflow uses, and writes their numbers to `bench-out/` (`bench.json`, `bench.csv` and a
+table, `summary.md`); `compare` shows what changed between two such records, for a change meant to
+be no slower:
+
+```sh
+python3 tools/bench.py run
+python3 tools/bench.py compare before/bench.json bench-out/bench.json
+```
+
 JETCARP makes no network connections today, and networking comes only on purpose. CI checks the
 dependency tree with [cargo-deny](https://github.com/EmbarkStudios/cargo-deny): it fails on a
 network client or server crate that `deny.toml` does not allow, on a known vulnerability, and on a
 crate from anywhere but crates.io. A change that adds networking allows its crate in `deny.toml`,
 for the one JETCARP crate that uses it (the file's comments show how), and updates `SECURITY.md`.
-To run the same check yourself (`cargo install --locked cargo-deny`):
+CI checks each target JETCARP is released for on its own, as that target builds the tree. To run
+the same check yourself (`cargo install --locked cargo-deny`):
 
 ```sh
-cargo deny check --warn unmaintained advisories bans sources
+for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-msvc \
+         aarch64-apple-darwin x86_64-apple-darwin; do
+  cargo deny --target "$t" check --warn unmaintained advisories bans sources
+done
 ```
 
 ## The determinism pins
@@ -195,6 +209,19 @@ claims more than its evidence: novelty only as set out in
   thread count.
 - The code follows rustfmt's default style: run `cargo fmt --all` before committing. CI checks it with
   `cargo fmt --all -- --check`.
+- The code passes clippy with no warnings: CI fails on any clippy or compiler warning, on Linux
+  and for Windows and macOS too.
+
+  ```sh
+  cargo clippy --workspace --all-targets --locked -- -D warnings
+  ```
+
+  The policy is in the root `Cargo.toml`, under `[workspace.lints.clippy]`, which every crate takes
+  up (`[lints] workspace = true`): four lints are allowed throughout, each with its reason. Anywhere
+  else, fix the warning, or, where clippy is wrong about one place, allow its lint there with
+  `#[allow(clippy::…)]` and a comment saying why. A lint allowed in many places belongs in the
+  policy, with its reason, rather than in each. CI runs clippy on the newest stable Rust, so a lint
+  a new Rust brings fails there the week it is out: fix it in its own pull request.
 - Commit messages start with a short summary, often prefixed by the area (`cli:`, `jobs:`, `Docs:`),
   followed by a paragraph on what changed and why.
 
