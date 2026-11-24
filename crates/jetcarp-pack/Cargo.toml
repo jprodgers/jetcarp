@@ -21,9 +21,9 @@ rayon.workspace = true
 bytes.workspace = true
 # The pack tables: Parquet through its Arrow API (nested lists of structs), zstd only.
 parquet = { workspace = true, features = ["arrow"] }
-arrow-array = "60.1.0"
-arrow-schema = "60.1.0"
-arrow-buffer = "60.1.0"
+arrow-array = "60.2.0"
+arrow-schema = "60.2.0"
+arrow-buffer = "60.2.0"
 # SSH signatures (sshsig) with Ed25519 keys, pure Rust (RustCrypto); no RSA or ECDSA.
 ssh-key = { version = "0.6.7", default-features = false, features = ["std", "ed25519", "getrandom"] }
 sha2 = "0.10.9"

@@ -401,7 +401,15 @@ impl JetcarpApp {
                             (Some(d), None, _) => {
                                 format!("{} of its own ({})", machine::bytes_text(d), g.source)
                             }
-                            _ => "not reported".into(),
+                            (None, Some(sh), _) => format!(
+                                "none of its own, may borrow {} ({})",
+                                machine::bytes_text(sh),
+                                g.source
+                            ),
+                            _ => match &g.not_read {
+                                Some(why) => format!("not read ({why})"),
+                                None => "not reported".into(),
+                            },
                         });
                         ui.end_row();
                     }

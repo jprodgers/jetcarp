@@ -130,7 +130,8 @@ future.
 
 ## Where JETCARP falls short
 
-These are known, and each is tracked:
+These are known, and each is tracked. Those that differ from system to system are also in
+[What works on each system](../getting-started/installing.md#accessibility), with why.
 
 - **Colour alone.** Cells' states and ages are told apart by colour only. The palettes chosen for
   colour-vision deficiency are checked by simulation, not yet by people with those deficiencies,
@@ -151,10 +152,11 @@ These are known, and each is tracked:
   symbols (⌘, ⌥). The app, and the caption on the desktop background and the screen savers, draw
   those in an installed font that has them (macOS's own fonts have the key symbols). A character
   that no font installed on the computer has is still drawn as a box.
-- **Not yet tested by hand** with screen readers (Narrator, NVDA, VoiceOver and Orca) or with
-  keyboard-only use, though the program's tests drive the whole app with key presses and read
-  what it offers screen readers ([#219](https://github.com/jprodgers/jetcarp/issues/219)); nor by
-  disabled people. Reduced motion
+- **Tested by hand only in part.** Orca and the keyboard alone were tried by hand on GNOME, with
+  0.4.3-rc.1; Narrator, NVDA and VoiceOver, and the keyboard alone on Windows and macOS, have not
+  been yet, though the program's tests drive the whole app with key presses and read what it
+  offers screen readers ([#219](https://github.com/jprodgers/jetcarp/issues/219)). Nor has
+  JETCARP been tested by disabled people. Reduced motion
   and the high-contrast theme are checked by the program's tests; reading each system's settings is
   checked by hand on Windows, macOS and GNOME as part of each release's testing
   ([#218](https://github.com/jprodgers/jetcarp/issues/218),

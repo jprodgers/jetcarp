@@ -650,7 +650,8 @@ impl Op for SystemDoctor {
             threads: std::thread::available_parallelism()
                 .map(|n| n.get())
                 .unwrap_or(1),
-            machine: crate::ops::machine::machine_info(cx),
+            // Doctor reads each GPU's memory afresh.
+            machine: crate::ops::machine::machine_info_fresh(cx),
             folders: DoctorFolders {
                 data_size_bytes: folder_size(&paths.data),
                 settings: paths.settings,

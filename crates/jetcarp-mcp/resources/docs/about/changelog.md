@@ -474,7 +474,33 @@ day later (0.4.2: 17 November here, 18 November there).
   [Testing](testing.md#continuous-integration),
   [#321](https://github.com/jprodgers/jetcarp/issues/321))
 
+- **CI builds the Intel Mac in the macOS test job,** after its tests, on the same Apple silicon
+  runner, instead of in a job of its own: twice on 2026-11-23 that second job found no runner. A
+  pull request's checks take about ten minutes longer.
+
+- **Parquet and Arrow 60.2.0** (from 60.1.0), for RUSTSEC-2026-0595: Parquet 60.1.0 wrote an
+  encrypted file's Bloom filters in plaintext. JETCARP builds Parquet without its encryption, so
+  it was never affected; the update keeps the dependency check clean.
+
+- **The release builds both Macs on one runner.** The Apple silicon and Intel Mac builds are made
+  one after the other on one Apple silicon runner, not on one each: GitHub's Apple silicon runners
+  are the scarcest, and v0.4.3-rc.2's first attempt found none for the second Mac job, so nothing
+  was published until it was run again. The Intel build's program is now also run once, under
+  Rosetta, where the runner has it; before, it was only built.
+
+- **The per-system tables say what rc.3's changes did:** Windows now stops a command, the app and
+  the host at a checkpoint when its console closes or at sign-out or shutdown (#319); Linux reads
+  NVIDIA's and Intel's GPU memory; macOS's explore searches give freed memory back; the release
+  runs the Intel Mac's program under Rosetta. The comparison with IRIS was run again on
+  v0.4.3-rc.2, and its one moved count is brought up to date.
+
 ### Fixed
+
+- **The publisher key is made safely by two programs at once** (#332). `jetcarp pack key`, or
+  anything that makes the key on first use, could fail with "File exists" when another program
+  made it at the same moment, or read it before its text was all written. The key is now written
+  whole into a file of its own, then linked into place, and a program that loses the race uses
+  the key the other made. Found by a test in CI that makes the key from three tests at once.
 
 - **On Windows, closing a command's console, signing out and shutting down stop it at a
   checkpoint** (#319), where Windows ended it at once: a search's job was left marked running and
@@ -615,6 +641,12 @@ day later (0.4.2: 17 November here, 18 November there).
 - **On macOS, the host asks the allocator to give back the memory it freed after each fit,** as it
   does on Linux: the host grew from 147 to 399 MB over a two-screen fit there. A fit also builds far
   fewer worlds now. ([#111](https://github.com/jprodgers/jetcarp/issues/111))
+- **On macOS, explore searches give the memory they have freed back to the system every 30
+  seconds,** as they do on Linux, with the call the host makes after a fit. Before, only Linux's
+  searches did, so on a Mac what a long search freed (each GPU batch's frames, the grids its cache
+  let go) stayed with its allocator. The host and the searches now share the one way of giving it
+  back. ([Searching](../guides/searching.md),
+  [#111](https://github.com/jprodgers/jetcarp/issues/111))
 - **The strobe guard no longer stops a debug build** on a picture side of fewer than 16 samples
   (an overflow in where its windows start); release builds were not affected.
 - **In the *Desktop background* pane, the processor's percentage after *Pause while the processor
@@ -921,6 +953,19 @@ day later (0.4.2: 17 November here, 18 November there).
   tile, which WCAG counts as flashing unless its squares are under 0.1°, was caught only as stripes,
   over a quarter of the screen (now fixed, [#269](https://github.com/jprodgers/jetcarp/issues/269)).
   ([The strobe guard](../guides/strobe-guard.md), [Bibliography](../research/bibliography.md))
+- **The book says what falls short on each system, and why.** *What works on each system*, in
+  *Installing JETCARP*, had five rows and no reasons. It is now a table for each area (installing
+  and builds, the desktop background and the screen saver, windows and monitors, accessibility,
+  the GPU, this computer, stopping, files, and what has been tried by hand), and each shortfall
+  says why: the window's place, for one, comes back on Windows, macOS and X11, but under Wayland
+  only its size does, since Wayland gives an app no say in where its windows go. It also says
+  plainly that a Mac is not recommended for serious research, and why. Pages that said what the
+  program doesn't do are corrected: the background host's windows open on their monitors except
+  under Wayland, which places them itself; under Wayland the wallpaper export's *Detected* layout
+  can read every monitor at (0, 0), and then lays them left to right; on Linux desktops other
+  than GNOME, a host started at login shows nothing; and Orca has now been tried by hand, with
+  0.4.3-rc.1. ([What works on each system](../getting-started/installing.md#what-works-on-each-system),
+  [#306](https://github.com/jprodgers/jetcarp/issues/306))
 
 - **Measuring this computer holds the rest of JETCARP still, and asks for heavy programs to be
   closed first.** The JETCARP Hardware Score times JETCARP's own work, so measuring while the app
@@ -947,6 +992,31 @@ day later (0.4.2: 17 November here, 18 November there).
   own values, never the score. They now say the JETCARP Hardware Score is for comparing computers
   and for Fit to this computer's first guess.
   ([First run](../getting-started/first-run.md), [#301](https://github.com/jprodgers/jetcarp/issues/301))
+- **On Linux, NVIDIA's and Intel's GPUs have their memory read, not only AMD's.** A GPU's limit
+  came from its own memory only where AMD's driver gave it; every other GPU got the estimate, a
+  share of the memory reserved for JETCARP. Now an NVIDIA GPU's memory comes from NVIDIA's
+  management library (NVML), which already gave its load, each GPU matched to its card by its PCI
+  address; a discrete Intel GPU's on the xe driver from the kernel's `dmem.capacity` (Linux 6.14
+  and later); and any other GPU's, among them NVIDIA's on nouveau and Intel's discrete ones on
+  i915, from its Vulkan driver's largest heap of the device's own memory, Vulkan being opened only
+  when a GPU needs it. An integrated Intel GPU, which works in the system's memory, keeps the
+  estimate, which fits it. A GPU whose memory is still not read is listed in `jetcarp doctor`,
+  *This computer* and the score's report with the reason (without NVML, in the words the GPU's
+  load gives), and `jetcarp limits` gives it beside the estimate. NVIDIA's GPUs with no DRM card
+  (nvidia-drm not loaded, as on compute servers) are found in the driver's own list and read
+  through NVML too. AMD's GPUs read as before. NVML and Vulkan are not opened at every start: what
+  they give is kept in `machine.json` by each GPU's ids and PCI address, which sysfs gives without
+  touching the GPU, and a plain start uses it, so a laptop's sleeping GPU is not woken; they are
+  opened for a GPU with nothing kept (the first start, a changed GPU), and by `jetcarp doctor` and
+  measuring, which read afresh. Only the `jetcarp` program saves these readings; code using
+  JETCARP's crates as a library, its tests among it, only reads them. A display adapter with no
+  render node (a firmware framebuffer, or a virtual machine's, such as Hyper-V's virtual VGA) is
+  not taken for a GPU, and nothing is opened for it. A measured computer whose GPU is now read is
+  noticed once as changed, and the note now says what changed for any change: *its GPU 10de:2684's
+  memory is now read, 24 GB from NVIDIA's NVML*, *its memory changed from 96 GB to 64 GB*, where it
+  said only "its processor, memory, GPUs or system".
+  ([What JETCARP reads](../guides/this-computer.md#what-jetcarp-reads),
+  [#213](https://github.com/jprodgers/jetcarp/issues/213))
 - **`jetcarp score`'s progress reads in a log.** With its output going to a file or a pipe, its
   steps ran together on one line, ended by a terminal's erase code. Each step is now a line of its
   own, with no escape codes; in a terminal the line is still redrawn in place. `jetcarp library

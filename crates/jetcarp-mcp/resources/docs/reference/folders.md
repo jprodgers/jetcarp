@@ -54,8 +54,9 @@ included). `jetcarp paths` shows where it is; set `JETCARP_OUT` to keep the outp
 **This computer's limits and score** are in the settings folder too: `limits.json` holds only
 the limits you set yourself (`jetcarp limits set`, or Tools → This computer…), and `machine.json`
 the last [JETCARP Hardware Score](../guides/this-computer.md) with its parts and the hardware it was
-measured on. Deleting `limits.json` puts every limit back to the machine's suggestion; deleting
-`machine.json` forgets the score.
+measured on, and the memory of each GPU that only NVML or Vulkan gives, as last read. Deleting
+`limits.json` puts every limit back to the machine's suggestion; deleting `machine.json` forgets
+the score, and the next start reads those GPUs afresh.
 
 **A data folder of your own.** A large library can live on another disk: the
 [first-run setup](../getting-started/first-run.md) (its data folder page, or

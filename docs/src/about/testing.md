@@ -93,10 +93,33 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   own left out), two IOAccelerator `PerformanceStatistics` dictionaries as `ioreg` prints them (an
   Apple GPU's `Device Utilization %`, an older driver's `GPU Activity(%)`), `fdinfo` of amdgpu,
   i915 and xe clients a second apart (engine time in nanoseconds, and xe's cycles), and NVML
-  stand-ins (three GPUs, one of which can't say). A live reading must give a figure between 0 and
-  1 and say where from, or say why there is none; on Linux with an AMD GPU it must give one.
-  Whether a busy GPU is noticed is checked by hand in the sittings on each system, since CI's
-  runners have no GPU to keep busy.
+  stand-ins (three GPUs, one of which can't say; `machine::nvml`). A live reading must give a
+  figure between 0 and 1 and say where from, or say why there is none; on Linux with an AMD GPU it
+  must give one. Whether a busy GPU is noticed is checked by hand in the sittings on each system,
+  since CI's runners have no GPU to keep busy.
+- **What the computer holds.** Each GPU's memory on Linux is read back from stand-in DRM folders
+  (`jetcarp-core`'s `machine::hardware`): an AMD card from its driver's files, as before, with
+  NVML not started; two NVIDIA cards through NVML stand-ins that list them in the other order, so
+  each must be found by its PCI address (NVML's own stand-ins give each GPU's memory and address,
+  one in capitals with a longer domain, one only in numbers); the same cards without NVML, each
+  with NVML's reason, the estimate for its limit, and the machine's fingerprint unchanged; Intel's
+  integrated GPU (the estimate, and why), a discrete one on xe from a stand-in `dmem.capacity`,
+  and one on i915 (its reason); and, where none of those gives it, stand-in Vulkan GPUs: an NVIDIA
+  card on nouveau (NVML not asked), the i915 card found by its ids, an NVIDIA card without NVML,
+  and another vendor's integrated GPU, whose heap counts as memory it may borrow, with Vulkan
+  asked once, and not at all for an integrated Intel GPU. NVIDIA GPUs with no DRM card, in a
+  stand-in of NVIDIA's driver's list, must be read through NVML too, one that has a card counted
+  once. With figures saved from an earlier reading, stand-ins that count their opens must show
+  neither NVML nor Vulkan opened; with nothing saved, another GPU at the same address or the same
+  GPU at another, each is opened once. A virtual machine's display adapters, with no render node
+  (Hyper-V's virtual VGA, as on CI's runners, and QEMU's bochs), must be left out with nothing
+  opened. Only the `jetcarp` program keeps what NVML or Vulkan said, so no test writes it into the
+  user's settings folder (CI's step with the default folders checks that). `machine.info` must read the saved figures, and doctor and
+  measuring afresh, with what they read kept beside the score. A live test reads the Vulkan drivers
+  here: on Linux with an AMD GPU, RADV must list it at its card's PCI address. The doctor's lines
+  and the score report must say where each GPU's memory came from, or why it was not read, and the
+  note that the computer changed what changed (a GPU's memory now read and where from, a new GPU,
+  one gone, the memory, the processor).
 - **The limits.** The per-machine limits are worked out for machines of 4 to 128 GB, with the
   person's own values, the two linked memory values and the ceilings; a world over the limit is
   refused before anything is built, naming the limit and where it came from, and never made
@@ -467,7 +490,10 @@ JETCARP neither ships nor builds IRIS; this is how the comparison was run, and w
 
 **Results.** Transitions are the most in any one second (JETCARP stops counting at 8, past a
 failure); IRIS's pattern column is the frames it failed for a pattern. *JETCARP, at-risk rule* is
-the verdict by the stricter stripe rule for someone who answered the warning at risk.
+the verdict by the stricter stripe rule for someone who answered the warning at risk. Run again on
+v0.4.3-rc.2 (the Linux desktop, 2026-11-23): every IRIS result the same, and one JETCARP count
+moved, `desktop-risk-seeds-soup`'s, from 1 / 0 to 2 / 0 with #289's restless-ash veil (a pass
+either way).
 
 | Recording | IRIS | IRIS transitions (light / red) | IRIS pattern frames failed | JETCARP | JETCARP, at-risk rule | JETCARP transitions (light / red) |
 |---|---|---|---|---|---|---|
@@ -504,7 +530,7 @@ the verdict by the stricter stripe rule for someone who answered the warning at 
 | `desktop-risk-live-field-4.37px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
 | `desktop-risk-live-field-7.7px` | pass | 0 / 0 | 0 | pass | pass | 0 / 0 |
 | `desktop-risk-maze` | pass | 0 / 0 | 0 | pass | pass | 1 / 0 |
-| `desktop-risk-seeds-soup` | pass | 0 / 0 | 0 | pass | pass | 1 / 0 |
+| `desktop-risk-seeds-soup` | pass | 0 / 0 | 0 | pass | pass | 2 / 0 |
 | `desktop-risk-stripes-still` | pass | 1 / 0 | 0 | pass | pass | 1 / 0 |
 | `desktop-risk-tron-blob` | pass, warning | 5 / 0 | 0 | pass, warning | pass, warning | 4 / 0 |
 | `desktop-risk-tron-checkerboard` | pass | 1 / 0 | 0 | pass | pass | 3 / 0 |
@@ -675,7 +701,8 @@ job that hangs is stopped rather than left running for hours.
   puts its `d3d10warp.dll` beside every program the tests run, which load it before the system's;
   `JETCARP_ALLOW_WARP=1` lets the tests choose it. The soup hunt's GPU tests skip there, saying
   why: that WARP takes minutes to compile each of the hunt's kernels and gets Generations rules
-  wrong, so the hunter never runs on WARP. It is a tool of CI's: nothing a release ships is built
+  wrong, so the hunter never runs on WARP for now
+  ([#334](https://github.com/jprodgers/jetcarp/issues/334) takes that on). It is a tool of CI's: nothing a release ships is built
   there, and no release contains it. On all three systems, and in the release workflow's
   tests, `JETCARP_REQUIRE_GPU=1` makes a GPU test that finds no adapter it can use (none, or one
   the GPU self-test turns down) fail, naming the adapter and why, rather than skip: there the GPU
@@ -693,6 +720,8 @@ job that hangs is stopped rather than left running for hours.
   real program makes and removes the Start menu entry in the test's own `APPDATA`.
 - **Build only** for macOS on Intel and Linux on ARM, which nobody tests by hand yet, and the whole
   workspace with the oldest Rust it says it supports (1.95), so that the stated minimum stays true.
+  The Intel Mac is built at the end of the macOS test job, on the same Apple silicon runner, since
+  those runners are GitHub's scarcest; Linux on ARM has a job of its own.
 - **Checks:** formatting (`cargo fmt --check`), the third-party notices are current, the workflows
   and packaging scripts pass `actionlint`, every crate packages and builds on its own (a crates.io
   dry run), the generated reference pages match the program, and every file of the app icon matches
@@ -911,8 +940,13 @@ keeps them free of it.
 
 - **Hardware and systems.** Three machines: no Linux on NVIDIA or Intel graphics, no Windows on AMD,
   no Mac with an Intel processor, and on Linux only GNOME on Wayland has been tried for the desktop
-  background. CI's runners have no real GPU. A driver that miscomputes on hardware we have not tried
-  could still give a different answer; `jetcarp verify` checks any run on the CPU.
+  background. So on Linux, reading an NVIDIA GPU's memory through NVML, and an Intel GPU's from
+  `dmem.capacity`, is tested only with stand-ins. The Vulkan reader is tried on the Framework's
+  Radeon (whose memory still comes from its driver's files), and is to be tried on the Acer's RTX
+  from a live Fedora system, where only Mesa's drivers run (nouveau and NVK): NVIDIA's own driver,
+  and so NVML, can't be tried there. CI's runners have no real GPU. A driver that miscomputes on
+  hardware we have not tried could still give a different answer; `jetcarp verify` checks any run
+  on the CPU.
 - **One person at the keyboard.** The hands-on sittings are Jimmie's: one person's eyes and habits,
   on one set of machines.
 - **What a screen reader says.** The tests read the tree a screen reader is given, not what

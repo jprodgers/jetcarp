@@ -233,6 +233,36 @@ pub fn end_with(end: fn(i32) -> !) {
     let _ = END.set(end);
 }
 
+/// Give the memory allocator's free pages back to the system. Allocators keep what a program
+/// frees, to hand out again, and the system goes on counting it as the program's: glibc's
+/// arenas give memory back only from their top, so a long explore search grew with the tilings
+/// it reached though what it holds is capped (#53), and the background host grew by about 100 MB
+/// with each Fit sweep (#69); macOS's allocator keeps freed pages the same way, and the host grew
+/// over two-screen fits there (#111). On Linux this is glibc's `malloc_trim`, on macOS
+/// `malloc_zone_pressure_relief` over every zone; elsewhere it does nothing. Explore searches
+/// call it every 30 seconds, and the host after a fit and before its memory limit lets a scene
+/// go.
+pub fn release_free_memory() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: malloc_trim only returns free memory to the system; it is safe to call at any time.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            /// `<malloc/malloc.h>`: frees what it can of every zone (`zone` null) back to the
+            /// system, up to `goal` bytes (0: as much as it can); returns the bytes freed.
+            fn malloc_zone_pressure_relief(zone: *mut std::ffi::c_void, goal: usize) -> usize;
+        }
+        // SAFETY: a null zone means every zone, and the call only returns free pages to the
+        // system; it is safe to call at any time.
+        unsafe {
+            malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
+        }
+    }
+}
+
 /// The pool as it stands: its size, what the other programs hold, and what this one does.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Pool {

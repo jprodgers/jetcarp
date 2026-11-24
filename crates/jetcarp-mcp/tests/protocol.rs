@@ -892,7 +892,11 @@ fn the_tools_read_the_machine_and_never_measure_it() {
         t.contains("worlds of at most 4,000,000 cells (4,096 unit cells a side)"),
         "{t}"
     );
-    assert!(!root.join("config").join("machine.json").exists());
+    // No score was kept (`machine.json` may hold the GPUs' memory as read at the server's start).
+    assert!(
+        jetcarp_core::machine::MachineFile::load(Some(&root.join("config")))
+            .is_none_or(|f| f.score.is_none())
+    );
     // No tool, and no action of one, runs the benchmark.
     let list = s
         .handle(&mut h, &req(3, "tools/list", json!({})))

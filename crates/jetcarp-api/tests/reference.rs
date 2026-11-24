@@ -159,7 +159,9 @@ fn paths_and_doctor() {
         keys(&to_value(&p)),
         ["bundled_packs", "data", "output", "runtime", "settings"]
     );
-    // Without a platform there is no GPU and no desktop integration.
+    // Without a platform there is no GPU and no desktop integration. Doctor reads the GPUs
+    // afresh, so it gets a settings folder of its own, never the user's.
+    let cx = Ctx::new().with_settings_dir(Some(scratch("doctor-settings")));
     let d = SystemDoctor::run(&cx, NoInput {}, &Quiet).unwrap();
     assert!(d.gpu.is_empty());
     assert_eq!(d.folders.library, jetcarp_store::Library::default_path());
@@ -253,7 +255,10 @@ impl Platform for GpuFake {
 
 #[test]
 fn the_doctor_says_which_adapter_each_purpose_uses_and_why() {
-    let cx = Ctx::new().with_platform(Arc::new(GpuFake));
+    // A settings folder of its own: doctor reads the GPUs afresh, never into the user's folder.
+    let cx = Ctx::new()
+        .with_platform(Arc::new(GpuFake))
+        .with_settings_dir(Some(scratch("doctor-adapters")));
     let d = SystemDoctor::run(&cx, NoInput {}, &Quiet).unwrap();
     let t = d.text();
     for want in [
