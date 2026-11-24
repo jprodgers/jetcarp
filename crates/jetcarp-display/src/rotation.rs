@@ -61,9 +61,9 @@ impl Clock {
         Clock::of(jiff::Timestamp::from_second(secs).unwrap_or(jiff::Timestamp::UNIX_EPOCH))
     }
 
-    /// The date and time at `t` in the system's time zone.
+    /// The date and time at `t` in the time zone in use ([`jetcarp_core::time_zone`]).
     fn of(t: jiff::Timestamp) -> Clock {
-        let t = t.to_zoned_datetime(jiff::tz::TimeZone::system());
+        let t = t.to_zoned_datetime(jetcarp_core::time_zone::local());
         Clock {
             weekday: t.weekday().to_monday_zero_offset() as u8,
             minute: t.hour() as u32 * 60 + t.minute() as u32,

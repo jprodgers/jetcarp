@@ -53,8 +53,8 @@ pub fn date_and_minute_at(secs: i64) -> String {
     Local::at(secs).date_and_minute()
 }
 
-/// A moment's date and time in the system's time zone, written as JETCARP has always written
-/// them (with chrono, before 0.4.3).
+/// A moment's date and time in the time zone in use ([`jetcarp_core::time_zone`]: `TZ`, else the
+/// system's), written as JETCARP has always written them (with chrono, before 0.4.3).
 struct Local(jiff::ZonedDateTime);
 
 impl Local {
@@ -67,7 +67,7 @@ impl Local {
     }
 
     fn of(t: jiff::Timestamp) -> Local {
-        Local(t.to_zoned_datetime(jiff::tz::TimeZone::system()))
+        Local(t.to_zoned_datetime(jetcarp_core::time_zone::local()))
     }
 
     /// `2026-11-05`: the year in four digits, with a sign before one outside 0 to 9999.
@@ -589,15 +589,41 @@ mod tests {
         );
     }
 
-    /// Set in a twin's process by [`in_time_zone`].
-    #[cfg(unix)]
+    /// Set in a twin's process by [`twin`].
     const TZ_CHILD: &str = "JETCARP_OUT_TIME_ZONE_TEST";
+
+    /// Runs the `#[ignore]`d twin test `name` in a process of its own, with `TZ` set to `tz` (or
+    /// not set at all): whether it passed, and what it printed and logged.
+    fn twin(name: &str, tz: Option<&str>) -> (bool, String, String) {
+        let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+        cmd.args([
+            name,
+            "--exact",
+            "--ignored",
+            "--nocapture",
+            "--test-threads=1",
+        ]);
+        cmd.env(TZ_CHILD, "1");
+        match tz {
+            Some(tz) => cmd.env("TZ", tz),
+            None => cmd.env_remove("TZ"),
+        };
+        let out = cmd.output().expect("start the test's own process");
+        let (stdout, stderr) = (
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        );
+        (
+            out.status.success() && stdout.contains("1 passed"),
+            stdout,
+            stderr,
+        )
+    }
 
     /// Moments, and the local time stamps of each in time zone `TZ`: [`stamp_at`],
     /// [`rfc3339_at`] and [`date_and_minute_at`]. Either side of daylight saving time's start and
     /// end, of midnight at the new year, and of 1970; zones with half and three-quarter hours, one
     /// set as a rule.
-    #[cfg(unix)]
     #[rustfmt::skip]
     const IN_ZONES: &[(&str, i64, &str, &str, &str)] = &[
         ("America/New_York", 1_793_907_002, "2026-11-05_14-30-02", "2026-11-05T14:30:02-05:00", "2026-11-05 14:30"),
@@ -619,38 +645,19 @@ mod tests {
     ];
 
     /// The local time stamps in each zone of [`IN_ZONES`], each set with `TZ` in a process of its
-    /// own ([`twin_local_time_stamps_in_one_zone`]), are as written before.
-    #[cfg(unix)]
+    /// own ([`twin_local_time_stamps_in_one_zone`]), are as written before: on every system, so a
+    /// `TZ` that names a time zone decides it on Windows too.
     #[test]
     fn local_time_stamps_in_these_time_zones() {
         let mut zones: Vec<&str> = IN_ZONES.iter().map(|z| z.0).collect();
         zones.dedup();
         for tz in zones {
-            let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "out::tests::twin_local_time_stamps_in_one_zone",
-                    "--exact",
-                    "--ignored",
-                    "--nocapture",
-                    "--test-threads=1",
-                ])
-                .env(TZ_CHILD, "1")
-                .env("TZ", tz)
-                .output()
-                .expect("start the test's own process");
-            let text = format!(
-                "{}\n{}",
-                String::from_utf8_lossy(&out.stdout),
-                String::from_utf8_lossy(&out.stderr)
-            );
-            assert!(
-                out.status.success() && text.contains("1 passed"),
-                "TZ={tz}:\n{text}"
-            );
+            let name = "out::tests::twin_local_time_stamps_in_one_zone";
+            let (passed, stdout, stderr) = twin(name, Some(tz));
+            assert!(passed, "TZ={tz}:\n{stdout}\n{stderr}");
         }
     }
 
-    #[cfg(unix)]
     #[test]
     #[ignore = "a twin: local_time_stamps_in_these_time_zones runs it with TZ set"]
     fn twin_local_time_stamps_in_one_zone() {
@@ -666,6 +673,64 @@ mod tests {
             seen += 1;
         }
         assert!(seen > 0, "{tz}");
+    }
+
+    /// A `TZ` that names no time zone JETCARP can read (a misspelt name, an empty one) is never
+    /// taken as UTC: the local times are in the system's own time zone, as with no `TZ` at all,
+    /// and the program says so once, naming the value and the zone it uses instead. Each in a
+    /// process of its own ([`twin_local_time_stamps_through_the_year`]).
+    #[test]
+    fn an_unreadable_tz_gives_the_system_s_time_zone_not_utc() {
+        let name = "out::tests::twin_local_time_stamps_through_the_year";
+        let (passed, system, stderr) = twin(name, None);
+        assert!(passed, "TZ not set:\n{system}\n{stderr}");
+        assert!(
+            !stderr.contains("TZ"),
+            "a warning with no TZ set:\n{stderr}"
+        );
+        let stamps = |out: &str| -> Vec<String> {
+            // The first shares its line with the test's name.
+            out.lines()
+                .filter_map(|l| l.split_once("stamp ").map(|(_, s)| s.to_string()))
+                .collect()
+        };
+        let want = stamps(&system);
+        assert_eq!(want.len(), 13, "{system}");
+        for tz in ["Not/A_Zone", "", "America/Boston"] {
+            let (passed, stdout, stderr) = twin(name, Some(tz));
+            assert!(passed, "TZ={tz:?}:\n{stdout}\n{stderr}");
+            assert_eq!(
+                stamps(&stdout),
+                want,
+                "TZ={tz:?}: not the system's time zone"
+            );
+            let warnings: Vec<&str> = stderr.lines().filter(|l| l.contains("TZ")).collect();
+            assert_eq!(
+                warnings.len(),
+                1,
+                "TZ={tz:?}: one warning, not {warnings:?}"
+            );
+            assert!(
+                warnings[0].contains(&format!("{tz:?}")) && warnings[0].contains("the system's"),
+                "TZ={tz:?}: {}",
+                warnings[0]
+            );
+        }
+    }
+
+    /// Prints the RFC 3339 time stamps of thirteen moments a month apart through 2026, in this
+    /// process's time zone, for [`an_unreadable_tz_gives_the_system_s_time_zone_not_utc`].
+    #[test]
+    #[ignore = "a twin: an_unreadable_tz_gives_the_system_s_time_zone_not_utc runs it"]
+    fn twin_local_time_stamps_through_the_year() {
+        if std::env::var_os(TZ_CHILD).is_none() {
+            return;
+        }
+        // From noon UTC on 1 January 2026, an average month (30.44 days) apart.
+        for month in 0..13i64 {
+            let secs = 1_767_268_800 + month * 2_629_746;
+            println!("stamp {}", rfc3339_at(secs));
+        }
     }
 
     #[test]

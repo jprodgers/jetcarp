@@ -1426,3 +1426,89 @@ fn explore_searches_say_they_are_not_reproducible() {
     assert!(help.contains("Not reproducible"), "{help}");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// `jetcarp doctor` says the time zone local times are in and where it came from, in its text and
+/// its JSON (#186): a `TZ` that names a time zone, on every system; the system's own with no
+/// `TZ`; and the system's with a `TZ` that names none, which is ignored (never taken as UTC),
+/// named, and warned of once.
+#[test]
+fn doctor_says_the_time_zone_and_where_it_came_from() {
+    let doctor = |tz: Option<&str>, json: bool| {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_jetcarp"));
+        cmd.args(if json {
+            &["doctor", "--json"][..]
+        } else {
+            &["doctor"][..]
+        })
+        .env("JETCARP_OUT", out_root())
+        .env("JETCARP_DATA_DIR", test_dir("JETCARP_DATA_DIR", "data"))
+        .env(
+            "JETCARP_CONFIG_DIR",
+            test_dir("JETCARP_CONFIG_DIR", "config"),
+        )
+        .env("JETCARP_GPU", "off");
+        match tz {
+            Some(tz) => cmd.env("TZ", tz),
+            None => cmd.env_remove("TZ"),
+        };
+        let o = cmd.output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        (
+            String::from_utf8_lossy(&o.stdout).to_string(),
+            String::from_utf8_lossy(&o.stderr).to_string(),
+        )
+    };
+    let zone = |tz: Option<&str>| -> Value {
+        let (out, _) = doctor(tz, true);
+        serde_json::from_str::<Value>(&out).unwrap()["time_zone"].clone()
+    };
+    let line = |tz: Option<&str>| -> String {
+        let (out, _) = doctor(tz, false);
+        out.lines()
+            .find(|l| l.trim_start().starts_with("time zone:"))
+            .unwrap_or_else(|| panic!("no time zone line:\n{out}"))
+            .trim()
+            .to_string()
+    };
+
+    // A TZ that names a time zone decides it, on every system.
+    let z = zone(Some("Asia/Kathmandu"));
+    assert_eq!(z["name"], "Asia/Kathmandu", "{z}");
+    assert_eq!(z["from"], "tz", "{z}");
+    assert_eq!(z["offset_now"], "+05:45", "{z}");
+    assert!(z["tz_ignored"].is_null(), "{z}");
+    assert_eq!(
+        line(Some("Asia/Kathmandu")),
+        "time zone: Asia/Kathmandu, +05:45 now (from TZ)"
+    );
+
+    // No TZ: the system's own.
+    let system = zone(None);
+    assert_eq!(system["from"], "system", "{system}");
+    let name = system["name"].as_str().unwrap().to_string();
+    let offset = system["offset_now"].as_str().unwrap().to_string();
+    assert!(!name.is_empty(), "{system}");
+    assert_eq!(
+        line(None),
+        format!("time zone: {name}, {offset} now (the system's)")
+    );
+
+    // A TZ that names none: the system's, the same offset, the value named, and one warning.
+    let z = zone(Some("Not/A_Zone"));
+    assert_eq!(z["from"], "system", "{z}");
+    assert_eq!(z["offset_now"], system["offset_now"], "{z}");
+    assert_eq!(z["tz_ignored"], "Not/A_Zone", "{z}");
+    if cfg!(unix) {
+        // Windows' own name for its zone stands in for the IANA one there.
+        assert_eq!(z["name"], system["name"], "{z}");
+    }
+    let l = line(Some("Not/A_Zone"));
+    assert!(
+        l.contains("(the system's") && l.contains("TZ=\"Not/A_Zone\""),
+        "{l}"
+    );
+    let (_, stderr) = doctor(Some("Not/A_Zone"), true);
+    let warnings: Vec<&str> = stderr.lines().filter(|l| l.contains("TZ")).collect();
+    assert_eq!(warnings.len(), 1, "{stderr}");
+    assert!(warnings[0].contains("\"Not/A_Zone\""), "{}", warnings[0]);
+}

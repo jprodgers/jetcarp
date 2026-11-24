@@ -209,12 +209,10 @@ fn now_secs() -> i64 {
 }
 
 /// Set in a twin's process by [`the_clock_in_these_time_zones`].
-#[cfg(unix)]
 const TZ_CHILD: &str = "JETCARP_ROTATION_TIME_ZONE_TEST";
 
 /// Moments, and the clock a rotation reads at each in time zone `TZ`: the weekday (0 is Monday),
 /// the minutes since local midnight and the days since 1970-01-01, local.
-#[cfg(unix)]
 const CLOCKS: &[(&str, i64, u8, u32, i64)] = &[
     // Sunday 8 March 2026: 01:59:59 EST, then 03:00 EDT (two to three o'clock never comes).
     ("America/New_York", 1_772_953_199, 6, 119, 20_520),
@@ -242,8 +240,8 @@ const CLOCKS: &[(&str, i64, u8, u32, i64)] = &[
 /// ([`twin_the_clock_in_one_zone`]), is as it was read before; and in New York, the rotation's
 /// time-of-day decisions at those moments: a schedule's window opening and closing on the minute,
 /// a time-of-day end firing when its time is skipped and again when it comes twice, and one an
-/// hour keeping its item through the hour that comes twice.
-#[cfg(unix)]
+/// hour keeping its item through the hour that comes twice. On every system: a `TZ` that names a
+/// time zone decides it on Windows too.
 #[test]
 fn the_clock_in_these_time_zones() {
     let mut zones: Vec<&str> = CLOCKS.iter().map(|z| z.0).collect();
@@ -273,7 +271,6 @@ fn the_clock_in_these_time_zones() {
     }
 }
 
-#[cfg(unix)]
 #[test]
 #[ignore = "a twin: the_clock_in_these_time_zones runs it with TZ set"]
 fn twin_the_clock_in_one_zone() {

@@ -2463,6 +2463,7 @@ dependencies = [
  "flate2",
  "gif",
  "image-webp",
+ "jiff",
  "libc",
  "png",
  "rayon",

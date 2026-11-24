@@ -21,14 +21,17 @@ dirs.workspace = true
 flate2.workspace = true
 gif.workspace = true
 image-webp.workspace = true
+# The time zone local times are in (`src/time_zone.rs`): `TZ` and the system's setting.
+jiff.workspace = true
 
 # Reading the machine's memory, processor and GPU memory (`src/machine/hardware.rs`), and the
 # processor's and the GPU's load as the score is measured (`src/machine/quiet.rs`,
 # `src/machine/gpu_load.rs`: PDH's GPU engine counters on Windows, IOKit on macOS, NVML opened
 # with dlopen on Linux), and on Windows the console's handler and a hidden window that hears the
-# session end (`src/quit_signal.rs`, #319): bindings only, already in the dependency tree.
+# session end (`src/quit_signal.rs`, #319), and Windows' own time zone setting when `TZ` can't be used
+# (`src/time_zone.rs`): bindings only, already in the dependency tree.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Console", "Win32_System_LibraryLoader", "Win32_System_Performance", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Console", "Win32_System_LibraryLoader", "Win32_System_Performance", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_Time", "Win32_UI_WindowsAndMessaging"] }
 windows = { version = "0.62.2", features = ["Win32_Graphics_Dxgi"] }
 
 # The Mac's memory figures (`src/machine/hardware.rs`), the GPU's load and memory on Linux (NVML
