@@ -319,7 +319,10 @@ second)` (`pacing`, `fps` and `max_fps` in `--json`; `max_fps` is `null` with `m
 ## The Desktop background pane
 
 *View → Desktop background settings…* opens the *Desktop background* pane, which holds everything
-about the host. The *Display* and *Screensaver* panes link to it.
+about the host. The *Display* and *Screensaver* panes link to it. These three panes aren't about
+the world on screen, so they open from the Quick Start too, with no world open, as windows over
+it; one still open when a world opens takes its place among the panes. The other panes work on a
+world: on the Quick Start their entries are greyed out, and say so when the pointer is over them.
 
 <img src="../images/tutorials/wallpaper-desktop-pane.webp" alt="The Desktop background pane, not running: Start; Show on the desktop; Rotation A classic a day on Every monitor, with Edit, New and Show just this scene under it; Add a screen; a link to the Screensaver pane, where profiles are made; Leave a still picture when it stops; On the lock screen; the GNOME extension's state with Install; Frames per second 30, GPU simulation Follow the shared setting (Automatic) and the Shared setting Automatic, Caption, Pause on battery, Pause while the processor is busier than 80 %, Start at login; Performance: the GPU, Show every generation (chosen) or Low power, Up to 60 frames a second, Processor limit 10 %, GPU limit 25 %, Smooth at the monitor's rate, a line saying the limits are for the whole desktop, each screen getting a share by its pixel area, Fit to this computer…, Measure again by itself when a monitor changes, and Not fitted: each scene shows at its own cell size; the status line notes the strobe guard softening the open scene's flashes" width="700">
 

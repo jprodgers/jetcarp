@@ -100,8 +100,18 @@ pub(super) const PANES: &[PaneDef] = &[
     },
 ];
 
+/// The panes that aren't about the world on screen: the background host's and the screen
+/// saver's settings, and where the grid shows. They open from the Quick Start too, as windows over
+/// it (#331); the rest need a world.
+pub(super) const WORLD_FREE: &[&str] = &["desktop", "screensaver", "display"];
+
 /// The grid view's id in the tree.
 pub(super) const GRID: &str = "grid";
+
+/// The window key of a pane open over the Quick Start (not the docked pane's own).
+pub(super) fn start_pane_key(id: &str) -> String {
+    format!("start-pane-{id}")
+}
 
 pub(super) fn pane_def(id: &str) -> Option<&'static PaneDef> {
     PANES.iter().find(|p| p.id == id)
@@ -488,6 +498,31 @@ impl JetcarpApp {
         self.shell.layout.tree = tree;
         for (id, p) in moves {
             self.shell.layout.set_place(&id, p);
+        }
+    }
+
+    /// The panes open over the Quick Start ([`WORLD_FREE`]), each a tool window of its own; with
+    /// a world open, those still open go into the layout as *View* would show them (#331).
+    pub(super) fn start_pane_windows(&mut self, ctx: &egui::Context) {
+        if self.start_panes.is_empty() {
+            return;
+        }
+        if self.screen == Screen::Sim {
+            for id in std::mem::take(&mut self.start_panes) {
+                self.shell.panes_hidden = false;
+                self.shell.layout.show_pane(id);
+            }
+            return;
+        }
+        for id in self.start_panes.clone() {
+            let Some(def) = pane_def(id) else { continue };
+            let key = start_pane_key(id);
+            let mut open = true;
+            let spec = popout::Spec::new(&key, def.title).size(340.0, 340.0);
+            popout::tool_window(ctx, spec, &mut open, |ui| pane_scroll(self, ui, def));
+            if !open {
+                self.start_panes.retain(|p| *p != id);
+            }
         }
     }
 

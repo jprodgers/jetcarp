@@ -480,6 +480,13 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The Desktop background, Screensaver and Display settings open from the Quick Start** (#331).
+  Their *View* entries were greyed out until a world was open, though none of them is about the
+  world on screen: *Fit to this computer* meant opening a world first. They now open as windows
+  over the Quick Start, taking the keyboard and closing with Esc, and one still open when a world
+  opens takes its place among the panes. The panes that do work on a world stay greyed out there,
+  and say why when the pointer is over them.
+
 - **The publisher key is made safely by two programs at once** (#332). `jetcarp pack key`, or
   anything that makes the key on first use, could fail with "File exists" when another program
   made it at the same moment, or read it before its text was all written. The key is now written
