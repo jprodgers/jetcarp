@@ -11,6 +11,9 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 default = ["ops", "pack"]
 # The operations and the context they run in, which need the store and the job runner. Without

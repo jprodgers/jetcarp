@@ -1392,7 +1392,6 @@ impl Search {
     }
 
     /// Make candidates for a grid. `ltl` fixes a Larger than Life group: only those are made.
-    #[allow(clippy::too_many_arguments)]
     fn emit(
         &self,
         grid: &Grid,
@@ -1714,7 +1713,6 @@ impl Search {
     /// confirmed with them). `reach` is a Larger than Life batch's reach (cells read per cell),
     /// for the GPU's pace. At a stop or the run's end the batch is given up between two of its
     /// submissions, its runs not recorded: then false.
-    #[allow(clippy::too_many_arguments)]
     fn gpu_batch(
         &self,
         be: &mut dyn Backend,
@@ -2229,7 +2227,6 @@ impl Search {
     /// generations it reached (its candidate's `gens` become those); one still going at a stop or
     /// the run's end is given up. Its cap counts its own time, not runs its thread takes up while
     /// it waits inside it ([`Busy`]). `kernel`: a Lenia kernel built for it already.
-    #[allow(clippy::too_many_arguments)]
     fn cpu_eval(
         &self,
         grid: &Grid,

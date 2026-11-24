@@ -781,7 +781,6 @@ impl CaptionPainter {
 
     /// Prepares `lines` for a target of `target` pixels. `scale` is pixels per point; `opacity`
     /// comes from [`CaptionSettings::opacity`]. Text is laid out again only when it changes.
-    #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
         device: &wgpu::Device,
@@ -797,7 +796,6 @@ impl CaptionPainter {
     }
 
     /// [`Self::prepare`], keeping clear of `insets` (a taskbar, the menu bar, the Dock).
-    #[allow(clippy::too_many_arguments)]
     pub fn prepare_within(
         &mut self,
         device: &wgpu::Device,

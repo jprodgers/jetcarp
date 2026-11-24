@@ -123,7 +123,8 @@ fn write_number(out: &mut String, n: &Number) -> Result<(), UnsafeInteger> {
     }
     match n.as_f64() {
         // Minus zero is `0` in ECMAScript; written out here rather than left to the formatter.
-        Some(x) if x == 0.0 => out.push('0'),
+        // (A float pattern matches as `==` does, so `0.0` matches minus zero too.)
+        Some(0.0) => out.push('0'),
         Some(x) if x.is_finite() => out.push_str(ryu_js::Buffer::new().format_finite(x)),
         // Not reachable: a serde_json number is always a finite double.
         _ => out.push_str("null"),

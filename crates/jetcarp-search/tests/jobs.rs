@@ -190,7 +190,7 @@ fn hunt_stopped_and_resumed_on_the_runner_equals_uninterrupted() {
         (JobStatus::Paused, Some(Stopped::Asked))
     );
     let half = soups(&out);
-    assert!(half >= 80 && half < 1200, "{half}");
+    assert!((80..1200).contains(&half), "{half}");
     assert_eq!(b.job_lease(jb).unwrap(), (None, None), "let go");
     let b2 = Library::open(b.path());
     let pb: HuntProgress = Runner::new(b2.clone())

@@ -440,8 +440,8 @@ fn run_scene(cx: &Ctx, a: RunIn, _: &dyn Progress) -> Result<RunSummary, ApiErro
             field: i,
             kind: f.kind.name().to_string(),
             shared: f.shared,
-            population: f.population() as u64,
-            lost: f.lost as u64,
+            population: f.population(),
+            lost: f.lost,
             cas: users(i, false),
         })
         .collect();

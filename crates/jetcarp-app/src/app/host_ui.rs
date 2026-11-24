@@ -1192,7 +1192,6 @@ fn share_lines(settings: &HostSettings) -> Vec<String> {
 /// sizes found; a card or size chosen is put in `settings` (`changed`).
 /// `shown` gives the scenes each screen's rotation shows now: only they get rows (#73).
 /// `first_seen` says whether a row of cards is new, so it is scrolled to its chosen card (#108).
-#[allow(clippy::too_many_arguments)]
 fn performance_ui(
     ui: &mut egui::Ui,
     view: TuneView,
@@ -1578,7 +1577,6 @@ fn row_key(screen: usize, scene: &TunedScene) -> String {
 /// One scene's cards in a row, its name and note above. `choosable`: a click chooses a card. The
 /// row scrolls sideways (a trackpad's sideways swipe, or shift and the wheel), and the first time
 /// it is seen (`first_seen`) it is scrolled to the chosen card, else the recommended one (#108).
-#[allow(clippy::too_many_arguments)]
 fn scene_row(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
@@ -1777,7 +1775,6 @@ fn other_scenes(
 /// One card: the picture at the screen's own pixels, the size and cells, the numbers, and whether
 /// it is within the limits. `gpu_unknown`: its GPU share wasn't measured, so it shows as unknown
 /// (#72). Whether it was clicked, and its response.
-#[allow(clippy::too_many_arguments)]
 fn card(
     ui: &mut egui::Ui,
     ctx: &egui::Context,

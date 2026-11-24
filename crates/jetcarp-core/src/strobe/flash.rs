@@ -2149,6 +2149,8 @@ mod tests {
             let mut v = Vec::with_capacity((W * H * 4) as usize);
             for y in 0..H {
                 for x in 0..W {
+                    // `y + 3` and `x + 1` shift the 4-by-4 pattern; neither is a rounding up.
+                    #[allow(clippy::manual_div_ceil)]
                     let on = inside(x, y)
                         && PHASES[phase][(((y + 3) / 4 % 4) * 4 + (x + 1) / 4 % 4) as usize]
                             == b'o';

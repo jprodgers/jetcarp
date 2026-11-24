@@ -739,10 +739,8 @@ pub fn load(c: &mut Connection) -> Result<Saved, String> {
         while let Some(r) = rows.next().map_err(e)? {
             s.stats.seen_blobs += 1;
             let b: Vec<u8> = r.get(0).map_err(e)?;
-            s.seen.extend(
-                b.chunks_exact(8)
-                    .map(|x| u64::from_le_bytes(x.try_into().unwrap())),
-            );
+            s.seen
+                .extend(b.as_chunks::<8>().0.iter().map(|x| u64::from_le_bytes(*x)));
         }
         s.next_id = c
             .query_row("SELECT COALESCE(MAX(id), 0) + 1 FROM runs", [], |r| {

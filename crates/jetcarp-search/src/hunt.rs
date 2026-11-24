@@ -841,7 +841,6 @@ fn make_progress(
 }
 
 /// Run soups `a..b` of every group; `None` if stopped part way (either flag set).
-#[allow(clippy::too_many_arguments)]
 fn run_batch(
     groups: &[Option<Arc<Runner>>],
     a: u64,
@@ -1128,7 +1127,6 @@ fn merge(
     flush
 }
 
-#[allow(clippy::too_many_arguments)]
 fn provenance(
     rec: &PatternRecord,
     g: &Group,
