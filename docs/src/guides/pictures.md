@@ -64,8 +64,12 @@ while the app keeps running:
 
 - **Size:** one of your monitors (as detected), *All monitors as a span*, a preset, or *Custom size*.
   For a span, *Layout* gives each monitor as `WIDTHxHEIGHT+X+Y` (the way `xrandr` prints it;
-  *Detected* fills in yours), and *Write* chooses *One span image*, *One per monitor* (cut so that they
-  line up across the gaps) or *Both*.
+  *Detected* fills in yours, where the system says where they are), and *Write* chooses *One span
+  image*, *One per monitor* (cut so that they line up across the gaps) or *Both*. Under Wayland the
+  desktop needn't tell an app where its monitors are, and they can all read (0, 0): when the
+  monitors would overlap, *Detected* and *All monitors as a span* lay them left to right, their
+  tops in line, so check the layout against your own and type it in if it differs (see
+  [What works on each system](../getting-started/installing.md#windows-and-monitors)).
 - **Fit:** *Cover* (the grid fills the image and is cropped, so no stage colour shows), *Contain* (the
   whole grid, letterboxed in the palette's stage colour), *Current view* (what the grid view shows now,
   scaled to the image) or *Repeat* (a grid with wrapped edges, tiled seamlessly over the image at a

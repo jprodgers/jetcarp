@@ -34,8 +34,9 @@ pub use tune::TuneArgs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-/// Set when a signal asks the host to stop: on Linux and macOS SIGTERM (what `kill` sends,
-/// launchd at logout on the Mac, and a Linux session as it ends), SIGHUP and SIGINT (#278). The
+/// Set when a signal asks the host to stop: SIGTERM (what `kill` sends, launchd at logout on the
+/// Mac, and a Linux session as it ends), SIGHUP and SIGINT (#278), and on Windows a sign-out, a
+/// shutdown, `taskkill` without `/F`, and Ctrl-C or the console closing (#319). The
 /// host's next frame then stops it as `jetcarp host stop` does (`Core::tick`): its link
 /// closes, so its endpoint file goes, a host showing the desktop leaves its still picture there
 /// when one is asked for, and its record in the memory pool goes as it ends. A second signal ends

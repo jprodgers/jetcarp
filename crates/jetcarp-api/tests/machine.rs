@@ -12,7 +12,7 @@ use jetcarp_api::ops::world::{
 };
 use jetcarp_api::world::{Host, Session};
 use jetcarp_api::{Ctx, ErrorKind, Limits, WorldMemory};
-use jetcarp_core::machine::{Id, MachineFile, Source};
+use jetcarp_core::machine::{GpuReading, Id, MachineFile, Source, last_reading};
 use jetcarp_core::{CaSpec, Scene, SizeSpec, TilingSpec};
 use serde_json::json;
 
@@ -121,6 +121,8 @@ fn a_short_score_is_kept_and_reported() {
         .unwrap_or_else(|| dir.join("data"));
     assert_eq!(cx.paths().data, want);
     let info = MachineInfo::run(&cx, NoInput {}, &Quiet).unwrap();
+    // `machine.info` takes each GPU's memory as saved; measuring and doctor read it afresh.
+    assert_eq!(last_reading(), Some(GpuReading::Saved));
     assert!(info.score.is_none());
     assert!(info.text().contains("not measured yet"), "{}", info.text());
     let out = MachineScore::run(
@@ -134,6 +136,7 @@ fn a_short_score_is_kept_and_reported() {
         &Quiet,
     )
     .unwrap();
+    assert_eq!(last_reading(), Some(GpuReading::Fresh));
     assert!(out.check().is_ok());
     assert!(out.score.problems.is_empty(), "{:?}", out.score.problems);
     assert!(out.score.score > 0.0 && out.score.quick);
@@ -143,6 +146,9 @@ fn a_short_score_is_kept_and_reported() {
     let kept = MachineFile::load(Some(&dir.join("settings"))).unwrap();
     assert_eq!(kept.score.as_ref().unwrap().score, out.score.score);
     assert!(!kept.fingerprint.is_empty());
+    // Every GPU is listed, and what was read of them kept for the next start.
+    assert!(kept.all_gpus);
+    assert_eq!(kept.gpus, out.hardware.gpus);
     let md = std::fs::read_to_string(dir.join("report.md")).unwrap();
     assert!(md.starts_with("# JETCARP Hardware Score"), "{md}");
     assert!(md.contains("| Life soups on the hat (scored) |"), "{md}");
@@ -153,9 +159,11 @@ fn a_short_score_is_kept_and_reported() {
     assert!(js["limits"]["entries"].as_array().unwrap().len() == Id::ALL.len());
     // machine.info and doctor show it.
     let info = MachineInfo::run(&cx, NoInput {}, &Quiet).unwrap();
+    assert_eq!(last_reading(), Some(GpuReading::Saved));
     assert_eq!(info.score.as_ref().unwrap().score, out.score.score);
     assert!(info.stale.is_none());
     let doc = jetcarp_api::ops::system::SystemDoctor::run(&cx, NoInput {}, &Quiet).unwrap();
+    assert_eq!(last_reading(), Some(GpuReading::Fresh));
     let t = doc.text();
     assert!(t.contains("This computer\n  system:"), "{t}");
     assert!(t.contains("JETCARP Hardware Score: "), "{t}");

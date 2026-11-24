@@ -22,7 +22,7 @@ big enough computer gets the same result from the same scene, as JETCARP promise
 | --- | --- | --- | --- |
 | Memory, and how much is free | `/proc/meminfo` | `GlobalMemoryStatusEx` | `sysctl hw.memsize` and the virtual memory statistics |
 | The processor and its cores | `/proc/cpuinfo` | the registry's processor name | `sysctl machdep.cpu.brand_string` |
-| GPU memory | `mem_info_vram_total` and `mem_info_gtt_total` under `/sys/class/drm`, which AMD's driver writes (other drivers' GPUs are estimated) | DXGI's dedicated and shared memory | one pool shared with the processor |
+| GPU memory | for AMD's driver, `mem_info_vram_total` and `mem_info_gtt_total` under `/sys/class/drm`; for NVIDIA's, its management library (NVML's `nvmlDeviceGetMemoryInfo`), the GPU found by its PCI address; for Intel's xe driver, the kernel's `/sys/fs/cgroup/dmem.capacity` (Linux 6.14 and later); for any other GPU, its Vulkan driver's largest device-local memory heap (see below) | DXGI's dedicated and shared memory | one pool shared with the processor |
 | How busy the processor is, as it measures | `/proc/stat`, less its own time from `/proc/self/stat` | `GetSystemTimes`, less its own from `GetProcessTimes` | `host_statistics`, less its own from `getrusage` |
 | How busy the GPU is, as it measures | AMD's `gpu_busy_percent`; NVIDIA's management library (NVML, `libnvidia-ml.so.1`, which comes with NVIDIA's driver, though some distributions package it on its own); for Intel's and other drivers' GPUs, DRM `fdinfo`: each program's GPU time, in `/proc/<pid>/fdinfo` | the `\GPU Engine(*)\Utilization Percentage` counters (PDH), which every vendor's driver gives and Task Manager shows | each `IOAccelerator`'s `PerformanceStatistics`, `Device Utilization %` (IOKit, what `ioreg -r -d 1 -c IOAccelerator` shows), with no administrator rights |
 
@@ -32,6 +32,49 @@ part of the memory aside for an integrated GPU (a desktop with 128 GB might give
 GPU), the system's memory is what is left, and the GPU's is the part set aside, plus what the system
 lets it borrow. On Apple silicon the processor and the GPU share one pool, and GPU worlds count
 against it like everything else.
+
+On Linux each driver says a GPU's memory in its own place, all of them readable without
+administrator rights:
+
+- **AMD** (amdgpu): the driver's own files under `/sys/class/drm`, the GPU's memory and what it
+  may borrow.
+- **NVIDIA** (NVIDIA's driver): NVIDIA's management library, NVML (`libnvidia-ml.so.1`), the same
+  one that says how busy the GPU is. NVML numbers its GPUs its own way, so each is matched to its
+  card by its PCI address. A GPU with no DRM card (nvidia-drm not loaded, as on many compute
+  servers) is found in the driver's own list, `/proc/driver/nvidia/gpus`, and read the same way,
+  each GPU counted once. NVML comes with NVIDIA's driver, though some distributions package it on
+  its own; without it, the GPU's Vulkan driver gives its memory (see below), and without either
+  the GPU's limit stays the estimate, and `jetcarp doctor` says why: *memory not read (the NVIDIA
+  GPU's management library, libnvidia-ml.so.1, could not be opened)*.
+- **Intel, discrete** (Arc): on the xe driver, the kernel's device-memory cgroup,
+  `/sys/fs/cgroup/dmem.capacity`, which lists each GPU's memory by its PCI address (Linux 6.14 and
+  later). The i915 driver, which Arc A-series cards use by default, gives its memory in no file,
+  only to a program that asks the driver itself (an `ioctl` on its render node,
+  `/dev/dri/renderD128`), which JETCARP doesn't do; its Vulkan driver gives it instead.
+- **Intel, integrated** (the GPU at PCI address `00:02.0`): it has no memory of its own to speak
+  of, and works in the system's, so the estimate, a share of the memory reserved for JETCARP, is
+  the right measure of what it can hold. `jetcarp doctor` says *memory not read (an integrated GPU,
+  which shares the system's memory)*.
+- **Any other GPU**, among them NVIDIA's on the nouveau driver (with Mesa's NVK), and a GPU none
+  of the above gives: its Vulkan driver's largest memory heap of the device's own
+  (`vkGetPhysicalDeviceMemoryProperties`), found by its PCI address. Vulkan is opened for this only
+  when a GPU needs it, and an integrated GPU's heap is the system's memory, so it counts as memory
+  the GPU may borrow, not its own.
+
+A display adapter with no render node (a firmware framebuffer, or a virtual machine's, such as
+Hyper-V's virtual VGA or QEMU's) is not a GPU JETCARP can run on: it is left out, and nothing is
+opened for it.
+
+**NVML and Vulkan are not opened at every start.** What they give, or that they gave nothing, is
+kept in `machine.json` beside each GPU's ids and PCI address, which JETCARP reads from sysfs at
+every start without touching the GPU. A plain start takes a GPU's memory from there; it opens NVML
+or Vulkan only for a GPU it has nothing for, the first time or after a GPU was changed, added or
+moved to another slot. `jetcarp doctor` and measuring read every GPU afresh, and keep what they
+find. Only the `jetcarp` program keeps it; code using JETCARP's crates as a library, its tests
+among it, only reads it. So a laptop's NVIDIA GPU, asleep while the integrated one drives the screen, is not woken
+just because a JETCARP program started (opening NVML or Vulkan would wake it, as `nvidia-smi`
+does). Should a GPU's memory change without the GPU changing (NVML installed since), `jetcarp
+doctor` reads it again.
 
 `jetcarp doctor` shows what it read, the score and the limits that matter most:
 
@@ -48,6 +91,11 @@ This computer
   an AI's share: small
   every limit: `jetcarp limits`
 ```
+
+Each GPU's line names where its memory came from (`sysfs`, `NVML`, `dmem.capacity`, `Vulkan`,
+`DXGI`, `unified memory`), or says why it was not read, as in `GPU 8086:a7a0: memory not read (an
+integrated GPU, which shares the system's memory)`; `jetcarp limits` gives the same reason beside
+the GPU's estimated limit.
 
 ## The limits
 
@@ -79,7 +127,7 @@ what the rest of JETCARP holds, and the others are scaled from the values the co
 | Limit (`jetcarp limits` name) | What it limits | On 16 GB | On 64 GB | Ceiling |
 | --- | --- | --- | --- | --- |
 | Largest world (`world`) | The memory one world may take | 4 GB (half of JETCARP's part) | 24 GB | all of JETCARP's part, and 4,294,967,295 cells |
-| Largest world on the GPU (`gpu-world`) | Cells a world may have to step on the GPU; a larger one steps on the processor, with the same result | half the GPU's memory at 16 bytes a cell (for an integrated GPU with little of its own, with what it may borrow, within JETCARP's part), within its buffer limits | the same | 2,147,483,647 cells |
+| Largest world on the GPU (`gpu-world`) | Cells a world may have to step on the GPU; a larger one steps on the processor, with the same result | half the GPU's memory at 16 bytes a cell (for an integrated GPU with little or none of its own, with what it may borrow, within JETCARP's part), within its buffer limits | the same | 2,147,483,647 cells |
 | Desktop background: memory (`host-memory`) | What the background host may use before it gives up its largest world | the pool, 8 GB, less what the rest of JETCARP holds | the pool, 48 GB, less the same | all of JETCARP's part |
 | Desktop background: cells (`host-cells`) | Cells one of its worlds may have | 64 million | 384 million | 4,294,967,295 |
 | HashLife: nodes (`hashlife-nodes`) | Blocks HashLife keeps before it clears out unused ones (about 45 bytes each) | 48 million | 288 million | 2,147,483,648 |
@@ -284,8 +332,10 @@ short run, until the computer is measured again with nothing else busy.
 The benchmark is **versioned**. A JETCARP that changes the workloads raises the version, and an
 older score is then shown as from an older benchmark, with a suggestion to measure again. A computer
 that changed (another processor, memory, GPU or system, or a new firmware split of its memory) is
-noticed when the app starts, and the status line suggests measuring again, once. Neither runs the
-benchmark by itself.
+noticed when the app starts, and the status line suggests measuring again, once, saying what
+changed: *this computer has changed since it was measured (its GPU 10de:2684's memory is now read,
+24 GB from NVIDIA's NVML)*, *(its memory changed from 96 GB to 64 GB)*. `jetcarp doctor` says the
+same. Neither runs the benchmark by itself.
 
 ```text
 $ jetcarp score --report report
@@ -366,7 +416,8 @@ part, so a computer whose memory changes keeps what the system was given:
 ```
 
 The score and its parts are kept in `machine.json` beside it, with the hardware it was measured on
-and how it was taken (`conditions`).
+and how it was taken (`conditions`), and each GPU as last read afresh (`gpus`, see
+[What JETCARP reads](#what-jetcarp-reads)).
 `host.json`'s `max_cells` and `max_memory_mb` give way to `host-cells` and `host-memory`, unless
 they were edited by hand, when the edited value still applies. `JETCARP_HUNT_CACHE_MB` still sets
 the hunt caches over everything.

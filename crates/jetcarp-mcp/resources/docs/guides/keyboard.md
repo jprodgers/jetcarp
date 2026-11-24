@@ -223,8 +223,10 @@ The checks behind this page drive the whole app with key presses in tests and re
 accessibility tree, as a screen reader would: every control in every window has a role and a name
 and its value reads, Tab reaches every control, F6 and F10 go where this page says, and the cell
 cursor draws, erases, selects and moves patterns (see [How JETCARP is tested](../about/testing.md)).
-What a screen reader says aloud is to be checked by hand, with Narrator and NVDA on Windows,
-VoiceOver on macOS and Orca on GNOME; it has not been yet (see
+What a screen reader says aloud is checked by hand, with Narrator and NVDA on Windows, VoiceOver
+on macOS and Orca on GNOME. So far Orca has been, with 0.4.3-rc.1: it named each control by what
+it does, symbol buttons too, gave the cards, swatches and presets their roles and names, read the
+grid cursor's cell, and read out the status line as it changed. The others have not been yet (see
 [Where JETCARP falls short](../about/accessibility.md#where-jetcarp-falls-short)).
 
 ## Settings

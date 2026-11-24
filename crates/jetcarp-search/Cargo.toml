@@ -23,12 +23,12 @@ memory-stats = "1.2.0"
 parquet.workspace = true
 bytes.workspace = true
 
-# malloc_trim: a long explore search gives glibc's free pages back to the system (#53).
-[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
-libc = "0.2.191"
-
 # proc_pid_rusage: the process's physical footprint, which macOS's memory readings use (#80).
 [target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2.191"
+
+# mallopt: the memory test keeps every free in glibc's arenas, so the search must give it back.
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dev-dependencies]
 libc = "0.2.191"
 
 [dev-dependencies]

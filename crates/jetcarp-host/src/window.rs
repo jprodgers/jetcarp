@@ -1079,9 +1079,7 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
     let mut app = App {
         core,
         mode,
-        instance: wgpu::Instance::new(
-            wgpu::InstanceDescriptor::new_without_display_handle_from_env(),
-        ),
+        instance: jetcarp_gpu::select::new_instance(),
         gpu: None,
         gpu_events: Arc::default(),
         gpu_errors_seen: BTreeSet::new(),
