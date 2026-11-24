@@ -320,10 +320,7 @@ pub fn run(a: SetupArgs, json: bool) -> Result<()> {
             "on the CPU (no GPU found)".into()
         };
         eprintln!("\nA Quick Start build searches {on} and adds its best runs to the Quick Start.");
-        loop {
-            let Some(t) = ask(&format!("Minutes to search (0 for none) [{m}]: ")) else {
-                break;
-            };
+        while let Some(t) = ask(&format!("Minutes to search (0 for none) [{m}]: ")) {
             if t.is_empty() {
                 break;
             }

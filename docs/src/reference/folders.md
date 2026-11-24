@@ -27,10 +27,10 @@ folder for the running app's and host's control files ([Runtime](#runtime-folder
 
 `jetcarp paths --json` prints the same as JSON (`bundled_packs` and `runtime` are `null` when there
 is none). `jetcarp doctor` adds what JETCARP read of the computer, with its score and limits, the
-catalog file, how much data is in use, the starter pack's size (or
-where it looked for one), and every `JETCARP_…` variable that is set, with wgpu's `WGPU_…` ones
-(such as `WGPU_BACKEND`), which change the graphics adapters it finds. That makes it the thing to
-paste into a bug report.
+time zone local times are in and where it came from, the catalog file, how much data is in use,
+the starter pack's size (or where it looked for one), and every `JETCARP_…` variable that is set,
+with wgpu's `WGPU_…` ones (such as `WGPU_BACKEND`), which change the graphics adapters it finds.
+That makes it the thing to paste into a bug report.
 
 ## The three folders
 

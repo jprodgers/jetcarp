@@ -724,7 +724,6 @@ impl Library {
 
     /// What an entry's card starts from, by handle (or id): its scene, its own preview scene if
     /// it has one, and the mature state (deflated) with its generation.
-    #[allow(clippy::type_complexity)]
     pub fn quickstart_card(
         &self,
         key: &str,
@@ -808,7 +807,6 @@ impl Library {
 /// ant's scene `ant`; `candidate` and `rejected` entries are hidden. Pins, flags and dates are
 /// kept as they were.
 pub(super) fn migrate_rows_in(tx: &Transaction) -> Result<usize, String> {
-    #[allow(clippy::type_complexity)]
     let old: Vec<(
         (String, String, Option<String>, String, String, String),
         (String, String, Option<f64>, String),

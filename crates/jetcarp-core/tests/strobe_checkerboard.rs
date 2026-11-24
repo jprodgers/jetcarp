@@ -36,7 +36,6 @@ const Y0: u32 = 180;
 /// A frame of `w` by `h` with a board of `sq`-pixel squares over `[x0, x0 + side)` and the same
 /// down, its squares offset `off` pixels from the frame's grid, in phase `phase`, light `hi` and
 /// dark `lo`, on a ground of `bg`.
-#[allow(clippy::too_many_arguments)]
 fn board(
     w: u32,
     h: u32,

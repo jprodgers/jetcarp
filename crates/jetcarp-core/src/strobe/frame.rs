@@ -329,7 +329,7 @@ fn reduce_with(rgba: &[u8], width: u32, height: u32, half: bool) -> (TileMap, Op
             let mut hcnt = vec![0u8; hsum.len()];
             for y in y0..y1 {
                 let row = &rgba[y * w * 4..(y + 1) * w * 4];
-                for (x, px) in row.chunks_exact(4).enumerate() {
+                for (x, px) in row.as_chunks::<4>().0.iter().enumerate() {
                     let (l, r) = pixel(px);
                     vals[(y - y0) * w + x] = (l, r);
                     lsum[x / TILE as usize] += l;

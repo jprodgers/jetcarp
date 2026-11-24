@@ -90,6 +90,7 @@ This computer
   largest world: 8 GB
   an AI's share: small
   every limit: `jetcarp limits`
+  time zone: America/New_York, -05:00 now (the system's)
 ```
 
 Each GPU's line names where its memory came from (`sysfs`, `NVML`, `dmem.capacity`, `Vulkan`,

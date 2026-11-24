@@ -796,7 +796,6 @@ impl Universe {
         let mut bases: Vec<(usize, i32)> =
             Vec::with_capacity(plan.offs.iter().map(|v| v.len()).sum());
         let mut scratch: Vec<u64> = Vec::new();
-        #[allow(clippy::needless_range_loop)]
         for r in r_lo..=r_hi {
             // Nothing within reach: the row stays empty.
             let a = r.saturating_sub(rj);

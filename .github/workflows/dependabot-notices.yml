@@ -1,0 +1,101 @@
+# Dependabot's pull requests that change Cargo.lock: THIRD_PARTY_LICENSES.html made again, and
+# pushed to the pull request's branch, so that CI's notices check passes without anyone thinking
+# about it.
+#
+# - It runs only on Dependabot's pull requests (their author is dependabot[bot]), on the
+#   `pull_request` event, never `pull_request_target`.
+# - It runs only main's scripts: it stops if the pull request changes anything but Cargo.toml and
+#   Cargo.lock files (Dependabot's own changes) and the notices. Nothing of the pull request is
+#   built or run: packaging/notices.sh fetches the crates and reads their licence files with
+#   cargo-about, a release binary checked against its SHA-256.
+# - Its token only reads. It pushes through a deploy key with write access (the repository's
+#   deploy key jetcarp-notices-key.pub; its private half is the Dependabot secret
+#   NOTICES_DEPLOY_KEY), so the push is an ordinary one and CI runs again on it; a push with the
+#   workflow's token would start no workflow. Dependabot's secrets reach only the runs Dependabot
+#   starts, so a run on any other push has no key and pushes nothing.
+# - Run again on its own push, it finds the notices current and does nothing.
+#
+# Once a commit of anyone else's is on a pull request, Dependabot stops rebasing it by itself;
+# commenting `@dependabot rebase` asks it to, and this runs again on the result.
+name: Dependabot's notices
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.lock"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-notices-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  notices:
+    name: The third-party notices for Dependabot's update
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The pull request's branch itself (not the merge commit), with main's history beside
+          # it, through the deploy key when this run has it.
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          ssh-key: ${{ secrets.NOTICES_DEPLOY_KEY }}
+      - name: The pull request changes only Dependabot's manifests and the notices
+        # So the scripts that run below are main's.
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-only "origin/$BASE...HEAD")
+          echo "Changed:"
+          echo "$changed"
+          other=$(grep -v -E '(^|/)Cargo\.(toml|lock)$|^THIRD_PARTY_LICENSES\.html$' <<<"$changed" || true)
+          if [ -n "$other" ]; then
+            echo "::error::this pull request changes more than Dependabot's manifests, so its notices are left to be made by hand (packaging/notices.sh):"
+            echo "$other"
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+      - name: cargo-about 0.9.3 (the version packaging/notices.sh names), checked against its release's checksum
+        run: |
+          v=0.9.3
+          f="cargo-about-$v-x86_64-unknown-linux-musl"
+          mkdir -p "$RUNNER_TEMP/cargo-about"
+          cd "$RUNNER_TEMP/cargo-about"
+          curl -fsSLO "https://github.com/EmbarkStudios/cargo-about/releases/download/$v/$f.tar.gz"
+          echo "3ad1e94ea1e63d69d1961f4fb15ccbbe9575d906111f96d2cb4dce6df48f71b4  $f.tar.gz" | sha256sum -c -
+          tar -xzf "$f.tar.gz" --strip-components=1 "$f/cargo-about"
+          ./cargo-about --version
+      - name: THIRD_PARTY_LICENSES.html made again
+        run: CARGO_ABOUT="$RUNNER_TEMP/cargo-about/cargo-about" packaging/notices.sh
+      - name: Pushed to the pull request's branch, if it changed
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HAS_KEY: ${{ secrets.NOTICES_DEPLOY_KEY != '' }}
+        run: |
+          if git diff --quiet -- THIRD_PARTY_LICENSES.html; then
+            echo "THIRD_PARTY_LICENSES.html is current: nothing to push."
+            exit 0
+          fi
+          other=$(git status --porcelain | grep -v -E '^ M THIRD_PARTY_LICENSES\.html$' || true)
+          if [ -n "$other" ]; then
+            echo "::error::making the notices changed other files too:"
+            echo "$other"
+            exit 1
+          fi
+          if [ "$HAS_KEY" != true ]; then
+            echo "::error::THIRD_PARTY_LICENSES.html needs making again, and only Dependabot's own runs have the key to push it: run packaging/notices.sh and push it, or comment @dependabot rebase"
+            exit 1
+          fi
+          git add THIRD_PARTY_LICENSES.html
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Notices: regenerated for this update"
+          git push origin "HEAD:refs/heads/$HEAD_REF"

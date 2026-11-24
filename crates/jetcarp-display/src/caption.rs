@@ -2,14 +2,16 @@
 //! come from the world here, so every display says the same thing. The app draws them with egui;
 //! [`CaptionPainter`] draws them on a plain wgpu surface, in the font the app's setting names
 //! ([`FontWatch`]): Atkinson Hyperlegible Next by default ([`crate::fonts`]), with egui's Ubuntu
-//! Light behind it for what Atkinson lacks (Greek).
+//! Light behind it for what Atkinson lacks (Greek). Its fonts are read with skrifa and its letters
+//! drawn with vello_cpu, the font reader and rasteriser egui draws the app's words with ([`Face`]).
 
 use crate::fonts::{Fallbacks, FontChoice};
-use ab_glyph::{Font, FontArc, GlyphId, PxScale, ScaleFont};
 use jetcarp_core::rules::{self, Rule};
 use jetcarp_core::topology::{Boundary, Topology};
 use jetcarp_core::{World, families};
 use serde::{Deserialize, Serialize};
+use skrifa::raw::TableProvider as _;
+use skrifa::{FontRef, GlyphId, MetadataProvider as _};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -283,7 +285,7 @@ const MAX_FALLBACK_FILE: u64 = 256 << 20;
 #[derive(Default)]
 struct Faces {
     /// In the order first needed.
-    list: Vec<FontArc>,
+    list: Vec<Face>,
     /// Where each file and face is in `list` (None: it couldn't be read).
     by_file: std::collections::HashMap<(PathBuf, u32), Option<usize>>,
 }
@@ -341,9 +343,9 @@ impl LastResort {
             .ok()
             .filter(|m| m.is_file() && m.len() <= MAX_FALLBACK_FILE)
             .and_then(|_| std::fs::read(&f.path).ok())
-            .and_then(|b| ab_glyph::FontVec::try_from_vec_and_index(b, f.index).ok());
+            .and_then(|b| Face::read(b, f.index));
         let at = font.map(|font| {
-            faces.list.push(FontArc::new(font));
+            faces.list.push(font);
             faces.list.len() - 1
         });
         faces.by_file.insert(key, at);
@@ -351,7 +353,7 @@ impl LastResort {
     }
 
     /// The `i`th font read.
-    fn face(&self, i: usize) -> FontArc {
+    fn face(&self, i: usize) -> Face {
         let faces = self.faces.lock().unwrap_or_else(|e| e.into_inner());
         faces.list[i].clone()
     }
@@ -362,12 +364,12 @@ impl LastResort {
 /// ([`LastResort`]). Each character is drawn in the first that has it.
 #[derive(Clone)]
 pub struct CaptionFont {
-    fonts: Vec<FontArc>,
+    fonts: Vec<Face>,
     last: Option<Arc<LastResort>>,
 }
 
-fn builtin(bytes: &'static [u8]) -> FontArc {
-    FontArc::try_from_slice(bytes).expect("a font that comes with JETCARP")
+fn builtin(bytes: &'static [u8]) -> Face {
+    Face::new(Bytes::Builtin(bytes), 0).expect("a font that comes with JETCARP")
 }
 
 impl Default for CaptionFont {
@@ -396,13 +398,12 @@ impl CaptionFont {
             }),
             FontChoice::File { path, index, .. } => {
                 let file = crate::fonts::load(path, Some(*index))?;
-                let font = ab_glyph::FontVec::try_from_vec_and_index(file.bytes, file.index)
-                    .map_err(|_| {
-                        let name = path.file_name().unwrap_or_default().to_string_lossy();
-                        format!("{name} isn't a font JETCARP can read.")
-                    })?;
+                let font = Face::read(file.bytes, file.index).ok_or_else(|| {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    format!("{name} isn't a font JETCARP can read.")
+                })?;
                 Ok(CaptionFont {
-                    fonts: vec![FontArc::new(font), ubuntu],
+                    fonts: vec![font, ubuntu],
                     last: None,
                 })
             }
@@ -424,7 +425,7 @@ impl CaptionFont {
     }
 
     /// The `i`th font: those in place, then the last resort's.
-    fn font(&self, i: usize) -> FontArc {
+    fn font(&self, i: usize) -> Face {
         match (self.fonts.get(i), &self.last) {
             (Some(f), _) => f.clone(),
             (None, Some(l)) => l.face(i - self.fonts.len()),
@@ -437,7 +438,7 @@ impl CaptionFont {
     pub fn glyph(&self, c: char) -> (usize, GlyphId) {
         for (i, f) in self.fonts.iter().enumerate() {
             let g = f.glyph_id(c);
-            if g.0 != 0 {
+            if g != GlyphId::NOTDEF {
                 return (i, g);
             }
         }
@@ -445,7 +446,7 @@ impl CaptionFont {
             && let Some(i) = l.face_for(c)
         {
             let g = l.face(i).glyph_id(c);
-            if g.0 != 0 {
+            if g != GlyphId::NOTDEF {
                 return (self.fonts.len() + i, g);
             }
         }
@@ -455,18 +456,16 @@ impl CaptionFont {
     /// The advance from glyph `last` to `g` at `px`, with their kerning when one font has both.
     fn advance(&self, last: Option<(usize, GlyphId)>, (i, g): (usize, GlyphId), px: f32) -> f32 {
         let font = self.font(i);
-        let f = font.as_scaled(PxScale::from(px));
         let kern = match last {
-            Some((j, l)) if j == i => f.kern(l, g),
+            Some((j, l)) if j == i => font.kern(l, g, px),
             _ => 0.0,
         };
-        kern + f.h_advance(g)
+        kern + font.h_advance(g, px)
     }
 
     /// Ascent, descent and line gap at `px` (of the first font: lines keep one height).
     fn metrics(&self, px: f32) -> (f32, f32, f32) {
-        let f = self.fonts[0].as_scaled(PxScale::from(px));
-        (f.ascent(), f.descent(), f.line_gap())
+        self.fonts[0].metrics(px)
     }
 
     pub fn line_width(&self, text: &str, px: f32) -> f32 {
@@ -531,9 +530,9 @@ impl CaptionFont {
             p[3] = BACKDROP_ALPHA;
         }
         let mut y = pad;
+        let mut pen = Pen::new();
         for (i, line) in fitted.iter().enumerate() {
             let px = px_of(i);
-            let scale = PxScale::from(px);
             let baseline = y + self.metrics(px).0;
             let mut x = pad;
             let mut last = None;
@@ -543,34 +542,375 @@ impl CaptionFont {
                 if let Some((j, l)) = last
                     && j == fi
                 {
-                    x += font.as_scaled(scale).kern(l, id);
+                    x += font.kern(l, id, px);
                 }
-                let glyph = id.with_scale_and_position(scale, ab_glyph::point(x, baseline));
-                if let Some(o) = font.outline_glyph(glyph) {
-                    let b = o.px_bounds();
-                    o.draw(|gx, gy, cov| {
-                        let (px, py) = (b.min.x as i64 + gx as i64, b.min.y as i64 + gy as i64);
-                        if px < 0 || py < 0 || px >= w as i64 || py >= h as i64 {
-                            return;
-                        }
-                        let at = (py as usize * w as usize + px as usize) * 4;
-                        let a = BACKDROP_ALPHA as f32 / 255.0;
-                        let cov = cov.clamp(0.0, 1.0);
-                        // White text over the backdrop, premultiplied.
-                        let value = (cov * 255.0).round() as u8;
-                        let alpha = ((cov + (1.0 - cov) * a) * 255.0).round() as u8;
-                        img[at] = img[at].max(value);
-                        img[at + 1] = img[at + 1].max(value);
-                        img[at + 2] = img[at + 2].max(value);
-                        img[at + 3] = img[at + 3].max(alpha);
-                    });
-                }
-                x += font.as_scaled(scale).h_advance(id);
+                pen.draw(font, id, px, [x, baseline], |gx, gy, value| {
+                    if gx < 0 || gy < 0 || gx >= w as i64 || gy >= h as i64 {
+                        return;
+                    }
+                    let at = (gy as usize * w as usize + gx as usize) * 4;
+                    let a = BACKDROP_ALPHA as f32 / 255.0;
+                    let cov = value as f32 / 255.0;
+                    // White text over the backdrop, premultiplied.
+                    let alpha = ((cov + (1.0 - cov) * a) * 255.0).round() as u8;
+                    img[at] = img[at].max(value);
+                    img[at + 1] = img[at + 1].max(value);
+                    img[at + 2] = img[at + 2].max(value);
+                    img[at + 3] = img[at + 3].max(alpha);
+                });
+                x += font.h_advance(id, px);
                 last = Some((fi, id));
             }
             y += line_h(i);
         }
         (img, w, h)
+    }
+}
+
+/// A font file's bytes: built into JETCARP, or read from a file.
+#[derive(Clone)]
+enum Bytes {
+    Builtin(&'static [u8]),
+    Read(Arc<Vec<u8>>),
+}
+
+impl Bytes {
+    fn get(&self) -> &[u8] {
+        match self {
+            Bytes::Builtin(b) => b,
+            Bytes::Read(b) => b,
+        }
+    }
+}
+
+/// One face of a font file, as the caption draws it. It is read with skrifa, egui's own font
+/// reader, and measured as JETCARP measured it with ab_glyph before 0.4.3-rc.3, so captions keep
+/// their sizes and layout: a line `px` pixels high is `px` from the face's ascent to its descent,
+/// and letters are spaced by their advances and the font's `kern` table (not GPOS, as before).
+#[derive(Clone)]
+struct Face {
+    bytes: Bytes,
+    index: u32,
+    /// How characters are looked up in its character map, worked out once.
+    charmap: skrifa::charmap::MappingIndex,
+    /// Ascent, descent and line gap, in font units ([`line_metrics`]).
+    ascent: f32,
+    descent: f32,
+    line_gap: f32,
+    glyphs: u32,
+}
+
+impl Face {
+    /// Face `index` of `bytes`, if the caption can draw in it ([`can_draw_in`]).
+    fn new(bytes: Bytes, index: u32) -> Option<Face> {
+        let font = FontRef::from_index(bytes.get(), index).ok()?;
+        let (glyphs, [ascent, descent, line_gap]) = sizes(&font)?;
+        let charmap = skrifa::charmap::MappingIndex::new(&font);
+        Some(Face {
+            charmap,
+            ascent,
+            descent,
+            line_gap,
+            glyphs,
+            bytes,
+            index,
+        })
+    }
+
+    /// Face `index` of a font file read whole.
+    fn read(bytes: Vec<u8>, index: u32) -> Option<Face> {
+        Face::new(Bytes::Read(Arc::new(bytes)), index)
+    }
+
+    fn font(&self) -> FontRef<'_> {
+        FontRef::from_index(self.bytes.get(), self.index).expect("read when the face was made")
+    }
+
+    /// Pixels per font unit for lines `px` high.
+    fn scale(&self, px: f32) -> f32 {
+        let height = self.ascent - self.descent;
+        if height > 0.0 { px / height } else { 0.0 }
+    }
+
+    fn glyph_id(&self, c: char) -> GlyphId {
+        let font = self.font();
+        self.charmap
+            .charmap(&font)
+            .map(c)
+            .unwrap_or(GlyphId::NOTDEF)
+    }
+
+    /// Ascent, descent and line gap at `px`.
+    fn metrics(&self, px: f32) -> (f32, f32, f32) {
+        let s = self.scale(px);
+        (s * self.ascent, s * self.descent, s * self.line_gap)
+    }
+
+    /// Glyph `g`'s advance at `px` (none for a glyph the face doesn't have).
+    fn h_advance(&self, g: GlyphId, px: f32) -> f32 {
+        let font = self.font();
+        let units = match font.hmtx() {
+            Ok(hmtx) if g.to_u32() < self.glyphs => hmtx.advance(g).unwrap_or(0),
+            _ => 0,
+        };
+        self.scale(px) * f32::from(units)
+    }
+
+    /// The kerning between glyphs `l` and `r` at `px`, from the font's `kern` table: the first of
+    /// its horizontal subtables that has the pair.
+    fn kern(&self, l: GlyphId, r: GlyphId, px: f32) -> f32 {
+        use skrifa::raw::tables::kern::SubtableKind;
+        let font = self.font();
+        let Ok(kern) = font.kern() else {
+            return 0.0;
+        };
+        let units = kern
+            .subtables()
+            .filter_map(Result::ok)
+            .filter(|st| st.is_horizontal() && !st.is_variable())
+            .find_map(|st| match st.kind().ok()? {
+                SubtableKind::Format0(t) => t.kerning(l, r),
+                SubtableKind::Format2(t) => t.kerning(l, r),
+                SubtableKind::Format3(t) => t.kerning(l, r),
+                SubtableKind::Format1(_) => None,
+            })
+            .unwrap_or(0);
+        self.scale(px) * units as f32
+    }
+}
+
+/// Whether the caption can draw in face `index` of the font file `bytes`: skrifa reads it, and it
+/// has the tables a face's size and spacing come from (`head`, `hhea`, `maxp`), as ab_glyph
+/// required before 0.4.3-rc.3.
+pub fn can_draw_in(bytes: &[u8], index: u32) -> bool {
+    FontRef::from_index(bytes, index).is_ok_and(|font| sizes(&font).is_some())
+}
+
+/// A face's number of glyphs, and its ascent, descent and line gap in font units.
+fn sizes(font: &FontRef) -> Option<(u32, [f32; 3])> {
+    font.head().ok()?;
+    let glyphs = u32::from(font.maxp().ok()?.num_glyphs());
+    let (ascent, descent, gap) = line_metrics(font)?;
+    Some((glyphs, [ascent, descent, gap]))
+}
+
+/// A face's ascent, descent and line gap in font units, as ttf-parser chose them for ab_glyph
+/// (`Face::ascender`, `descender` and `line_gap` in ttf-parser 0.25): OS/2's typographic values
+/// when the font asks for them, else hhea's, with OS/2's in place of zeros. None without hhea.
+fn line_metrics(font: &FontRef) -> Option<(f32, f32, f32)> {
+    let table = |tag: &[u8; 4]| font.table_data(skrifa::Tag::new(tag)).map(|d| d.as_bytes());
+    let i16_at = |b: &[u8], at: usize| b.get(at..at + 2).map(|v| i16::from_be_bytes([v[0], v[1]]));
+    let hhea = table(b"hhea").filter(|b| b.len() >= 36)?;
+    let (h_ascent, h_descent, h_gap) = (i16_at(hhea, 4)?, i16_at(hhea, 6)?, i16_at(hhea, 8)?);
+    // ttf-parser read OS/2 only when it was as long as its version says.
+    let os2 = table(b"OS/2").filter(|b| {
+        let need = match i16_at(b, 0).map(|v| v as u16) {
+            Some(0) => 78,
+            Some(1) => 86,
+            Some(2..=4) => 96,
+            Some(5) => 100,
+            _ => usize::MAX,
+        };
+        b.len() >= need
+    });
+    let Some(os2) = os2 else {
+        return Some((h_ascent.into(), h_descent.into(), h_gap.into()));
+    };
+    let at = |offset| i16_at(os2, offset).unwrap_or(0);
+    let (version, selection) = (at(0) as u16, at(62) as u16);
+    let (typo_ascent, typo_descent, typo_gap) = (at(68), at(70), at(72));
+    let (win_ascent, win_descent) = (at(74), at(76).wrapping_neg());
+    if version >= 4 && selection & (1 << 7) != 0 {
+        return Some((typo_ascent.into(), typo_descent.into(), typo_gap.into()));
+    }
+    let or_os2 = |hhea: i16, typo: i16, win: i16| match (hhea, typo) {
+        (0, 0) => win,
+        (0, t) => t,
+        (h, _) => h,
+    };
+    let ascent = or_os2(h_ascent, typo_ascent, win_ascent);
+    let descent = or_os2(h_descent, typo_descent, win_descent);
+    let gap = if h_ascent == 0 || h_descent == 0 {
+        if typo_ascent != 0 || typo_descent != 0 {
+            typo_gap
+        } else {
+            0
+        }
+    } else {
+        h_gap
+    };
+    Some((ascent.into(), descent.into(), gap.into()))
+}
+
+/// The widest or tallest glyph drawn, in pixels: a caption's letters are at most 200 pixels high.
+const MAX_GLYPH_SIDE: i64 = 4096;
+
+/// Draws glyphs' outlines with vello_cpu, one glyph at a time, as ab_glyph drew them: the outline
+/// scaled to the line's size, placed with its origin at the pen's point on the baseline, covering
+/// the whole pixels its outline's box touches.
+struct Pen {
+    path: vello_cpu::kurbo::BezPath,
+    resources: vello_cpu::Resources,
+    /// Made for the first glyph, and sized again for each.
+    ctx: Option<vello_cpu::RenderContext>,
+}
+
+impl Pen {
+    fn new() -> Pen {
+        Pen {
+            path: Default::default(),
+            resources: vello_cpu::Resources::new(),
+            ctx: None,
+        }
+    }
+
+    /// Draw glyph `g` of `face` at `px` with its origin at `at`, calling `put` with each pixel
+    /// its box covers and how much of the pixel the glyph covers (0 to 255).
+    fn draw(
+        &mut self,
+        face: &Face,
+        g: GlyphId,
+        px: f32,
+        at: [f32; 2],
+        mut put: impl FnMut(i64, i64, u8),
+    ) {
+        use skrifa::instance::{LocationRef, Size};
+        use vello_cpu::kurbo::Affine;
+        let font = face.font();
+        let Some(outline) = font.outline_glyphs().get(g) else {
+            return;
+        };
+        self.path.truncate(0);
+        let mut to = ToPixels {
+            path: &mut self.path,
+            scale: face.scale(px),
+            at,
+            now: at,
+        };
+        let settings =
+            skrifa::outline::DrawSettings::unhinted(Size::unscaled(), LocationRef::default());
+        if outline.draw(settings, &mut to).is_err() {
+            return;
+        }
+        let b = self.path.control_box();
+        let (x0, y0) = (b.x0.floor(), b.y0.floor());
+        let (w, h) = ((b.x1.ceil() - x0) as i64, (b.y1.ceil() - y0) as i64);
+        // Nothing to draw, or a glyph far larger than any letter a caption has (a broken font).
+        if !(1..=MAX_GLYPH_SIDE).contains(&w) || !(1..=MAX_GLYPH_SIDE).contains(&h) {
+            return;
+        }
+        let (w, h) = (w as u16, h as u16);
+        let ctx = self
+            .ctx
+            .get_or_insert_with(|| vello_cpu::RenderContext::new(w, h));
+        ctx.reset_and_resize(w, h);
+        ctx.set_transform(Affine::translate((-x0, -y0)));
+        ctx.set_paint(vello_cpu::color::OpaqueColor::<vello_cpu::color::Srgb>::WHITE);
+        ctx.fill_path(&self.path);
+        let mut pixmap = vello_cpu::Pixmap::new(w, h);
+        ctx.render(&mut pixmap, &mut self.resources);
+        let (x0, y0) = (x0 as i64, y0 as i64);
+        let pixels = pixmap.data_as_u8_slice().as_chunks::<4>().0;
+        for (i, p) in pixels.iter().enumerate() {
+            let (x, y) = ((i % w as usize) as i64, (i / w as usize) as i64);
+            // Premultiplied white: the alpha is the coverage.
+            put(x0 + x, y0 + y, p[3]);
+        }
+    }
+}
+
+/// A glyph's outline, in font units with y up, as a path of straight lines in the caption's
+/// pixels: scaled, y down, from the pen's point. Its curves are cut into lines here, as ab_glyph
+/// cut them (finer than vello_cpu's own quarter-pixel tolerance, which would flatten small letters'
+/// curves visibly), all in f32, as ab_glyph worked them out.
+struct ToPixels<'a> {
+    path: &'a mut vello_cpu::kurbo::BezPath,
+    scale: f32,
+    at: [f32; 2],
+    /// The point the outline is at, in pixels.
+    now: [f32; 2],
+}
+
+impl ToPixels<'_> {
+    fn pt(&self, x: f32, y: f32) -> [f32; 2] {
+        let [ax, ay] = self.at;
+        [ax + x * self.scale, ay - y * self.scale]
+    }
+
+    fn line(&mut self, p: [f32; 2]) {
+        self.path.line_to((p[0] as f64, p[1] as f64));
+        self.now = p;
+    }
+
+    /// A cubic curve cut in halves until each is nearly straight, as stb_truetype and
+    /// ab_glyph_rasterizer cut them.
+    fn cubic(&mut self, p: [[f32; 2]; 4], depth: u8) {
+        let dist =
+            |a: [f32; 2], b: [f32; 2]| ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt();
+        let long = dist(p[0], p[1]) + dist(p[1], p[2]) + dist(p[2], p[3]);
+        let short = dist(p[0], p[3]);
+        if depth < 16 && long * long - short * short > 0.35 * 0.35 {
+            let p01 = lerp(0.5, p[0], p[1]);
+            let p12 = lerp(0.5, p[1], p[2]);
+            let p23 = lerp(0.5, p[2], p[3]);
+            let (pa, pb) = (lerp(0.5, p01, p12), lerp(0.5, p12, p23));
+            let mid = lerp(0.5, pa, pb);
+            self.cubic([p[0], p01, pa, mid], depth + 1);
+            self.cubic([mid, pb, p23, p[3]], depth + 1);
+        } else {
+            self.line(p[3]);
+        }
+    }
+}
+
+/// `a` + (`b` − `a`) × `t`, as ab_glyph_rasterizer works it out.
+fn lerp(t: f32, a: [f32; 2], b: [f32; 2]) -> [f32; 2] {
+    [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]
+}
+
+impl skrifa::outline::OutlinePen for ToPixels<'_> {
+    fn move_to(&mut self, x: f32, y: f32) {
+        let p = self.pt(x, y);
+        self.path.move_to((p[0] as f64, p[1] as f64));
+        self.now = p;
+    }
+
+    fn line_to(&mut self, x: f32, y: f32) {
+        let p = self.pt(x, y);
+        self.line(p);
+    }
+
+    /// In as many equal steps of the curve as its bend calls for, as ab_glyph_rasterizer cuts it.
+    fn quad_to(&mut self, cx0: f32, cy0: f32, x: f32, y: f32) {
+        let (p0, p1, p2) = (self.now, self.pt(cx0, cy0), self.pt(x, y));
+        let (dx, dy) = (p0[0] - 2.0 * p1[0] + p2[0], p0[1] - 2.0 * p1[1] + p2[1]);
+        let dev = dx * dx + dy * dy;
+        if dev < 0.333 {
+            self.line(p2);
+            return;
+        }
+        let n = 1 + (3.0 * dev).sqrt().sqrt().floor() as usize;
+        let step = (n as f32).recip();
+        let mut t = 0.0;
+        for _ in 0..n - 1 {
+            t += step;
+            self.line(lerp(t, lerp(t, p0, p1), lerp(t, p1, p2)));
+        }
+        self.line(p2);
+    }
+
+    fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
+        let p = [
+            self.now,
+            self.pt(cx0, cy0),
+            self.pt(cx1, cy1),
+            self.pt(x, y),
+        ];
+        self.cubic(p, 0);
+    }
+
+    fn close(&mut self) {
+        self.path.close_path();
     }
 }
 
@@ -781,7 +1121,6 @@ impl CaptionPainter {
 
     /// Prepares `lines` for a target of `target` pixels. `scale` is pixels per point; `opacity`
     /// comes from [`CaptionSettings::opacity`]. Text is laid out again only when it changes.
-    #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
         device: &wgpu::Device,
@@ -797,7 +1136,6 @@ impl CaptionPainter {
     }
 
     /// [`Self::prepare`], keeping clear of `insets` (a taskbar, the menu bar, the Dock).
-    #[allow(clippy::too_many_arguments)]
     pub fn prepare_within(
         &mut self,
         device: &wgpu::Device,
@@ -891,7 +1229,6 @@ impl CaptionPainter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ab_glyph::FontRef;
     use jetcarp_core::{Scene, SizeSpec, TilingSpec, topology};
 
     #[test]
@@ -968,26 +1305,18 @@ mod tests {
     #[test]
     fn the_caption_is_in_atkinson_with_ubuntu_light_behind() {
         let f = CaptionFont::default();
-        let atkinson = FontRef::try_from_slice(crate::fonts::NEXT_REGULAR).unwrap();
+        let atkinson = FontRef::new(crate::fonts::NEXT_REGULAR).unwrap().charmap();
         for c in "Life B3/S23 · 480 × 270 · wraps … généré".chars() {
-            assert_eq!(f.glyph(c), (0, atkinson.glyph_id(c)), "{c}");
+            assert_eq!(f.glyph(c), (0, atkinson.map(c).unwrap()), "{c}");
         }
         // Greek letters Atkinson lacks.
         for c in "λφαβγ".chars() {
             assert_eq!(f.glyph(c).0, 1, "{c}");
-            assert_ne!(f.glyph(c).1.0, 0, "{c}");
+            assert_ne!(f.glyph(c).1, GlyphId::NOTDEF, "{c}");
         }
         // Atkinson's widths, so its picture is not the Ubuntu one.
-        let ubuntu = FontRef::try_from_slice(epaint_default_fonts::UBUNTU_LIGHT).unwrap();
         let w = f.line_width("Square grid", 20.0);
-        let uw: f32 = "Square grid"
-            .chars()
-            .map(|c| {
-                ubuntu
-                    .as_scaled(PxScale::from(20.0))
-                    .h_advance(ubuntu.glyph_id(c))
-            })
-            .sum();
+        let uw = width_in(epaint_default_fonts::UBUNTU_LIGHT, "Square grid");
         assert!((w - uw).abs() > 1.0, "{w} vs Ubuntu Light's {uw}");
         let (img, iw, ih) = f.rasterize(&["Life".into(), "λ".into()], 20.0, 400.0);
         assert_eq!(img.len(), (iw * ih * 4) as usize);
@@ -998,17 +1327,12 @@ mod tests {
     }
 
     /// `text`'s width at 20 pixels in `font` alone.
-    fn width_in(font: &[u8], text: &str) -> f32 {
-        let f = FontRef::try_from_slice(font).unwrap();
-        let s = f.as_scaled(PxScale::from(20.0));
-        let mut w = 0.0;
-        let mut last = None;
-        for c in text.chars() {
-            let g = f.glyph_id(c);
-            w += last.map_or(0.0, |l| s.kern(l, g)) + s.h_advance(g);
-            last = Some(g);
-        }
-        w
+    fn width_in(font: &'static [u8], text: &str) -> f32 {
+        let alone = CaptionFont {
+            fonts: vec![builtin(font)],
+            last: None,
+        };
+        alone.line_width(text, 20.0)
     }
 
     /// The desktop background's caption is drawn in the font the app's setting names (`app.json`
@@ -1097,9 +1421,8 @@ mod tests {
     }
 
     fn hack_x() -> GlyphId {
-        FontRef::try_from_slice(epaint_default_fonts::HACK_REGULAR)
-            .unwrap()
-            .glyph_id('X')
+        let hack = FontRef::new(epaint_default_fonts::HACK_REGULAR).unwrap();
+        hack.charmap().map('X').unwrap()
     }
 
     /// A character none of the caption's fonts has (Chinese, Japanese, Korean, the macOS key
@@ -1111,7 +1434,7 @@ mod tests {
         let dir = installed_stand_in("caption-last-resort", only);
         let plain = CaptionFont::default();
         for c in only.chars() {
-            assert_eq!(plain.glyph(c).1.0, 0, "{c} is a box without it");
+            assert_eq!(plain.glyph(c).1, GlyphId::NOTDEF, "{c} is a box without it");
         }
         let last = LastResort::ready(Fallbacks::find(&[dir.to_path_buf()]));
         let f = CaptionFont::default().with_last_resort(Arc::clone(&last));
@@ -1121,8 +1444,7 @@ mod tests {
         for c in "Life · 480 × 270 λ…".chars() {
             assert_eq!(f.glyph(c), plain.glyph(c), "{c} in the fonts in place");
         }
-        let hack = FontRef::try_from_slice(epaint_default_fonts::HACK_REGULAR).unwrap();
-        let x = hack.as_scaled(PxScale::from(20.0)).h_advance(hack_x());
+        let x = width_in(epaint_default_fonts::HACK_REGULAR, "X");
         assert_eq!(f.line_width("中", 20.0), x);
         let line = vec!["中文 · Life".to_string()];
         assert_ne!(
@@ -1169,7 +1491,11 @@ mod tests {
         let started = t0.elapsed();
         let f = CaptionFont::default().with_last_resort(Arc::clone(&last));
         assert!(!f.last_resort_ready());
-        assert_eq!(f.glyph('中').1.0, 0, "a box while the fonts are read");
+        assert_eq!(
+            f.glyph('中').1,
+            GlyphId::NOTDEF,
+            "a box while the fonts are read"
+        );
         let (_, w, h) = f.rasterize(&["中文 · Life".into()], 20.0, 400.0);
         assert!(w > 0 && h > 0, "the caption is drawn meanwhile");
         let _ = go.send(());
@@ -1191,7 +1517,216 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert!(none.last_resort_ready());
-        assert_eq!(none.glyph('中').1.0, 0);
+        assert_eq!(none.glyph('中').1, GlyphId::NOTDEF);
+    }
+
+    /// The caption's fonts with `bytes` chosen as a font file, copied as `name` into `dir`.
+    fn chosen(dir: &std::path::Path, name: &str, bytes: &[u8]) -> CaptionFont {
+        std::fs::create_dir_all(dir).unwrap();
+        let path = dir.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        let choice = FontChoice::File {
+            family: name.into(),
+            path,
+            index: 0,
+        };
+        CaptionFont::for_choice(&choice).unwrap()
+    }
+
+    /// The pixels of a caption picture `w` wide that are mostly letter: left, top, right, bottom.
+    fn lit(img: &[u8], w: u32) -> [u32; 4] {
+        let mut b = [u32::MAX, u32::MAX, 0, 0];
+        for (i, p) in img.as_chunks::<4>().0.iter().enumerate() {
+            let (x, y) = (i as u32 % w, i as u32 / w);
+            if p[0] >= 128 {
+                b = [b[0].min(x), b[1].min(y), b[2].max(x + 1), b[3].max(y + 1)];
+            }
+        }
+        b
+    }
+
+    /// The caption's sizes and layout, pinned as they were drawn before 0.4.3-rc.3 (#186): in
+    /// Atkinson Hyperlegible Next, egui's Ubuntu Light, Hack and Atkinson Hyperlegible Mono, its
+    /// line heights, the widths of lines with accents and with a Greek letter drawn in the font
+    /// behind, the picture's size, with lines cut to fit, and where its letters fall (to a pixel,
+    /// for a rasteriser's antialiasing).
+    #[test]
+    fn the_caption_s_sizes_and_layout_are_pinned() {
+        let dir = jetcarp_core::scratch::ScratchDir::new("caption-pins");
+        let fonts = [
+            ("Next", CaptionFont::default()),
+            (
+                "Ubuntu",
+                CaptionFont::for_choice(&FontChoice::Egui).unwrap(),
+            ),
+            (
+                "Hack",
+                chosen(&dir, "Hack.ttf", epaint_default_fonts::HACK_REGULAR),
+            ),
+            ("Mono", chosen(&dir, "Mono.ttf", crate::fonts::MONO_REGULAR)),
+        ];
+        let font = |name: &str| &fonts.iter().find(|f| f.0 == name).unwrap().1;
+        let texts = [
+            "Life · B3/S23",
+            "Square grid · 480 × 270 · wraps",
+            "généré λ…",
+        ];
+        // Ascent, descent and line gap at 12, 20 and 37.5 pixels; each text's width at each.
+        #[rustfmt::skip]
+        let sizes: [(&str, f32, [f32; 3], [f32; 3]); 12] = [
+            ("Next", 12.0, [9.083_077, -2.916_923, 0.0], [52.956_924, 129.147_69, 42.383_65]),
+            ("Next", 20.0, [15.138_461, -4.861_538, 0.0], [88.261_55, 215.246_17, 70.639_42]),
+            ("Next", 37.5, [28.384_615, -9.115_385, 0.0], [165.490_39, 403.586_58, 132.448_91]),
+            ("Ubuntu", 12.0, [9.976_807, -2.023_194, 0.299_732], [59.550_407, 145.284_58, 52.196_25]),
+            ("Ubuntu", 20.0, [16.628_01, -3.371_989, 0.499_554], [99.250_67, 242.140_9, 86.993_76]),
+            ("Ubuntu", 37.5, [31.177_52, -6.322_48, 0.936_664], [186.095_02, 454.014_28, 163.113_3]),
+            ("Hack", 12.0, [9.568_791, -2.431_208, 0.0], [80.682_884, 192.397_64, 55.857_38]),
+            ("Hack", 20.0, [15.947_987, -4.052_013, 0.0], [134.471_5, 320.662_84, 93.095_64]),
+            ("Hack", 37.5, [29.902_473, -7.597_525, 0.0], [252.134_05, 601.242_6, 174.554_34]),
+            ("Mono", 12.0, [9.083_077, -2.916_923, 0.0], [75.840_004, 180.849_24, 51.937_5]),
+            ("Mono", 20.0, [15.138_461, -4.861_538, 0.0], [126.399_994, 301.415_5, 86.562_49]),
+            ("Mono", 37.5, [28.384_615, -9.115_385, 0.0], [237.000_05, 565.153_93, 162.304_69]),
+        ];
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
+        for (name, px, metrics, widths) in sizes {
+            let (a, d, g) = font(name).metrics(px);
+            assert!(
+                near(a, metrics[0]) && near(d, metrics[1]) && near(g, metrics[2]),
+                "{name} at {px}: {a} {d} {g}, not {metrics:?}"
+            );
+            for (text, want) in texts.into_iter().zip(widths) {
+                let w = font(name).line_width(text, px);
+                assert!(near(w, want), "{name} at {px}: {text} is {w}, not {want}");
+            }
+        }
+        // The caption of three lines at 12, 20 and 40 pixels in room enough, and at 20 in 200
+        // pixels: the picture's width and height, and the pixels its letters cover.
+        let lines: Vec<String> = [
+            "Life · B3/S23",
+            "Square grid · 480 × 270 · wraps",
+            "Wolfram series · 31 of 256 · generation 1,234",
+        ]
+        .map(String::from)
+        .to_vec();
+        #[rustfmt::skip]
+        let pictures = [
+            ("Next", 12.0, 2000.0, [153, 46], [8, 10, 144, 37]),
+            ("Next", 20.0, 2000.0, [252, 74], [12, 16, 238, 61]),
+            ("Next", 40.0, 2000.0, [503, 148], [25, 32, 478, 121]),
+            ("Next", 20.0, 200.0, [200, 74], [12, 16, 187, 61]),
+            ("Ubuntu", 12.0, 2000.0, [177, 47], [8, 10, 167, 38]),
+            ("Ubuntu", 20.0, 2000.0, [291, 76], [13, 15, 278, 63]),
+            ("Ubuntu", 40.0, 2000.0, [582, 151], [25, 29, 556, 126]),
+            ("Ubuntu", 20.0, 200.0, [199, 76], [13, 15, 185, 61]),
+            ("Hack", 12.0, 2000.0, [226, 46], [8, 10, 217, 38]),
+            ("Hack", 20.0, 2000.0, [374, 74], [12, 15, 360, 62]),
+            ("Hack", 40.0, 2000.0, [747, 148], [24, 30, 721, 123]),
+            ("Hack", 20.0, 200.0, [195, 74], [12, 15, 182, 59]),
+            ("Mono", 12.0, 2000.0, [213, 46], [8, 10, 204, 37]),
+            ("Mono", 20.0, 2000.0, [353, 74], [12, 16, 339, 61]),
+            ("Mono", 40.0, 2000.0, [705, 148], [24, 32, 679, 121]),
+            ("Mono", 20.0, 200.0, [200, 74], [12, 16, 186, 58]),
+        ];
+        for (name, px, room, size, letters) in pictures {
+            let (img, w, h) = font(name).rasterize(&lines, px, room);
+            assert_eq!([w, h], size, "{name} at {px} in {room}");
+            let got = lit(&img, w);
+            assert!(
+                got.iter().zip(letters).all(|(&g, l)| g.abs_diff(l) <= 1),
+                "{name} at {px} in {room}: letters in {got:?}, not {letters:?}"
+            );
+        }
+        // Where a line is cut to fit.
+        let long = "Wolfram series · 31 of 256 · generation 1,234";
+        let cuts = [
+            ("Next", "Wolfram series · 31 …"),
+            ("Hack", "Wolfram serie…"),
+        ];
+        for (name, want) in cuts {
+            assert_eq!(font(name).fit(long, 20.0, 150.0), want, "{name}");
+        }
+    }
+
+    /// Captions drawn into `JETCARP_CAPTION_SHOTS` (`--ignored`), as PNGs of the picture the
+    /// caption painter shows (premultiplied, over its backdrop), for comparing two builds' pixels:
+    /// several scenes' captions at five sizes in Atkinson Hyperlegible Next and Mono, Ubuntu Light,
+    /// and each font file in `JETCARP_CAPTION_SHOT_FONTS`; and a line of characters those lack, in
+    /// the font behind and in the installed fonts of `JETCARP_FONT_DIRS` (both separated as `PATH`
+    /// is).
+    #[test]
+    #[ignore = "draws captions into JETCARP_CAPTION_SHOTS, for comparing builds"]
+    fn draw_captions_for_comparison() {
+        let Some(out) = std::env::var_os("JETCARP_CAPTION_SHOTS").map(PathBuf::from) else {
+            eprintln!("skipped: set JETCARP_CAPTION_SHOTS to a folder");
+            return;
+        };
+        std::fs::create_dir_all(&out).unwrap();
+        let paths = |var: &str| -> Vec<PathBuf> {
+            std::env::var_os(var).map_or_else(Vec::new, |v| std::env::split_paths(&v).collect())
+        };
+        let last = LastResort::ready(Fallbacks::find(&paths("JETCARP_FONT_DIRS")));
+        let dir = jetcarp_core::scratch::ScratchDir::new("caption-shots");
+        let mut fonts = vec![
+            ("next".to_string(), CaptionFont::default()),
+            (
+                "mono".into(),
+                chosen(&dir, "Mono.ttf", crate::fonts::MONO_REGULAR),
+            ),
+            (
+                "ubuntu".into(),
+                CaptionFont::for_choice(&FontChoice::Egui).unwrap(),
+            ),
+        ];
+        for path in paths("JETCARP_CAPTION_SHOT_FONTS") {
+            let name = path.file_stem().unwrap().to_string_lossy().to_lowercase();
+            let choice = FontChoice::File {
+                family: name.clone(),
+                path,
+                index: 0,
+            };
+            fonts.push((name, CaptionFont::for_choice(&choice).unwrap()));
+        }
+        let square = TilingSpec::rect("square", 480, 270, topology::Boundary::Wrap);
+        let hex = TilingSpec::rect("hex", 200, 120, topology::Boundary::Dead);
+        let penrose = TilingSpec::new("penrose-rhomb").with_size(SizeSpec::Level(3));
+        let wolfram = Place {
+            rotation: "Wolfram series",
+            number: 31,
+            count: 256,
+        };
+        let mut generations = world("W110", square.clone());
+        generations.generation = 1_234_567;
+        let scenes: Vec<(&str, Vec<String>)> = vec![
+            ("life", lines(&world("B3/S23", square), None, false)),
+            ("wolfram", lines(&generations, Some(wolfram), true)),
+            ("hex", lines(&world("B2/S34H", hex), None, false)),
+            ("penrose", lines(&world("B3/S23", penrose), None, true)),
+            (
+                "fallback",
+                vec![
+                    "生命游戏 · λόγος · ⌘ ⌥".into(),
+                    "Rotation 中文 · ελληνικά".into(),
+                ],
+            ),
+        ];
+        let mut n = 0;
+        for (name, font) in &fonts {
+            let font = font.clone().with_last_resort(Arc::clone(&last));
+            for (scene, text) in &scenes {
+                for px in [12.0, 16.0, 20.0, 28.0, 40.0] {
+                    let (rgba, width, height) = font.rasterize(text, px, 1600.0);
+                    let img = jetcarp_core::render::Image {
+                        width,
+                        height,
+                        rgba,
+                    };
+                    let file = out.join(format!("{name}-{scene}-{px}.png"));
+                    jetcarp_core::render::write_png(&file, &img, &[]).unwrap();
+                    n += 1;
+                }
+            }
+        }
+        eprintln!("{n} captions drawn into {}", out.display());
     }
 
     #[test]

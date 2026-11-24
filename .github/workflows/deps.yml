@@ -1,8 +1,9 @@
 # Check the dependency tree with cargo-deny (deny.toml): known vulnerabilities and unsoundness in
 # dependencies (the RustSec advisory database), a ban on every network client and server crate
 # (SECURITY.md promises that JETCARP makes no network connections), and crates from crates.io
-# only. It runs on every push to main and every pull request, and once a week, because an
-# advisory can be published for a dependency without anything here changing.
+# only. Each target JETCARP releases for is checked on its own, as built for that target alone.
+# It runs on every push to main and every pull request, and once a week, because an advisory can
+# be published for a dependency without anything here changing.
 name: Dependencies
 
 on:
@@ -36,5 +37,21 @@ jobs:
           curl -fsSLO "https://github.com/EmbarkStudios/cargo-deny/releases/download/$v/$f.tar.gz"
           echo "a2170b854ff697e79e39c4c538981c9c1bdd803addbae6719a4cb66b4585a903  $f.tar.gz" | sha256sum -c -
           tar -xzf "$f.tar.gz" --strip-components=1 "$f/cargo-deny"
-      - name: cargo deny check (unmaintained crates are warnings, never failures)
-        run: ./cargo-deny --locked check --warn unmaintained advisories bans sources
+      - name: cargo deny check, once for each target in deny.toml (unmaintained crates are warnings, never failures)
+        # Given every target at once, cargo-deny merges them into one graph and reports crates no
+        # target builds (#186), so each target is checked on its own. Every target runs, and the
+        # step fails at the end if any failed.
+        run: |
+          targets=$(python3 -c 'import tomllib; print(" ".join(tomllib.load(open("deny.toml", "rb"))["graph"]["targets"]))')
+          failed=""
+          for t in $targets; do
+            echo "::group::$t"
+            if ! ./cargo-deny --locked --target "$t" check --warn unmaintained advisories bans sources; then
+              failed="$failed $t"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::cargo-deny failed for:$failed"
+            exit 1
+          fi

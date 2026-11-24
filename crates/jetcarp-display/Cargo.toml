@@ -11,6 +11,9 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 default = ["library"]
 # Quick Start entries a rotation names are found in the user's library (the background host;
@@ -28,15 +31,17 @@ bytemuck.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rhai = { version = "=1.27.0", features = ["sync", "serde"] }
-chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+jiff.workspace = true
 dirs.workspace = true
-# The caption on surfaces with no egui: glyph drawing, and the font the app already ships.
-ab_glyph = "0.2.32"
+# The caption on surfaces with no egui: the fonts egui ships (Ubuntu Light behind Atkinson).
 epaint_default_fonts = "0.37.0"
-# Reading installed fonts' names and character maps, and checking a chosen font file
-# (`src/fonts.rs`), for the app and the caption alike: egui's own font parser, already in the tree
-# through epaint, so this adds no new crates.
+# Reading fonts: installed fonts' names and character maps, a chosen font file's check
+# (`src/fonts.rs`), and the caption's letters, their sizes and outlines (`src/caption.rs`). egui's
+# own font reader, already in the tree through epaint, so this adds no new crates.
 skrifa = { version = "0.44.0", default-features = false, features = ["std"] }
+# The caption's letters drawn from their outlines: the rasteriser egui draws the app's words with,
+# already in the tree through epaint (without its text and PNG parts, which JETCARP doesn't use).
+vello_cpu = { version = "0.2.0", default-features = false, features = ["std", "u8_pipeline"] }
 
 [dev-dependencies]
 pollster.workspace = true

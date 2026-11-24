@@ -320,7 +320,6 @@ fn where_to_look(
 
 /// The scene of a soup: its cells pasted at the centre of a dead-edged grid with room to run
 /// `gens` generations (at most 1,024 unit cells, or 16 million cells, on a side).
-#[allow(clippy::too_many_arguments)]
 fn scene_of(
     rec: &PatternRecord,
     layout: &Layout,

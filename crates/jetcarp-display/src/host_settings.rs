@@ -477,7 +477,6 @@ impl Tuning {
     /// Whether `--pick` may place sizes from it without measuring again (#77): found by this
     /// JETCARP, for `rotation`, every one of its scenes (`labels`), on this monitor, within these
     /// limits (processor, GPU and frame rate), on this GPU, and with a scene measured.
-    #[allow(clippy::too_many_arguments)]
     pub fn current(
         &self,
         rotation: &str,

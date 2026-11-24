@@ -559,7 +559,7 @@ mod tests {
         let (b, w) = (solid(100, 100, [0; 3]), solid(100, 100, [255; 3]));
         let c = check(&[&b, &w], 50, false);
         let d = slowed_delay(&c, 50);
-        assert!(d >= 500 && d <= SLOWEST_MS, "{d}");
+        assert!((500..=SLOWEST_MS).contains(&d), "{d}");
         assert!(!check(&[&b, &w], d, false).harmful);
     }
 }

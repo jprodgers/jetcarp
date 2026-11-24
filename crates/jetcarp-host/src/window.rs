@@ -1146,13 +1146,12 @@ pub fn run(core: Core, mode: Mode, seconds: Option<f64>) -> ! {
 
 #[cfg(test)]
 mod tests {
-    use super::{no_wallpaper_note, stand_in_title};
-
     /// With the extension's files installed, as setup leaves them, the note and the stand-in
     /// window say to log out once, not to run an install that has been done (#139).
     #[test]
     #[cfg(all(unix, not(target_os = "macos")))]
     fn a_window_standing_in_for_the_wallpaper_says_to_log_out_once() {
+        use super::{no_wallpaper_note, stand_in_title};
         assert!(
             no_wallpaper_note(false, true).contains("which is installed: log out and back in once")
         );

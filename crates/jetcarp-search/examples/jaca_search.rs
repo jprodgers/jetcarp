@@ -684,7 +684,6 @@ fn now() -> f64 {
         .as_secs_f64()
 }
 
-#[allow(clippy::too_many_arguments)]
 fn insert(
     db: &Connection,
     stage: &str,

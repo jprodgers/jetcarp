@@ -816,7 +816,7 @@ fn letter_verdict(l: &Letter, cell_px: f64) -> String {
 
 fn print_row(r: &Row) {
     println!(
-        "| {} | {} | {} | {} | {} | {:.0}% | {:.0}% | {} ({}) | {} ({}: area {}, fine {}, partial {}, screen {}) | {} (guard {}) | {:.0}%{} | {:.0}% | {}{} |",
+        "| {} | {} | {} | {} | {} | {:.0}% | {:.0}% | {} ({}, concurrent {}) | {} ({}: area {}, fine {}, partial {}, screen {}) | {} (guard {}) | {:.0}%{} | {:.0}% | {}{} |",
         r.name,
         if r.window { "window" } else { "screen" },
         r.cell_px,
@@ -825,7 +825,8 @@ fn print_row(r: &Row) {
         r.p2 * 100.0,
         r.letter.fail_share * 100.0,
         letter_verdict(&r.letter, r.cell_px),
-        format!("{}, concurrent {}", r.letter.most(), r.letter.concurrent),
+        r.letter.most(),
+        r.letter.concurrent,
         level_name(r.drawn.worst()),
         r.drawn.most(),
         r.drawn.area_transitions.max(r.drawn.red_transitions),
@@ -1292,7 +1293,12 @@ fn windows_against_pixels() {
             if change.len() != map.len() {
                 change = vec![Change::default(); map.len()];
             }
-            let lum: Vec<f32> = px.chunks_exact(4).map(|q| values(&lin, q).lum).collect();
+            let lum: Vec<f32> = px
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|q| values(&lin, q).lum)
+                .collect();
             let changed = last.as_ref().map_or(0, |l| {
                 l.iter()
                     .zip(&lum)

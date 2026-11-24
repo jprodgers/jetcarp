@@ -700,7 +700,7 @@ pub fn measure(
             ApiError::engine(e)
         }
     })?;
-    score.date = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+    score.date = crate::out::date_and_minute();
     score.conditions = Some(before.conditions());
     let (l, _, note) = table(&hw, settings.as_deref());
     let mut machine_file = None;

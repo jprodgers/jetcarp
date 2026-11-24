@@ -1,0 +1,5 @@
+# The Rust a release is built with, and that CI's Clippy job lints with: release.yml, crates.yml
+# and ci.yml read this file (the line below, with comments and spaces left out). Move it on at the
+# start of each release cycle, to that day's stable Rust (`rustup check` names it), together with
+# the pin of dtolnay/rust-toolchain, and fix or allow the lints the new clippy brings.
+1.100.0

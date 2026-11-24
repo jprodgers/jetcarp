@@ -11,6 +11,9 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 default = ["ops", "pack"]
 # The operations and the context they run in, which need the store and the job runner. Without
@@ -29,7 +32,7 @@ jetcarp-pack = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 png.workspace = true
-chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+jiff.workspace = true
 rayon.workspace = true
 # JSON Schemas for each operation's input and output (the op registry, `jetcarp api schema`,
 # and later the MCP tools' input schemas).

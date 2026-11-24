@@ -804,7 +804,7 @@ mod tests {
             let r = sim.guard.report();
             assert_eq!(r.action, Action::Slowed, "{fps}: {r:?}");
             let cap = r.cap.unwrap();
-            assert!(cap <= 3.0 && cap >= MIN_PACE, "{fps}: cap {cap}");
+            assert!((MIN_PACE..=3.0).contains(&cap), "{fps}: cap {cap}");
             assert!(
                 sim.worst_shown <= MAX_TRANSITIONS,
                 "{fps} fps: {}",

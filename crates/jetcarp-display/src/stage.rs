@@ -758,7 +758,6 @@ impl Stage {
     }
 
     /// The colour behind the grid.
-
     pub fn backdrop(&self) -> [u8; 3] {
         self.show.as_ref().map_or([0, 0, 0], |s| {
             let (_, c) = jetcarp_core::render::backdrop(&s.world);

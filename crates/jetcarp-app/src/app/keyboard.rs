@@ -722,7 +722,7 @@ impl JetcarpApp {
         let screen = |c: usize| -> Vec<egui::Pos2> {
             topo.polygon(c).iter().map(|q| xf.to_screen(*q)).collect()
         };
-        if self.kb.cursor.anchor.is_some() {
+        if let Some(a) = self.kb.cursor.anchor {
             let cells = self.kb.cursor.selected(topo);
             if cells.len() <= 5000 {
                 // Each selected cell tinted (where it is convex: a hat's or a spectre's outline
@@ -741,7 +741,6 @@ impl JetcarpApp {
                     p.add(egui::Shape::closed_line(pts, s));
                 }
             } else {
-                let a = self.kb.cursor.anchor.unwrap();
                 let r = egui::Rect::from_two_pos(
                     xf.to_screen(topo.centroid(a)),
                     xf.to_screen(topo.centroid(cell)),

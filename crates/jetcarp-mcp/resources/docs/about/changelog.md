@@ -488,11 +488,84 @@ day later (0.4.2: 17 November here, 18 November there).
   was published until it was run again. The Intel build's program is now also run once, under
   Rosetta, where the runner has it; before, it was only built.
 
+- **Clippy in CI, required before `main` moves.** A new job, *Clippy*, runs `cargo clippy
+  --workspace --all-targets --locked -- -D warnings` on Linux, and for Windows and macOS from Linux,
+  so a clippy or compiler warning fails it. It lints with the Rust releases are built with, so a new
+  Rust's lints arrive when that version is moved on, at the start of a cycle. The lint policy is
+  written down in the root `Cargo.toml` (`[workspace.lints.clippy]`, taken up by every crate):
+  `too_many_arguments`, `type_complexity`, `needless_range_loop` and `manual_is_multiple_of` are
+  allowed, each with its reason, in place of 31 allows scattered through the code. The 72 warnings
+  clippy 1.100 gave were fixed (31) or allowed (39 by the policy, 2 at the one place each), and an
+  unused import in a test on Windows and macOS went; no behaviour changed. One fix shows in the API
+  docs: `jetcarp-api`'s list of modules had lost its `error` item, read as a link definition.
+  ([Contributing](contributing.md#code-style),
+  [#183](https://github.com/jprodgers/jetcarp/issues/183))
+
+- **A release is built with a named Rust, 1.100.0,** rather than whatever stable Rust was current
+  that day, so a release can be built again exactly. The version is in one file,
+  `.github/rust-release`, which the release workflow, the workflow that finishes a crates.io publish
+  and the Clippy job read. It moves on by hand at the start of each cycle. CI's tests stay on the
+  newest stable, so a new Rust's warnings show up there first.
+  ([Continuous integration](testing.md#continuous-integration),
+  [#183](https://github.com/jprodgers/jetcarp/issues/183))
+
+- **The dependency check runs once for each target** JETCARP is released for, with the crates that
+  target builds. Run over all five at once, cargo-deny merged them into one tree, and reported the
+  tray icon's GTK crates (`proc-macro-error`, and glib's advisory, which `deny.toml` ignored for
+  #119), which no target builds: the tray icon is built only for Windows and macOS, and its GTK
+  crates only for Linux. The ignore is gone, and the warnings left are `chrono`, `smartstring` and
+  `ttf-parser` everywhere, and the three `zbus` crates on Linux.
+  ([#186](https://github.com/jprodgers/jetcarp/issues/186))
+
+- **Dependabot** opens weekly pull requests for the crates and for the workflows' actions: each
+  ecosystem's patch updates together, and each minor and each major update on its own, since a 0.x
+  crate's minor update can break the build. A version is proposed once it is five days old; security
+  updates don't wait. Its pull requests go through CI and are reviewed like any other. It keeps the
+  actions' pinned commits current, with the version in the comment beside each. On its crate
+  updates, a workflow makes the third-party notices again and pushes them to the pull request, so
+  the notices check passes without anyone running `packaging/notices.sh`.
+  ([Continuous integration](testing.md#continuous-integration),
+  [#183](https://github.com/jprodgers/jetcarp/issues/183))
+
+- **Benchmarks and coverage, measured weekly.** A new workflow, run once a week and by hand, never
+  on a pull request, runs every benchmark in the repository (`tools/bench.py`) and records each
+  number with the commit, the date, the runner and the Rust that built it, and measures how much of
+  the code the tests run (cargo-llvm-cov). The numbers are in each run's summary and artifacts;
+  nothing is sent anywhere. `python3 tools/bench.py compare` shows what changed between two runs.
+  ([Continuous integration](testing.md#continuous-integration),
+  [#183](https://github.com/jprodgers/jetcarp/issues/183))
+
 - **The per-system tables say what rc.3's changes did:** Windows now stops a command, the app and
   the host at a checkpoint when its console closes or at sign-out or shutdown (#319); Linux reads
   NVIDIA's and Intel's GPU memory; macOS's explore searches give freed memory back; the release
   runs the Intel Mac's program under Rosetta. The comparison with IRIS was run again on
   v0.4.3-rc.2, and its one moved count is brought up to date.
+
+- **The caption is drawn with skrifa and vello_cpu, egui's own font reader and rasteriser,
+  instead of ab_glyph,** which reads fonts with ttf-parser, a crate the RustSec database marks
+  unmaintained (RUSTSEC-2026-0192). On Windows and macOS the caption was the only thing that brought
+  ttf-parser in; on Linux winit's window decorations still do, until winit moves off it. Both
+  crates were in the tree already through egui, so nothing new comes in. The caption keeps its
+  fonts and its look: its line heights, spacing and kerning are worked out as ab_glyph worked them
+  out, and its curves cut into lines as ab_glyph cut them, so 125 captions drawn both ways (five
+  scenes' captions in five fonts, with Chinese, Greek and key symbols from the fonts behind, at 12
+  to 40 pixels) are the same size, and 355 of their 3.1 million pixels differ, each by one level.
+  ([Font](../guides/accessibility-settings.md#font),
+  [#186](https://github.com/jprodgers/jetcarp/issues/186))
+- **JETCARP's own dates and times come from jiff instead of chrono,** which the RustSec database
+  marks unmaintained (RUSTSEC-2026-0543): the output folders' names, records' times, a machine
+  score's date and the rotations' clock. They are written exactly as before, which tests now pin
+  in several time zones, either side of daylight saving time's changes, midnight and 1970. jiff is
+  pure Rust; on Windows it carries its own copy of the time zone database. chrono stays in the tree
+  through Arrow and Parquet until they move off it. One rule now holds on every system: a `TZ`
+  that names a time zone decides it (on Windows too, where chrono read only Windows' own setting),
+  and without one the computer's setting does. A `TZ` that names no zone JETCARP can read is
+  ignored, never taken as UTC: the computer's setting is used, and the program warns once, naming
+  the value and the zone used instead. `jetcarp doctor` shows the time zone in use and where it
+  came from, in its text and its JSON (`time_zone`). A zone changed in the system's settings
+  reaches a running program within five minutes; daylight saving time changes the clock at once.
+  ([When a rotation moves on](../guides/rotations.md#when-a-rotation-moves-on),
+  [#186](https://github.com/jprodgers/jetcarp/issues/186))
 
 ### Fixed
 

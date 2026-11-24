@@ -58,6 +58,7 @@ pub mod spectre;
 pub mod step;
 pub mod strobe;
 pub mod table;
+pub mod time_zone;
 pub mod topology;
 pub mod turmite;
 pub mod vonneumann;

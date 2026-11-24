@@ -260,6 +260,77 @@ jobs:
       - name: rustfmt
         run: cargo fmt --all -- --check
 
+  clippy:
+    # Every clippy warning fails the job, and so does every compiler warning. Which lints are
+    # allowed, and why, is written down in the root Cargo.toml's [workspace.lints.clippy]. With the
+    # Rust releases are built with (.github/rust-release), not the newest stable: main's ruleset
+    # requires this job, so a new Rust's lints arrive only when that version is moved on, at the
+    # start of a cycle, never as a surprise on a pull request. Windows' and macOS's code is linted
+    # here too, for their targets: clippy only checks the code and never links it, so the C code
+    # under SQLite and zstd is "compiled" by stand-ins that write empty files.
+    name: Clippy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The Rust releases are built with (.github/rust-release)
+        id: rust
+        run: |
+          v=$(sed 's/#.*//' .github/rust-release | tr -d '[:space:]')
+          if ! [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::.github/rust-release should name one Rust version, such as 1.100.0, not '$v'"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          toolchain: ${{ steps.rust.outputs.version }}
+          components: clippy
+          targets: x86_64-pc-windows-msvc,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Linux libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libvulkan1
+      - name: Clippy (Linux x86_64; with the Windows launcher's feature, so every program is linted)
+        run: cargo clippy --workspace --all-targets --locked --features jetcarp/windows-launcher -- -D warnings
+      - name: Stand-in C compilers and archivers for the Windows and macOS targets
+        run: |
+          d="$RUNNER_TEMP/stand-in"
+          mkdir -p "$d"
+          # Each writes an empty file where its output would go, and nothing else.
+          cat > "$d/cl.exe" <<'EOF'
+          #!/bin/sh
+          for a in "$@"; do case "$a" in -Fo*|/Fo*) f="${a#?Fo}"; mkdir -p "$(dirname "$f")"; : > "$f";; esac; done
+          EOF
+          cat > "$d/lib.exe" <<'EOF'
+          #!/bin/sh
+          for a in "$@"; do case "$a" in -out:*|/OUT:*|-OUT:*|/out:*) f="${a#*:}"; mkdir -p "$(dirname "$f")"; : > "$f";; esac; done
+          EOF
+          cat > "$d/cc" <<'EOF'
+          #!/bin/sh
+          o=""; prev=""
+          for a in "$@"; do if [ "$prev" = -o ]; then o="$a"; fi; prev="$a"; done
+          if [ -n "$o" ]; then mkdir -p "$(dirname "$o")"; : > "$o"; fi
+          EOF
+          cat > "$d/ar" <<'EOF'
+          #!/bin/sh
+          for a in "$@"; do case "$a" in *.a) mkdir -p "$(dirname "$a")"; : > "$a"; exit 0;; esac; done
+          EOF
+          chmod +x "$d"/*
+      - name: Clippy (Windows x86_64, checked from Linux)
+        env:
+          CC_x86_64_pc_windows_msvc: ${{ runner.temp }}/stand-in/cl.exe
+          AR_x86_64_pc_windows_msvc: ${{ runner.temp }}/stand-in/lib.exe
+        run: cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc --features jetcarp/windows-launcher -- -D warnings
+      - name: Clippy (macOS arm64, checked from Linux)
+        env:
+          CC_aarch64_apple_darwin: ${{ runner.temp }}/stand-in/cc
+          AR_aarch64_apple_darwin: ${{ runner.temp }}/stand-in/ar
+        run: cargo clippy --workspace --all-targets --locked --target aarch64-apple-darwin -- -D warnings
+
   notices:
     # THIRD_PARTY_LICENSES.html, which ships in every release, must match Cargo.lock.
     name: Third-party notices are current

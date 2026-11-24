@@ -763,7 +763,9 @@ pub fn fade_striped_outlines_if(
     }
     let lum: Vec<f32> = fills
         .rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|c| luminance([c[0], c[1], c[2]]))
         .collect();
     let line = luminance([outline[0], outline[1], outline[2]]);
@@ -800,7 +802,9 @@ fn even_field(fills: &Image, outline: Rgba) -> Vec<bool> {
     let (w, h) = (fills.width as usize, fills.height as usize);
     let lum: Vec<f32> = fills
         .rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|c| luminance([c[0], c[1], c[2]]))
         .collect();
     let line = luminance([outline[0], outline[1], outline[2]]);
@@ -1613,7 +1617,6 @@ impl ViewColors {
 /// `width` x `height` pixels at `scale` pixels per world unit. Tile outlines are drawn when
 /// tiles are at least `opts.outline_min_px` across (`opts.scale` and `opts.max_side` are
 /// ignored). Used by `media` for moving windows; see [`render_view`] for the world's own colours.
-#[allow(clippy::too_many_arguments)]
 pub fn render_rect(
     world: &World,
     color: &(dyn Fn(usize) -> Rgba + Sync),
@@ -1631,7 +1634,6 @@ pub fn render_rect(
 
 /// [`render_rows_at`] for a whole picture, outlines faint where they would form strong stripes
 /// ([`fade_striped_outlines`]).
-#[allow(clippy::too_many_arguments)]
 fn render_at_checked(
     world: &World,
     color: &(dyn Fn(usize) -> Rgba + Sync),
@@ -1658,7 +1660,6 @@ fn render_at_checked(
 
 /// Render pixel rows `y0..y1` of an image `width` pixels wide at scale `s`, with the tiling's
 /// top-left bounds corner at pixel `origin`.
-#[allow(clippy::too_many_arguments)]
 fn render_rows_at(
     world: &World,
     color: &(dyn Fn(usize) -> Rgba + Sync),
@@ -1683,7 +1684,6 @@ fn render_rows_at(
 /// Draw the tiling into `img`, which holds pixel rows `y0..y0 + img.height` of a larger image,
 /// at scale `s` with the tiling's top-left bounds corner at pixel `origin`. Pixels no tile
 /// covers keep their colour.
-#[allow(clippy::too_many_arguments)]
 fn draw_rows_at(
     img: &mut Image,
     world: &World,

@@ -205,7 +205,13 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   the app's font setting in `app.json`: a font file chosen there from the next check without a
   restart and at the next start, egui's original, then Atkinson again; and with the chosen file
   removed, Atkinson, with a note that names the file and no folder
-  (`jetcarp-display/src/caption.rs`). Installing the macOS screen saver, in a scratch folder on any
+  (`jetcarp-display/src/caption.rs`). The caption's sizes and layout are pinned as they were
+  before it moved from ab_glyph to skrifa and vello_cpu in 0.4.3 (#186): its line heights, the
+  widths of lines with accents and with a Greek letter from the font behind, the picture's size
+  with lines cut to fit, and where its letters fall, to a pixel, in Atkinson Hyperlegible Next and
+  Mono, Ubuntu Light and Hack (`the_caption_s_sizes_and_layout_are_pinned`); an ignored test draws
+  captions into a folder for comparing two builds pixel by pixel
+  (`draw_captions_for_comparison`). Installing the macOS screen saver, in a scratch folder on any
   system, must record the font chosen and copy its file whole into the bundle's Resources (a
   collection with its face), and copy nothing for Atkinson or egui's original; a chosen font that
   is gone or isn't a font must give Atkinson and a warning that names the file and no folder; a
@@ -235,6 +241,29 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   doctor`, and not be tried again until the next change; and a change to the guard or the answer
   must reach the bundle without installing again, while a change that bakes the same leaves it
   alone (`jetcarp-display/tests/saver_update.rs`).
+- **Local times.** The output folders' names (`2026-11-05_14-30-02`), records' times
+  (`2026-11-05T14:30:02-05:00`), a machine score's date and the rotations' clock must name the
+  moment in the computer's own time zone, whatever it is, and agree with each other. Each is pinned,
+  in a process of its own with `TZ` set (on every system, Windows included), in New York either
+  side of both of 2026's daylight saving changes, midnight at the new year and 1970, in Kathmandu
+  (+05:45), St John's (−03:30), Lord Howe Island (whose clocks go back half an hour), London, UTC
+  and a POSIX rule; and in New York the rotation's decisions at those moments: a schedule's
+  window opening and closing on the minute, an item ending at 02:30 on the night that time never
+  comes, one ending at 01:30 on the night it comes twice, and one an hour keeping its item through
+  that hour
+  (`jetcarp-api/src/out.rs`, `jetcarp-display/tests/rotation.rs`). The pins were written with
+  chrono and pass unchanged on jiff, which JETCARP uses since 0.4.3 (#186). A `TZ` that names no
+  zone (`Not/A_Zone`, a misspelt `America/Boston`, an empty value) must give the same time stamps as
+  no `TZ` at all, through a year, never UTC, with one warning naming the value and the zone used
+  (`an_unreadable_tz_gives_the_system_s_time_zone_not_utc`; red before the fix, which took it as
+  UTC). `jetcarp doctor`, text and JSON, must say the zone and where it came from: from a `TZ` that
+  names one, the system's with none, and the system's, the same offset, with a `TZ` that names none,
+  which it names (`doctor_says_the_time_zone_and_where_it_came_from`, in
+  `jetcarp/tests/cli_json.rs`). The rule itself is tested with stand-ins for the system's zone; the
+  system's zone read without `TZ` from `/etc/localtime` as a link and as a file; and Windows'
+  settings made POSIX rules, for zones with daylight saving time in either hemisphere and without,
+  which must give the IANA zones' offsets through 2026 and 2027
+  (`jetcarp-core/src/time_zone.rs`).
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the
@@ -691,6 +720,17 @@ release workflow. The workflows name each action they use by its commit, with it
 so a tag that moves cannot change what runs. Every job has a time limit, about twice its usual length or more, so a
 job that hangs is stopped rather than left running for hours.
 
+CI's tests build with the newest stable Rust, so that a new Rust's warnings show up the week it
+comes out, and one job with the oldest Rust JETCARP supports. A release is built with one named
+version instead, so that it can be built again exactly as it was: Rust 1.100.0 for 0.4.3, named in
+`.github/rust-release`, the one place it is set. The release workflow, the workflow that finishes a
+crates.io publish, and the Clippy job read it there. It is moved on by hand at the start of each
+release cycle: change the version in that file to that day's stable Rust (`rustup check` names it),
+move the pin of the action that installs Rust in the same pull request, and fix or allow the lints
+the new clippy brings, which the Clippy job on that pull request shows. Dependabot can't do it: it
+updates a Rust version only in a `rust-toolchain.toml` file, and one in the repository would make
+every contributor's own builds use that version too.
+
 - **Build and test** the whole workspace on Linux (x86_64), Windows (x86_64) and macOS (Apple
   silicon). The runners have no GPU of their own, so on Linux the GPU tests run on Mesa's software
   renderer (lavapipe), on macOS on the runner's virtual GPU, and on Windows on WARP, Windows'
@@ -722,20 +762,65 @@ job that hangs is stopped rather than left running for hours.
   workspace with the oldest Rust it says it supports (1.95), so that the stated minimum stays true.
   The Intel Mac is built at the end of the macOS test job, on the same Apple silicon runner, since
   those runners are GitHub's scarcest; Linux on ARM has a job of its own.
-- **Checks:** formatting (`cargo fmt --check`), the third-party notices are current, the workflows
-  and packaging scripts pass `actionlint`, every crate packages and builds on its own (a crates.io
-  dry run), the generated reference pages match the program, and every file of the app icon matches
-  its master SVG (`packaging/gen-icons.py --check`: each PNG rendered again by librsvg, whose pixels
-  may differ only by another version's antialiasing, and the `.ico`, the `.icns` and the copies the
-  program embeds byte for byte).
+- **Checks:** formatting (`cargo fmt --check`), clippy with every warning an error (below), the
+  third-party notices are current, the workflows and packaging scripts pass `actionlint`, every
+  crate packages and builds on its own (a crates.io dry run), the generated reference pages match
+  the program, and every file of the app icon matches its master SVG (`packaging/gen-icons.py
+  --check`: each PNG rendered again by librsvg, whose pixels may differ only by another version's
+  antialiasing, and the `.ico`, the `.icns` and the copies the program embeds byte for byte).
+- **Clippy:** `cargo clippy --workspace --all-targets --locked -- -D warnings`, so any clippy or
+  compiler warning fails the job, which must pass before `main` moves: on Linux with every program
+  (the Windows launcher's feature on), and for Windows and macOS too, checked from Linux, since
+  clippy reads the code without linking it. It runs with the release's Rust (above), not the newest
+  stable, so a new Rust's lints arrive only when that version is moved on, never on someone else's
+  pull request. The lints allowed, and why, are listed in the root `Cargo.toml`
+  (`[workspace.lints.clippy]`), which every crate takes up; an allow in the code is for one place
+  only. See [Contributing](contributing.md#code-style).
 - **The dependencies,** with [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) (`deny.toml`),
   on every push to `main`, every pull request and once a week, since an advisory can be published
-  without anything in JETCARP changing. The check fails on a known vulnerability or unsoundness in
+  without anything in JETCARP changing. Each target JETCARP is released for is checked on its own,
+  with the crates that target builds: given them all at once, cargo-deny merges them into one tree
+  and reports crates no target builds ([#186](https://github.com/jprodgers/jetcarp/issues/186)).
+  The check fails on a known vulnerability or unsoundness in
   any dependency (the [RustSec](https://rustsec.org/) database), on any HTTP, TLS, DNS, WebSocket
   or peer-to-peer client or server crate that `deny.toml` does not allow, so that no networking
   comes in unplanned while [`SECURITY.md`](https://github.com/jprodgers/jetcarp/blob/main/SECURITY.md)
   says JETCARP makes no network connections, and on any crate from somewhere other than crates.io. A notice that a crate
   is no longer maintained is shown as a warning, and never fails it.
+- **Dependabot** looks for new versions every Monday, of the crates and of the workflows' actions.
+  Each ecosystem's patch updates come together in one pull request, and each minor and each major
+  update in one of its own: a minor update of a 0.x crate can break the build, so it never holds up
+  the rest. A version is proposed only once it is five days old, so one that is withdrawn soon after
+  its release never is; security updates don't wait. Its pull requests go through CI and are
+  reviewed like any other; none merges by itself. It moves an action's pinned commit to the new
+  release's and rewrites the version in the comment beside it. Two pins it cannot follow, and they
+  move by hand at the start of each cycle: the action that installs Rust, pinned to a branch with no
+  releases, and the release's Rust itself.
+- **The notices on Dependabot's pull requests:** a crate update that changes `Cargo.lock` changes
+  the third-party notices, so a workflow (*Dependabot's notices*) makes them again: on Dependabot's
+  pull requests only, it runs `packaging/notices.sh` with a checked release of cargo-about, and if
+  `THIRD_PARTY_LICENSES.html` changed, commits that file alone, *Notices: regenerated for this
+  update*, and pushes it to the pull request's branch. It builds and runs nothing of the pull
+  request's, and stops if the pull request changes anything but Cargo's manifests. It pushes through
+  a deploy key that only Dependabot's own runs receive, so the push starts CI again as any push
+  does, while its token can only read; run again on its own push, it finds the notices current and
+  does nothing. Once that commit is on a pull request, Dependabot no longer rebases it by itself:
+  commenting `@dependabot rebase` asks it to, and the notices are made again on the result.
+- **Benchmarks and coverage,** once a week and when started by hand, never on a pull request and
+  never a check that must pass (the *Benchmarks and coverage* workflow). `tools/bench.py` runs every
+  benchmark in the repository with fixed arguments, in release, the GPU's on lavapipe: the engine's
+  (HashLife, exact aperiodic patches, sandpiles, sliding windows), the GPU's (Life and every rule
+  family on the CPU and the GPU, the batch stepper), the soup hunter's, and the benchmark behind the
+  [JETCARP Hardware Score](../guides/this-computer.md#the-benchmark-and-the-score). Each number goes
+  into the run's summary and into `bench.json` and `bench.csv`, with the commit, the date, the
+  runner and the Rust that built it; `python3 tools/bench.py compare OLD.json NEW.json` shows how
+  two runs differ, and a run started by hand compares itself with an earlier one whose id it is
+  given. Coverage is the whole test suite again, instrumented by
+  [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov): the share of JETCARP's lines,
+  functions and regions the tests run is in the summary, and the lcov file is kept with the run.
+  Nothing is sent to an outside service. The runners are shared machines, whose times vary by 10% or
+  so from run to run, and their GPU is a software renderer: the numbers show a change in JETCARP's
+  own speed, not a machine's.
 - **The book** builds, its internal links all resolve, and its scripting reference matches the
   program.
 - **Golly:** the Linux job builds Golly's `bgolly` 4.0 and 5.0 from their source (Ubuntu packages

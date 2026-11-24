@@ -53,9 +53,7 @@ impl Harness {
         } else if ps::read_in(&settings).is_none() {
             ps::record_in(&settings, ps::Answer::NoDisorder, "test").unwrap();
         }
-        let Some(o) = Offscreen::new(w, h) else {
-            return None;
-        };
+        let o = Offscreen::new(w, h)?;
         o.ctx.enable_accesskit();
         let mut cc = eframe::CreationContext::_new_kittest(o.ctx.clone());
         cc.wgpu_render_state = Some(o.render_state());

@@ -172,6 +172,197 @@ fn a_clock_end_fires_as_the_time_passes() {
     assert_eq!(p.tick(&at(120.0, 12 * 60 + 5)), Action::Load(1));
 }
 
+/// The clock a rotation reads is the moment's local date and time in this system's time zone,
+/// whatever it is: its minutes and day are the moment's, moved by a whole number of minutes
+/// (the zone's offset), and its weekday is its day's.
+#[test]
+fn the_clock_is_the_local_date_and_time() {
+    for secs in [
+        1_000_000_000,
+        1_772_953_200,
+        1_793_512_800,
+        1_795_523_400,
+        4_102_444_799,
+    ] {
+        let c = Clock::at(secs);
+        let local = c.day * 86_400 + c.minute as i64 * 60 + secs.rem_euclid(60);
+        let offset = local - secs;
+        assert!(
+            offset.abs() <= 18 * 3600 && offset % 60 == 0,
+            "{secs}: {c:?}"
+        );
+        assert_eq!(c.weekday as i64, (c.day + 3).rem_euclid(7), "{secs}: {c:?}");
+        assert!(c.minute < 24 * 60, "{secs}: {c:?}");
+    }
+    let before = Clock::at(now_secs());
+    let now = Clock::local();
+    let after = Clock::at(now_secs());
+    assert!(now == before || now == after, "{now:?}");
+}
+
+/// Seconds since 1970-01-01 UTC now.
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+}
+
+/// Set in a twin's process by [`the_clock_in_these_time_zones`].
+const TZ_CHILD: &str = "JETCARP_ROTATION_TIME_ZONE_TEST";
+
+/// Moments, and the clock a rotation reads at each in time zone `TZ`: the weekday (0 is Monday),
+/// the minutes since local midnight and the days since 1970-01-01, local.
+const CLOCKS: &[(&str, i64, u8, u32, i64)] = &[
+    // Sunday 8 March 2026: 01:59:59 EST, then 03:00 EDT (two to three o'clock never comes).
+    ("America/New_York", 1_772_953_199, 6, 119, 20_520),
+    ("America/New_York", 1_772_953_200, 6, 180, 20_520),
+    // Sunday 1 November 2026: 01:59:59 EDT, then 01:00 EST (one o'clock comes twice).
+    ("America/New_York", 1_793_512_799, 6, 119, 20_758),
+    ("America/New_York", 1_793_512_800, 6, 60, 20_758),
+    // Tuesday 24 November 2026, either side of 07:30 and of 22:00.
+    ("America/New_York", 1_795_523_399, 1, 449, 20_781),
+    ("America/New_York", 1_795_523_400, 1, 450, 20_781),
+    ("America/New_York", 1_795_575_599, 1, 1319, 20_781),
+    ("America/New_York", 1_795_575_600, 1, 1320, 20_781),
+    // Midnight at the new year, Thursday to Friday; and the last second before 1970 (UTC).
+    ("America/New_York", 1_798_779_599, 3, 1439, 20_818),
+    ("America/New_York", 1_798_779_600, 4, 0, 20_819),
+    ("America/New_York", -1, 2, 1139, -1),
+    // Lord Howe Island puts its clocks back half an hour: 01:59:59, then 01:30.
+    ("Australia/Lord_Howe", 1_775_314_799, 6, 119, 20_548),
+    ("Australia/Lord_Howe", 1_775_314_800, 6, 90, 20_548),
+    ("Asia/Kathmandu", 1_793_907_002, 4, 75, 20_763),
+    ("UTC", 1_793_907_002, 3, 1170, 20_762),
+];
+
+/// The clock in each zone of [`CLOCKS`], each set with `TZ` in a process of its own
+/// ([`twin_the_clock_in_one_zone`]), is as it was read before; and in New York, the rotation's
+/// time-of-day decisions at those moments: a schedule's window opening and closing on the minute,
+/// a time-of-day end firing when its time is skipped and again when it comes twice, and one an
+/// hour keeping its item through the hour that comes twice. On every system: a `TZ` that names a
+/// time zone decides it on Windows too.
+#[test]
+fn the_clock_in_these_time_zones() {
+    let mut zones: Vec<&str> = CLOCKS.iter().map(|z| z.0).collect();
+    zones.dedup();
+    for tz in zones {
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "twin_the_clock_in_one_zone",
+                "--exact",
+                "--ignored",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(TZ_CHILD, "1")
+            .env("TZ", tz)
+            .output()
+            .expect("start the test's own process");
+        let text = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            out.status.success() && text.contains("1 passed"),
+            "TZ={tz}:\n{text}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "a twin: the_clock_in_these_time_zones runs it with TZ set"]
+fn twin_the_clock_in_one_zone() {
+    if std::env::var_os(TZ_CHILD).is_none() {
+        return;
+    }
+    let tz = std::env::var("TZ").unwrap();
+    let mut seen = 0;
+    for &(_, secs, weekday, minute, day) in CLOCKS.iter().filter(|z| z.0 == tz) {
+        let want = Clock {
+            weekday,
+            minute,
+            day,
+        };
+        assert_eq!(Clock::at(secs), want, "{secs} in {tz}");
+        seen += 1;
+    }
+    assert!(seen > 0, "{tz}");
+    if tz != "America/New_York" {
+        return;
+    }
+    // A window from 07:30 to 22:00 opens and closes on the minute; one from 22:00 to 06:00
+    // crosses midnight.
+    let day = Schedule {
+        from: Some("07:30".into()),
+        to: Some("22:00".into()),
+        ..Default::default()
+    };
+    let night = Schedule {
+        from: Some("22:00".into()),
+        to: Some("06:00".into()),
+        ..Default::default()
+    };
+    let open = |s: &Schedule, secs| s.contains(Clock::at(secs));
+    assert!(!open(&day, 1_795_523_399) && open(&day, 1_795_523_400));
+    assert!(open(&day, 1_795_575_599) && !open(&day, 1_795_575_600));
+    assert!(!open(&night, 1_795_575_599) && open(&night, 1_795_575_600));
+    assert!(open(&night, 1_798_779_599) && open(&night, 1_798_779_600));
+    assert!(open(&night, 1_795_517_999) && !open(&night, 1_795_518_000));
+
+    // An item that ends at a time of day.
+    let ends_at = |at: &str, start: i64, ticks: &[(i64, Action)]| {
+        let r = rotation(vec![
+            scene_item("a").end(End::Clock { at: at.into() }),
+            scene_item("b"),
+        ]);
+        let mut p = player(&r, 1);
+        assert_eq!(p.start(Clock::at(start)), Some(0));
+        p.on_loaded(0.0, 0, Clock::at(start));
+        for (k, &(secs, want)) in ticks.iter().enumerate() {
+            let mut o = obs(1.0 + k as f64, 1);
+            o.clock = Clock::at(secs);
+            assert_eq!(p.tick(&o), want, "{at}, at {secs}");
+        }
+    };
+    // 02:30 never comes on 8 March: the end fires as the clock jumps from 01:59 to 03:00.
+    ends_at(
+        "02:30",
+        1_772_949_600,
+        &[
+            (1_772_953_199, Action::Stay),
+            (1_772_953_200, Action::Load(1)),
+        ],
+    );
+    // 01:30 comes twice on 1 November: the end fires the first time, and, for an item started
+    // in between, again the second.
+    ends_at(
+        "01:30",
+        1_793_509_200,
+        &[
+            (1_793_510_999, Action::Stay),
+            (1_793_511_000, Action::Load(1)),
+        ],
+    );
+    ends_at(
+        "01:30",
+        1_793_512_799,
+        &[
+            (1_793_512_800, Action::Stay),
+            (1_793_514_599, Action::Stay),
+            (1_793_514_600, Action::Load(1)),
+        ],
+    );
+
+    // One an hour: the hour that comes twice is one hour of the clock, and the hour skipped is
+    // none.
+    let hour = |secs| Clock::at(secs).hour();
+    assert_eq!(hour(1_793_512_799), hour(1_793_512_800));
+    assert_eq!(hour(1_772_953_200) - hour(1_772_953_199), 2);
+    assert_eq!(hour(1_798_779_600) - hour(1_798_779_599), 1);
+}
+
 #[test]
 fn shuffle_visits_everything_then_reorders_without_repeating() {
     let items = (0..12)

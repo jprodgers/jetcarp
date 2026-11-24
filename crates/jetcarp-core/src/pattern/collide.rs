@@ -630,7 +630,6 @@ fn at_edge(frame: &Frame, u: &Universe, nb: crate::topology::Nb) -> bool {
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn run_one(
     a: &PatternRecord,
     b: &PatternRecord,

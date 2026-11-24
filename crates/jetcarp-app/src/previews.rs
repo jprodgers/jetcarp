@@ -509,7 +509,6 @@ struct Worker {
 
 impl Worker {
     /// A card's preview scene and mature state, from its source.
-    #[allow(clippy::type_complexity)]
     fn fetch(&mut self, source: &Source) -> Result<(Scene, Option<Vec<u8>>, u32), String> {
         match source {
             Source::Entry { library, handle } => {

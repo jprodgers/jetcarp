@@ -269,7 +269,7 @@ impl JetcarpApp {
             pace: Pace {
                 speed: if self.max_speed { 0.0 } else { self.speed },
                 reached: self.strobe.reached,
-                frame_rate: self.fps as f32,
+                frame_rate: self.fps,
             },
             scene: self.geom_counter,
             resume: self.strobe.resume,
