@@ -787,9 +787,11 @@ fn rank(info: &wgpu::AdapterInfo, purpose: Purpose) -> (u8, u8) {
 /// shader, as FXC compiles it, with a workgroup barrier after an early return or in an `if` that
 /// ends the shader: each of those kernels has one, in uniform control flow as WGSL requires, and a
 /// shader of a few lines (an atomic, then a barrier in a closing `if`) crashes it too. The same
-/// kernels compiled by DXC run on the same WARP, WARP 1.0.22 (Microsoft's NuGet package) runs
-/// FXC's, and every kernel then matches the processor bit for bit: the fault is WARP's compiler's,
-/// not the kernels'. Windows CI runs the GPU tests on WARP 1.0.22 (`.github/workflows/ci.yml`).
+/// kernels compiled by DXC run on the same WARP and match the processor bit for bit, and WARP
+/// 1.0.22 (Microsoft's NuGet package) runs FXC's world stepper and explore batches so too: the
+/// fault is WARP's compiler's, not the kernels'. Windows CI runs the GPU tests on WARP 1.0.22
+/// (`.github/workflows/ci.yml`), all but the soup hunt's, which that WARP compiles too slowly and,
+/// for Generations rules, wrongly (`hunt::NOT_ON_WARP`).
 ///
 /// WARP is not supported for users until Windows Update brings a WARP that compiles JETCARP's
 /// shaders, and even then only if supporting it breaks nothing else. The kernels are not reshaped

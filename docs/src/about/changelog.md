@@ -462,13 +462,15 @@ day later (0.4.2: 17 November here, 18 November there).
   sessions), is still not supported for simulating: the WARP that comes with Windows crashes while
   it compiles the world stepper's kernel (and the soup hunt's). The fault is in WARP's own shader
   compiler, which fails on a workgroup barrier after an early return or in an `if` that ends the
-  shader; the newer WARP Microsoft publishes for developers runs every kernel, bit for bit with the
-  processor. WARP won't be supported until Windows Update brings one that compiles JETCARP's
-  shaders, and then only if that breaks nothing else. Drawing on WARP, as the background host does
-  on a virtual machine, was never affected, and a program that has used WARP ends cleanly. Windows
-  CI now runs the GPU tests on that newer WARP, which it downloads and checks;
-  `JETCARP_ALLOW_WARP=1` lets tests choose WARP, and nothing a release ships contains it. ([The
-  GPU](../guides/gpu.md#which-adapter), [Testing](testing.md#continuous-integration),
+  shader; the newer WARP Microsoft publishes for developers runs the world stepper and explore
+  batches bit for bit with the processor. WARP won't be supported until Windows Update brings one
+  that compiles JETCARP's shaders, and then only if that breaks nothing else. Drawing on WARP, as
+  the background host does on a virtual machine, was never affected, and a program that has used
+  WARP ends cleanly. Windows CI now runs the GPU tests on that newer WARP, which it downloads and
+  checks, all but the soup hunt's: it compiles the hunt's kernels too slowly and gets Generations
+  rules wrong in them, so the hunter never runs on WARP. `JETCARP_ALLOW_WARP=1` lets tests choose
+  WARP, and nothing a release ships contains it. ([The GPU](../guides/gpu.md#which-adapter),
+  [Testing](testing.md#continuous-integration),
   [#321](https://github.com/jprodgers/jetcarp/issues/321))
 
 ### Fixed

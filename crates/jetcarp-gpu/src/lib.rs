@@ -2157,22 +2157,12 @@ fn entry(binding: u32, buf: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_> {
 /// waited for ever hung a test on the Intel UHD (#52).
 pub(crate) const GPU_WAIT: Duration = Duration::from_secs(60);
 
-/// [`GPU_WAIT`] on Windows' WARP, which only tests use (`select::warp_allowed`, #321). A
-/// software renderer is never reset, and on CI's four processors WARP took over a minute on one
-/// submission of the soup hunt's.
-pub(crate) const WARP_WAIT: Duration = Duration::from_secs(600);
-
-/// Wait for the work submitted so far, at most [`GPU_WAIT`] ([`WARP_WAIT`] on WARP).
+/// Wait for the work submitted so far, at most [`GPU_WAIT`].
 pub(crate) fn wait_for_gpu(device: &wgpu::Device) -> Result<(), String> {
-    let limit = if select::is_warp(&device.adapter_info()) {
-        WARP_WAIT
-    } else {
-        GPU_WAIT
-    };
     device
         .poll(wgpu::PollType::Wait {
             submission_index: None,
-            timeout: Some(limit),
+            timeout: Some(GPU_WAIT),
         })
         .map(|_| ())
         .map_err(|e| format!("GPU poll: {e}"))

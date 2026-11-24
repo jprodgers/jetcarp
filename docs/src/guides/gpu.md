@@ -110,8 +110,10 @@ Windows' software renderer, WARP, is not supported, and never used to simulate (
 on it). The WARP that comes with Windows crashes while it compiles the world stepper's kernel (and
 the soup hunt's), taking the program down with it before a self-test could turn it down. The fault
 is in WARP's own shader compiler, which fails on a workgroup barrier after an early return or in an
-`if` that ends the shader. The newer WARP Microsoft publishes for developers compiles and runs every
-kernel, bit for bit with the processor, and JETCARP's Windows CI runs the GPU tests on it
+`if` that ends the shader. The newer WARP Microsoft publishes for developers runs the world stepper
+and explore batches bit for bit with the processor, and JETCARP's Windows CI runs the GPU tests on
+it; it takes minutes to compile each of the soup hunt's kernels, though, and gets Generations rules
+wrong in them, so the hunter never runs on WARP
 ([#321](https://github.com/jprodgers/jetcarp/issues/321)). WARP won't be supported until Windows
 Update brings a WARP that compiles JETCARP's shaders, and even then only if supporting it breaks
 nothing else; the kernels won't be reshaped to suit a WARP that can't.

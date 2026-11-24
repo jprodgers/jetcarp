@@ -60,7 +60,7 @@ the GPU tests then run on it. The WARP that comes with Windows crashes compiling
 a newer one from Microsoft's
 [`Microsoft.Direct3D.WARP`](https://www.nuget.org/packages/Microsoft.Direct3D.WARP) package, its
 `d3d10warp.dll` put beside the test program, runs them, as Windows CI does
-([Testing](testing.md#continuous-integration)).
+([Testing](testing.md#continuous-integration)), all but the soup hunt's, which never runs on WARP.
 A few slow surveys are marked `#[ignore]` and run only when asked (`cargo test … -- --ignored`).
 
 On Windows the tests of the folder rules make directory junctions and symbolic links. Symbolic links

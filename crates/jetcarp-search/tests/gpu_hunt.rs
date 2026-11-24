@@ -19,6 +19,12 @@ fn gpu() -> Option<Arc<GpuHunter>> {
             eprintln!("GPU hunter tests on {}", g.name());
             Some(Arc::new(g))
         }
+        // WARP, on which Windows CI runs the GPU tests, is the one adapter the hunter turns
+        // down on purpose: these skip there, saying why, even under JETCARP_REQUIRE_GPU=1.
+        Err(e) if e == jetcarp_gpu::hunt::NOT_ON_WARP => {
+            eprintln!("note: skipping the GPU hunter tests: {e}");
+            None
+        }
         Err(e) => {
             jetcarp_gpu::no_gpu("GPU hunter tests", &e);
             None
@@ -27,19 +33,7 @@ fn gpu() -> Option<Arc<GpuHunter>> {
     .clone()
 }
 
-/// How many of `n` soups to run: all of them, or an eighth (at least 16) on Windows' WARP, the
-/// software renderer Windows CI runs these on (#321), where they took 23 minutes in all on its
-/// four processors and timed out.
-fn soups(g: &GpuHunter, n: u64) -> u64 {
-    if g.name().contains("Microsoft Basic Render Driver") {
-        (n / 8).max(16)
-    } else {
-        n
-    }
-}
-
 fn check_prefixes(g: &GpuHunter, rule: &str, tiling: &str, n: u64) {
-    let n = soups(g, n);
     let t = jetcarp_core::pattern::tiling_from_key(tiling).unwrap();
     let spec = HuntSpec::default();
     let c = Census::new(rule, &t, None, spec.max_period).unwrap();
@@ -86,7 +80,6 @@ fn gpu_prefixes_equal_cpu_for_isotropic_rules() {
         ("B3-cnqy/S23-a", 300),
         ("B2a3-ckn/S1e2-in3/C4", 200),
     ] {
-        let n = soups(&g, n);
         let t = TilingSpec::new("square");
         let spec = HuntSpec::default();
         let c = Census::new(rule, &t, None, spec.max_period).unwrap();
@@ -166,7 +159,7 @@ fn gpu_hunt_equals_cpu_hunt() {
     let spec = HuntSpec {
         rules: vec!["B3/S23".into(), "B2/S34".into()],
         tilings: vec![TilingSpec::new("square"), TilingSpec::new("hex")],
-        soups: Some(soups(&g, 400)),
+        soups: Some(400),
         ..Default::default()
     };
     hunts_agree(&g, &spec);
@@ -179,7 +172,7 @@ fn gpu_hunt_equals_cpu_hunt_for_isotropic_rules() {
     let spec = HuntSpec {
         rules: vec!["B2-a/S12".into(), "B3/S2-i34q".into()],
         tilings: vec![TilingSpec::new("square")],
-        soups: Some(soups(&g, 300)),
+        soups: Some(300),
         ..Default::default()
     };
     hunts_agree(&g, &spec);
