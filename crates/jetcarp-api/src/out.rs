@@ -19,12 +19,12 @@ pub fn out_root(explicit: Option<&Path>) -> PathBuf {
 
 /// Local time as `2026-11-05_14-30-02` (safe in file names on every system).
 pub fn stamp() -> String {
-    chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string()
+    Local::now().stamp()
 }
 
 /// [`stamp`] at `secs` seconds since 1970-01-01 UTC.
 pub fn stamp_at(secs: i64) -> String {
-    local_at(secs).format("%Y-%m-%d_%H-%M-%S").to_string()
+    Local::at(secs).stamp()
 }
 
 /// A count and its noun: `1 row`, `3 rows`.
@@ -35,28 +35,72 @@ pub fn count(n: impl Into<u64>, one: &str, many: &str) -> String {
 
 /// Local time as RFC 3339 to the second, `2026-11-05T14:30:02-05:00`, for records.
 pub fn now_rfc3339() -> String {
-    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
+    Local::now().rfc3339()
 }
 
 /// [`now_rfc3339`] at `secs` seconds since 1970-01-01 UTC.
 pub fn rfc3339_at(secs: i64) -> String {
-    local_at(secs).to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
+    Local::at(secs).rfc3339()
 }
 
 /// Local time to the minute, `2026-11-05 14:30`: the date of a machine's score.
 pub fn date_and_minute() -> String {
-    chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()
+    Local::now().date_and_minute()
 }
 
 /// [`date_and_minute`] at `secs` seconds since 1970-01-01 UTC.
 pub fn date_and_minute_at(secs: i64) -> String {
-    local_at(secs).format("%Y-%m-%d %H:%M").to_string()
+    Local::at(secs).date_and_minute()
 }
 
-fn local_at(secs: i64) -> chrono::DateTime<chrono::Local> {
-    chrono::DateTime::from_timestamp(secs, 0)
-        .unwrap_or_default()
-        .with_timezone(&chrono::Local)
+/// A moment's date and time in the system's time zone, written as JETCARP has always written
+/// them (with chrono, before 0.4.3).
+struct Local(jiff::ZonedDateTime);
+
+impl Local {
+    fn now() -> Local {
+        Local::of(jiff::Timestamp::now())
+    }
+
+    fn at(secs: i64) -> Local {
+        Local::of(jiff::Timestamp::from_second(secs).unwrap_or(jiff::Timestamp::UNIX_EPOCH))
+    }
+
+    fn of(t: jiff::Timestamp) -> Local {
+        Local(t.to_zoned_datetime(jiff::tz::TimeZone::system()))
+    }
+
+    /// `2026-11-05`: the year in four digits, with a sign before one outside 0 to 9999.
+    fn date(&self) -> String {
+        let t = &self.0;
+        let year = match t.year() {
+            y @ 0..=9999 => format!("{y:04}"),
+            y => format!("{y:+05}"),
+        };
+        format!("{year}-{:02}-{:02}", t.month(), t.day())
+    }
+
+    fn stamp(&self) -> String {
+        let t = &self.0;
+        let (h, m, s) = (t.hour(), t.minute(), t.second());
+        format!("{}_{h:02}-{m:02}-{s:02}", self.date())
+    }
+
+    /// The offset in hours and minutes, rounded to the minute.
+    fn rfc3339(&self) -> String {
+        let t = &self.0;
+        let (h, m, s) = (t.hour(), t.minute(), t.second());
+        let offset = t.offset().seconds();
+        let sign = if offset < 0 { '-' } else { '+' };
+        let minutes = (offset.unsigned_abs() + 30) / 60;
+        let (oh, om) = (minutes / 60, minutes % 60);
+        format!("{}T{h:02}:{m:02}:{s:02}{sign}{oh:02}:{om:02}", self.date())
+    }
+
+    fn date_and_minute(&self) -> String {
+        let t = &self.0;
+        format!("{} {:02}:{:02}", self.date(), t.hour(), t.minute())
+    }
 }
 
 /// A label made safe for a file name: letters, digits, `-`, `_`, `.`; spaces and anything else

@@ -28,7 +28,7 @@ bytemuck.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rhai = { version = "=1.27.0", features = ["sync", "serde"] }
-chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+jiff.workspace = true
 dirs.workspace = true
 # The caption on surfaces with no egui: glyph drawing, and the font the app already ships.
 ab_glyph = "0.2.32"
