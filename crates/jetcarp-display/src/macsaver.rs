@@ -293,7 +293,7 @@ fn bake_fallbacks(
     let missing: Vec<char> = chars
         .iter()
         .copied()
-        .filter(|&c| drawn.glyph(c).1.0 == 0)
+        .filter(|&c| drawn.glyph(c).1 == skrifa::GlyphId::NOTDEF)
         .collect();
     if missing.is_empty() || installed.is_empty() {
         return vec![];
@@ -380,7 +380,7 @@ fn bake_font(choice: &FontChoice) -> Result<(BakedFont, Option<FontBytes>), Stri
         )
     };
     let file = crate::fonts::load(path, Some(*index)).map_err(warn)?;
-    if ab_glyph::FontRef::try_from_slice_and_index(&file.bytes, file.index).is_err() {
+    if !crate::caption::can_draw_in(&file.bytes, file.index) {
         let name = path.file_name().unwrap_or_default().to_string_lossy();
         return Err(warn(format!("{name} isn't a font JETCARP can read")));
     }
@@ -1191,7 +1191,7 @@ mod tests {
             .0
             .with_last_resort(last_resort(&back.fallbacks, &resources));
         assert_eq!(font.glyph('生').0, 2, "生 from the copy");
-        assert_ne!(font.glyph('生').1.0, 0);
+        assert_ne!(font.glyph('生').1, skrifa::GlyphId::NOTDEF);
 
         // A caption its fonts draw whole needs nothing copied.
         assert!(bake_named("A classic a day").fallbacks.is_empty());
