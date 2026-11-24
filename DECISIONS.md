@@ -533,7 +533,8 @@ is dated more closely than that.
 - **Claude's part:** the pinning came from the audit's issue
   [#183](https://github.com/jprodgers/jetcarp/issues/183); Claude offered updating by hand each
   cycle or by Dependabot, and Jimmie chose by hand.
-- **Stands.**
+- **Stands,** but for the updating by hand, which D-47 replaces for every action Dependabot can
+  follow.
 
 ### D-39. Release files: checksums by the installers, attestations by hand, Windows not yet signed
 
@@ -583,6 +584,20 @@ is dated more closely than that.
   statement is checked again with every release.
 - **Sound:** none at present. Some of the Cellular Automata Puzzles (0.6.0) will be based on sound;
   those will have a visual indicator, worked out with the puzzles.
+- **Stands.**
+
+### D-47. Dependabot keeps the crates and the actions' pins current
+
+- **Decided:** Jimmie, 24 November 2026, approving the plan for 0.4.3-rc.3's CI checks
+  ([#183](https://github.com/jprodgers/jetcarp/issues/183)).
+- **The decision:** Dependabot looks for new versions of the crates and of the workflows' actions
+  every week, and opens pull requests for them: each ecosystem's minor and patch updates together,
+  and each major update on its own. They go through CI and are reviewed like any other pull
+  request. This replaces D-38's update by hand at the start of each cycle, for every action
+  Dependabot can follow; the action that installs Rust (pinned to a branch with no releases) and
+  the Rust a release is built with still move by hand, at the start of each cycle.
+- **Why:** updating the pins by hand once a cycle was for convenience, never a rule.
+- **Claude's part:** the Dependabot file and its settings, from the audit's issue.
 - **Stands.**
 
 ## People
