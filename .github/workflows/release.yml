@@ -67,6 +67,12 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # The Rust every job here builds with, named exactly so that a release can be built again as it
+  # was. Moved on by hand at the start of each release cycle, to the stable Rust of the day (with
+  # the actions' pins); Dependabot can't, as it only updates rust-toolchain.toml files, which would
+  # force this version on every contributor's own builds. CI's other jobs use the newest stable, so
+  # new warnings show there first.
+  RUST_TOOLCHAIN: "1.100.0"
   MATURIN_VERSION: "1.16.0"
   ZIGLANG_VERSION: "0.16.0"
   # Anything a step runs keeps away from the runner's own settings, data and Pictures folders.
@@ -199,6 +205,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Linux libraries (windowing, plus Mesa's software Vulkan so GPU tests run)
         run: |
@@ -241,6 +249,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
         with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: ${{ matrix.target }}${{ matrix.also && format(',{0}', matrix.also) || '' }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -458,6 +467,8 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch, 2026-11-15
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: Linux libraries (crates.io's verification builds the window and display crates)
         run: |
           sudo apt-get update
