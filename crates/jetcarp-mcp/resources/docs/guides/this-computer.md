@@ -270,6 +270,16 @@ from the parts, not from the one number: with no size from before,
 one-core rate (on the processor) or the GPU's soup rate (on the GPU) says the scene's work fits in,
 and it counts a step on the GPU at the GPU's speed over the processor's.
 
+**What no cell size changes.** A desktop background's frame costs the GPU its stepping and drawing,
+which a fit's sizes change, and the [strobe guard](strobe-guard.md#what-it-costs)'s measuring of
+the whole frame, which they don't. On a strong GPU that part is small: under 1% of an AMD Radeon
+8060S at 30 frames a second. On a weak one it can be most of the share: in 0.4.3-rc.1, on a laptop's
+Intel UHD, the desktop background took 32 to 44% of the GPU at 30 frames a second at every size,
+so no size was within a 25% GPU limit (#343). The guard's pass now measures the same, to the bit,
+in less time: on Mesa's llvmpipe, whose figures for the same frames are about that UHD's, in about
+half, and a whole frame through the guard in about three quarters (44% of 30 frames a second down
+to 34%, against 10.8% with no guard).
+
 ### While it measures
 
 The score times JETCARP's own work, so anything else keeping the computer busy lowers it, and

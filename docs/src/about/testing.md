@@ -428,6 +428,18 @@ with the guard already on.
   makes the red measure's saturation test in whole numbers: the measure steps from 0 to over 100
   there, so a pixel decoded a little differently could move a tile's mean by a whole step (it did,
   on llvmpipe).
+- **A change to how the GPU measures keeps every reading and every verdict** (#343). An ignored
+  test (`crates/jetcarp-display/tests/strobe_record.rs`, with `JETCARP_STROBE_VERDICTS=DIR`)
+  records, for the whole corpus below, a digest of every bit of the GPU's readings of each frame
+  (its tile maps as drawn and as shown, its half image, and the frame it shows when it softens),
+  read both ways the pass reads a frame, measured alone and with tiles softened and veiled in
+  patterns that move from frame to frame, at 333 by 251 pixels (part tiles at two edges); and the
+  guard's report and notes at every frame of the corpus as the desktop painter (read in place and
+  copied) and the app's view show it, for everyone and for someone at risk. Run on two builds, the
+  files must be the same. For rc.3's pass, which measures four tiles a workgroup, they were, on the
+  Radeon and on llvmpipe: 8,640 readings to the bit and 22,320 frames' verdicts (none, 8,020;
+  softening, 5,068; slowed, 9,232; 94 notes). Its time is measured pass by pass, off screen, by
+  `crates/jetcarp-display/tests/frame_cost.rs` ([What it costs](../guides/strobe-guard.md#what-it-costs)).
 - **The corpus** (`docs/scenes/strobe/`): scenes made to flash (a Margolus Tron field, which flips
   every generation, in grey and in a saturated red-orange; Tron from a blob, whose rectilinear
   growth is regular stripes as well; a Seeds soup; Hodgepodge as Quick Start shows it, the seizure
