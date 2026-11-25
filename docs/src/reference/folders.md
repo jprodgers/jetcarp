@@ -29,7 +29,9 @@ folder for the running app's and host's control files ([Runtime](#runtime-folder
 is none). `jetcarp doctor` adds what JETCARP read of the computer, with its score and limits, the
 time zone local times are in and where it came from, the catalog file, how much data is in use,
 the starter pack's size (or where it looked for one), and every `JETCARP_…` variable that is set,
-with wgpu's `WGPU_…` ones (such as `WGPU_BACKEND`), which change the graphics adapters it finds.
+with wgpu's `WGPU_…` ones (such as `WGPU_BACKEND`), which change the graphics adapters it finds,
+and, when there is more than one JETCARP on the computer, every `jetcarp` on your `PATH` and which
+one runs ([More than one JETCARP](../getting-started/installing.md#more-than-one-jetcarp)).
 That makes it the thing to paste into a bug report.
 
 ## The three folders
@@ -100,8 +102,8 @@ publisher (`publisher.json`) and the rater book (`raters.json`); see [Packs](../
 If you keep the MCP server's HTTP token ([Keeping the token](mcp.md#keeping-the-token)),
 `http-tokens/` holds it, readable by you alone: `mcp-http.json` for `jetcarp mcp --http
 --keep-token` and `app-http.json` for the app's; not keeping it, or making a new one, deletes or
-replaces the file. These are everything JETCARP keeps here, and what `jetcarp uninstall --settings` counts as
-JETCARP's; it deletes them all but `pack/`'s four files, which go only with `--publisher-key`
+replaces the file. These are everything JETCARP keeps here (a test of JETCARP's own gathers them
+from its code, so none is missed), and what `jetcarp uninstall --settings` counts as JETCARP's; it deletes them all but `pack/`'s four files, which go only with `--publisher-key`
 ([Uninstalling](../guides/uninstalling.md)).
 Files written by another settings version, or that cannot be read, give the defaults.
 

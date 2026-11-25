@@ -569,6 +569,50 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **A dark Windows contrast theme gives the app's dark high-contrast form** (#342). Under any
+  contrast theme Windows says the style is light (`AppsUseLightTheme` is 1), so with *Light or
+  dark: Follow the system* the app showed *Night sky*, a black window with white text, in the
+  high-contrast theme's light form. While a contrast theme is on, the app now takes the form from
+  the theme's window colour (`GetSysColor(COLOR_WINDOW)`): dark when white text stands out more on
+  it than black. A choice of *Dark* or *Light* still wins.
+  ([Accessibility settings](../guides/accessibility-settings.md#high-contrast),
+  [#342](https://github.com/jprodgers/jetcarp/issues/342))
+- **A taskbar pin starts JETCARP without a console window** (#347). JETCARP set no
+  AppUserModelID, so Windows pinned the process it saw, the console program `jetcarp.exe`, and a
+  pin opened a console window with the app. The Start menu entry and the app's windows now share
+  one AppUserModelID, `JimmieRodgers.JETCARP`, and the main window has a relaunch command that
+  starts the windowless launcher, so a pin starts JETCARP as the Start menu entry does. Run
+  `jetcarp launcher install` once (the installer does) to give an older entry the ID.
+  ([Open the app](../getting-started/installing.md#open-the-app),
+  [#347](https://github.com/jprodgers/jetcarp/issues/347))
+- **A second JETCARP is named** (#348). With Scoop's 0.4.1 installed as well as the installer's
+  rc.1, `jetcarp` ran 0.4.1 and the Start menu opened it too, and nothing JETCARP said mentioned
+  the other copy. `jetcarp doctor` now names this program and every `jetcarp` on the `PATH` in its
+  order, which one `jetcarp` runs, how each was installed, and on Windows every Start menu entry
+  named *JETCARP* with what it starts, with the commands that remove the others; and both
+  installers say at the end when they find another JETCARP (Scoop's, winget's, Homebrew's,
+  cargo's, pipx's, uv's, or another folder of the installer's), with how to remove it.
+  ([More than one JETCARP](../getting-started/installing.md#more-than-one-jetcarp),
+  [#348](https://github.com/jprodgers/jetcarp/issues/348))
+- **`jetcarp uninstall --settings` deletes a settings folder holding `machine.json`** (#349).
+  Neither `machine.json` (the machine as last measured, written on a plain start too) nor
+  `limits.json` (your own limits) nor the macOS screen saver's `screen-saver-state.json` was on the
+  list of what `--settings` counts as JETCARP's, so it refused the folder on almost any computer.
+  They are on it now, and a test gathers the names from JETCARP's code, so a file added to the
+  settings folder later is counted too.
+  ([Uninstalling](../guides/uninstalling.md#2-jetcarps-folders),
+  [#349](https://github.com/jprodgers/jetcarp/issues/349))
+- **The installer's uninstall makes no folder it then names as kept** (#350). After `jetcarp
+  uninstall --data`, the PowerShell installer's `-Uninstall` ran the program, whose run made
+  `%LOCALAPPDATA%\jetcarp` again, and then named it among the folders it kept. Both installers now
+  run the program with folders of its own for that, deleted after it (on a Mac, the settings
+  folder is still its own, for the screen saver); `jetcarp launcher` and `jetcarp uninstall` keep
+  nothing of the machine in the settings folder, as they already kept no memory record; and the
+  installers name a kept folder only when it holds a file. `jetcarp --version` and `--help` now
+  end before the machine is read.
+  ([Uninstalling](../guides/uninstalling.md#the-powershell-installer),
+  [#350](https://github.com/jprodgers/jetcarp/issues/350))
+
 - **The Desktop background, Screensaver and Display settings open from the Quick Start** (#331).
   Their *View* entries were greyed out until a world was open, though none of them is about the
   world on screen: *Fit to this computer* meant opening a world first. They now open as windows

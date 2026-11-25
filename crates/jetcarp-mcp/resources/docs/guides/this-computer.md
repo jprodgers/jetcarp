@@ -70,8 +70,10 @@ kept in `machine.json` beside each GPU's ids and PCI address, which JETCARP read
 every start without touching the GPU. A plain start takes a GPU's memory from there; it opens NVML
 or Vulkan only for a GPU it has nothing for, the first time or after a GPU was changed, added or
 moved to another slot. `jetcarp doctor` and measuring read every GPU afresh, and keep what they
-find. Only the `jetcarp` program keeps it; code using JETCARP's crates as a library, its tests
-among it, only reads it. So a laptop's NVIDIA GPU, asleep while the integrated one drives the screen, is not woken
+find. Only the `jetcarp` program keeps it, and not in `jetcarp launcher` or `jetcarp uninstall`,
+which are over in a moment (the installers run `launcher` as they uninstall, after `jetcarp
+uninstall --settings` took the folder); code using JETCARP's crates as a library, its tests among
+it, only reads it. So a laptop's NVIDIA GPU, asleep while the integrated one drives the screen, is not woken
 just because a JETCARP program started (opening NVML or Vulkan would wake it, as `nvidia-smi`
 does). Should a GPU's memory change without the GPU changing (NVML installed since), `jetcarp
 doctor` reads it again.

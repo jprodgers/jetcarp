@@ -248,8 +248,11 @@ your user `PATH` if it was there (an install with `-NoModifyPath` never put it t
 again. As with the shell installer, any release's installer removes any version's install.
 
 Both installers say what they removed, and name the folders of your settings, data and pictures
-that are still there. After `jetcarp uninstall --settings --data`, they are gone, and nothing is said
-of them.
+that are still there and hold something. After `jetcarp uninstall --settings --data`, they are gone,
+and nothing is said of them: the program, which each installer runs before deleting it, runs then
+with folders of its own, deleted after it, so it makes none of yours again (on a Mac it still reads
+your settings folder, so that a screen saver still installed keeps your settings). A folder holding
+only empty folders is not named either.
 
 ### pipx
 

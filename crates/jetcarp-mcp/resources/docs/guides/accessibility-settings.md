@@ -103,6 +103,11 @@ choice: on Windows and macOS, and on Linux through the desktop's settings portal
 color-scheme` where there is no portal). GNOME's *Light* style says no preference there, and the
 app takes it as light; a desktop it can't read at all leaves the app dark.
 
+Under a Windows contrast theme, Windows says the style is light whatever the theme's colours (it
+sets `AppsUseLightTheme` to 1), so there the app takes the form from the theme itself: whether its
+window colour (`GetSysColor(COLOR_WINDOW)`) is dark or light. *Night sky*, *Aquatic* and *Dusk*
+give the dark form, *Desert* the light one. A choice of *Dark* or *Light* here still wins.
+
 ## Font
 
 The app's words are in **Atkinson Hyperlegible Next**, and its monospaced text (rules, scripts,
