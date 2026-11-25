@@ -48,9 +48,11 @@ pollster.workspace = true
 objc2 = "0.6.5"
 
 # Windows: the system's reduced motion and contrast themes (`src/a11y.rs`, #218, #220), through
-# `SystemParametersInfoW`. windows-sys is already in the tree (the display crate uses it).
+# `SystemParametersInfoW`, and a contrast theme's window colour (`GetSysColor`, #342). windows-sys
+# is already in the tree (the display crate and the core use it, Gdi among their features).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
+    "Win32_Graphics_Gdi",
     "Win32_UI_Accessibility",
     "Win32_UI_WindowsAndMessaging",
 ] }
