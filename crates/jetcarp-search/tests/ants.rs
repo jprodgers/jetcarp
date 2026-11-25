@@ -667,11 +667,12 @@ fn narrow_highways_render_their_loop() {
 /// A chaotic ant whose cells make a long thin strip, as LLRU's (nine cells by 2,201 after
 /// 20,000 steps) and UNUL's (one by 6,668) do, has a build-up no worse than 1:4 and large enough
 /// to see (#340): its steps up to where the strip gets four times as long as it is wide, the strip
-/// leaving the tangle. ULLL's blob shows its whole run, as before.
+/// leaving the tangle. ULLL's blob shows its whole run, as before. *Open* runs the whole run of
+/// each.
 #[test]
 fn a_long_thin_build_up_is_drawn_near_square() {
     use jetcarp_core::media::{MediaMode, MediaOptions};
-    use jetcarp_store::media::ants::{BUILD_FRAMES, build_gens, build_steps};
+    use jetcarp_store::media::ants::{BUILD_FRAMES, build_gens, media_gens, media_steps};
     use jetcarp_store::media::{self, MediaTarget};
     let lib = temp_lib("long-thin");
     let rows: Vec<AntRow> = ["LLRU", "UNUL", "ULLL"]
@@ -701,8 +702,8 @@ fn a_long_thin_build_up_is_drawn_near_square() {
             "{}: {w} x {h} at {cell} pixels a cell is too small to see",
             r.rule
         );
-        // A strip shows its steps up to where it gets four times as long as it is wide.
-        let steps = build_steps(r);
+        // A strip's picture shows its steps up to where it gets four times as long as it is wide.
+        let steps = media_steps(r);
         if r.rule.ends_with("ULLL") {
             assert_eq!(steps, r.steps, "{}: the whole run", r.rule);
         } else {
@@ -713,10 +714,28 @@ fn a_long_thin_build_up_is_drawn_near_square() {
                 r.steps
             );
         }
-        assert!(build_gens(r) <= BUILD_FRAMES, "{}", r.rule);
-        // The scene the window opens is the same run, to the same step.
+        assert!(media_gens(r) <= BUILD_FRAMES, "{}", r.rule);
+        // *Open* and a promoted Quick Start entry run the whole run in the main view, where it
+        // can be panned and zoomed: the scene's grid holds every cell the run reached, and its
+        // generations reach its last step.
         let sc = jetcarp_store::media::ants::build_scene(r).unwrap();
         let per = sc.cas[0].steps_per_gen as u64;
-        assert!(build_gens(r) * per >= steps, "{}", r.rule);
+        assert!(
+            build_gens(r) * per >= r.steps,
+            "{}: Open runs {} of its {} steps",
+            r.rule,
+            build_gens(r) * per,
+            r.steps
+        );
+        let rows = match sc.tiling.size {
+            Some(jetcarp_core::topology::SizeSpec::Rect { h, .. }) => h,
+            _ => 0,
+        };
+        let reached = (r.run.reach[3] - r.run.reach[1] + 1) as u32;
+        assert!(
+            rows >= reached,
+            "{}: Open's grid has {rows} rows of the {reached} its run reached",
+            r.rule
+        );
     }
 }

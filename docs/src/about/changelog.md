@@ -598,10 +598,12 @@ day later (0.4.2: 17 November here, 18 November there).
 - **An ant that builds a strip has a build-up that can be seen** (#340). A chaotic run whose
   cells make a long thin strip had its whole build-up drawn: `LLRU` on squares, nine cells by
   2,201 after 20,000 steps, came out 15 by 2,207 pixels and two points wide in the window, and
-  `UNUL`, one cell by 6,668, was refused. A build-up now runs until just before its cells get more
-  than four times as long as they are wide, as a highway's stops four periods past its onset:
-  LLRU's shows its first 677 steps at 120 by 480 pixels, the strip leaving where it started, and
-  the window says which steps it shows. Other build-ups are as they were.
+  `UNUL`, one cell by 6,668, was refused. A build-up's picture and animation now run until just
+  before its cells get more than four times as long as they are wide, as a highway's build-up
+  stops four periods past its onset: LLRU's show its first 677 steps at 120 by 480 pixels, the
+  strip leaving where it started, and the window says which steps they show. *Open*, and a Quick
+  Start entry made from the run, still run the whole of it in the main view, where it can be
+  panned and zoomed. Other build-ups are as they were.
   ([Langton's ant and turmites](../automata/turmites.md#running-and-searching),
   [#340](https://github.com/jprodgers/jetcarp/issues/340))
 - **The book says how a hexagonal rule looks in Golly** (#351). Hexagonal Life (`B2/S34H`) copied

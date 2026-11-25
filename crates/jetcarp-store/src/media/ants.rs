@@ -4,10 +4,12 @@
 //! - **Build-up** (mode `seed`, every outcome): the run from step 0 on a dead-edged grid that
 //!   just holds every cell the ant reaches (a scene, so the app replays it too), about 150
 //!   frames. A highway runs to its onset plus four periods, so the highway shows leaving the
-//!   tangle; other runs show their whole length (at most [`BUILD_MAX_STEPS`]). A run whose cells
-//!   would make a strip more than [`BUILD_MAX_RATIO`] times as long as it is wide (an ant that
-//!   builds a strip, as `LLRU` and `UNUL` do on squares) shows its steps up to the last before
-//!   that, the strip leaving the tangle (#340): drawn whole it would be a sliver too thin to see.
+//!   tangle; other runs show their whole length (at most [`BUILD_MAX_STEPS`]). The picture and
+//!   animation of a run whose cells would make a strip more than [`BUILD_MAX_RATIO`] times as
+//!   long as it is wide (an ant that builds a strip, as `LLRU` and `UNUL` do on squares) show its
+//!   steps up to the last before that, the strip leaving the tangle (#340): drawn whole it would
+//!   be a sliver too thin to see. The scene (*Open*, a promoted Quick Start entry) keeps the whole
+//!   run, to be panned and zoomed in the main view.
 //! - **Highway loop** (mode `alone`, highways only, the automatic choice for them): one period of
 //!   the steady highway in a window that moves with the ant at the highway's speed, a frame per
 //!   step (or per a divisor of the period, at most 240 frames). The loop starts enough periods
@@ -150,15 +152,20 @@ fn index_in(topo: &Topology, i: i32, j: i32, k: u8) -> Result<usize, String> {
         .ok_or_else(|| format!("cell ({i}, {j}, {k}) is outside the media grid (internal error)"))
 }
 
-/// Steps a build-up shows: the onset plus four periods for a highway (or orbit), else the run;
-/// and fewer when its cells would make a strip more than [`BUILD_MAX_RATIO`] times as long as it
-/// is wide (module docs).
+/// Steps the build-up scene runs (*Open*, a promoted Quick Start entry): the onset plus four
+/// periods for a highway (or orbit), else the run.
 pub fn build_steps(row: &AntRow) -> u64 {
-    let steps = match (row.outcome, row.onset, row.period) {
+    match (row.outcome, row.onset, row.period) {
         (Outcome::Highway | Outcome::Periodic, Some(o), Some(p)) => o + 4 * p.max(1),
         _ => row.steps,
     }
-    .clamp(1, BUILD_MAX_STEPS);
+    .clamp(1, BUILD_MAX_STEPS)
+}
+
+/// Steps the build-up's picture and animation show: [`build_steps`], or fewer when its cells
+/// would make a strip more than [`BUILD_MAX_RATIO`] times as long as it is wide (module docs).
+pub fn media_steps(row: &AntRow) -> u64 {
+    let steps = build_steps(row);
     strip_end(row, steps).unwrap_or(steps).max(1)
 }
 
@@ -207,11 +214,24 @@ pub fn scene(row: &AntRow, steps: u64, steps_per_gen: u32) -> Result<Scene, Stri
     Ok(sc)
 }
 
-/// The build-up scene with the default frame spacing.
+/// A frame every this many steps, for [`BUILD_FRAMES`] frames.
+fn per_frame(steps: u64) -> u64 {
+    steps.div_ceil(BUILD_FRAMES).max(1)
+}
+
+/// The build-up scene with the default frame spacing: the whole run ([`build_steps`]), which
+/// *Open* and a promoted Quick Start entry run in the main view, where it can be panned and
+/// zoomed.
 pub fn build_scene(row: &AntRow) -> Result<Scene, String> {
     let steps = build_steps(row);
-    let per = steps.div_ceil(BUILD_FRAMES).max(1);
-    scene(row, steps, per.min(u32::MAX as u64) as u32)
+    scene(row, steps, per_frame(steps).min(u32::MAX as u64) as u32)
+}
+
+/// The scene the build-up's picture and animation are drawn from: [`media_steps`] of it, on a
+/// grid that just holds them.
+pub fn media_scene(row: &AntRow) -> Result<Scene, String> {
+    let steps = media_steps(row);
+    scene(row, steps, per_frame(steps).min(u32::MAX as u64) as u32)
 }
 
 /// The build-up scene in a built-in palette (`None`: [`SCENE_PALETTE`]); an unknown name is an
@@ -228,8 +248,13 @@ pub fn build_scene_in(row: &AntRow, palette: Option<&str>) -> Result<Scene, Stri
 /// Generations of the build-up scene (frames minus one).
 pub fn build_gens(row: &AntRow) -> u64 {
     let steps = build_steps(row);
-    let per = steps.div_ceil(BUILD_FRAMES).max(1);
-    steps.div_ceil(per)
+    steps.div_ceil(per_frame(steps))
+}
+
+/// Generations of the build-up's animation ([`media_scene`]).
+pub fn media_gens(row: &AntRow) -> u64 {
+    let steps = media_steps(row);
+    steps.div_ceil(per_frame(steps))
 }
 
 fn smallest_stride(p: u64, max_frames: u64) -> u64 {

@@ -56,8 +56,9 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   squares, 20,000 steps), each a few cells wide, must render their loop, closing on itself, and
   `media render --ant` must write it (`narrow_highways_render_their_loop`). The build-ups of `LLRU`
   and `UNUL`, chaotic runs that build a long strip, must be no worse than 1:4 with cells at least
-  4 pixels across, and `ULLL`'s must show its whole run
-  (`a_long_thin_build_up_is_drawn_near_square`, both in `jetcarp-search/tests/ants.rs`).
+  4 pixels across, and `ULLL`'s must show its whole run; the scene *Open* runs must hold each
+  run's every cell and step (`a_long_thin_build_up_is_drawn_near_square`, both in
+  `jetcarp-search/tests/ants.rs`).
 - **Golly agrees.** [Golly](https://golly.sourceforge.io/)'s command-line program, `bgolly`, reads
   the RLE JETCARP writes as the same cells, and writes it back as JETCARP reads it. It runs the
   pattern to the same generations as JETCARP, cell for cell. The test uses soups of nine rules on
@@ -179,7 +180,7 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   hunt, must have its ▶ painted over its picture with nothing painted over the ▶; *Ants and
   turmites*, opened from its menu item with runs stored, must list them in its first frames, play
   a highway's loop and show a strip-building ant's build-up at least 60 points across, each still
-  with its ▶ on top. The ▶ itself must stand out 3:1 or more, by its ring or its disc, from every
+  with its ▶ on top, and *Open* must load the strip's whole run. The ▶ itself must stand out 3:1 or more, by its ring or its disc, from every
   colour of a sweep of the colour cube, the house style's colours and the themes' fills, in the
   dark and light themes and both high-contrast ones (`a11y.rs`). In every window, every control
   must have a role, a name that says something and a value that reads, and the status line must be

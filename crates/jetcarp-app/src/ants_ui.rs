@@ -228,7 +228,7 @@ impl AntsWindow {
                 if mode == media::MediaMode::Alone {
                     return "the highway's loop, alone".to_string();
                 }
-                let shown = jetcarp_store::media::ants::build_steps(&row);
+                let shown = jetcarp_store::media::ants::media_steps(&row);
                 if shown < row.steps {
                     format!("the build-up from step 0 to step {shown} of {}", row.steps)
                 } else {

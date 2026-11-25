@@ -2515,7 +2515,8 @@ fn the_ants_window_lists_its_runs_and_plays_their_media() {
 /// - a chaotic ant that builds a strip shows its build-up at a size that can be seen and clicked
 ///   (#340: 15 by 2,207 pixels, shown two points wide);
 /// - with reduced motion each is a still with its ▶ on top, larger than the 16-point disc that
-///   went unseen (#341).
+///   went unseen (#341);
+/// - *Open* runs the strip's whole run in the main view, not the first steps its picture shows.
 #[test]
 #[ignore = "started by the_ants_window_lists_its_runs_and_plays_their_media, in a scratch process"]
 fn child_the_ants_window_lists_its_runs_and_plays_their_media() {
@@ -2622,6 +2623,34 @@ fn child_the_ants_window_lists_its_runs_and_plays_their_media() {
             ));
         }
         marked(&k, "LLRU", at, &mut failures);
+    }
+    // *Open* runs LLRU's whole run in the main view, to be panned and zoomed, not the first steps
+    // its picture shows.
+    let reached = (rows[1].run.reach[3] - rows[1].run.reach[1] + 1) as u32;
+    let layer = k
+        .widget_named("Select")
+        .and_then(|id| k.focusable().into_iter().find(|w| w.0 == id))
+        .map(|w| w.1);
+    let open = k
+        .focusable()
+        .into_iter()
+        .find(|w| {
+            Some(w.1) == layer
+                && k.nodes
+                    .get(&w.0.accesskit_id())
+                    .is_some_and(|n| k.name(n) == "Open")
+        })
+        .map(|w| w.0)
+        .expect("LLRU's Open button");
+    k.ctx.memory_mut(|m| m.request_focus(open));
+    k.frames(2);
+    k.key(Key::Enter);
+    let rows_open = |k: &Kb| k.app.world.topo.lattice().map(|g| g.h).unwrap_or(0);
+    if !frames_until(&mut k, 60.0, |k| rows_open(k) >= reached) {
+        failures.push(format!(
+            "#340: Open gave LLRU's run a grid of {} rows, not the {reached} it reached",
+            rows_open(&k)
+        ));
     }
     assert!(failures.is_empty(), "{failures:#?}");
     done();

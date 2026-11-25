@@ -151,11 +151,13 @@ opens, with their outcomes per tiling. Selecting a run plays its media, which
 `jetcarp media render --ant ID` writes into the library too. A highway's media is its loop alone,
 in a window that moves with the ant, drawn on a grid of at least 8 by 8 unit cells, so a highway
 three cells wide has one too. Any other run shows its build-up from step 0 on a grid that just holds
-the cells it reaches. A highway's build-up stops four periods past its onset. Any build-up stops
-before its cells get more than four times as long as they are wide: `LLRU` on squares, run for
-20,000 steps, builds a strip nine cells wide and 2,201 long, so its build-up shows its first 677
-steps, the strip leaving where it started. Drawn whole, the run would be a sliver too thin to see.
-The window says which steps a build-up shows, and *Open* runs the same build-up in the main view.
+the cells it reaches. A highway's build-up stops four periods past its onset. A build-up's picture
+and animation stop before its cells get more than four times as long as they are wide: `LLRU` on
+squares, run for 20,000 steps, builds a strip nine cells wide and 2,201 long, so its animation
+shows its first 677 steps, the strip leaving where it started. Drawn whole, the run would be a
+sliver too thin to see. The window says which steps the animation shows. *Open* runs the whole
+build-up in the main view, where it can be panned and zoomed, and so does a Quick Start entry made
+from the run.
 
 ## What is new here
 
