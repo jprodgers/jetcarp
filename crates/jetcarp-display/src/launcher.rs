@@ -927,6 +927,26 @@ mod identity {
         Ok(())
     }
 
+    /// What the window `hwnd`'s property store holds for the identity's properties, as strings:
+    /// its ID and its relaunch command, icon and name. For the tests.
+    #[cfg(test)]
+    pub fn window_values(hwnd: isize) -> [Option<String>; 4] {
+        use windows::Win32::System::Com::StructuredStorage::PropVariantClear;
+        let h = HWND(hwnd as *mut core::ffi::c_void);
+        // SAFETY: as in `set_window`; each value read is cleared once, here.
+        unsafe {
+            let Ok(store) = SHGetPropertyStoreForWindow::<IPropertyStore>(h) else {
+                return [None, None, None, None];
+            };
+            [&ID, &RELAUNCH_COMMAND, &RELAUNCH_ICON, &RELAUNCH_NAME].map(|key| {
+                let mut v = store.GetValue(key).ok()?;
+                let s = string_of(&v);
+                let _ = PropVariantClear(&mut v);
+                s
+            })
+        }
+    }
+
     /// The main window lets its identity go, as the app ends: the shell keeps a window's
     /// properties until they are cleared.
     pub fn clear_window() {
@@ -956,18 +976,45 @@ pub fn set_app_identity() {
     identity::set_process();
 }
 
+/// The windowless launcher a window of the program `me` relaunches: its own, so that a pin made
+/// from the taskbar starts the program that was pinned, and never another JETCARP the Start menu
+/// entry starts (#347). That is the Start menu entry's copy in `stable` when the record beside it
+/// names `me`, which starts this program and goes on starting the version that replaces it after
+/// an upgrade (winget's folders name the version, so the launcher beside a winget install would
+/// be gone); else the `jetcarpw.exe` beside `me`; none when neither is there.
+pub fn relaunch_launcher(me: &Path, stable: Option<&Path>) -> Option<PathBuf> {
+    // As Windows compares them, without regard to case; links followed.
+    let same = |a: &Path, b: &Path| {
+        let c = |p: &Path| {
+            let c = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+            let s = c.to_string_lossy().into_owned();
+            if cfg!(windows) { s.to_lowercase() } else { s }
+        };
+        c(a) == c(b)
+    };
+    if let Some(d) = stable {
+        let copy = d.join(LAUNCHER_EXE);
+        let named = std::fs::read_to_string(d.join(RECORD))
+            .ok()
+            .and_then(|t| t.lines().next().map(|l| l.trim().to_string()))
+            .filter(|l| !l.is_empty());
+        if copy.is_file() && named.is_some_and(|n| same(Path::new(&n), me)) {
+            return Some(copy);
+        }
+    }
+    let beside = me.with_file_name(LAUNCHER_EXE);
+    beside.is_file().then_some(beside)
+}
+
 /// Windows: the app's main window (`hwnd`) takes [`APP_USER_MODEL_ID`], and a relaunch command
-/// that starts the windowless launcher: the Start menu entry's copy ([`stable_dir`]), else the one
-/// beside this program. So a pin made from the taskbar starts JETCARP with no console window, as
-/// the Start menu entry does (#347). Nothing elsewhere.
+/// that starts this program's own windowless launcher ([`relaunch_launcher`]). So a pin made from
+/// the taskbar starts the program that was pinned, with no console window (#347). Nothing
+/// elsewhere.
 pub fn set_window_identity(hwnd: isize) -> Result<(), String> {
     #[cfg(windows)]
     {
-        let copy = stable_dir().ok().map(|d| d.join(LAUNCHER_EXE));
-        let beside = std::env::current_exe()
-            .ok()
-            .map(|e| jetcarp_core::paths::plain_path(e).with_file_name(LAUNCHER_EXE));
-        let relaunch = [copy, beside].into_iter().flatten().find(|p| p.is_file());
+        let me = program().map_err(|e| format!("this program's path: {e}"))?;
+        let relaunch = relaunch_launcher(&me, stable_dir().ok().as_deref());
         identity::set_window(hwnd, relaunch.as_deref())
     }
     #[cfg(not(windows))]
@@ -1000,6 +1047,101 @@ pub fn shortcut_app_id(lnk: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A window relaunches its own program's launcher (#347): the one beside the program, or the
+    /// Start menu entry's copy only when that copy's record names this program, never another
+    /// JETCARP's; none when there is neither.
+    #[test]
+    fn a_window_relaunches_its_own_program_s_launcher() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-relaunch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (mine, other, stable) = (dir.join("mine"), dir.join("other"), dir.join("stable"));
+        for d in [&mine, &other, &stable] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        let me = mine.join("jetcarp.exe");
+        let them = other.join("jetcarp.exe");
+        for f in [
+            &me,
+            &them,
+            &mine.join(LAUNCHER_EXE),
+            &stable.join(LAUNCHER_EXE),
+        ] {
+            std::fs::write(f, b"x").unwrap();
+        }
+        let record = |p: &Path| {
+            std::fs::write(stable.join(RECORD), format!("{}\n", p.display())).unwrap();
+        };
+        // The Start menu entry starts another JETCARP: this window relaunches its own launcher.
+        record(&them);
+        assert_eq!(
+            relaunch_launcher(&me, Some(&stable)),
+            Some(mine.join(LAUNCHER_EXE))
+        );
+        // It starts this one: its copy, which an upgrade keeps.
+        record(&me);
+        assert_eq!(
+            relaunch_launcher(&me, Some(&stable)),
+            Some(stable.join(LAUNCHER_EXE))
+        );
+        // No entry: the launcher beside the program.
+        assert_eq!(relaunch_launcher(&me, None), Some(mine.join(LAUNCHER_EXE)));
+        // No launcher of its own, and the entry starts another: none, not the other's.
+        std::fs::remove_file(mine.join(LAUNCHER_EXE)).unwrap();
+        record(&them);
+        assert_eq!(relaunch_launcher(&me, Some(&stable)), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A window's property store takes the AppUserModelID and the relaunch command, with its
+    /// icon and name, and gives them back; clearing empties them (#347). On a window of the
+    /// system's own `STATIC` class, never shown.
+    #[cfg(windows)]
+    #[test]
+    fn a_window_holds_the_id_and_its_relaunch_command() {
+        use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, WS_OVERLAPPEDWINDOW,
+        };
+        let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        let class: Vec<u16> = "STATIC".encode_utf16().chain([0]).collect();
+        // SAFETY: a window of a system class, with no parent, menu or data, destroyed below.
+        let hwnd = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                class.as_ptr(),
+                WS_OVERLAPPEDWINDOW,
+                0,
+                0,
+                100,
+                100,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        assert!(!hwnd.is_null(), "no window");
+        let exe = Path::new(r"C:\Program Files\JETCARP\jetcarpw.exe");
+        identity::set_window(hwnd as isize, Some(exe)).unwrap();
+        assert_eq!(
+            identity::window_values(hwnd as isize),
+            [
+                Some(APP_USER_MODEL_ID.to_string()),
+                Some(format!("\"{}\"", exe.display())),
+                Some(format!("{},0", exe.display())),
+                Some("JETCARP".to_string()),
+            ]
+        );
+        clear_window_identity();
+        assert_eq!(
+            identity::window_values(hwnd as isize),
+            [None, None, None, None]
+        );
+        // SAFETY: the window made above.
+        unsafe { DestroyWindow(hwnd) };
+    }
 
     /// The Start menu entry carries JETCARP's AppUserModelID, which the app's window has too, so
     /// the taskbar pins the entry, which starts the windowless launcher, and not the console
