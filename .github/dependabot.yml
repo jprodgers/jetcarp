@@ -29,6 +29,13 @@ updates:
     groups:
       crates:
         update-types: [patch]
+    # The captions' skrifa and vello_cpu stay at the versions egui's epaint uses, so the build holds
+    # one copy of each (#352); their minor and major updates move with egui's, by hand.
+    ignore:
+      - dependency-name: skrifa
+        update-types: [version-update:semver-minor, version-update:semver-major]
+      - dependency-name: vello_cpu
+        update-types: [version-update:semver-minor, version-update:semver-major]
     labels: [dependencies]
     commit-message:
       prefix: Dependencies
