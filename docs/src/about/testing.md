@@ -795,7 +795,9 @@ every contributor's own builds use that version too.
   reviewed like any other; none merges by itself. It moves an action's pinned commit to the new
   release's and rewrites the version in the comment beside it. Two pins it cannot follow, and they
   move by hand at the start of each cycle: the action that installs Rust, pinned to a branch with no
-  releases, and the release's Rust itself.
+  releases, and the release's Rust itself. And it leaves the minor and major updates of `skrifa` and
+  `vello_cpu` alone: the captions use the versions egui uses, so the build holds one copy of each,
+  and they move when egui does.
 - **The notices on Dependabot's pull requests:** a crate update that changes `Cargo.lock` changes
   the third-party notices, so a workflow (*Dependabot's notices*) makes them again: on Dependabot's
   pull requests only, it runs `packaging/notices.sh` with a checked release of cargo-about, and if
