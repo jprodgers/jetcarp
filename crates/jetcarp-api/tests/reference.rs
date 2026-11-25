@@ -189,12 +189,39 @@ fn paths_and_doctor() {
             "gpu_policy",
             "machine",
             "os",
+            "program",
             "programs",
             "threads",
             "time_zone",
             "version"
         ]
     );
+    // This program, in the first lines and the JSON: its version and its path, the home folder
+    // shown as `~`, so that no user name is pasted into a bug report.
+    let me = jetcarp_core::paths::program_path().unwrap();
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .map(std::path::PathBuf::from)
+        .filter(|h| !h.as_os_str().is_empty());
+    let shown = match home.as_deref().and_then(|h| me.strip_prefix(h).ok()) {
+        Some(rest) => std::path::Path::new("~").join(rest).display().to_string(),
+        None => me.display().to_string(),
+    };
+    assert_eq!(
+        v["program"]["version"],
+        jetcarp_core::VERSION,
+        "{}",
+        v["program"]
+    );
+    assert_eq!(v["program"]["path"], shown.as_str(), "{}", v["program"]);
+    assert_eq!(
+        t.lines().nth(1),
+        Some(format!("  program: {shown}").as_str()),
+        "{t}"
+    );
+    if let Some(h) = home.as_deref().filter(|h| me.starts_with(h)) {
+        let first: String = t.lines().take(2).collect::<Vec<_>>().join("\n");
+        assert!(!first.contains(&h.display().to_string()), "{first}");
+    }
     // This program and the `jetcarp`s on the PATH (#348), as JSON whether or not the text has a
     // section on them.
     assert!(v["programs"]["on_path"].is_array(), "{}", v["programs"]);

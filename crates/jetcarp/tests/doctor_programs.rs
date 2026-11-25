@@ -110,7 +110,16 @@ fn doctor_names_every_jetcarp_on_the_path_and_which_one_runs() {
     path.extend(path_without_jetcarps());
 
     let text = doctor(&h, &path, false);
-    let (a, b) = (first.display().to_string(), second.display().to_string());
+    // In the text the home folder is `~`, so no user name is pasted into a bug report.
+    let tilde = |p: &Path| {
+        format!(
+            "~{}{}",
+            std::path::MAIN_SEPARATOR,
+            p.strip_prefix(&h).unwrap().display()
+        )
+    };
+    let (a, b) = (tilde(&first), tilde(&second));
+    assert!(!text.contains(&first.display().to_string()), "{text}");
     let (at_a, at_b) = (text.find(&a), text.find(&b));
     assert!(
         at_a.is_some() && at_b.is_some(),
@@ -124,11 +133,23 @@ fn doctor_names_every_jetcarp_on_the_path_and_which_one_runs() {
     );
     let line_b = text.lines().find(|l| l.contains(&b)).unwrap();
     assert!(!line_b.contains("runs when you type"), "{line_b}");
-    // This program is not on that PATH, and is named too.
+    // This program is not on that PATH, and is named too, as in doctor's first lines.
     let me = Path::new(env!("CARGO_BIN_EXE_jetcarp"));
-    assert!(text.contains("this program: "), "{text}");
+    assert!(text.contains("\n  this program: "), "{text}");
+    assert!(
+        text.lines()
+            .nth(1)
+            .is_some_and(|l| l.starts_with("  program: ")),
+        "{text}"
+    );
 
     let d: Value = serde_json::from_str(&doctor(&h, &path, true)).unwrap();
+    assert_eq!(
+        d["program"]["version"],
+        env!("CARGO_PKG_VERSION"),
+        "{}",
+        d["program"]
+    );
     let on_path = d["programs"]["on_path"].as_array().unwrap();
     assert_eq!(on_path.len(), 2, "{on_path:?}");
     assert!(same_file(

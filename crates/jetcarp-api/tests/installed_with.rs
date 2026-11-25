@@ -345,3 +345,44 @@ fn on_windows_each_pathext_extension_is_looked_for_in_its_order() {
     );
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Doctor shows the home folder as `~` (#348): at the start of a path, on a folder's boundary,
+/// in the system's own separators; on Windows whatever the case.
+#[test]
+fn the_home_folder_is_shown_as_a_tilde() {
+    use jetcarp_api::ops::system::home_as_tilde;
+    let t = |p: &str, h: Option<&str>| home_as_tilde(Path::new(p), h.map(Path::new));
+    assert_eq!(
+        t("/home/ada/.local/bin/jetcarp", Some("/home/ada")),
+        "~/.local/bin/jetcarp"
+    );
+    assert_eq!(
+        t("/home/ada/.local/bin/jetcarp", Some("/home/ada/")),
+        "~/.local/bin/jetcarp"
+    );
+    assert_eq!(t("/home/ada", Some("/home/ada")), "~");
+    // Another user's folder whose name begins with the same letters, and no home: as it is.
+    assert_eq!(
+        t("/home/adam/jetcarp", Some("/home/ada")),
+        "/home/adam/jetcarp"
+    );
+    assert_eq!(
+        t("/opt/jetcarp/jetcarp", Some("/home/ada")),
+        "/opt/jetcarp/jetcarp"
+    );
+    assert_eq!(t("/home/ada/jetcarp", None), "/home/ada/jetcarp");
+    assert_eq!(t("/home/ada/jetcarp", Some("")), "/home/ada/jetcarp");
+    assert_eq!(
+        t(
+            r"C:\Users\ada\AppData\Local\Programs\jetcarp\jetcarp.exe",
+            Some(r"C:\Users\ada")
+        ),
+        r"~\AppData\Local\Programs\jetcarp\jetcarp.exe"
+    );
+    if cfg!(windows) {
+        assert_eq!(
+            t(r"c:\users\ADA\jetcarp.exe", Some(r"C:\Users\ada")),
+            r"~\jetcarp.exe"
+        );
+    }
+}

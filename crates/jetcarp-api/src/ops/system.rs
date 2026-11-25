@@ -378,6 +378,8 @@ impl DoctorTimeZone {
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct DoctorReport {
     pub version: String,
+    /// This program: its version and its path, the home folder shown as `~`.
+    pub program: ThisProgram,
     pub os: String,
     pub arch: String,
     pub threads: usize,
@@ -397,7 +399,47 @@ pub struct DoctorReport {
     pub environment: Vec<(String, String)>,
 }
 
-/// This program, and the other JETCARPs the PATH has, for `jetcarp doctor` (#348): with two, the
+/// This program, as `jetcarp doctor` names it in its first lines.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct ThisProgram {
+    pub version: String,
+    /// Where it is, its links followed, with the home folder shown as `~` (`~/.local/lib/jetcarp/
+    /// jetcarp`), so that no user name is pasted into a bug report; empty when it can't be told.
+    pub path: String,
+}
+
+/// `p` for people, with the home folder `home` at its start shown as `~` (`~/.local/bin/jetcarp`,
+/// `~\AppData\Local\Programs\jetcarp\jetcarp.exe`), as named or with its links followed; on
+/// Windows without regard to case. Elsewhere `p` as it is.
+pub fn home_as_tilde(p: &Path, home: Option<&Path>) -> String {
+    let text = p.display().to_string();
+    let Some(home) = home.filter(|h| !h.as_os_str().is_empty()) else {
+        return text;
+    };
+    let forms = [
+        home.to_path_buf(),
+        jetcarp_core::paths::plain_path(canonical(home)),
+    ];
+    for h in &forms {
+        let h = h.display().to_string();
+        let h = h.trim_end_matches(['/', '\\']);
+        if h.is_empty() || text.len() < h.len() {
+            continue;
+        }
+        let (head, rest) = text.as_bytes().split_at(h.len());
+        let same = if cfg!(windows) {
+            head.eq_ignore_ascii_case(h.as_bytes())
+        } else {
+            head == h.as_bytes()
+        };
+        if same && (rest.is_empty() || matches!(rest[0], b'/' | b'\\')) {
+            return format!("~{}", &text[h.len()..]);
+        }
+    }
+    text
+}
+
+/// This program and the other JETCARPs the PATH has, for `jetcarp doctor` (#348): with two, the
 /// one typed `jetcarp` runs may be another version than the one the Start menu or the app opens.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct DoctorPrograms {
@@ -406,6 +448,10 @@ pub struct DoctorPrograms {
     /// Every program named `jetcarp` on the PATH, in the PATH's order: typing `jetcarp` runs the
     /// first.
     pub on_path: Vec<DoctorProgram>,
+    /// The home folder, which the text shows as `~` ([`home_as_tilde`]); the JSON gives the
+    /// paths as they are.
+    #[serde(skip)]
+    pub home: Option<PathBuf>,
 }
 
 /// A program named `jetcarp` on the PATH.
@@ -544,10 +590,20 @@ pub fn doctor_programs(
             }
         })
         .collect();
-    DoctorPrograms { this, on_path }
+    DoctorPrograms {
+        this,
+        on_path,
+        home: None,
+    }
 }
 
 impl DoctorPrograms {
+    /// The same, its text showing the home folder `home` as `~`.
+    pub fn with_home(mut self, home: Option<PathBuf>) -> DoctorPrograms {
+        self.home = home;
+        self
+    }
+
     /// Whether there is more than one JETCARP to speak of: more than one on the PATH, more than
     /// one Start menu entry named JETCARP, or one on the PATH that is not this program.
     pub fn more_than_one(&self, start_menu: &[crate::ctx::StartMenuEntry]) -> bool {
@@ -563,6 +619,7 @@ impl DoctorPrograms {
         if !self.more_than_one(start_menu) {
             return String::new();
         }
+        let show = |p: &Path| home_as_tilde(p, self.home.as_deref());
         let how = |w: &Option<InstalledWith>| {
             w.as_ref()
                 .map(|w| format!(" (installed with {})", w.name()))
@@ -571,7 +628,7 @@ impl DoctorPrograms {
         let mut s = String::from("\nMore than one JETCARP\n");
         if let Some(t) = &self.this {
             let mine = installed_with(t, cfg!(windows));
-            let _ = writeln!(s, "  this program: {}{}", t.display(), how(&mine));
+            let _ = writeln!(s, "  this program: {}{}", show(t), how(&mine));
         }
         if self.on_path.is_empty() {
             s.push_str("  on the PATH: none\n");
@@ -579,9 +636,9 @@ impl DoctorPrograms {
             s.push_str("  on the PATH, in its order:\n");
         }
         for (i, p) in self.on_path.iter().enumerate() {
-            let mut line = format!("    {}", p.path.display());
+            let mut line = format!("    {}", show(&p.path));
             if let Some(r) = &p.runs {
-                let _ = write!(line, ", which runs {}", r.display());
+                let _ = write!(line, ", which runs {}", show(r));
             }
             line.push_str(&how(&p.installed_with));
             if p.this {
@@ -595,17 +652,17 @@ impl DoctorPrograms {
         if !start_menu.is_empty() {
             s.push_str("  Start menu entries named JETCARP:\n");
             for e in start_menu {
-                let mut line = format!("    {}", e.shortcut.display());
+                let mut line = format!("    {}", show(&e.shortcut));
                 match &e.starts {
                     Some(t) => {
-                        let _ = write!(line, ", which starts {}", t.display());
+                        let _ = write!(line, ", which starts {}", show(t));
                     }
                     None => line.push_str(" (what it starts could not be read)"),
                 }
                 if e.ours {
                     line.push_str(" (JETCARP's own entry, from `jetcarp launcher install`");
                     if let Some(p) = &e.then_starts {
-                        let _ = write!(line, ", which starts {}", p.display());
+                        let _ = write!(line, ", which starts {}", show(p));
                     }
                     line.push(')');
                 } else if let Some(w) = e.starts.as_deref().and_then(|t| installed_with(t, true)) {
@@ -620,7 +677,7 @@ impl DoctorPrograms {
             let _ = writeln!(
                 s,
                 "  note: `jetcarp` here runs {}, not this program",
-                first.program().display()
+                show(first.program())
             );
         }
         // How to remove the others, as far as is known.
@@ -634,7 +691,7 @@ impl DoctorPrograms {
         };
         for p in self.on_path.iter().filter(|p| !p.this) {
             if let Some(w) = &p.installed_with {
-                add(w, p.program().display().to_string());
+                add(w, show(p.program()));
             }
         }
         for e in start_menu.iter().filter(|e| !e.ours) {
@@ -645,7 +702,7 @@ impl DoctorPrograms {
                     .as_deref()
                     .is_some_and(|me| me.parent() == t.parent())
             {
-                add(&w, t.display().to_string());
+                add(&w, show(t));
             }
         }
         if remove.is_empty() {
@@ -667,8 +724,8 @@ impl Report for DoctorReport {
     fn text(&self) -> String {
         let f = &self.folders;
         let mut s = format!(
-            "JETCARP {} on {} {} ({} threads)\n\n",
-            self.version, self.os, self.arch, self.threads
+            "JETCARP {} on {} {} ({} threads)\n  program: {}\n\n",
+            self.version, self.os, self.arch, self.threads, self.program.path
         );
         s.push_str(&machine_text(&self.machine));
         let _ = writeln!(s, "  time zone: {}", self.time_zone.text);
@@ -950,6 +1007,12 @@ impl Op for SystemDoctor {
             .map(|p| folder_size(p));
         Ok(DoctorReport {
             version: jetcarp_core::VERSION.to_string(),
+            program: ThisProgram {
+                version: jetcarp_core::VERSION.to_string(),
+                path: jetcarp_core::paths::program_path()
+                    .map(|p| home_as_tilde(&p, home_dir().as_deref()))
+                    .unwrap_or_default(),
+            },
             os: std::env::consts::OS.to_string(),
             arch: std::env::consts::ARCH.to_string(),
             threads: std::thread::available_parallelism()
@@ -984,7 +1047,8 @@ impl Op for SystemDoctor {
                 &std::env::var_os("PATH").unwrap_or_default(),
                 cfg!(windows),
                 std::env::var_os("PATHEXT").as_deref(),
-            ),
+            )
+            .with_home(home_dir()),
             environment: jetcarp_env(),
         })
     }
