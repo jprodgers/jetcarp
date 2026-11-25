@@ -2,6 +2,8 @@
 //! to an off-screen texture, and check the pixels against the simulation's own colours. Each test
 //! skips itself when the machine has no GPU adapter.
 
+mod common;
+
 use jetcarp_core::render::colors_for;
 use jetcarp_core::{Command, Scene, SizeSpec, TilingSpec, World, geom};
 use jetcarp_display::gpu::{Geometry, TileDraw, TileRenderer, slot_capacity};
@@ -21,36 +23,13 @@ struct Gpu {
     renderer: TileRenderer,
 }
 
+/// The display adapter as JETCARP chooses it, and a device on it ([`common::device`]): a software
+/// one only with JETCARP_GPU=software (Mesa's software Vulkan in CI); Windows' WARP, whose shader
+/// compiler crashes on the world stepper, never, unless JETCARP_ALLOW_WARP=1 allows it (#321). No
+/// usable adapter skips these tests, or fails them under JETCARP_REQUIRE_GPU=1.
 fn gpu() -> Option<Gpu> {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    // The display adapter as JETCARP chooses it: a software one only with JETCARP_GPU=software
-    // (Mesa's software Vulkan in CI); Windows' WARP, whose shader compiler crashes on the world
-    // stepper, never, unless JETCARP_ALLOW_WARP=1 allows it (#321).
-    // No usable adapter skips these tests, or fails them under JETCARP_REQUIRE_GPU=1.
-    let choice =
-        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
-            Ok(c) => c,
-            Err(e) => {
-                jetcarp_gpu::no_gpu("the offscreen display tests", &e);
-                return None;
-            }
-        };
-    if let Err(e) = &choice.usable {
-        jetcarp_gpu::no_gpu("the offscreen display tests", e);
-        return None;
-    }
-    let adapter = choice.adapter;
-    let (device, queue) =
-        match pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) {
-            Ok(d) => d,
-            Err(e) => {
-                let name = adapter.get_info().name;
-                let why = format!("{name} refused a device: {e}");
-                jetcarp_gpu::no_gpu("the offscreen display tests", &why);
-                return None;
-            }
-        };
+    let (adapter, device, queue) =
+        common::device("the offscreen display tests", |_| Default::default())?;
     let renderer = TileRenderer::new(&device, FORMAT);
     Some(Gpu {
         adapter,

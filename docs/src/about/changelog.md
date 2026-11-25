@@ -574,6 +574,20 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The GPU tests open the GPU as JETCARP itself does** (#370, #52). The strobe guard's GPU tests
+  crashed once on Windows CI's WARP as they started (0xC0000005), and the GPU recovery tests
+  crashed or hung now and then on a Windows laptop's NVIDIA and Intel GPUs, both only with tests
+  running side by side. The tests of the strobe guard's GPU pass and painter, the sweep card's
+  picture, the offscreen display and the choice of adapter, and the app's offscreen pictures, each
+  made a GPU instance of their own with every backend, OpenGL too on Windows, and dropped it at
+  once. They now open the GPU the one way the program does, which keeps the first instance and
+  leaves OpenGL out on Windows (#315), and the display tests choose their adapter once for each
+  test program and open their devices one at a time. The recovery tests' steppers share one
+  device, where each opened its own. Neither crash came back on CI's WARP in 83 runs of the two test programs before the
+  change or 43 after, so whether this was the cause isn't known; what the tests did that the
+  program never does is gone. Nothing JETCARP ships changed.
+  ([#370](https://github.com/jprodgers/jetcarp/issues/370))
+
 - **The Desktop background, Screensaver and Display settings open from the Quick Start** (#331).
   Their *View* entries were greyed out until a world was open, though none of them is about the
   world on screen: *Fit to this computer* meant opening a world first. They now open as windows
