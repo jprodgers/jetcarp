@@ -109,7 +109,10 @@ download is complete and unchanged, but `SHA256SUMS` comes from the same place a
 Where it came from is shown by a provenance attestation: the release workflow has GitHub make one
 for every release file, a signed record of the repository, the workflow and the commit that built
 it. The GitHub CLI checks it (`gh attestation verify FILE --repo jprodgers/jetcarp`); the
-installers do not. How to check a download both ways is in
+installers do not. The commit a release is built from is named by its tag, which from
+v0.4.3-rc.3 on is signed by the maintainer's SSH key (listed in `.github/allowed_signers`), and the
+repository's rules let only the maintainer create a release tag and nobody move or delete one. How
+to check a download, and a tag, is in
 [Installing JETCARP](docs/src/getting-started/installing.md#checking-a-download).
 
 Releases for macOS are not signed with an Apple Developer ID, and releases for Windows are not yet

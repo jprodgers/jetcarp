@@ -567,6 +567,11 @@ day later (0.4.2: 17 November here, 18 November there).
   ([When a rotation moves on](../guides/rotations.md#when-a-rotation-moves-on),
   [#186](https://github.com/jprodgers/jetcarp/issues/186))
 
+- **Release tags are signed, and can't be moved** (#183). From v0.4.3-rc.3 on, each release tag
+  is signed with the maintainer's SSH key (`.github/allowed_signers`; GitHub shows it *Verified*),
+  and the repository's rules let only the maintainer create a `v…` tag and nobody move or delete
+  one. *Installing JETCARP* says how to check a tag with `git tag -v`.
+
 ### Fixed
 
 - **The Desktop background, Screensaver and Display settings open from the Quick Start** (#331).
