@@ -51,6 +51,11 @@ Each entry of `tests` in `tests.json` has:
 - `from` (and `to`), the releases with what it needs; a release outside them skips it and says why;
 - `seconds`, its time on a typical laptop, and `per_adapter`, the time each GPU adds.
 
+The top-level `script` is the oldest script version that knows everything in the file (each
+script's `FT_VERSION` or `$FtVersion`). A test of a new kind, or a new key a kind reads, raises
+it in the same change that raises both scripts' versions; an older copy then stops and asks the
+tester to download the script again, rather than misreading a test it doesn't know.
+
 The kinds' own keys:
 
 - `parity`: `set` (`short`, the 371 scenes at `gens` 300, or `long`, the 40 at 5,000), `pick`
@@ -82,7 +87,7 @@ each pair of files is for:
 
 | Files | Releases | Hash |
 | --- | --- | --- |
-| `expected-0.4.3-rc.1.tsv`, `long-0.4.3-rc.1.tsv` | 0.4.3-rc.1 and later | state hash version 2, 64 hexadecimal digits |
+| `expected-0.4.3-rc.1.tsv`, `long-0.4.3-rc.1.tsv` | 0.4.3-rc.1 to 0.4.3-rc.2 | state hash version 2, 64 hexadecimal digits |
 | `expected-0.4.2-rc.1.tsv`, `long-0.4.2-rc.1.tsv` | 0.4.2-rc.1 to 0.4.2 | state hash version 1, 16 hexadecimal digits |
 
 The 0.4.3 set is 0.4.2's scenes with their hashes in version 2 (#173), and the B0 and Larger than
@@ -91,6 +96,12 @@ Life rows as #238 changed them; the 0.4.2 set is the `hash_v1` column of the sam
 three test machines, and the scripts here reproduce it on the Framework (Radeon 8060S, llvmpipe):
 0.4.3-rc.2, 0.4.3-rc.1 and 0.4.2 each match all 371 scenes and the 40 long ones, on the processor
 and the Radeon, against their own set.
+
+Each set ends (`to`) at the newest release it has been checked with. A later release isn't
+checked yet: its testers see "expected hashes aren't checked yet", and the scenes run anyway with
+the processor and each GPU compared, so a rule a new candidate changed on purpose never shows as
+a failure on someone's computer. When a candidate is tagged, run the Suite against it on the
+Framework; if every scene matches, move the set's `to` on to it.
 
 When a release changes what a scene replays to:
 

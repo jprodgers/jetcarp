@@ -1,5 +1,6 @@
 {
   "format": 1,
+  "script": 1,
   "about": "What jetcarp-field-test.sh and jetcarp-field-test.ps1 run, tier by tier. Each test names its tiers, the command line it runs (every one a subcommand: never the app, never the background host, nothing drawn on screen), how its result is read (its kind, which both scripts know), its time on a typical laptop, and the oldest release with what it needs (`from`, and `to` where it stops applying). A release outside a test's range skips it, saying why. README.md says how to change this file.",
   "tiers": [
     {
@@ -22,11 +23,12 @@
     }
   ],
   "parity": {
-    "about": "The scenes and the hashes every machine must reach, from the release-candidate test records (each cycle's parity set: README.md). A set is used for the releases from `from` to `to` (no `to`: every later release, until a set with a later `from` takes over). A release that no set covers runs the scenes anyway and compares the processor with each GPU.",
+    "about": "The scenes and the hashes every machine must reach, from the release-candidate test records (each cycle's parity set: README.md). A set is used for the releases from `from` to `to`, and `to` is the newest release the set was checked with: a later release isn't checked yet, so it runs the scenes anyway and compares the processor with each GPU, until its candidate has been checked and `to` moved on (README.md).",
     "scenes": "parity/scenes.tsv",
     "sets": [
       {
         "from": "0.4.3-rc.1",
+        "to": "0.4.3-rc.2",
         "short": "parity/expected-0.4.3-rc.1.tsv",
         "long": "parity/long-0.4.3-rc.1.tsv",
         "hash": "state hash version 2: SHA-256, 64 hexadecimal digits",

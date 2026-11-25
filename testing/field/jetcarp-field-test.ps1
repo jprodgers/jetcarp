@@ -698,7 +698,7 @@ function Test-Parity($t) {
     $script:TCmd = "jetcarp run <scene> --gens $gens --json, with --cpu on the processor and --gpu on each GPU"
     if ($modes.Count -eq 0) { Complete-Test "skip" "no adapters of this kind here"; $script:NSkip++; return }
     Dim "Running: $($script:TCmd)"
-    if (-not $exp) { Warn "No expected hashes for JETCARP $($script:V): the GPUs are compared with the processor instead." }
+    if (-not $exp) { Warn "JETCARP $($script:V)'s expected hashes aren't checked yet: the GPUs are compared with the processor instead." }
     $nogpu = (@($modes | Where-Object { $_.Flag -eq "cpu" }).Count -gt 0) -and (@($modes | Where-Object { $_.Flag -eq "gpu" }).Count -eq 0)
     if ($nogpu) { Warn "No GPU here that JETCARP uses: the processor alone." }
     $total = $list.Count * $modes.Count; $done = 0; $allOk = $true; $fell = @(); $cpuHash = @{}; $ok = 0; $of = 0
@@ -748,7 +748,7 @@ function Test-Parity($t) {
     $ngm = @($modes | Where-Object { $_.Flag -eq "gpu" }).Count
     $on = "the processor"; if ($ngm -gt 0) { $on += " and $ngm GPU(s)" }; if (@($modes | Where-Object { $_.Flag -eq "cpu" }).Count -eq 0) { $on = "$ngm adapter(s)" }
     $sum = "$($list.Count) scenes x $(Get-Commas $gens) generations on $($on): $ok of $of hashes as they should be"
-    if (-not $exp) { $sum = "$($list.Count) scenes x $(Get-Commas $gens) generations on $on, no expected hashes for this release" }
+    if (-not $exp) { $sum = "$($list.Count) scenes x $(Get-Commas $gens) generations on $on; the GPUs held to the processor's hashes (this release's expected ones aren't checked yet)" }
     if ($nogpu) { $sum += " (no GPU to compare)" }
     if (-not $allOk) { Complete-Test "fail" $sum }
     elseif ($fell.Count -gt 0) { Add-Problem "every run on $($fell -join ', ') fell back to the processor"; Complete-Test "warn" "$sum; $($fell -join ', ') ran on the processor" }
@@ -998,6 +998,10 @@ function Initialize-Data {
     }
     $script:Tests = ConvertFrom-JsonFile (Join-Path $script:DataDir "tests.json")
     if ($null -eq $script:Tests -or $script:Tests.format -ne 1) { Stop-Field "tests.json is format $(if ($script:Tests) { $script:Tests.format } else { 'unknown' }), and this script reads format 1: get the newest jetcarp-field-test.ps1" }
+    # The data names the oldest script that knows everything in it; an older copy stops here
+    # rather than misreading a test it doesn't know (#371).
+    $need = 1; if ($null -ne $script:Tests.script -and "$($script:Tests.script)" -match '^\d+$') { $need = [int]$script:Tests.script }
+    if ($need -gt $FtVersion) { Stop-Field "this test data needs script $need or newer, and this copy is script $($FtVersion). Download jetcarp-field-test.ps1 again: https://raw.githubusercontent.com/$Repo/main/testing/field/jetcarp-field-test.ps1" }
     $script:Scenes = Join-Path $script:Work "scenes"
     New-Item -ItemType Directory -Force -Path $script:Scenes | Out-Null
     $script:ScenesTsv = Join-Path $script:DataDir (Get-DataPath $script:Tests.parity.scenes)
@@ -1062,6 +1066,7 @@ function Select-Tier {
             Write-Host ("  {0}) {1,-9} {2}" -f ($i + 1), $tiers[$i].name, $tiers[$i].minutes)
             if ($UseColor) { Write-Host "       $($tiers[$i].about)" -ForegroundColor DarkGray } else { Write-Host "       $($tiers[$i].about)" }
         }
+        Dim "The times are for a typical laptop: this computer may take more or less."
         while ($true) {
             $a = Ask "Press Enter for 1 ($($tiers[0].name)), or type a number:" "1"
             if ($a -match '^\d$' -and [int]$a -ge 1 -and [int]$a -le $tiers.Count) { $id = [string]$tiers[[int]$a - 1].id; break }
@@ -1219,6 +1224,8 @@ function Complete-Run {
     Info "network addresses. Nothing was sent: send this one file by hand to whoever asked you to test."
     $a = Ask "Show the whole file now? [Y/n]" "y"
     if ($script:AskOk -and $a -match '^[Yy]') {
+        # Out-Host -Paging names its own keys (space, Enter, q); a host that can't page shows it whole.
+        Info "Space shows the next page; q comes back here."
         try { Get-Content -LiteralPath $script:ReportPath -Encoding UTF8 | Out-Host -Paging } catch { Get-Content -LiteralPath $script:ReportPath -Encoding UTF8 | Write-Host }
     }
     $script:Finished = $true

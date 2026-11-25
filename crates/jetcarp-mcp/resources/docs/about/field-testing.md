@@ -76,6 +76,8 @@ The questions can be answered beforehand instead, for a run that asks nothing:
 
 ## The tiers
 
+The times are for a typical laptop, and the menu says so: a computer can take more or less.
+
 | Tier | Time | Runs |
 | --- | --- | --- |
 | **Quick** | a few minutes | What JETCARP sees on this computer (`jetcarp doctor`); which graphics adapters it runs on; anything that would skew the numbers; the [JETCARP Hardware Score](../guides/this-computer.md#the-benchmark-and-the-score) (`jetcarp score --no-save`, about a minute); 16 scenes on the processor and the GPU JETCARP picks |
@@ -93,7 +95,15 @@ too. Only the speeds and the score depend on the computer.
 **Older releases** skip what they can't run, and say so: 0.4.2 has no Hardware Score and no *Fit to
 this computer*, and the scenes need 0.4.2-rc.1 or later. Each release is checked against the hashes
 recorded for it (0.4.3 changed how they are written,
-[#173](https://github.com/jprodgers/jetcarp/issues/173)).
+[#173](https://github.com/jprodgers/jetcarp/issues/173)). Each set of hashes ends at the newest
+release it was checked with. A newer one says its **expected hashes aren't checked yet**, and its
+scenes are compared between the processor and each GPU instead, so a rule a new candidate changed
+on purpose doesn't show up as a failure. The set moves on once that candidate has been checked on
+the main test machine.
+
+**The test data** (which tests each tier runs, and the hashes) comes from the repository's `main`,
+so a correction reaches everyone at once. It names the oldest script that can read it. If yours is
+older, the script stops before testing anything and asks you to download it again.
 
 How long each tier took on the main test machine, from the plan to the report:
 
@@ -111,7 +121,8 @@ the whole run corrects it as the tests go.
 
 At the end the script writes `jetcarp-field-report-<release>-<tier>-<date>.json` in the folder you
 ran it from (or in your home folder, if that one can't be written), says where it is, and offers
-to show you the whole file before you send it. It is JSON, with a short summary in words at the
+to show you the whole file before you send it (space shows the next page, and q comes back to the
+script). It is JSON, with a short summary in words at the
 top. It holds:
 
 - the release, and the checksum of the archive tested;

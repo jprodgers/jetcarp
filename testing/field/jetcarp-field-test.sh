@@ -1023,7 +1023,7 @@ t_parity() {
         return
     fi
     dim "Running: $T_CMD"
-    [ -n "$_exp" ] || warn "No expected hashes for JETCARP $V: the GPUs are compared with the processor instead."
+    [ -n "$_exp" ] || warn "JETCARP $V's expected hashes aren't checked yet: the GPUs are compared with the processor instead."
     _nogpu=""
     if grep -q '^cpu' "$CUR/modes" && ! grep -q '^gpu' "$CUR/modes"; then
         _nogpu=1
@@ -1137,7 +1137,7 @@ EOF
     [ "$_ngm" -gt 0 ] && _on="$_on and $_ngm GPU(s)"
     grep -q '^cpu' "$CUR/modes" || _on="$_ngm adapter(s)"
     _sum="$_nsc scenes x $(commas "$_gens") generations on $_on: ${_ok_all% *} of ${_ok_all#* } hashes as they should be"
-    [ -n "$_exp" ] || _sum="$_nsc scenes x $(commas "$_gens") generations on $_on, no expected hashes for this release"
+    [ -n "$_exp" ] || _sum="$_nsc scenes x $(commas "$_gens") generations on $_on; the GPUs held to the processor's hashes (this release's expected ones aren't checked yet)"
     [ -n "$_nogpu" ] && _sum="$_sum (no GPU to compare)"
     if [ -z "$_all_ok" ]; then
         test_end fail "$_sum"
@@ -1535,6 +1535,11 @@ load_data() {
     jflat "$DATA/tests.json" "$TESTS"
     _fmt=$(jget "$TESTS" .format)
     [ "$_fmt" = 1 ] || die "tests.json is format ${_fmt:-unknown}, and this script reads format 1: get the newest jetcarp-field-test.sh"
+    # The data names the oldest script that knows everything in it; an older copy stops here
+    # rather than misreading a test it doesn't know (#371).
+    _need=$(jget "$TESTS" .script)
+    case "$_need" in '' | *[!0-9]*) _need=1 ;; esac
+    [ "$_need" -le "$FT_VERSION" ] || die "this test data needs script $_need or newer, and this copy is script $FT_VERSION. Download jetcarp-field-test.sh again: https://raw.githubusercontent.com/$REPO/main/testing/field/jetcarp-field-test.sh"
     SCENES="$W/scenes"
     SCENES_TSV="$DATA/$(jget "$TESTS" .parity.scenes)"
     mkdir -p "$SCENES"
@@ -1619,6 +1624,7 @@ choose_tier() {
             printf '%s\n' "$(jget "$TESTS" ".tiers[$_i].about")" | wrap 7 | sed "s/^ */       $D/; s/\$/$R/"
             _i=$((_i + 1))
         done
+        dim "The times are for a typical laptop: this computer may take more or less."
         while :; do
             ask "Press Enter for 1 ($(jget "$TESTS" '.tiers[0].name')), or type a number:" 1
             case "$ANSWER" in
@@ -1789,7 +1795,14 @@ finish() {
     case "$ANSWER" in
         [Yy]*)
             if [ -n "$ASK" ]; then
-                if command -v less >/dev/null 2>&1; then less "$REPORT"; elif command -v more >/dev/null 2>&1; then more "$REPORT"; else cat "$REPORT"; fi
+                # less with -E leaves by itself at the end of the file, and its prompt says how
+                # to leave sooner: never a bare "(END)" with no way out shown (#371).
+                if command -v less >/dev/null 2>&1; then
+                    info "Space shows the next page; q comes back here."
+                    LESS='' less -E -X -R '-PsSpace for the next page, q to go back to the test' "$REPORT"
+                else
+                    cat "$REPORT"
+                fi
             fi
             ;;
     esac
