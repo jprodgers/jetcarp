@@ -436,7 +436,12 @@ cleanup() {
 # shellcheck disable=SC2329 # run by the INT, TERM and HUP traps
 on_stop() {
     trap '' INT TERM HUP
-    [ -n "$FINISHED" ] && exit 130
+    if [ -n "$FINISHED" ]; then
+        status_clear
+        printf '\n'
+        say "The report: $(tilde "$REPORT")"
+        exit 130
+    fi
     STOPPED=1
     status_clear
     printf '\n'
@@ -872,6 +877,18 @@ probe() { # JETCARP_GPU WGPU_BACKEND ROLE LABEL
             _lab=$(printf '%s' "$_b" | awk '{ s = $0; sub(/;.*/, "", s); sub(/^gpu \(/, "", s); sub(/\)$/, "", s); print s }')
             _used_api=$(printf '%s' "$_lab" | awk '{ s = $0; sub(/.*, /, "", s); print tolower(s) }')
             _note=$(printf '%s' "$_b" | sed -n 's/^[^;]*; //p')
+            # Asked for an adapter it won't use (WARP, say), JETCARP falls back to another:
+            # that adapter isn't used, and the one it ran on is tested in its own place (#371).
+            _other=""
+            if [ -n "$1" ]; then
+                case "$_lab" in "$1"*) ;; *) _other=1 ;; esac
+            fi
+            [ -n "$2" ] && [ "$_used_api" != "$2" ] && _other=1
+            if [ -n "$_other" ]; then
+                printf '%s\t0\t%s\t%s\t%s\t%s\n' "$3" "$4" "$1" "$2" "JETCARP ran it on $_lab instead" >>"$W/adapters.tsv"
+                dim "Not used: $4: JETCARP ran it on $_lab instead"
+                return 0
+            fi
             [ "$3" = device ] && printf '%s\t%s\n' "$1" "$_used_api" >>"$CUR/used"
             printf '%s\t1\t%s\t%s\t%s\t%s\n' "$3" "$_lab" "$1" "$2" "$_note" >>"$W/adapters.tsv"
             case "$3" in
@@ -1780,6 +1797,9 @@ run_tests() {
 
 finish() {
     write_report
+    # Every test ran and the report is written: a Ctrl-C from here on (while the report is
+    # shown, or at the last question) leaves it as it is, not marked as stopped (#371).
+    FINISHED=1
     _secs=$(($(now) - RUN_START))
     heading "Finished in $(dur "$_secs"): $N_PASS passed, $N_WARN with warnings, $N_FAIL failed, $N_SKIP skipped"
     tail -n +3 "$W/summary.all" | wrap 2 | awk -v red="$RED" -v yel="$YEL" -v d="$D" -v r="$R" '
@@ -1806,7 +1826,6 @@ finish() {
             fi
             ;;
     esac
-    FINISHED=1
     end_choice
     say ""
     say "The report: $(tilde "$REPORT")"

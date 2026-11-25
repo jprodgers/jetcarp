@@ -207,10 +207,12 @@ function Ask([string]$Prompt, [string]$Default) {
 
 function Get-Commas($n) { return [string]::Format($Inv, "{0:N0}", [double]$n) }
 function Get-Dur($s) {
+    # Whole numbers throughout: D2 takes only integers, and [Math]::Floor gives a double, which
+    # ended a run of over an hour on the Acer before its report was written (#371).
     $s = [int][Math]::Floor([double]$s + 0.5)
     if ($s -lt 60) { return "$s s" }
-    if ($s -lt 3600) { return [string]::Format($Inv, "{0} min {1:D2} s", [Math]::Floor($s / 60), $s % 60) }
-    return [string]::Format($Inv, "{0} h {1:D2} min", [Math]::Floor($s / 3600), [Math]::Floor(($s % 3600) / 60))
+    if ($s -lt 3600) { return [string]::Format($Inv, "{0} min {1:D2} s", [int][Math]::Floor($s / 60), [int]($s % 60)) }
+    return [string]::Format($Inv, "{0} h {1:D2} min", [int][Math]::Floor($s / 3600), [int][Math]::Floor(($s % 3600) / 60))
 }
 function Get-Left($s) {
     if ($s -lt 45) { return "under a minute left" }
@@ -574,6 +576,13 @@ function Test-Adapters($t) {
             $lab = ($b -replace ';.*$', '' -replace '^gpu \(', '' -replace '\)$', '')
             $usedApi = ($lab -replace '^.*, ', '').ToLowerInvariant()
             $note = ""; if ($b -match '^[^;]*; (.*)$') { $note = $Matches[1] }
+            # Asked for an adapter it won't use (WARP, say), JETCARP falls back to another:
+            # that adapter isn't used, and the one it ran on is tested in its own place (#371).
+            if (($name -and -not $lab.StartsWith($name, [StringComparison]::Ordinal)) -or ($api -and $usedApi -ne $api)) {
+                [void]$script:AdapterList.Add([pscustomobject]@{ role = $role; used = $false; label = $label; gpu = $name; api = $api; note = "JETCARP ran it on $lab instead" })
+                Dim "Not used: $($label): JETCARP ran it on $lab instead"
+                return
+            }
             if ($role -eq "device") { $used["$name|$usedApi"] = $true }
             [void]$script:AdapterList.Add([pscustomobject]@{ role = $role; used = $true; label = $lab; gpu = $name; api = $api; note = $note })
             if ($role -eq "chosen") { Info "JETCARP picks: $lab" } else { Info "Runs on: $lab" }
@@ -941,7 +950,31 @@ function Get-Scrubbed([string]$Text) {
     return $Text
 }
 
+# The report, whatever goes wrong: if the full one can't be made, a shorter one with every
+# test's summary and the error, so a run is never lost to a fault in the script's own report.
 function Write-Report {
+    try { Write-FullReport }
+    catch {
+        $err = $_.Exception.Message
+        try {
+            $r = [ordered]@{
+                format = "jetcarp-field-report"; format_version = 1
+                summary = @("JETCARP $($script:V) on $($script:System), $($script:Arch): $($script:TierName); the script could not write its full report ($err)") + @($script:Summary)
+                result = "script-error"; error = $err; stopped = [bool]$script:Stopped
+                counts = [ordered]@{ pass = $script:NPass; warn = $script:NWarn; fail = $script:NFail; skip = $script:NSkip }
+                script = [ordered]@{ name = "jetcarp-field-test.ps1"; version = $FtVersion; data = $script:DataShown }
+            }
+            try { $r.tests = @($script:Results) } catch { }
+            Write-Utf8 $script:ReportPath ((Get-Scrubbed (ConvertTo-Json -InputObject $r -Depth 40)) + "`n")
+        } catch {
+            # Not even that: keep the test's own folder, so nothing that ran is lost.
+            $script:KeepWorkNow = $true
+            throw
+        }
+    }
+}
+
+function Write-FullReport {
     $result = "pass"; if ($script:NWarn -gt 0) { $result = "warn" }; if ($script:NFail -gt 0) { $result = "fail" }; if ($script:Stopped) { $result = "stopped" }
     $secs = [int]$script:RunClock.Elapsed.TotalSeconds
     $head = "JETCARP $($script:V)$(if ($script:Pre) { ' (release candidate)' }) on $($script:System), $($script:Arch): $($script:TierName), $(Get-Dur $secs), $((Get-Date).ToString('yyyy-MM-dd HH:mm', $Inv))"
@@ -1209,6 +1242,9 @@ function Restore-Env {
 
 function Complete-Run {
     Write-Report
+    # Every test ran and the report is written: a Ctrl-C from here on (while the report is
+    # shown, or at the last question) leaves it as it is, not marked as stopped (#371).
+    $script:Finished = $true
     $secs = [int]$script:RunClock.Elapsed.TotalSeconds
     Heading "Finished in $(Get-Dur $secs): $($script:NPass) passed, $($script:NWarn) with warnings, $($script:NFail) failed, $($script:NSkip) skipped"
     foreach ($l in $script:Summary) {
@@ -1228,7 +1264,6 @@ function Complete-Run {
         Info "Space shows the next page; q comes back here."
         try { Get-Content -LiteralPath $script:ReportPath -Encoding UTF8 | Out-Host -Paging } catch { Get-Content -LiteralPath $script:ReportPath -Encoding UTF8 | Write-Host }
     }
-    $script:Finished = $true
     Complete-Choice
     Say ""
     Say "The report: $(Get-Tilde $script:ReportPath)"
@@ -1376,7 +1411,8 @@ try {
         $exitCode = 130
     } elseif ($script:Running) { Stop-Jet $script:Running }
     if ($script:Work -and (Test-Path -LiteralPath $script:Work)) {
-        if ($KeepWork) { Write-Host "Kept the temporary folder: $($script:Work)" } else { Remove-Item -Recurse -Force -LiteralPath $script:Work -ErrorAction SilentlyContinue }
+        if ($script:KeepWorkNow) { Write-Host "The report could not be written, so the temporary folder is kept, with every test's own output: $($script:Work)" -ForegroundColor Yellow }
+        elseif ($KeepWork) { Write-Host "Kept the temporary folder: $($script:Work)" } else { Remove-Item -Recurse -Force -LiteralPath $script:Work -ErrorAction SilentlyContinue }
     }
     Restore-Env
     # A Ctrl-C ends the script here, after this block, with the status a stop gives.
