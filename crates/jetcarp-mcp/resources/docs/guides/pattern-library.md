@@ -236,8 +236,13 @@ live for good, at even generations when it flashes ([B0 rules](../automata/life-
 JETCARP's hexagons have offset rows, while Golly and LifeViewer lay hexagons out
 as a sheared square grid, so a hexagon pattern is written in their layout. Pasting it back into a
 hexagon world, for example with the `rle` of a world edit (MCP, scripts, the command line), turns it
-back, so a copy pastes back as the same pattern. JETCARP's tests check this against Golly itself
-on every change: Golly reads a copy as the same cells and runs it to the same generations
+back, so a copy pastes back as the same pattern. In Golly a hexagonal rule, such as Hexagonal Life
+(`B2/S34H`), runs on its square grid, sheared: each cell's six neighbours are the eight around it
+less the north-east and south-west ones, so the pattern looks square there. Golly draws the cells
+as (slanted) hexagons only with *View → Show Cell Icons* ticked, at a zoom of 1:8 or more
+([Golly: QuickLife](../research/bibliography.md#gollynd_quicklife)). JETCARP's tests check copies
+against Golly itself on every change: Golly reads a copy as the same cells and runs it to the same
+generations
 ([How JETCARP is tested](../about/testing.md#automated-tests)). Other tilings, other rule families, rules with
 more states, a rule with birth on 0 at an odd generation of a flashing background, and worlds with
 several automata are refused, with the reason. The rest of the exchange with Golly
