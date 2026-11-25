@@ -1,0 +1,280 @@
+{
+  "format": 1,
+  "about": "What jetcarp-field-test.sh and jetcarp-field-test.ps1 run, tier by tier. Each test names its tiers, the command line it runs (every one a subcommand: never the app, never the background host, nothing drawn on screen), how its result is read (its kind, which both scripts know), its time on a typical laptop, and the oldest release with what it needs (`from`, and `to` where it stops applying). A release outside a test's range skips it, saying why. README.md says how to change this file.",
+  "tiers": [
+    {
+      "id": "quick",
+      "name": "Quick",
+      "minutes": "a few minutes",
+      "about": "what JETCARP sees on this computer, its JETCARP Hardware Score, and a first check that the GPU and the processor agree"
+    },
+    {
+      "id": "suite",
+      "name": "Suite",
+      "minutes": "10 to 20 minutes",
+      "about": "Quick, plus all 371 scenes on the processor and each GPU, two soup hunts with known results, Fit to this computer off screen, HashLife, and stepping speed"
+    },
+    {
+      "id": "extended",
+      "name": "Extended",
+      "minutes": "30 to 60 minutes",
+      "about": "Suite, plus 40 scenes run for 5,000 generations, the scenes again through every other graphics API, and a 15-minute search with its memory watched"
+    }
+  ],
+  "parity": {
+    "about": "The scenes and the hashes every machine must reach, from the release-candidate test records (each cycle's parity set: README.md). A set is used for the releases from `from` to `to` (no `to`: every later release, until a set with a later `from` takes over). A release that no set covers runs the scenes anyway and compares the processor with each GPU.",
+    "scenes": "parity/scenes.tsv",
+    "sets": [
+      {
+        "from": "0.4.3-rc.1",
+        "short": "parity/expected-0.4.3-rc.1.tsv",
+        "long": "parity/long-0.4.3-rc.1.tsv",
+        "hash": "state hash version 2: SHA-256, 64 hexadecimal digits",
+        "made": "0.4.3's set: 0.4.2's scenes, its hashes in version 2 (#173), with the B0 and Larger than Life rows as #238 changed them; checked with 0.4.3-rc.1 and rc.2 on the processor and every GPU of the three test machines"
+      },
+      {
+        "from": "0.4.2-rc.1",
+        "to": "0.4.2",
+        "short": "parity/expected-0.4.2-rc.1.tsv",
+        "long": "parity/long-0.4.2-rc.1.tsv",
+        "hash": "state hash version 1: FNV-1a, 16 hexadecimal digits",
+        "made": "0.4.2's set, made with 0.4.2-rc.1 on the Framework's processor and held through 0.4.2 (rc.1 fails scenes 365 to 369 on Intel UHD graphics: #20, fixed in rc.2)"
+      }
+    ]
+  },
+  "tests": [
+    {
+      "id": "doctor",
+      "tiers": ["quick", "suite", "extended"],
+      "name": "What JETCARP sees here",
+      "about": "the system, processor, memory, graphics adapters and drivers, and the GPU self-test, as `jetcarp doctor` reports them",
+      "kind": "doctor",
+      "args": ["doctor", "--json"],
+      "from": "0.4.0",
+      "seconds": 5
+    },
+    {
+      "id": "adapters",
+      "tiers": ["quick", "suite", "extended"],
+      "name": "Which GPUs JETCARP runs on",
+      "about": "one short run on each graphics adapter the doctor lists: which ones JETCARP uses, through which API, and why it leaves any out",
+      "kind": "adapters",
+      "from": "0.4.2",
+      "seconds": 6
+    },
+    {
+      "id": "busy",
+      "tiers": ["quick", "suite", "extended"],
+      "name": "Anything that would skew the numbers?",
+      "about": "other JETCARP programs running, how busy the processor is, and whether a laptop is on battery: close what you can for numbers that compare",
+      "kind": "busy",
+      "from": "0.4.0",
+      "seconds": 3
+    },
+    {
+      "id": "score",
+      "tiers": ["quick", "suite", "extended"],
+      "name": "JETCARP Hardware Score",
+      "about": "about a minute of JETCARP's own work, each answer checked; it names anything busy and asks first, and keeps nothing (`--no-save`)",
+      "kind": "score",
+      "args": ["score", "--no-save", "--report", "{work}/score"],
+      "report": "{work}/score.json",
+      "attach": true,
+      "from": "0.4.3-rc.1",
+      "seconds": 75
+    },
+    {
+      "id": "parity-quick",
+      "tiers": ["quick"],
+      "name": "Parity: 16 scenes",
+      "about": "16 scenes across the rule families and tilings, 300 generations each, on the processor and on the GPU JETCARP picks: every hash must match",
+      "kind": "parity",
+      "set": "short",
+      "pick": "0, 6, 9, 13, 17, 19, 64, 71, 91, 99, 102, 198, 206, 249, 314, 365",
+      "gens": 300,
+      "cpu": true,
+      "adapters": "chosen",
+      "from": "0.4.2-rc.1",
+      "seconds": 8,
+      "per_adapter": 16
+    },
+    {
+      "id": "parity-full",
+      "tiers": ["suite", "extended"],
+      "name": "Parity: all 371 scenes on each GPU",
+      "about": "every scene, 300 generations, on the processor and on each GPU: every hash must match",
+      "kind": "parity",
+      "set": "short",
+      "pick": "all",
+      "gens": 300,
+      "cpu": true,
+      "adapters": "devices",
+      "from": "0.4.2-rc.1",
+      "seconds": 140,
+      "per_adapter": 360
+    },
+    {
+      "id": "parity-long",
+      "tiers": ["extended"],
+      "name": "Parity: 40 scenes for 5,000 generations",
+      "about": "40 scenes across every family and kind of tiling, 5,000 generations each, so that slow drift shows",
+      "kind": "parity",
+      "set": "long",
+      "pick": "all",
+      "gens": 5000,
+      "cpu": true,
+      "adapters": "devices",
+      "from": "0.4.2-rc.1",
+      "seconds": 110,
+      "per_adapter": 40
+    },
+    {
+      "id": "parity-apis",
+      "tiers": ["extended"],
+      "name": "Parity on every other graphics API",
+      "about": "the 98 scenes on each adapter the earlier tests left out: the same GPU through another API (DirectX 12, OpenGL), and software renderers. One JETCARP won't use falls back to the processor, and says why",
+      "kind": "parity",
+      "set": "short",
+      "pick": "every 4, 364-370",
+      "gens": 300,
+      "cpu": false,
+      "adapters": "others",
+      "from": "0.4.2-rc.1",
+      "seconds": 0,
+      "per_adapter": 100
+    },
+    {
+      "id": "hunt-life",
+      "tiers": ["suite", "extended"],
+      "name": "Soup hunt with known results: Life",
+      "about": "5,000 Life soups on squares from seed 1, on the processor and on each GPU: every count must be the known one",
+      "kind": "check",
+      "args": ["search", "hunt", "--soups", "5000", "--seed", "1", "--library", "{work}/library", "--json"],
+      "progress": "soups",
+      "devices": ["cpu", "gpu"],
+      "adapters": "devices",
+      "say": "line",
+      "same": ["progress.by_class", "progress.distinct", "progress.died", "progress.exploded", "progress.groups[0].settled", "progress.groups[0].generations"],
+      "expect": [
+        {
+          "from": "0.4.3-rc.1",
+          "values": {
+            "progress.by_class.still life": 65436,
+            "progress.by_class.oscillator": 30744,
+            "progress.by_class.spaceship": 9420,
+            "progress.distinct": 40,
+            "progress.died": 16,
+            "progress.exploded": 0,
+            "progress.groups[0].settled": 4984,
+            "progress.groups[0].generations": 2725909
+          }
+        },
+        {
+          "from": "0.4.2",
+          "to": "0.4.2",
+          "values": {
+            "progress.by_class.still life": 64803,
+            "progress.by_class.oscillator": 30427,
+            "progress.by_class.spaceship": 9353,
+            "progress.distinct": 40,
+            "progress.died": 16,
+            "progress.exploded": 18,
+            "progress.groups[0].settled": 4966,
+            "progress.groups[0].generations": 2743758
+          }
+        }
+      ],
+      "from": "0.4.0",
+      "seconds": 20,
+      "per_adapter": 8
+    },
+    {
+      "id": "hunt-hex",
+      "tiers": ["suite", "extended"],
+      "name": "Soup hunt with known results: hexagons",
+      "about": "3,000 soups of B2/S34H on hexagons from seed 7, on the processor and on each GPU",
+      "kind": "check",
+      "args": ["search", "hunt", "--rules", "B2/S34H", "--tilings", "hex", "--soups", "3000", "--seed", "7", "--library", "{work}/library", "--json"],
+      "progress": "soups",
+      "devices": ["cpu", "gpu"],
+      "adapters": "devices",
+      "say": "line",
+      "same": ["progress.by_class", "progress.distinct", "progress.died", "progress.exploded", "progress.groups[0].settled", "progress.groups[0].generations"],
+      "expect": [
+        {
+          "from": "0.4.2",
+          "values": {
+            "progress.by_class.oscillator": 13253,
+            "progress.distinct": 19,
+            "progress.died": 10,
+            "progress.exploded": 0,
+            "progress.groups[0].settled": 2990,
+            "progress.groups[0].generations": 190405
+          }
+        }
+      ],
+      "from": "0.4.0",
+      "seconds": 5,
+      "per_adapter": 3
+    },
+    {
+      "id": "hashlife",
+      "tiers": ["suite", "extended"],
+      "name": "HashLife: a billion generations",
+      "about": "the Life scene jumped 2^30 generations on the unbounded plane: its population must be the known one",
+      "kind": "check",
+      "args": ["hashlife", "{scene:0}", "--gens", "2^30", "--json"],
+      "say": "population",
+      "expect": [
+        {
+          "from": "0.4.2",
+          "values": {
+            "population": "2118",
+            "generation": 1073741824
+          }
+        }
+      ],
+      "from": "0.4.2",
+      "seconds": 3
+    },
+    {
+      "id": "fit",
+      "tiers": ["suite", "extended"],
+      "name": "Fit to this computer, off screen",
+      "about": "the desktop background's fit (`jetcarp host tune`) for a 1920 by 1080 screen, with no background host running, so it measures off screen; it shows nothing and saves nothing (`--dry-run`)",
+      "kind": "fit",
+      "args": ["host", "tune", "--canvas", "1920x1080", "--dry-run", "--json"],
+      "from": "0.4.3-rc.1",
+      "seconds": 30
+    },
+    {
+      "id": "speed",
+      "tiers": ["suite", "extended"],
+      "name": "Stepping speed",
+      "about": "generations a second of Life and of JACA on a 1024 by 1024 grid, on the processor and on each GPU; each must reach the same hash on all of them",
+      "kind": "speed",
+      "scenes": [
+        {"name": "Life", "scene": "speed/life-1024.json", "gens": 400},
+        {"name": "JACA", "scene": "speed/jaca-1024.json", "gens": 400}
+      ],
+      "devices": ["cpu", "gpu"],
+      "adapters": "devices",
+      "from": "0.4.2",
+      "seconds": 25,
+      "per_adapter": 6
+    },
+    {
+      "id": "explore",
+      "tiers": ["extended"],
+      "name": "A 15-minute search, its memory watched",
+      "about": "an explore search over every tiling and rule family for 15 minutes, on every core but two and the GPU, its memory read every 5 seconds; it stops itself if it passes a quarter of this computer's memory",
+      "kind": "explore",
+      "args": ["search", "explore", "--minutes", "{minutes}", "--max-rss-gb", "{max_rss_gb}", "--library", "{work}/library", "--json"],
+      "minutes": 15,
+      "max_rss_share": 0.25,
+      "progress": "runs",
+      "from": "0.4.2",
+      "seconds": 915
+    }
+  ]
+}
