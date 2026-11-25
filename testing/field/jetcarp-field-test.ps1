@@ -1117,7 +1117,9 @@ function Install-Scratch {
     $wc = New-Object System.Net.WebClient
     $wc.Headers["User-Agent"] = "jetcarp-field-test"
     $task = $wc.DownloadFileTaskAsync("$($script:Base)/$($script:Archive)", $zip)
-    while (-not $task.Wait(200)) {
+    while ($true) {
+        # A failed download ends the wait with an exception: it is reported below.
+        try { if ($task.Wait(200)) { break } } catch { break }
         $got = 0; if (Test-Path -LiteralPath $zip) { $got = (Get-Item -LiteralPath $zip).Length }
         if ($script:Size -gt 0) { Show-Status "Downloading JETCARP $($script:V)" ([int]($got * 1000 / $script:Size)) "$(Get-Human $got) of $(Get-Human $script:Size)" -1 "" }
         else { Show-Status "Downloading JETCARP $($script:V)" -1 (Get-Human $got) -1 "" }
