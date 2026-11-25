@@ -512,23 +512,21 @@ pub fn doctor_programs(
     windows: bool,
     pathext: Option<&std::ffi::OsStr>,
 ) -> DoctorPrograms {
-    let same = |a: &Path, b: &Path| {
-        let (a, b) = (canonical(a), canonical(b));
+    // Windows compares paths without regard to case.
+    let same_text = |a: &Path, b: &Path| {
         if windows {
             a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
         } else {
             a == b
         }
     };
+    let same = |a: &Path, b: &Path| same_text(&canonical(a), &canonical(b));
     let on_path = jetcarps_on_path(path, windows, pathext)
         .into_iter()
         .map(|p| {
             let runs = scoop_shim_target(&p)
-                .or_else(|| {
-                    let real = jetcarp_core::paths::plain_path(canonical(&p));
-                    (real != p).then_some(real)
-                })
-                .filter(|r| r != &p);
+                .or_else(|| Some(jetcarp_core::paths::plain_path(canonical(&p))))
+                .filter(|r| !same_text(r, &p));
             let program = runs.clone().unwrap_or_else(|| p.clone());
             DoctorProgram {
                 installed_with: installed_with(&program, windows).or_else(|| {

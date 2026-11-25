@@ -189,11 +189,16 @@ fn paths_and_doctor() {
             "gpu_policy",
             "machine",
             "os",
+            "programs",
             "threads",
             "time_zone",
             "version"
         ]
     );
+    // This program and the `jetcarp`s on the PATH (#348), as JSON whether or not the text has a
+    // section on them.
+    assert!(v["programs"]["on_path"].is_array(), "{}", v["programs"]);
+    assert!(v["desktop"]["start_menu"].is_array(), "{}", v["desktop"]);
     // The time zone local times are in, and where it came from (#186).
     assert!(t.contains("\n  time zone: "), "{t}");
     assert!(
