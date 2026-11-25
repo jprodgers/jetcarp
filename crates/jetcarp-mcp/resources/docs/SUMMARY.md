@@ -107,6 +107,7 @@
 - [Credits and acknowledgements](about/credits.md)
 - [How JETCARP was made](about/how-made.md)
 - [How JETCARP is tested](about/testing.md)
+  - [Help test JETCARP](about/field-testing.md)
 - [Changelog](about/changelog.md)
 - [Roadmap](about/roadmap.md)
 - [Accessibility](about/accessibility.md)

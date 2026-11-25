@@ -372,6 +372,21 @@ day later (0.4.2: 17 November here, 18 November there).
   `.ico` and the `.icns` from one SVG (and a simpler one for the small sizes, if one is added),
   and CI checks them against it. ([Open the app](../getting-started/installing.md#open-the-app),
   [#105](https://github.com/jprodgers/jetcarp/issues/105))
+- **A field test anyone can run.** `testing/field/` has a script for Linux and macOS (POSIX sh)
+  and one for Windows (Windows PowerShell 5.1 and PowerShell 7) that test a release on the
+  computer they run on and write one report file to send back by hand. Each downloads the release
+  chosen (the newest by default, release candidates included, or one from a menu), checks it
+  against `SHA256SUMS`, and runs it from a temporary folder with JETCARP's folders inside it, so
+  the tester's own JETCARP is never touched. Quick (a few minutes) is `jetcarp doctor`, which GPUs
+  JETCARP runs on, a look for anything that would skew the numbers, the Hardware Score and 16
+  parity scenes; Suite (10 to 20) adds all 371 scenes on the processor and each GPU, soup hunts
+  with known results, HashLife, *Fit to this computer* off screen and stepping speed; Extended (30
+  to 60) the 40 long scenes, every other graphics API and a 15-minute search with its memory
+  watched. Every test is a command-line run with nothing drawn on screen; nothing is sent; the
+  report leaves out the user's name, home folder, computer name and network addresses. The tests
+  are data (`tests.json`), with the releases each applies to, so an older release skips what it
+  can't run. A weekly, advisory workflow runs both scripts on Linux, macOS and Windows.
+  ([Help test JETCARP](field-testing.md))
 
 ### Changed
 

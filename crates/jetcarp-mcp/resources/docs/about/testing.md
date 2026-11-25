@@ -844,6 +844,11 @@ four vendors (as of 0.4.2):
 | System | Fedora Linux 45, Linux 7.3, GNOME Shell 51.1 on Wayland | Windows 11 Home 26H2 (build 26300) | macOS 27.2.1 |
 | Screen | AOC Q3277, 2560 × 1440 at 60 Hz (moved to a laptop for the two-monitor sitting) | 1920 × 1080, built in | the built-in Retina panel |
 
+Beyond these three, anyone can test a release on their own computer with the field-test scripts,
+which run the candidate's own checks (the parity scenes on every GPU, hunts with known results,
+the Hardware Score, stepping speed) with nothing drawn on screen and write one report to send back:
+see [Help test JETCARP](field-testing.md).
+
 The test plan for a candidate is written down before it is tested: a document listing each step,
 what to run, and what counts as a pass. It is carried out in three parts.
 
@@ -1031,7 +1036,8 @@ keeps them free of it.
   from a live Fedora system, where only Mesa's drivers run (nouveau and NVK): NVIDIA's own driver,
   and so NVML, can't be tried there. CI's runners have no real GPU. A driver that miscomputes on
   hardware we have not tried could still give a different answer; `jetcarp verify` checks any run
-  on the CPU.
+  on the CPU. The [field test](field-testing.md) takes the same checks to other people's computers,
+  as far as those who run it reach.
 - **One person at the keyboard.** The hands-on sittings are Jimmie's: one person's eyes and habits,
   on one set of machines.
 - **What a screen reader says.** The tests read the tree a screen reader is given, not what
