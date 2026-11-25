@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "name": "Field test: Life, 1024 by 1024",
+  "description": "Conway's Game of Life from a random start on a wrapped 1024 by 1024 square grid: the field test's stepping-speed scene.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 1024, "h": 1024}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [
+    {"id": 1, "name": "Life", "rule": "B3/S23", "neighborhood": "touch", "enabled": true, "affects_others": true, "steps_per_gen": 1, "palette": "Ember", "seed": {"random": {"density": 0.35}}}
+  ]
+}

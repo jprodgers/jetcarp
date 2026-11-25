@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "name": "Field test: JACA, 1024 by 1024",
+  "description": "JACA, Life (+1) against Day & Night (-1), from a mixed random start on a wrapped 1024 by 1024 square grid: the field test's stepping-speed scene.",
+  "tiling": {"family": "square", "size": {"rect": {"w": 1024, "h": 1024}}, "boundary": "wrap"},
+  "rng_state": 1,
+  "cas": [
+    {"id": 1, "name": "JACA Life vs Day & Night", "rule": "JACA +B3/S23 -B3678/S34678", "neighborhood": "touch", "enabled": true, "affects_others": false, "steps_per_gen": 1, "palette": "Tide", "palette_neg": "Koi", "seed": {"signed": {"density": 0.3, "negative": 0.5}}}
+  ]
+}

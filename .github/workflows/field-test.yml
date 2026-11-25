@@ -1,0 +1,94 @@
+# The field test (testing/field/), run as a tester runs it, on each system's runner: the quick
+# tier, by default against the newest published release (release candidates included), asking
+# nothing, removing what it added, and keeping its report as an artifact and in the run's summary.
+# Windows runs it twice, under Windows PowerShell 5.1 and under PowerShell 7.
+#
+# Advisory: on demand and once a week, never on a pull request, and no ruleset requires it. Like
+# the scripts themselves, it needs the network, for GitHub's list of releases and the release's
+# files; the test data comes from this checkout. The runners have no GPU but Windows' WARP (which
+# JETCARP refuses) and macOS's virtual one, so the GPU's parts mostly test the scripts' fallbacks.
+name: Field test
+
+on:
+  schedule:
+    # Mondays at 10:17 UTC (5:17 AM EST).
+    - cron: "17 10 * * 1"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Optional: the release to test, such as 0.4.3-rc.2 (default: the newest)"
+        required: false
+        default: ""
+      tier:
+        description: "quick, suite or extended"
+        required: false
+        default: "quick"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: field-test-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  field-test:
+    name: Field test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux, os: ubuntu-24.04 }
+          - { name: macOS, os: macos-latest }
+          - { name: Windows, os: windows-latest }
+    env:
+      RELEASE: ${{ inputs.release }}
+      TIER: ${{ inputs.tier || 'quick' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The shell script
+        if: runner.os != 'Windows'
+        run: |
+          set -- --yes --tier "$TIER" --remove --report "$RUNNER_TEMP/field-report-sh.json"
+          if [ -n "$RELEASE" ]; then set -- "$@" --release "$RELEASE"; fi
+          sh testing/field/jetcarp-field-test.sh "$@"
+      - name: The PowerShell script, in Windows PowerShell 5.1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $a = @("-Yes", "-Tier", $env:TIER, "-Remove", "-Report", (Join-Path $env:RUNNER_TEMP "field-report-ps51.json"))
+          if ($env:RELEASE) { $a += @("-Release", $env:RELEASE) }
+          powershell -NoProfile -ExecutionPolicy Bypass -File testing\field\jetcarp-field-test.ps1 @a
+          exit $LASTEXITCODE
+      - name: The PowerShell script, in PowerShell 7
+        if: ${{ runner.os == 'Windows' && !cancelled() }}
+        shell: pwsh
+        run: |
+          $a = @("-Yes", "-Tier", $env:TIER, "-Remove", "-Report", (Join-Path $env:RUNNER_TEMP "field-report-ps7.json"))
+          if ($env:RELEASE) { $a += @("-Release", $env:RELEASE) }
+          pwsh -NoProfile -ExecutionPolicy Bypass -File testing\field\jetcarp-field-test.ps1 @a
+          exit $LASTEXITCODE
+      - name: The reports' summaries, in the run's summary
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          for f in "$RUNNER_TEMP"/field-report-*.json; do
+            [ -f "$f" ] || continue
+            {
+              echo "### $(basename "$f")"
+              echo
+              python3 -c 'import json, sys; [print("    " + l) for l in json.load(open(sys.argv[1], encoding="utf-8"))["summary"]]' "$f"
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: field-report-${{ matrix.name }}
+          path: ${{ runner.temp }}/field-report-*.json
+          if-no-files-found: warn
+          retention-days: 90
