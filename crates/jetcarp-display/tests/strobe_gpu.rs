@@ -15,6 +15,8 @@
 //! `JETCARP_REQUIRE_GPU=1` ([`jetcarp_gpu::no_gpu`]). `gpu_cost` (ignored; run with
 //! `-- --ignored --nocapture`) times the pass at common screen sizes.
 
+mod common;
+
 use jetcarp_core::strobe::frame::{TileMap, reduce, reduce_both};
 use jetcarp_core::strobe::soften::{Plan, Softener};
 use jetcarp_display::strobe_gpu::{Shown, StrobeGpu};
@@ -28,38 +30,18 @@ struct Gpu {
 }
 
 /// The GPU, or None after [`jetcarp_gpu::no_gpu`] (which fails the test instead under
-/// `JETCARP_REQUIRE_GPU=1`).
+/// `JETCARP_REQUIRE_GPU=1`): a device of the test's own on the adapter the program chose once
+/// ([`common::device`]).
 fn gpu() -> Option<Gpu> {
-    const WHAT: &str = "the strobe guard's GPU pass tests";
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let choice =
-        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
-            Ok(c) => c,
-            Err(e) => {
-                jetcarp_gpu::no_gpu(WHAT, &e);
-                return None;
-            }
-        };
-    if let Err(e) = &choice.usable {
-        jetcarp_gpu::no_gpu(WHAT, e);
-        return None;
-    }
-    let name = choice.info.name.clone();
-    let adapter = choice.adapter;
     let ts = wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS;
-    let timestamps = adapter.features().contains(ts);
-    let mut desc = jetcarp_display::painter::device_descriptor(&adapter);
-    if timestamps {
-        desc.required_features |= ts;
-    }
-    let (device, queue) = match pollster::block_on(adapter.request_device(&desc)) {
-        Ok(d) => d,
-        Err(e) => {
-            jetcarp_gpu::no_gpu(WHAT, &format!("{name} refused a device: {e}"));
-            return None;
+    let (adapter, device, queue) = common::device("the strobe guard's GPU pass tests", |a| {
+        let mut desc = jetcarp_display::painter::device_descriptor(a);
+        if a.features().contains(ts) {
+            desc.required_features |= ts;
         }
-    };
+        desc
+    })?;
+    let timestamps = device.features().contains(ts);
     let info = adapter.get_info();
     eprintln!("adapter: {}", info.name);
     // Windows' WARP, on which Windows CI runs these (WARP 1.0.22, #321), is slow at this pass:

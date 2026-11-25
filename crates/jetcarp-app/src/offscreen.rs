@@ -34,9 +34,9 @@ impl Offscreen {
     /// `JETCARP_REQUIRE_GPU=1`: [`jetcarp_gpu::no_gpu`]).
     pub fn new(width: u32, height: u32) -> Option<Offscreen> {
         const WHAT: &str = "the app's offscreen tests";
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        // As the window would choose (`jetcarp_gpu::select`), with no surface.
+        // As the program opens the GPU (`jetcarp_gpu::select::new_instance`, #323), and as the
+        // window would choose (`jetcarp_gpu::select`), with no surface.
+        let instance = jetcarp_gpu::select::new_instance();
         let adapter =
             match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None)
             {

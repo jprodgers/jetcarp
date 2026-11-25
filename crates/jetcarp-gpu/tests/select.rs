@@ -18,9 +18,10 @@ fn usable_software(all: &[wgpu::Adapter]) -> bool {
     })
 }
 
+/// The adapters, as the program lists them: through [`select::new_instance`], with the backends
+/// JETCARP opens (#323).
 fn adapters() -> Vec<wgpu::Adapter> {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let instance = select::new_instance();
     pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()))
 }
 

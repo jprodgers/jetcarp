@@ -6,6 +6,32 @@
 
 use jetcarp_core::*;
 use jetcarp_gpu::GpuSim;
+use std::sync::OnceLock;
+
+/// A new stepper on the tests' one device, or None after [`jetcarp_gpu::no_gpu`].
+///
+/// Both tests and every case share one device, opened once (#52, #370). Each stepper came with a
+/// device of its own before: one test opened and dropped sixteen, one after another, while the
+/// other's ran, and on the Windows laptop's NVIDIA and Intel GPUs this program crashed
+/// (0xC0000005) or hung now and then with both tests running, never with one at a time (#52). The
+/// failures here are the tests' own (a batch made to fail), not the device's, so one device
+/// serves every case, and each case still gets a stepper of its own. A stepper's readbacks wait
+/// for their own results, so steppers can share a device.
+fn stepper() -> Option<GpuSim> {
+    static DEVICE: OnceLock<Option<(wgpu::Device, wgpu::Queue, String)>> = OnceLock::new();
+    let (device, queue, name) = DEVICE
+        .get_or_init(
+            || match jetcarp_gpu::select::compute_device("jetcarp-gpu recovery tests") {
+                Ok(d) => Some(d),
+                Err(e) => {
+                    jetcarp_gpu::no_gpu("the GPU recovery tests", &e);
+                    None
+                }
+            },
+        )
+        .as_ref()?;
+    Some(GpuSim::new(device.clone(), queue.clone(), name.clone()))
+}
 
 fn scene(t: TilingSpec, rule: &str, seed: SeedSpec) -> Scene {
     let mut s = Scene::new(t);
@@ -68,13 +94,7 @@ fn a_run_that_fails_part_way_leaves_the_world_as_it_was() {
     let gens = 200;
     for (what, sc) in cases() {
         for (nth, late) in [(2, false), (2, true), (1, true), (3, false)] {
-            let mut sim = match GpuSim::headless() {
-                Ok(s) => s,
-                Err(e) => {
-                    jetcarp_gpu::no_gpu("the GPU recovery tests", &e);
-                    return;
-                }
-            };
+            let Some(mut sim) = stepper() else { return };
             let what = format!("{what}, batch {nth} failing (late: {late})");
             let mut gw = World::from_scene(&sc).unwrap();
             let start = state(&gw);
@@ -98,13 +118,7 @@ fn a_run_that_fails_part_way_leaves_the_world_as_it_was() {
 /// on the GPU and part way on the CPU still ends as the CPU's.
 #[test]
 fn gpu_and_cpu_generations_mix_around_a_failure() {
-    let mut sim = match GpuSim::headless() {
-        Ok(s) => s,
-        Err(e) => {
-            jetcarp_gpu::no_gpu("the GPU recovery tests", &e);
-            return;
-        }
-    };
+    let Some(mut sim) = stepper() else { return };
     for (what, sc) in cases() {
         let mut gw = World::from_scene(&sc).unwrap();
         // 30 generations on the GPU, a failing run, then 70 more on the GPU.

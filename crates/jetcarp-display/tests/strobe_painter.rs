@@ -7,6 +7,8 @@
 //! ([`jetcarp_gpu::no_gpu`]). `JETCARP_STROBE_RECORD=DIR` also writes each frame as a PNG there,
 //! for IRIS.
 
+mod common;
+
 use jetcarp_core::strobe::flash::FlashMeter;
 use jetcarp_core::strobe::frame::reduce;
 use jetcarp_core::strobe::{MAX_TRANSITIONS, Viewing};
@@ -24,35 +26,12 @@ const W: u32 = 320;
 const H: u32 = 240;
 
 /// The GPU, or None after [`jetcarp_gpu::no_gpu`] (which fails the test instead under
-/// `JETCARP_REQUIRE_GPU=1`).
+/// `JETCARP_REQUIRE_GPU=1`): a device of the test's own on the adapter the program chose once
+/// ([`common::device`]).
 fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
-    const WHAT: &str = "the strobe guard's painter tests";
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let choice =
-        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
-            Ok(c) => c,
-            Err(e) => {
-                jetcarp_gpu::no_gpu(WHAT, &e);
-                return None;
-            }
-        };
-    if let Err(e) = &choice.usable {
-        jetcarp_gpu::no_gpu(WHAT, e);
-        return None;
-    }
-    match pollster::block_on(
-        choice
-            .adapter
-            .request_device(&wgpu::DeviceDescriptor::default()),
-    ) {
-        Ok(d) => Some(d),
-        Err(e) => {
-            let name = &choice.info.name;
-            jetcarp_gpu::no_gpu(WHAT, &format!("{name} refused a device: {e}"));
-            None
-        }
-    }
+    let (_, device, queue) =
+        common::device("the strobe guard's painter tests", |_| Default::default())?;
+    Some((device, queue))
 }
 
 /// A stage showing a Margolus Tron field on an empty background (it flips every generation) at

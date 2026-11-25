@@ -1,6 +1,8 @@
 //! A sweep card's picture is the screen's own pixels: a checkerboard of cells `px` pixels across
 //! comes out as blocks of exactly `px` pixels.
 
+mod common;
+
 use jetcarp_core::{Boundary, CaSpec, Scene, SeedSpec, TilingSpec};
 use jetcarp_display::crop;
 use jetcarp_display::host_settings::{Size, TunedScene, Tuning};
@@ -12,36 +14,11 @@ use jetcarp_display::stage::{Stage, no_lookup};
 use jetcarp_display::tuning::crop_size;
 use std::time::{Duration, Instant};
 
-/// The display adapter as JETCARP chooses it. No usable one skips the test, or fails it under
-/// `JETCARP_REQUIRE_GPU=1`.
+/// The display adapter as JETCARP chooses it, and a device on it ([`common::device`]). No usable
+/// one skips the test, or fails it under `JETCARP_REQUIRE_GPU=1`.
 fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
-    const WHAT: &str = "the sweep card picture test";
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let choice =
-        match jetcarp_gpu::select::pick(&instance, jetcarp_gpu::select::Purpose::Display, None) {
-            Ok(c) => c,
-            Err(e) => {
-                jetcarp_gpu::no_gpu(WHAT, &e);
-                return None;
-            }
-        };
-    if let Err(e) = &choice.usable {
-        jetcarp_gpu::no_gpu(WHAT, e);
-        return None;
-    }
-    match pollster::block_on(
-        choice
-            .adapter
-            .request_device(&wgpu::DeviceDescriptor::default()),
-    ) {
-        Ok(d) => Some(d),
-        Err(e) => {
-            let name = &choice.info.name;
-            jetcarp_gpu::no_gpu(WHAT, &format!("{name} refused a device: {e}"));
-            None
-        }
-    }
+    let (_, device, queue) = common::device("the sweep card picture test", |_| Default::default())?;
+    Some((device, queue))
 }
 
 /// A stage showing a still checkerboard on a `w` by `h` square grid, built at `px` pixels a cell
