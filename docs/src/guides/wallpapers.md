@@ -404,9 +404,12 @@ work a cell, from its tiling's neighbours, its rules (and their passes a generat
 its drawing, with the GPU's steps counted at the GPU's speed. A rotation whose scenes all step on
 one device has one scene measured; one that mixes them (Life on the GPU beside the Wolfram series'
 rows on the processor, say) has two, each found by its own binary search, one after the other. A
-rule series, such as the Wolfram series, is one scene, measured by its first rule. A scene that is a
-pattern placed on an empty field (a glider gun, an ant from one cell), or that is not rebuilt to fill
-the screen, keeps its own size, and is not one of those measured.
+rule series, such as the Wolfram series, is one scene, since each of its rules costs the same a
+cell: it is measured and pictured by the first of its rules that changes cells of its seed, and its
+row of cards says which (the Wolfram series' first rule, rule 0, draws nothing from its one cell, so
+its rule 1). A scene that is a pattern placed on an empty field (a glider gun, an ant from one
+cell), or that is not rebuilt to fill the screen, keeps its own size, and is not one of those
+measured.
 
 **A few sizes.** The measured scene is shown at a size for a second (the first quarter to warm up,
 the rest measured), and a binary search chooses the next: finer if it was within the limits,
@@ -479,7 +482,9 @@ takes its place only when clearly within them; the other scenes keep their sizes
 same fit recommends the same sizes.
 
 **The cards.** The measured scene has a row of cards, one for each size tried: a picture of the
-screen at that size, shown at the screen's own pixels so a one-pixel cell looks as it will; the size
+middle of the screen at that size, shown at the screen's own pixels so a one-pixel cell looks as it
+will (a scene drawn row by row from the top, as the Wolfram series' rules are, is pictured where its
+rows are: in the second each size shows for, they do not reach the middle); the size
 and the number of cells; the processor, GPU (*unknown* where it could not be measured, see *What it
 measures* below) and frame rate; and whether it is within the limits. The row scrolls sideways, with
 a trackpad's sideways swipe or with shift and the mouse wheel, and opens at the card the scene shows
@@ -487,7 +492,9 @@ at. *Recommended* marks the finest size within the limits, and each scene shows 
 size unless you choose another. Click a card to choose it: the rest of the rotation follows it.
 A rotation that mixes devices has a row for each measured scene, each saying which device it
 steps on. Below the cards, each other scene has its size, a menu of the sizes it can take, and how
-its work a cell compares with that of the scene measured on its device. *Use this size for every
+its work a cell compares with that of the scene measured on its device: side by side where the pane
+is wide enough, else that note under the scene's name and menu, as in the pane docked beside the
+grid. *Use this size for every
 scene on this tiling* gives a chosen card's size to the screen's other scenes on the same tiling,
 *Use the recommended size for the rest* settles every scene you have not chosen, and *Use the
 scenes' own sizes* forgets the fit.
@@ -529,7 +536,10 @@ share and the scenes it measures (`measured`) in `shares`, and the last how long
 size in pixels such as `--pick 4`) places sizes from the last fit while it is still current: found
 by this JETCARP, for each screen's rotation and every one of its scenes, on the same monitor (its
 size, pixels per point and refresh rate), within the same limits and on the same GPU. Nothing is
-measured, and it takes a moment. Otherwise it fits first; `--fresh` fits again anyway.
+measured, and it takes a moment. Otherwise it fits first; `--fresh` fits again anyway. A size in
+pixels gives each lattice scene that cell size, and each scene on an aperiodic tiling the level
+whose tiles are nearest it, of all the levels it can show at, whether or not the fit tried that
+level: `--pick 4` on a 1920 × 1080 screen gives Penrose waves level 5, its tiles 5.1 pixels.
 
 **What it measures.** The processor time is JETCARP's own, on every thread. With several screens
 measured at once, the process's processor and GPU time is shared between them by how long each
