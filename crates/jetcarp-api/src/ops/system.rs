@@ -1141,6 +1141,11 @@ fn dir_is_empty(d: &Path) -> bool {
 // be added to them, as well as to `folders.md` ("What lives in each folder"), or `uninstall` will
 // refuse a folder that holds it. The uninstall test (`tests/uninstall_folders.rs`) fills a
 // folder with every name on them.
+//
+// For the settings folder a test also gathers the names from the code (#349:
+// `tests/settings_files_listed.rs`): every path built in it with `.join`, on `config_dir()` or on
+// a variable named `settings` or `config` that holds the folder, must name something on these
+// lists. A new file there fails that test until it is listed.
 
 /// What may be inside one of JETCARP's folders.
 #[derive(Clone, Copy)]
@@ -1217,8 +1222,10 @@ pub(crate) fn runtime_entry(name: &str) -> bool {
 
 /// The files JETCARP keeps at the top of the settings folder: the app's, the host's and setup's
 /// settings, the data folder chosen in setup, the answer to the photosensitive seizure warning,
-/// the GPU setting and its self-tests, the host's command, the user's own desktop picture, and
-/// the two macOS screen saver records.
+/// the GPU setting and its self-tests, the host's command, the user's own desktop picture, the
+/// machine as last measured and the person's own limits (#232, #349), and the three macOS screen
+/// saver records (what it replaced, the wallpaper store before removing it, and what it was
+/// built from, #287).
 const SETTINGS_FILES: &[&str] = &[
     "app.json",
     "host.json",
@@ -1229,8 +1236,11 @@ const SETTINGS_FILES: &[&str] = &[
     "gpu-checks.json",
     "host-program",
     "desktop-picture.json",
+    jetcarp_core::machine::MACHINE_FILE,
+    jetcarp_core::machine::limits::LIMITS_FILE,
     "screen-saver-before.plist",
     "wallpaper-store-before-saver-remove.plist",
+    "screen-saver-state.json",
 ];
 
 /// The publisher's files (`<settings>/pack/`): the private key and its public half, who the
@@ -1257,6 +1267,15 @@ const SETTINGS_FOLDERS: &[(&str, Inside)] = &[
     ("pack", Inside::Named(PACK_FILES)),
     ("http-tokens", Inside::Named(HTTP_TOKEN_FILES)),
 ];
+
+/// Whether `uninstall --settings` counts `name`, at the top of the settings folder, as
+/// JETCARP's: one of the files it keeps there (or one of them being written), or one of its
+/// folders. For the test that gathers the names from the code (#349).
+pub fn settings_entry_listed(name: &str) -> bool {
+    SETTINGS_FILES.contains(&name)
+        || being_written(name, SETTINGS_FILES)
+        || SETTINGS_FOLDERS.iter().any(|(f, _)| *f == name)
+}
 
 /// A temporary file JETCARP writes beside one of `names` and then renames into place
 /// (`setup.json.tmp-123`, `raters.tmp123`, `gpu.json.tmp`, `.host-endpoint.json.123.tmp`): the

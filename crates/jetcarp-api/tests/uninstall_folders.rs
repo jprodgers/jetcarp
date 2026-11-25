@@ -112,6 +112,12 @@ fn settings_of_jetcarps(d: &Path) {
         "desktop-picture.json",
         "screen-saver-before.plist",
         "wallpaper-store-before-saver-remove.plist",
+        // The machine as last measured and the person's own limits (#232; `machine.json` is
+        // written on a plain start since #324), and the macOS screen saver's record of what it
+        // was built from (#287): #349.
+        "machine.json",
+        "limits.json",
+        "screen-saver-state.json",
         "setup.json.tmp-4242",
         "screensavers/calm.json",
         "rotations/evening.json",
