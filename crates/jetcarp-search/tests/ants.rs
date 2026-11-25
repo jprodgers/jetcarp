@@ -616,3 +616,107 @@ fn ant_scenes_and_media_take_a_palette() {
     // Nothing was stored.
     assert!(media::stored(&lib, "ant", &r.id).unwrap().is_empty());
 }
+
+/// The runs of rc.1's sitting (strings 2 to 4 on squares, 20,000 steps), by rule.
+fn square_run(rule: &str) -> AntRow {
+    run_one(
+        &parse_rule(rule).unwrap(),
+        &tiling("square"),
+        &Start::Empty,
+        &lim(20_000),
+    )
+    .unwrap()
+}
+
+/// Highways on squares whose loop is narrow, as every highway rc.1's sitting found was: their
+/// loop is drawn on a grid padded to the 8 by 8 unit cells a grid needs (#339), so it renders,
+/// closes, and is what `jetcarp media render --ant` writes.
+#[test]
+fn narrow_highways_render_their_loop() {
+    use jetcarp_core::media::{MediaMode, MediaOptions};
+    use jetcarp_store::media::{self, MediaTarget};
+    let lib = temp_lib("narrow-highways");
+    let rows: Vec<AntRow> = ["LRUR", "LRN", "LURR", "ULRN", "ULNR", "UULL", "ULL"]
+        .into_iter()
+        .map(square_run)
+        .collect();
+    lib.ants_flush(0, &rows, None, None).unwrap();
+    let o = MediaOptions {
+        frames: false,
+        ..Default::default()
+    };
+    for r in &rows {
+        assert_eq!(r.outcome, Outcome::Highway, "{}", r.rule);
+        let a = jetcarp_store::media::ants::highway_animation(r, &o)
+            .unwrap_or_else(|e| panic!("{}: {e}", r.rule));
+        assert!(a.seamless, "{}: the loop closes", r.rule);
+        assert_eq!(a.window_kind, "moving");
+        assert_eq!(
+            a.frames.len() as u64,
+            r.period.unwrap().min(240),
+            "{}",
+            r.rule
+        );
+        let done = media::render(&lib, &MediaTarget::Ant(r.id.clone()), &o)
+            .unwrap_or_else(|e| panic!("{}: {e}", r.rule));
+        assert_eq!(done.mode, MediaMode::Alone, "{}", r.rule);
+        assert!(done.animation().is_some() && done.file("poster").is_some());
+    }
+}
+
+/// A chaotic ant whose cells make a long thin strip, as LLRU's (nine cells by 2,201 after
+/// 20,000 steps) and UNUL's (one by 6,668) do, has a build-up no worse than 1:4 and large enough
+/// to see (#340): its steps up to where the strip gets four times as long as it is wide, the strip
+/// leaving the tangle. ULLL's blob shows its whole run, as before.
+#[test]
+fn a_long_thin_build_up_is_drawn_near_square() {
+    use jetcarp_core::media::{MediaMode, MediaOptions};
+    use jetcarp_store::media::ants::{BUILD_FRAMES, build_gens, build_steps};
+    use jetcarp_store::media::{self, MediaTarget};
+    let lib = temp_lib("long-thin");
+    let rows: Vec<AntRow> = ["LLRU", "UNUL", "ULLL"]
+        .into_iter()
+        .map(square_run)
+        .collect();
+    lib.ants_flush(0, &rows, None, None).unwrap();
+    let o = MediaOptions {
+        frames: false,
+        ..Default::default()
+    };
+    for r in &rows {
+        assert_eq!(r.outcome, Outcome::Chaotic, "{}", r.rule);
+        let done = media::render(&lib, &MediaTarget::Ant(r.id.clone()), &o)
+            .unwrap_or_else(|e| panic!("{}: {e}", r.rule));
+        assert_eq!(done.mode, MediaMode::Seed, "{}", r.rule);
+        let a = done.animation().unwrap();
+        let (w, h) = (a.width, a.height);
+        assert!(
+            w.max(h) <= 4 * w.min(h),
+            "{}: {w} x {h} is worse than 1:4",
+            r.rule
+        );
+        let cell = a.render["cell_px"].as_f64().unwrap();
+        assert!(
+            w.min(h) >= 100 && cell >= 4.0,
+            "{}: {w} x {h} at {cell} pixels a cell is too small to see",
+            r.rule
+        );
+        // A strip shows its steps up to where it gets four times as long as it is wide.
+        let steps = build_steps(r);
+        if r.rule.ends_with("ULLL") {
+            assert_eq!(steps, r.steps, "{}: the whole run", r.rule);
+        } else {
+            assert!(
+                steps >= 50 && steps < r.steps / 10,
+                "{}: {steps} steps of {}",
+                r.rule,
+                r.steps
+            );
+        }
+        assert!(build_gens(r) <= BUILD_FRAMES, "{}", r.rule);
+        // The scene the window opens is the same run, to the same step.
+        let sc = jetcarp_store::media::ants::build_scene(r).unwrap();
+        let per = sc.cas[0].steps_per_gen as u64;
+        assert!(build_gens(r) * per >= steps, "{}", r.rule);
+    }
+}

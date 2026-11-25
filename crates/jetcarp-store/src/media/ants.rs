@@ -4,12 +4,18 @@
 //! - **Build-up** (mode `seed`, every outcome): the run from step 0 on a dead-edged grid that
 //!   just holds every cell the ant reaches (a scene, so the app replays it too), about 150
 //!   frames. A highway runs to its onset plus four periods, so the highway shows leaving the
-//!   tangle; other runs show their whole length (at most [`BUILD_MAX_STEPS`]).
+//!   tangle; other runs show their whole length (at most [`BUILD_MAX_STEPS`]). A run whose cells
+//!   would make a strip more than [`BUILD_MAX_RATIO`] times as long as it is wide (an ant that
+//!   builds a strip, as `LLRU` and `UNUL` do on squares) shows its steps up to the last before
+//!   that, the strip leaving the tangle (#340): drawn whole it would be a sliver too thin to see.
 //! - **Highway loop** (mode `alone`, highways only, the automatic choice for them): one period of
 //!   the steady highway in a window that moves with the ant at the highway's speed, a frame per
 //!   step (or per a divisor of the period, at most 240 frames). The loop starts enough periods
 //!   after the onset that the window sees only highway, so the frame after the last is the first
 //!   pixel for pixel (checked; `seamless` says so).
+//!
+//! Every grid is at least 8 by 8 unit cells, the smallest a grid can be: a narrow highway's
+//! loop, a few cells wide on squares, is drawn on a grid padded to that (#339).
 
 use crate::AntRow;
 use jetcarp_core::ants::plane::{Ant, Compiled, Field, Lattice, step};
@@ -27,8 +33,25 @@ pub const BUILD_MAX_STEPS: u64 = 2_000_000;
 /// Frames in a build-up.
 pub const BUILD_FRAMES: u64 = 150;
 
+/// A build-up is at most this many times as long as it is wide in the plane (#340).
+pub const BUILD_MAX_RATIO: f64 = 4.0;
+
+/// Unit cells of margin around what a build-up's run reaches.
+const BUILD_MARGIN: i32 = 3;
+
 /// The engine run to `steps`: its field, the ant, and the box of unit cells reached.
 fn replay(row: &AntRow, steps: u64) -> Result<(Lattice, Field, Ant, [i32; 4]), String> {
+    walk(row, steps, |_, _, _| true)
+}
+
+/// The engine run from the run's start for `steps` steps, `grown(lattice, t, box)` called with
+/// the box of unit cells reached at the start (`t` = 0) and after each step `t` that grows it;
+/// the run stops there when it returns false. The field, the ant, and the box when it stopped.
+fn walk(
+    row: &AntRow,
+    steps: u64,
+    mut grown: impl FnMut(&Lattice, u64, [i32; 4]) -> bool,
+) -> Result<(Lattice, Field, Ant, [i32; 4]), String> {
     let lat = Lattice::new(&row.tiling)?;
     let m = parse_rule(&row.rule)?;
     let comp = Compiled::new(&m, &lat);
@@ -38,21 +61,65 @@ fn replay(row: &AntRow, steps: u64) -> Result<(Lattice, Field, Ant, [i32; 4]), S
         b = [b[0].min(i), b[1].min(j), b[2].max(i), b[3].max(j)];
     }
     let mut a = Ant::default();
-    for _ in 0..steps {
-        step(&lat, &comp, &mut f, &mut a);
-        b = [b[0].min(a.i), b[1].min(a.j), b[2].max(a.i), b[3].max(a.j)];
+    if grown(&lat, 0, b) {
+        for t in 1..=steps {
+            step(&lat, &comp, &mut f, &mut a);
+            let was = b;
+            b = [b[0].min(a.i), b[1].min(a.j), b[2].max(a.i), b[3].max(a.j)];
+            if b != was && !grown(&lat, t, b) {
+                break;
+            }
+        }
     }
     Ok((lat, f, a, b))
 }
 
+/// How many times as long as it is wide, in the plane, a grid is that holds the unit cells `b`
+/// with `m` cells of margin, as [`grid_for`] makes it: the box of the parallelogram its columns
+/// and rows span.
+fn grid_ratio(lat: &Lattice, b: [i32; 4], m: i32) -> f64 {
+    let cols = (b[2] - b[0] + 1 + 2 * m).max(MIN_GRID as i32);
+    let rows = (b[3] - b[1] + 1 + 2 * m).max(MIN_GRID as i32);
+    let (u, v) = (lat.world([cols, 0]), lat.world([0, rows]));
+    let (w, h) = (u[0].abs() + v[0].abs(), u[1].abs() + v[1].abs());
+    w.max(h) / w.min(h).max(1e-9)
+}
+
+/// The last step, of the first `steps`, before what the run reaches gets more than
+/// [`BUILD_MAX_RATIO`] times as long as it is wide (or than its start, a long soup, already is):
+/// `steps` when it never does.
+fn strip_end(row: &AntRow, steps: u64) -> Result<u64, String> {
+    let mut most = BUILD_MAX_RATIO;
+    let mut end = steps;
+    walk(row, steps, |lat, t, b| {
+        let r = grid_ratio(lat, b, BUILD_MARGIN);
+        if t == 0 {
+            most = most.max(r);
+        } else if r > most {
+            end = t - 1;
+            return false;
+        }
+        true
+    })?;
+    Ok(end)
+}
+
+/// The fewest unit cells a grid has across and down ([`Topology::build`] refuses fewer).
+const MIN_GRID: u32 = 8;
+
 /// A dead-edged grid holding the unit cells `b` (relative to an origin) with `m` cells of
-/// margin: the tiling spec and the unsheared lattice coordinates of the origin in it.
+/// margin, and at least [`MIN_GRID`] unit cells each way (a narrow highway's loop is fewer, #339:
+/// the box is centred in the larger grid): the tiling spec and the unsheared lattice coordinates
+/// of the origin in it.
 fn grid_for(
     row: &AntRow,
     b: [i32; 4],
     m: i32,
 ) -> Result<(jetcarp_core::topology::TilingSpec, i32, i32), String> {
-    let h = (b[3] - b[1] + 1 + 2 * m) as u32;
+    let rows = (b[3] - b[1] + 1 + 2 * m) as u32;
+    let h = rows.max(MIN_GRID);
+    // Rows above the box: its margin, and half of any rows added to reach the smallest grid.
+    let above = m + ((h - rows) / 2) as i32;
     let mut w = (b[2] - b[0] + 1 + 2 * m) as u32 + h;
     for _ in 0..4 {
         let mut spec = jetcarp_core::pattern::tiling_identity(&row.tiling);
@@ -60,15 +127,17 @@ fn grid_for(
         spec.boundary = Boundary::Dead;
         let topo = Topology::build(&spec)?;
         let g = topo.lattice().ok_or("not a lattice")?;
-        let j0 = m - b[1];
+        let j0 = above - b[1];
         let rows = (b[1]..=b[3]).map(|j| g.row_start[(j + j0) as usize]);
         let (lo, hi) = rows.fold((i32::MAX, i32::MIN), |(lo, hi), r| (lo.min(r), hi.max(r)));
         let i0 = hi - b[0] + m;
         let need = (i0 + b[2] + m + 1 - lo) as u32;
         if need <= w {
-            // Trim the width to what is needed (row starts do not depend on it).
-            spec.size = Some(SizeSpec::Rect { w: need, h });
-            return Ok((spec, i0, j0));
+            // Trim the width to what is needed (row starts do not depend on it), or widen it to
+            // the smallest grid with the box in the middle.
+            let pad = MIN_GRID.saturating_sub(need);
+            spec.size = Some(SizeSpec::Rect { w: need + pad, h });
+            return Ok((spec, i0 + (pad / 2) as i32, j0));
         }
         w = need;
     }
@@ -81,13 +150,16 @@ fn index_in(topo: &Topology, i: i32, j: i32, k: u8) -> Result<usize, String> {
         .ok_or_else(|| format!("cell ({i}, {j}, {k}) is outside the media grid (internal error)"))
 }
 
-/// Steps a build-up shows: the onset plus four periods for a highway (or orbit), else the run.
+/// Steps a build-up shows: the onset plus four periods for a highway (or orbit), else the run;
+/// and fewer when its cells would make a strip more than [`BUILD_MAX_RATIO`] times as long as it
+/// is wide (module docs).
 pub fn build_steps(row: &AntRow) -> u64 {
-    match (row.outcome, row.onset, row.period) {
+    let steps = match (row.outcome, row.onset, row.period) {
         (Outcome::Highway | Outcome::Periodic, Some(o), Some(p)) => o + 4 * p.max(1),
         _ => row.steps,
     }
-    .clamp(1, BUILD_MAX_STEPS)
+    .clamp(1, BUILD_MAX_STEPS);
+    strip_end(row, steps).unwrap_or(steps).max(1)
 }
 
 /// The palette ant scenes open in.
@@ -100,7 +172,7 @@ pub const SCENE_PALETTE: &str = "Prism";
 /// [`render::recolor_scene`]: jetcarp_core::render::recolor_scene
 pub fn scene(row: &AntRow, steps: u64, steps_per_gen: u32) -> Result<Scene, String> {
     let (_, _, _, b) = replay(row, steps)?;
-    let (spec, i0, j0) = grid_for(row, b, 3)?;
+    let (spec, i0, j0) = grid_for(row, b, BUILD_MARGIN)?;
     let topo = Topology::build(&spec)?;
     let start = index_in(&topo, i0, j0, 0)?;
     let mut sc = Scene::new(spec);
