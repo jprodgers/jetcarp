@@ -45,6 +45,10 @@ const COMMENT: &str = "Cellular automata on almost any tiling of the plane";
 pub const LAUNCHER_EXE: &str = "jetcarpw.exe";
 /// The file beside that copy naming the `jetcarp.exe` it starts (`launcher_find.rs` reads it).
 pub const RECORD: &str = "jetcarp-program";
+/// Windows: the AppUserModelID JETCARP's windows and its Start menu entry share (#347), by which
+/// the taskbar knows the app's windows for the entry's, and pins the entry: the windowless
+/// launcher, not the console program `jetcarp.exe` it starts. The name winget knows JETCARP by.
+pub const APP_USER_MODEL_ID: &str = "JimmieRodgers.JETCARP";
 
 /// Windows: the folder of JETCARP's own that the Start menu entry starts from, which no upgrade
 /// touches: `%LOCALAPPDATA%\jetcarp\launcher`, beside the runtime files and the screen saver.
@@ -726,10 +730,12 @@ pub fn describe() -> String {
 #[cfg(windows)]
 mod shortcut {
     use std::path::{Path, PathBuf};
+    use windows::Win32::System::Com::StructuredStorage::PropVariantClear;
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
         CoUninitialize, IPersistFile, STGM_READ,
     };
+    use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
     use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
     use windows::core::{HSTRING, Interface};
 
@@ -754,7 +760,7 @@ mod shortcut {
     }
 
     /// Writes the shortcut `lnk` to `target`, which shows the target's own icon and starts in its
-    /// folder.
+    /// folder, with JETCARP's AppUserModelID (#347).
     pub fn make(lnk: &Path, target: &Path) -> Result<(), String> {
         // S_FALSE (COM already on for this thread) is balanced too.
         let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_ok();
@@ -769,6 +775,12 @@ mod shortcut {
                     link.SetWorkingDirectory(&HSTRING::from(dir))?;
                 }
             }
+            let store: IPropertyStore = link.cast()?;
+            let id = super::identity::Wide::new(super::APP_USER_MODEL_ID);
+            unsafe {
+                store.SetValue(&super::identity::ID, &id.value())?;
+                store.Commit()?;
+            }
             let file: IPersistFile = link.cast()?;
             unsafe { file.Save(&HSTRING::from(lnk), true) }
         })();
@@ -777,11 +789,240 @@ mod shortcut {
         }
         r.map_err(|e| format!("{}: {e}", lnk.display()))
     }
+
+    /// The AppUserModelID of the shortcut `lnk` (`System.AppUserModel.ID`), if it has one.
+    pub fn app_id(lnk: &Path) -> Option<String> {
+        let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_ok();
+        let r = (|| -> windows::core::Result<Option<String>> {
+            let link: IShellLinkW =
+                unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }?;
+            let file: IPersistFile = link.cast()?;
+            unsafe { file.Load(&HSTRING::from(lnk), STGM_READ) }?;
+            let store: IPropertyStore = link.cast()?;
+            let mut v = unsafe { store.GetValue(&super::identity::ID) }?;
+            let s = super::identity::string_of(&v);
+            // SAFETY: `v` is the value GetValue gave, cleared once, here.
+            let _ = unsafe { PropVariantClear(&mut v) };
+            Ok(s)
+        })();
+        if com {
+            unsafe { CoUninitialize() };
+        }
+        r.ok().flatten()
+    }
+}
+
+/// Windows: the app's identity on the taskbar (#347). With none, Windows took the process for
+/// what to pin, the console program `jetcarp.exe`, so a pin started JETCARP with a console window.
+/// The process takes [`APP_USER_MODEL_ID`], which the Start menu entry has too; its main window
+/// has it as well, with a relaunch command that starts the windowless launcher, so a pin made
+/// from the taskbar starts JETCARP as the Start menu entry does.
+#[cfg(windows)]
+mod identity {
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use windows::Win32::Foundation::{HWND, PROPERTYKEY};
+    use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
+    use windows::Win32::System::Variant::VT_LPWSTR;
+    use windows::Win32::UI::Shell::PropertiesSystem::{
+        IPropertyStore, SHGetPropertyStoreForWindow,
+    };
+    use windows::core::{GUID, PWSTR};
+
+    /// The `System.AppUserModel` properties' set (propkey.h).
+    const APP_USER_MODEL: GUID = GUID::from_u128(0x9f4c2855_9f79_4b39_a8d0_e1d42de1d5f3);
+    /// `System.AppUserModel.ID`.
+    pub const ID: PROPERTYKEY = PROPERTYKEY {
+        fmtid: APP_USER_MODEL,
+        pid: 5,
+    };
+    /// `System.AppUserModel.RelaunchCommand`: what a pin of the window starts.
+    const RELAUNCH_COMMAND: PROPERTYKEY = PROPERTYKEY {
+        fmtid: APP_USER_MODEL,
+        pid: 2,
+    };
+    /// `System.AppUserModel.RelaunchIconResource`: the pin's icon (`file,index`).
+    const RELAUNCH_ICON: PROPERTYKEY = PROPERTYKEY {
+        fmtid: APP_USER_MODEL,
+        pid: 3,
+    };
+    /// `System.AppUserModel.RelaunchDisplayNameResource`: the pin's name.
+    const RELAUNCH_NAME: PROPERTYKEY = PROPERTYKEY {
+        fmtid: APP_USER_MODEL,
+        pid: 4,
+    };
+
+    /// A string as a property's value (`VT_LPWSTR`), pointing into the string it holds: a store
+    /// copies what it is given, so the value is never cleared.
+    pub struct Wide(Vec<u16>);
+
+    impl Wide {
+        pub fn new(s: &str) -> Wide {
+            Wide(s.encode_utf16().chain([0]).collect())
+        }
+
+        pub fn value(&self) -> PROPVARIANT {
+            let mut v = PROPVARIANT::default();
+            // SAFETY: a zeroed PROPVARIANT given its type and a pointer to a string ending in 0,
+            // which outlives every use of the value (`self`).
+            unsafe {
+                let inner = &mut *v.Anonymous.Anonymous;
+                inner.vt = VT_LPWSTR;
+                inner.Anonymous.pwszVal = PWSTR(self.0.as_ptr() as *mut u16);
+            }
+            v
+        }
+    }
+
+    /// A property's value as a string, when it is one.
+    pub fn string_of(v: &PROPVARIANT) -> Option<String> {
+        // SAFETY: the union is read as the type its `vt` says; a string's pointer, when not null,
+        // ends in 0.
+        unsafe {
+            let inner = &*v.Anonymous.Anonymous;
+            if inner.vt != VT_LPWSTR || inner.Anonymous.pwszVal.is_null() {
+                return None;
+            }
+            inner.Anonymous.pwszVal.to_string().ok()
+        }
+    }
+
+    /// The window [`set_window`] gave the identity, for [`clear_window`].
+    static WINDOW: AtomicIsize = AtomicIsize::new(0);
+
+    /// This process is JETCARP the app on the taskbar: before any window is made.
+    pub fn set_process() {
+        let id = windows::core::HSTRING::from(super::APP_USER_MODEL_ID);
+        // SAFETY: a string the call copies; it only names the process.
+        let _ = unsafe { windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID(&id) };
+    }
+
+    /// The main window `hwnd` takes the identity, and, when `relaunch` names the windowless
+    /// launcher, a relaunch command that starts it, with its icon and JETCARP's name.
+    pub fn set_window(hwnd: isize, relaunch: Option<&std::path::Path>) -> Result<(), String> {
+        let h = HWND(hwnd as *mut core::ffi::c_void);
+        // SAFETY: the app's own window, alive while the app runs; the store is released when it
+        // goes out of scope.
+        let store: IPropertyStore =
+            unsafe { SHGetPropertyStoreForWindow(h) }.map_err(|e| e.to_string())?;
+        let id = Wide::new(super::APP_USER_MODEL_ID);
+        let r = (|| -> windows::core::Result<()> {
+            // SAFETY: values that outlive the calls, which copy them.
+            unsafe {
+                if let Some(exe) = relaunch {
+                    let command = Wide::new(&format!("\"{}\"", exe.display()));
+                    let icon = Wide::new(&format!("{},0", exe.display()));
+                    let name = Wide::new("JETCARP");
+                    store.SetValue(&RELAUNCH_COMMAND, &command.value())?;
+                    store.SetValue(&RELAUNCH_ICON, &icon.value())?;
+                    store.SetValue(&RELAUNCH_NAME, &name.value())?;
+                }
+                // All in one commit, the ID with them: the shell uses the relaunch properties
+                // only on a window that has an ID.
+                store.SetValue(&ID, &id.value())?;
+                store.Commit()
+            }
+        })();
+        r.map_err(|e| e.to_string())?;
+        WINDOW.store(hwnd, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// The main window lets its identity go, as the app ends: the shell keeps a window's
+    /// properties until they are cleared.
+    pub fn clear_window() {
+        let hwnd = WINDOW.swap(0, Ordering::Relaxed);
+        if hwnd == 0 {
+            return;
+        }
+        let h = HWND(hwnd as *mut core::ffi::c_void);
+        // SAFETY: as in `set_window`; an empty value (VT_EMPTY) clears each property.
+        unsafe {
+            if let Ok(store) = SHGetPropertyStoreForWindow::<IPropertyStore>(h) {
+                let empty = PROPVARIANT::default();
+                for key in [&ID, &RELAUNCH_COMMAND, &RELAUNCH_ICON, &RELAUNCH_NAME] {
+                    let _ = store.SetValue(key, &empty);
+                }
+                let _ = store.Commit();
+            }
+        }
+    }
+}
+
+/// Windows: this process is JETCARP the app on the taskbar, with [`APP_USER_MODEL_ID`], which the
+/// Start menu entry has too (#347). Called before the app makes its first window. Nothing
+/// elsewhere.
+pub fn set_app_identity() {
+    #[cfg(windows)]
+    identity::set_process();
+}
+
+/// Windows: the app's main window (`hwnd`) takes [`APP_USER_MODEL_ID`], and a relaunch command
+/// that starts the windowless launcher: the Start menu entry's copy ([`stable_dir`]), else the one
+/// beside this program. So a pin made from the taskbar starts JETCARP with no console window, as
+/// the Start menu entry does (#347). Nothing elsewhere.
+pub fn set_window_identity(hwnd: isize) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let copy = stable_dir().ok().map(|d| d.join(LAUNCHER_EXE));
+        let beside = std::env::current_exe()
+            .ok()
+            .map(|e| jetcarp_core::paths::plain_path(e).with_file_name(LAUNCHER_EXE));
+        let relaunch = [copy, beside].into_iter().flatten().find(|p| p.is_file());
+        identity::set_window(hwnd, relaunch.as_deref())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = hwnd;
+        Ok(())
+    }
+}
+
+/// Windows: the main window lets [`set_window_identity`]'s properties go, as the app ends.
+pub fn clear_window_identity() {
+    #[cfg(windows)]
+    identity::clear_window();
+}
+
+/// Windows: the AppUserModelID of the shortcut `lnk`, as the shell reads it (none: it has none,
+/// or it can't be read); `None` elsewhere. For the test of `jetcarp launcher install` (#347).
+pub fn shortcut_app_id(lnk: &Path) -> Option<String> {
+    #[cfg(windows)]
+    {
+        shortcut::app_id(lnk)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = lnk;
+        None
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Start menu entry carries JETCARP's AppUserModelID, which the app's window has too, so
+    /// the taskbar pins the entry, which starts the windowless launcher, and not the console
+    /// program the window's process is (#347).
+    #[cfg(windows)]
+    #[test]
+    fn the_shortcut_carries_the_app_user_model_id() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-aumid-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let lnk = dir.join(SHORTCUT);
+        let target = std::env::current_exe().unwrap();
+        shortcut::make(&lnk, &target).unwrap();
+        assert_eq!(shortcut_app_id(&lnk).as_deref(), Some(APP_USER_MODEL_ID));
+        let lower = |p: &Path| p.to_string_lossy().to_lowercase();
+        assert_eq!(
+            shortcut::target(&lnk).map(|p| lower(&p)),
+            Some(lower(&target))
+        );
+        // A shortcut made elsewhere, without one: none.
+        assert_eq!(shortcut_app_id(&dir.join("missing.lnk")), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     /// Doctor names the Start menu entries named JETCARP, JETCARP's own and Scoop's in *Scoop
     /// Apps* (#348): shortcuts of that name, whatever the case, in the folder and those below.

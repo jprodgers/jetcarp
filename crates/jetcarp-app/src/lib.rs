@@ -61,6 +61,9 @@ pub fn shortcuts() -> Vec<ShortcutGroup> {
 pub fn run(launch: LaunchArgs) -> Result<(), String> {
     // On macOS the application menu takes its name from the process: JETCARP, not `jetcarp`.
     jetcarp_display::set_process_name("JETCARP");
+    // On Windows the taskbar knows the app's windows by the AppUserModelID the Start menu entry
+    // has too, before the first window is made (#347).
+    jetcarp_display::launcher::set_app_identity();
     // After an upgrade on macOS, launchd refuses at login the login item's changed program until
     // it is registered again (#99): that happens here, beside the window.
     desktop_offers::refresh_login_item();
@@ -155,5 +158,24 @@ pub fn run(launch: LaunchArgs) -> Result<(), String> {
 /// the console closing, a sign-out and a shutdown (#319).
 fn new_app(cc: &eframe::CreationContext<'_>, launch: LaunchArgs) -> app::JetcarpApp {
     quit_signal::install(&cc.egui_ctx);
+    window_identity(cc);
     app::JetcarpApp::new(cc, launch)
+}
+
+/// Windows: the main window takes the app's AppUserModelID and a relaunch command that starts
+/// the windowless launcher, so a pin made from the taskbar starts JETCARP with no console window
+/// (#347). winit has no setting for either; the window's property store holds them.
+fn window_identity(cc: &eframe::CreationContext<'_>) {
+    #[cfg(windows)]
+    {
+        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(h) = cc.window_handle()
+            && let RawWindowHandle::Win32(w) = h.as_raw()
+            && let Err(e) = jetcarp_display::launcher::set_window_identity(w.hwnd.get())
+        {
+            eprintln!("note: the window's taskbar identity could not be set: {e}");
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = cc;
 }
