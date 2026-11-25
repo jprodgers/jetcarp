@@ -340,6 +340,10 @@ and *Default* among them), and screen readers name each one by its words. *Tools
 turmites…* and *Tools → Large sandpile…* do the same for their strategies, *Tools → Catalog tools…*
 runs collisions and the evolutionary search, and *Tools → Pattern library…* browses what all of them
 found. A job started in the app can be stopped or resumed from the command line, and the other way
-round. In the *Hunts* window, a job whose process has gone shows as *stale* at once, and *Render
-media (animations of these finds)*, beside a job's finds, writes each find's animation, poster and
-thumbnail in the background (see [Pictures and animations](pictures.md#animations)).
+round. In the *Hunts* window, a job whose process has gone shows as *stale* at once, each of a
+job's finds plays as a small animation (with reduced motion, a still with a ▶ that plays on a
+click: [Accessibility settings](accessibility-settings.md#reduced-motion)), and *Render media
+(animations of these finds)*, beside a job's finds, writes each find's animation, poster and
+thumbnail in the background (see [Pictures and animations](pictures.md#animations)). *Ants and
+turmites* lists the stored ant runs as it opens and plays each one's media
+([Langton's ant and turmites](../automata/turmites.md#running-and-searching)).

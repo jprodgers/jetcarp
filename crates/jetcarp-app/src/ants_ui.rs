@@ -12,7 +12,8 @@
 //! A search starts through the operation `search.start` (strategy `ants`, in the background),
 //! stops through `jobs.stop`, and resumes through `jobs.resume` (`crate::window_job`), so it is
 //! in the process's job registry with the dashboard's jobs. The stored runs and the census are
-//! read, and curation written, on a catalog thread of the window's own, never on the UI thread.
+//! read, and curation written, on a catalog thread of the window's own, never on the UI thread:
+//! as the window opens, however it is opened (#338), and as *Refresh* reads them.
 //! `JETCARP_ANTS_SELECT=<k>` selects row k (headless checks).
 
 use crate::window_job::{CatalogThread, Hooks, WindowJob};
@@ -85,6 +86,8 @@ pub struct AntsWindow {
     select_env: Option<usize>,
     /// The last run has ended and its runs have been read.
     read_after_end: bool,
+    /// The window was open last frame (one that opens reads the stored runs, #338).
+    was_open: bool,
     /// Palette for media and opened runs (`None`: the house style; saved in the settings).
     pub palette: Option<String>,
 }
@@ -112,6 +115,7 @@ impl Default for AntsWindow {
             error: None,
             selected: None,
             read_after_end: false,
+            was_open: false,
             select_env: std::env::var("JETCARP_ANTS_SELECT")
                 .ok()
                 .and_then(|v| v.parse().ok()),
@@ -134,7 +138,7 @@ impl AntsWindow {
             }
             self.start();
         }
-        self.reload();
+        // The window's first frame reads the stored runs, as it does however it opens.
     }
 
     /// The search started or resumed here is still at work.
@@ -217,7 +221,20 @@ impl AntsWindow {
         let lib = self.lib.clone();
         let id = r.id.clone();
         let palette = self.palette.clone();
+        let row = r.clone();
         std::thread::spawn(move || {
+            // What the media show (the window says it with the picture).
+            let what = |mode: media::MediaMode| {
+                if mode == media::MediaMode::Alone {
+                    return "the highway's loop, alone".to_string();
+                }
+                let shown = jetcarp_store::media::ants::media_steps(&row);
+                if shown < row.steps {
+                    format!("the build-up from step 0 to step {shown} of {}", row.steps)
+                } else {
+                    "the build-up from step 0".to_string()
+                }
+            };
             let res = (|| -> MediaResult {
                 if let Some(p) = &palette {
                     // Another palette: in memory only, the catalog keeps the house style.
@@ -233,11 +250,7 @@ impl AntsWindow {
                     )?;
                     let note = format!(
                         "{} in {p} (not stored), {} frames, {} × {}",
-                        if a.mode == media::MediaMode::Alone {
-                            "the highway's loop, alone"
-                        } else {
-                            "the build-up from step 0"
-                        },
+                        what(a.mode),
                         a.frames.len(),
                         a.width(),
                         a.height()
@@ -266,11 +279,7 @@ impl AntsWindow {
                 let delay = a.render["delay_ms"].as_u64().unwrap_or(80) as u32;
                 let note = format!(
                     "{} ({}), {} frames, {} × {}{}",
-                    if done.mode == media::MediaMode::Alone {
-                        "the highway's loop, alone"
-                    } else {
-                        "the build-up from step 0"
-                    },
+                    what(done.mode),
                     a.kind,
                     a.frames,
                     a.width,
@@ -451,6 +460,12 @@ impl AntsWindow {
 
     pub fn show(&mut self, ctx: &egui::Context) -> Vec<Action> {
         let mut out = vec![];
+        // Opened since the last frame, from the menu or anywhere else: read the stored runs, as
+        // *Refresh* does (#338).
+        if self.open && !self.was_open {
+            self.reload();
+        }
+        self.was_open = self.open;
         self.take_read();
         if let Some(k) = self.select_env
             && let Some(r) = self.rows.get(k).cloned()

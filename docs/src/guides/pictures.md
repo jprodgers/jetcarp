@@ -159,7 +159,10 @@ thumb  llrr/thumb.png
 - **How.** A pattern *alone* is shown on an empty field for `--periods` full periods (default 1), so
   the animation loops seamlessly; a spaceship's window moves with it. *From the seed*, the whole grid
   runs for `--gens` generations (default 200; row rules one frame per row), with a frame every
-  `--every` generations. `--mode` overrides the choice.
+  `--every` generations. `--mode` overrides the choice. An ant run shows a highway's loop alone, in
+  a window that moves with the ant, and any other run its build-up from step 0, no more than four
+  times as long as it is wide (see
+  [Langton's ant and turmites](../automata/turmites.md#running-and-searching)).
 - **Format.** With `--format auto` (the default), the animation is a GIF when each frame is at most
   320 × 320 pixels, the whole animation at most 8 million pixels and 256 colours, and an animated
   lossless WebP otherwise; `--format gif` and `--format webp` choose one. `--no-frames` skips the

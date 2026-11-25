@@ -37,8 +37,10 @@ When reduced motion is on:
   changes.
 - **The small animations in other windows show stills until you choose one.** The finds in the
   [Hunts dashboard](searching.md#in-the-app) and an ant run's animation in *Ants and turmites* show
-  their first frame, with a small ▶ in the corner. Click one (or press Enter while it has the
-  keyboard) to play it; click it again to still it.
+  their first frame, with a ▶ in the corner: a white arrow on a black disc ringed in white, which
+  stands out from any picture in either theme and in high contrast. Hovering a still says "Plays on
+  a click". Click one (or press Enter while it has the keyboard) to play it; click it again to
+  still it.
 - **A scene opens paused,** with a note in the status line: "Paused because your system asks for
   reduced motion. Space runs it; Settings → Accessibility changes this." Space, or *Run → Run /
   Pause*, runs it as usual. When the [strobe guard](strobe-guard.md) has a note too, the guard's

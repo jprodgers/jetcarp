@@ -574,6 +574,45 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The ▶ on a still find or ant run shows, and is easy to see** (#337, #341). With reduced
+  motion on, the *Hunts* window painted a find's ▶ before its picture, so the picture hid it, and
+  the one in *Ants and turmites*, a dark disc 16 points across with a small arrow, went unseen over
+  its dark frame. Both windows now paint the same mark after the picture: a white ▶ on a black disc
+  24 points across, ringed in white, so the ring or the disc stands out at least 3:1 from any
+  picture behind it, in either theme and in high contrast (a test checks it against the whole
+  colour cube). Hovering a still says "Plays on a click".
+  ([Accessibility settings](../guides/accessibility-settings.md#reduced-motion),
+  [#337](https://github.com/jprodgers/jetcarp/issues/337),
+  [#341](https://github.com/jprodgers/jetcarp/issues/341))
+- ***Ants and turmites* lists its stored runs as it opens** (#338). It read them only when a
+  search ran or ended, a filter changed or *Refresh* was pressed, so opened from *Tools* it showed
+  none, and its outcomes per tiling were blank, until *Refresh*. It now reads them whenever it
+  opens. ([#338](https://github.com/jprodgers/jetcarp/issues/338))
+- **A narrow highway gets its animation** (#339). A highway's media is its loop alone, drawn on a
+  grid that just holds it, and a grid can't be smaller than 8 by 8 unit cells: every highway in
+  rc.1's sitting (on squares, a few cells wide) failed with "grid must be at least 8 by 8 unit
+  cells, got 7 by 15", in the app's panel and in `jetcarp media render --ant`. The grid is now at
+  least 8 by 8, with the loop in its middle.
+  ([Langton's ant and turmites](../automata/turmites.md#running-and-searching),
+  [#339](https://github.com/jprodgers/jetcarp/issues/339))
+- **An ant that builds a strip has a build-up that can be seen** (#340). A chaotic run whose
+  cells make a long thin strip had its whole build-up drawn: `LLRU` on squares, nine cells by
+  2,201 after 20,000 steps, came out 15 by 2,207 pixels and two points wide in the window, and
+  `UNUL`, one cell by 6,668, was refused. A build-up's picture and animation now run until just
+  before its cells get more than four times as long as they are wide, as a highway's build-up
+  stops four periods past its onset: LLRU's show its first 677 steps at 120 by 480 pixels, the
+  strip leaving where it started, and the window says which steps they show. *Open*, and a Quick
+  Start entry made from the run, still run the whole of it in the main view, where it can be
+  panned and zoomed. Other build-ups are as they were.
+  ([Langton's ant and turmites](../automata/turmites.md#running-and-searching),
+  [#340](https://github.com/jprodgers/jetcarp/issues/340))
+- **The book says how a hexagonal rule looks in Golly** (#351). Hexagonal Life (`B2/S34H`) copied
+  with *Copy as RLE* runs correctly in Golly but looks square there: Golly runs a hexagonal rule on
+  its square grid, sheared, and draws hexagons only with its cell icons on, at a zoom of 1:8 or
+  more. The book's *Copy as RLE* section now says so.
+  ([Copy as RLE](../guides/pattern-library.md#copy-as-rle),
+  [#351](https://github.com/jprodgers/jetcarp/issues/351))
+
 - **The Desktop background, Screensaver and Display settings open from the Quick Start** (#331).
   Their *View* entries were greyed out until a world was open, though none of them is about the
   world on screen: *Fit to this computer* meant opening a world first. They now open as windows

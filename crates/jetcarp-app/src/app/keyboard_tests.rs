@@ -2368,3 +2368,290 @@ fn child_panes_not_about_a_world_open_from_the_quick_start() {
     );
     done();
 }
+
+/// Frames until `ready`, at most `secs` seconds (the windows read and render on threads of their
+/// own); whether it came.
+fn frames_until(k: &mut Kb, secs: f64, mut ready: impl FnMut(&Kb) -> bool) -> bool {
+    let t = std::time::Instant::now();
+    while t.elapsed().as_secs_f64() < secs {
+        k.frames(1);
+        if ready(k) {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    false
+}
+
+/// Every word a screen reader is given in the last frame: each node's name and value.
+fn words(k: &Kb) -> Vec<String> {
+    k.nodes
+        .values()
+        .flat_map(|n| [n.label.clone(), n.value.clone()])
+        .flatten()
+        .collect()
+}
+
+/// A play mark (the ▶ on a still picture, `crate::a11y::Stills::mark`) drawn in the last frame:
+/// its centre and radius, and whether a shape drawn after it, other than its own arrow, covers
+/// its centre.
+#[derive(Debug)]
+struct Mark {
+    at: egui::Pos2,
+    radius: f32,
+    covered: bool,
+}
+
+/// The play marks of the last frame: each filled disc of six points or more, in the order the
+/// frame's shapes are painted.
+fn play_marks(k: &Kb) -> Vec<Mark> {
+    use egui::epaint::Shape;
+    fn walk(s: &Shape, out: &mut Vec<Shape>) {
+        match s {
+            Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            s => out.push(s.clone()),
+        }
+    }
+    let mut shapes = vec![];
+    for c in &k.shapes {
+        walk(&c.shape, &mut shapes);
+    }
+    // What hides what is under it: anything filled (an outline alone does not).
+    let covers = |s: &Shape, at: egui::Pos2| match s {
+        Shape::Rect(r) => r.fill.a() > 0 && r.rect.contains(at),
+        Shape::Circle(c) => c.fill.a() > 0 && (c.center - at).length() <= c.radius,
+        Shape::Path(p) => p.fill.a() > 0 && s.visual_bounding_rect().contains(at),
+        Shape::Mesh(_) | Shape::Text(_) => s.visual_bounding_rect().contains(at),
+        _ => false,
+    };
+    let mut marks = vec![];
+    for (i, s) in shapes.iter().enumerate() {
+        let Shape::Circle(c) = s else { continue };
+        if c.fill.a() == 0 || c.radius < 6.0 {
+            continue;
+        }
+        let own = egui::Rect::from_center_size(c.center, egui::Vec2::splat(c.radius * 2.0))
+            .expand(c.stroke.width + 1.0);
+        let covered = shapes[i + 1..].iter().any(|later| {
+            !own.contains_rect(later.visual_bounding_rect()) && covers(later, c.center)
+        });
+        marks.push(Mark {
+            at: c.center,
+            radius: c.radius,
+            covered,
+        });
+    }
+    marks
+}
+
+#[test]
+fn the_hunts_window_s_still_finds_show_their_play_mark() {
+    in_scratch("app::keyboard_tests::child_the_hunts_window_s_still_finds_show_their_play_mark");
+}
+
+/// With reduced motion, each find in the *Hunts* window is a still that plays on a click, and
+/// its ▶ shows on top of its picture (#337). The mark was painted first and the find's
+/// background and picture over it, so it never showed. Here a small hunt of Life finds a few
+/// patterns, and every mark the window paints must be the last thing over its spot.
+#[test]
+#[ignore = "started by the_hunts_window_s_still_finds_show_their_play_mark, in a scratch process"]
+fn child_the_hunts_window_s_still_finds_show_their_play_mark() {
+    if !child() {
+        return;
+    }
+    let mut k = Kb::new();
+    k.app.a11y.settings.reduced_motion = crate::a11y::Follow::On;
+    k.app.dash.test_start("B3/S23", "square", 200);
+    let finished = frames_until(&mut k, 120.0, |k| {
+        let jobs = k.app.dash.test_jobs();
+        !jobs.is_empty() && jobs.iter().all(|j| j.status == "done")
+    });
+    assert!(
+        finished,
+        "the hunt never finished: {:?}",
+        k.app.dash.test_jobs()
+    );
+    // A hunt this small can end in the second the window first read it, which it does not read
+    // again by itself: *Refresh*, as a person would.
+    k.focus_named("Refresh");
+    k.key(Key::Enter);
+    // Its finds are listed, and their pictures drawn on threads of their own.
+    let mut seen = 0;
+    let came = frames_until(&mut k, 60.0, |k| {
+        let n = play_marks(k).len();
+        // Every find on screen has its picture once the count stops growing.
+        let steady = n > 0 && n == seen;
+        seen = n;
+        steady
+    });
+    assert!(
+        came,
+        "no find in the Hunts window showed a still with a mark"
+    );
+    k.frames(3);
+    let marks = play_marks(&k);
+    let hidden: Vec<&Mark> = marks.iter().filter(|m| m.covered).collect();
+    assert!(
+        hidden.is_empty(),
+        "{} of the {} finds' play marks are painted under their picture: {hidden:?}",
+        hidden.len(),
+        marks.len()
+    );
+    done();
+}
+
+#[test]
+fn the_ants_window_lists_its_runs_and_plays_their_media() {
+    in_scratch("app::keyboard_tests::child_the_ants_window_lists_its_runs_and_plays_their_media");
+}
+
+/// The *Ants and turmites* window as rc.1's sitting found it, with runs of its search (strings of
+/// two to four turns on squares, 20,000 steps) stored before the window opens:
+///
+/// - opened from its menu item, it lists them in its first frames (#338: it was empty until
+///   *Refresh*);
+/// - a highway's media render and play in its panel (#339: "No media: grid must be at least 8 by
+///   8 unit cells, got 7 by 15");
+/// - a chaotic ant that builds a strip shows its build-up at a size that can be seen and clicked
+///   (#340: 15 by 2,207 pixels, shown two points wide);
+/// - with reduced motion each is a still with its ▶ on top, larger than the 16-point disc that
+///   went unseen (#341);
+/// - *Open* runs the strip's whole run in the main view, not the first steps its picture shows.
+#[test]
+#[ignore = "started by the_ants_window_lists_its_runs_and_plays_their_media, in a scratch process"]
+fn child_the_ants_window_lists_its_runs_and_plays_their_media() {
+    use jetcarp_core::ants::run::{Limits, Start};
+    use jetcarp_core::ants::search::parse_rule;
+    if !child() {
+        return;
+    }
+    let square = jetcarp_core::pattern::tiling_list("square")
+        .unwrap()
+        .remove(0);
+    let rows: Vec<jetcarp_store::AntRow> = ["LRUR", "LLRU"]
+        .into_iter()
+        .map(|r| {
+            let lim = Limits {
+                steps: 20_000,
+                ..Default::default()
+            };
+            jetcarp_search::ants::run_one(&parse_rule(r).unwrap(), &square, &Start::Empty, &lim)
+                .unwrap()
+        })
+        .collect();
+    jetcarp_store::Library::open_default()
+        .ants_flush(0, &rows, None, None)
+        .unwrap();
+    const PICTURE: &str = "The run's animation (Enter plays or stills it)";
+    let mut k = Kb::new();
+    k.app.a11y.settings.reduced_motion = crate::a11y::Follow::On;
+    let mut failures: Vec<String> = vec![];
+    let listed = |rule: &'static str| move |k: &Kb| words(k).iter().any(|w| w == rule);
+    k.app
+        .run_action(&k.ctx.clone(), menu::Action::Tool(menu::ToolWin::Ants));
+    if !frames_until(&mut k, 10.0, listed("LRUR")) {
+        failures.push(
+            "#338: opened from its menu item, the window listed none of the stored runs".into(),
+        );
+        k.focus_named("Refresh");
+        k.key(Key::Enter);
+        assert!(
+            frames_until(&mut k, 10.0, listed("LRUR")),
+            "Refresh listed none either"
+        );
+    }
+    // Select a run and wait for its media: the picture, or the note saying why there is none.
+    let play = |k: &mut Kb, rule: &str, failures: &mut Vec<String>, issue: &str| {
+        k.focus_named("Select");
+        k.key(Key::Enter);
+        let shown = |k: &Kb| {
+            k.nodes
+                .values()
+                .any(|n| n.label.as_deref() == Some(PICTURE))
+                || words(k).iter().any(|w| w.starts_with("No media"))
+        };
+        assert!(
+            frames_until(k, 120.0, shown),
+            "{rule}: no media and no note"
+        );
+        k.frames(3);
+        if let Some(note) = words(k).into_iter().find(|w| w.starts_with("No media")) {
+            failures.push(format!("{issue}: {rule}'s panel says {note:?}"));
+            return None;
+        }
+        let picture = k
+            .nodes
+            .values()
+            .find(|n| n.label.as_deref() == Some(PICTURE));
+        picture.and_then(|n| n.bounds)
+    };
+    // The still's mark is on top of the picture, and larger than before.
+    let marked = |k: &Kb, rule: &str, at: egui::Rect, failures: &mut Vec<String>| {
+        let marks: Vec<Mark> = play_marks(k)
+            .into_iter()
+            .filter(|m| at.contains(m.at))
+            .collect();
+        match marks.first() {
+            None => failures.push(format!("{rule}: its still has no play mark")),
+            Some(m) if m.covered => failures.push(format!("{rule}: its play mark is hidden")),
+            Some(m) if m.radius <= 8.0 => failures.push(format!(
+                "#341: {rule}'s play mark is a disc of {} points across, as small as the one that went unseen",
+                m.radius * 2.0
+            )),
+            Some(_) => {}
+        }
+    };
+    if let Some(at) = play(&mut k, "LRUR", &mut failures, "#339") {
+        marked(&k, "LRUR", at, &mut failures);
+    }
+    // The chaotic runs.
+    k.focus_named("Outcome");
+    k.key(Key::Enter);
+    k.frames(2);
+    k.focus_named("chaotic");
+    k.key(Key::Enter);
+    assert!(
+        frames_until(&mut k, 10.0, listed("LLRU")),
+        "choosing chaotic listed no LLRU"
+    );
+    if let Some(at) = play(&mut k, "LLRU", &mut failures, "#340") {
+        if at.width().min(at.height()) < 60.0 {
+            failures.push(format!(
+                "#340: LLRU's build-up is shown {:.0} by {:.0} points, too thin to see or click",
+                at.width(),
+                at.height()
+            ));
+        }
+        marked(&k, "LLRU", at, &mut failures);
+    }
+    // *Open* runs LLRU's whole run in the main view, to be panned and zoomed, not the first steps
+    // its picture shows.
+    let reached = (rows[1].run.reach[3] - rows[1].run.reach[1] + 1) as u32;
+    let layer = k
+        .widget_named("Select")
+        .and_then(|id| k.focusable().into_iter().find(|w| w.0 == id))
+        .map(|w| w.1);
+    let open = k
+        .focusable()
+        .into_iter()
+        .find(|w| {
+            Some(w.1) == layer
+                && k.nodes
+                    .get(&w.0.accesskit_id())
+                    .is_some_and(|n| k.name(n) == "Open")
+        })
+        .map(|w| w.0)
+        .expect("LLRU's Open button");
+    k.ctx.memory_mut(|m| m.request_focus(open));
+    k.frames(2);
+    k.key(Key::Enter);
+    let rows_open = |k: &Kb| k.app.world.topo.lattice().map(|g| g.h).unwrap_or(0);
+    if !frames_until(&mut k, 60.0, |k| rows_open(k) >= reached) {
+        failures.push(format!(
+            "#340: Open gave LLRU's run a grid of {} rows, not the {reached} it reached",
+            rows_open(&k)
+        ));
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    done();
+}

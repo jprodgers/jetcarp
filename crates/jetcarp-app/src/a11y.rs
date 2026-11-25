@@ -528,26 +528,50 @@ impl Stills {
         if self.moving(&ctx, key) { time } else { 0.0 }
     }
 
-    /// Mark a still picture as one that plays when clicked: a small ▶ in its corner, and a word
-    /// on hover.
+    /// Mark a still picture as one that plays when clicked: a ▶ in its corner, and
+    /// [`MARK_HOVER`] on hover. Painted after the picture, so it shows on top of it (#337); the
+    /// same in every window that has small animations.
     pub fn mark(&self, ui: &egui::Ui, resp: &egui::Response, key: &str) {
         if self.moving(ui.ctx(), key) {
             return;
         }
-        let r = resp.rect;
-        let at = r.right_bottom() - egui::vec2(10.0, 10.0);
-        let p = ui.painter();
-        p.circle_filled(at, 8.0, Color32::from_black_alpha(170));
-        p.text(
-            at + egui::vec2(1.0, 0.0),
-            egui::Align2::CENTER_CENTER,
-            "▶",
-            egui::FontId::proportional(10.0),
-            Color32::WHITE,
-        );
-        resp.clone()
-            .on_hover_text("A still, as reduced motion is on: click to play it.");
+        paint_mark(ui.painter(), resp.rect);
+        resp.clone().on_hover_text(MARK_HOVER);
     }
+}
+
+/// The play mark's radius in points (#341: the 8 of before went unseen).
+const MARK_RADIUS: f32 = 12.0;
+/// The play mark's disc: opaque black.
+const MARK_DISC: Color32 = Color32::BLACK;
+/// The play mark's arrow and the ring round its disc: white. Against any colour, white or black
+/// stands out 4.5:1 or more (the two together span WCAG's whole range, 21:1), so the ring or the
+/// disc is at least 3:1 against whatever picture is behind it, in either theme and in high
+/// contrast (#341, WCAG 2.2's 1.4.11); the arrow is 21:1 against the disc.
+const MARK_LIGHT: Color32 = Color32::WHITE;
+/// The ring's width in points.
+const MARK_RING: f32 = 2.0;
+/// What hovering a still picture says.
+const MARK_HOVER: &str = "Plays on a click";
+
+/// The play mark in the bottom-right corner of `rect`: a white ▶ on a black disc ringed in
+/// white, drawn as shapes (no font has to hold the arrow).
+fn paint_mark(p: &egui::Painter, rect: egui::Rect) {
+    let r = MARK_RADIUS;
+    let at = rect.right_bottom() - egui::vec2(r + MARK_RING + 2.0, r + MARK_RING + 2.0);
+    p.circle(at, r, MARK_DISC, egui::Stroke::new(MARK_RING, MARK_LIGHT));
+    // The arrow's centroid on the disc's centre.
+    let (w, h) = (r * 0.9, r * 1.05);
+    let left = at.x - w / 3.0;
+    p.add(egui::Shape::convex_polygon(
+        vec![
+            egui::pos2(left, at.y - h / 2.0),
+            egui::pos2(left + w, at.y),
+            egui::pos2(left, at.y + h / 2.0),
+        ],
+        MARK_LIGHT,
+        egui::Stroke::NONE,
+    ));
 }
 
 use egui::Color32;
@@ -1281,6 +1305,126 @@ mod tests {
             0.0,
             "a second click stills it"
         );
+    }
+
+    /// The ▶ on a still picture (#341): larger than the 16-point disc that went unseen, its edge
+    /// (the disc, or the ring round it) at least 3:1 against any picture behind it, the arrow
+    /// against the disc too, in the dark and light themes and in high contrast. The colours
+    /// behind it: a sweep of the whole colour cube, the house style's, and the themes' own fills.
+    #[test]
+    fn the_play_mark_stands_out_from_any_picture_in_every_theme() {
+        use egui::epaint::Shape;
+        use egui::{Color32, Theme};
+        /// A colour as drawn over `bg` (egui's colours are premultiplied).
+        fn over(c: Color32, bg: Color32) -> Color32 {
+            let k = (255 - c.a()) as u32;
+            let mix = |a: u8, b: u8| (a as u32 + b as u32 * k / 255).min(255) as u8;
+            Color32::from_rgb(mix(c.r(), bg.r()), mix(c.g(), bg.g()), mix(c.b(), bg.b()))
+        }
+        fn walk(s: &Shape, out: &mut Vec<Shape>) {
+            match s {
+                Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                s => out.push(s.clone()),
+            }
+        }
+        let mut behind: Vec<Color32> = vec![];
+        let steps = [0u8, 51, 102, 153, 204, 255];
+        for r in steps {
+            for g in steps {
+                for b in steps {
+                    behind.push(Color32::from_rgb(r, g, b));
+                }
+            }
+        }
+        let house = jetcarp_core::media::MediaStyle::default();
+        for c in [house.background, house.stage, house.outline]
+            .iter()
+            .chain(&house.binary)
+            .chain(&house.multi)
+            .chain(&house.height)
+            .chain(&house.continuous)
+        {
+            behind.push(Color32::from_rgb(c[0], c[1], c[2]));
+        }
+        for (dark, high) in [(true, false), (false, false), (true, true), (false, true)] {
+            let theme = format!(
+                "{} {}",
+                if dark { "dark" } else { "light" },
+                if high { "high contrast" } else { "standard" }
+            );
+            let ctx = egui::Context::default();
+            let b = if dark {
+                crate::theme::Brightness::Dark
+            } else {
+                crate::theme::Brightness::Light
+            };
+            crate::theme::apply(&ctx, high, b);
+            set_motion_reduced(&ctx, true);
+            let v = ctx
+                .style_of(if dark { Theme::Dark } else { Theme::Light })
+                .visuals
+                .clone();
+            let mut bgs = behind.clone();
+            bgs.extend([v.window_fill, v.panel_fill, v.extreme_bg_color]);
+            let stills = Stills::default();
+            let mut out = ctx.run_ui(Default::default(), |ui| {
+                let resp = ui.allocate_response(egui::vec2(132.0, 106.0), egui::Sense::click());
+                stills.mark(ui, &resp, "find");
+            });
+            out.textures_delta.clear();
+            let mut shapes = vec![];
+            for c in &out.shapes {
+                walk(&c.shape, &mut shapes);
+            }
+            // The mark's edge: each circle's fill and ring; its arrow: the shape drawn on it.
+            let circles: Vec<_> = shapes
+                .iter()
+                .filter_map(|s| match s {
+                    Shape::Circle(c) => Some(*c),
+                    _ => None,
+                })
+                .collect();
+            let disc = circles
+                .iter()
+                .max_by(|a, b| a.radius.total_cmp(&b.radius))
+                .unwrap_or_else(|| panic!("{theme}: no disc"));
+            let mut edge = vec![disc.fill];
+            if disc.stroke.width > 0.0 {
+                edge.push(disc.stroke.color);
+            }
+            let fails: Vec<String> = bgs
+                .iter()
+                .filter(|&&bg| {
+                    edge.iter()
+                        .all(|&c| crate::theme::contrast(over(c, bg), bg) < 3.0)
+                })
+                .map(|bg| format!("{bg:?}"))
+                .collect();
+            assert!(
+                fails.is_empty(),
+                "{theme}: the mark's edge ({edge:?}) is under 3:1 against {} of {} colours, such as {:?}",
+                fails.len(),
+                bgs.len(),
+                &fails[..fails.len().min(4)]
+            );
+            assert!(
+                disc.radius >= 12.0,
+                "{theme}: a disc of {} points across, as small as the one that went unseen",
+                disc.radius * 2.0
+            );
+            let arrow = shapes
+                .iter()
+                .find_map(|s| match s {
+                    Shape::Path(p) if p.closed && p.points.len() == 3 => Some(p.fill),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{theme}: no arrow"));
+            let face = over(disc.fill, Color32::from_gray(128));
+            assert!(
+                crate::theme::contrast(over(arrow, face), face) >= 4.5,
+                "{theme}: the arrow on the disc"
+            );
+        }
     }
 
     /// The spinner stands still with reduced motion: drawing it asks for no more frames.

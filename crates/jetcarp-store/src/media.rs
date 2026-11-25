@@ -291,9 +291,9 @@ fn resolve(lib: &Library, t: &MediaTarget, mode: MediaMode) -> Result<Job, Strin
                     ));
                 }
                 MediaMode::Alone => Source::Ant(Box::new(a.clone())),
-                _ => Source::Scene(Box::new(crate::media::ants::build_scene(&a)?)),
+                _ => Source::Scene(Box::new(crate::media::ants::media_scene(&a)?)),
             };
-            gens = Some(crate::media::ants::build_gens(&a));
+            gens = Some(crate::media::ants::media_gens(&a));
             ("ant", a.id.clone(), src, want)
         }
     };

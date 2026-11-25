@@ -2029,9 +2029,6 @@ impl DashWindow {
                 let time = self.stills.time(&resp, &key, time);
                 let anims = self.anims.as_mut();
                 let tex = anims.and_then(|a| a.frame_at(&f.target, time));
-                if tex.is_some() {
-                    self.stills.mark(ui, &resp, &key);
-                }
                 let p = ui.painter_at(rect);
                 p.rect_filled(rect, 2.0, Color32::from_gray(20));
                 match tex {
@@ -2044,6 +2041,8 @@ impl DashWindow {
                             Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                             Color32::WHITE,
                         );
+                        // After the picture, so it shows on top of it (#337).
+                        self.stills.mark(ui, &resp, &key);
                     }
                     None => {
                         let failed = self.anims.as_ref().is_some_and(|a| a.failed(&f.target));

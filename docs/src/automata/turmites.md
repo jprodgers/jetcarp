@@ -146,6 +146,19 @@ forever. It reproduces the RL ant's published highway (period 104, onset 9,977) 
 example, a highway for `LNL` on hexagons with period 35 from step 161,093. This engine is tested to
 agree cell for cell with the ordinary world's turmites on seven tilings.
 
+In the app, *Tools → Ants and turmites…* runs the same search and lists the stored runs as it
+opens, with their outcomes per tiling. Selecting a run plays its media, which
+`jetcarp media render --ant ID` writes into the library too. A highway's media is its loop alone,
+in a window that moves with the ant, drawn on a grid of at least 8 by 8 unit cells, so a highway
+three cells wide has one too. Any other run shows its build-up from step 0 on a grid that just holds
+the cells it reaches. A highway's build-up stops four periods past its onset. A build-up's picture
+and animation stop before its cells get more than four times as long as they are wide: `LLRU` on
+squares, run for 20,000 steps, builds a strip nine cells wide and 2,201 long, so its animation
+shows its first 677 steps, the strip leaving where it started. Drawn whole, the run would be a
+sliver too thin to see. The window says which steps the animation shows. *Open* runs the whole
+build-up in the main view, where it can be panned and zoomed, and so does a Quick Start entry made
+from the run.
+
 ## What is new here
 
 Ants have run on hexagons, triangles and Penrose tilings before (see above). Our prior-art search

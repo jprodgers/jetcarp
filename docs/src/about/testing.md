@@ -52,6 +52,13 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   ran them, pinned as that code made them; with isotropic rules moved to the end of the
   processor's list it fails.
 - **Exact verification.** Every object a hunt keeps is run again alone and compared cell by cell.
+- **Ant media.** The seven highways of rc.1's sitting (turn strings of two to four letters on
+  squares, 20,000 steps), each a few cells wide, must render their loop, closing on itself, and
+  `media render --ant` must write it (`narrow_highways_render_their_loop`). The build-ups of `LLRU`
+  and `UNUL`, chaotic runs that build a long strip, must be no worse than 1:4 with cells at least
+  4 pixels across, and `ULLL`'s must show its whole run; the scene *Open* runs must hold each
+  run's every cell and step (`a_long_thin_build_up_is_drawn_near_square`, both in
+  `jetcarp-search/tests/ants.rs`).
 - **Golly agrees.** [Golly](https://golly.sourceforge.io/)'s command-line program, `bgolly`, reads
   the RLE JETCARP writes as the same cells, and writes it back as JETCARP reads it. It runs the
   pattern to the same generations as JETCARP, cell for cell. The test uses soups of nine rules on
@@ -169,8 +176,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   the *Hunts* window's explore form, at the same sizes, ↓ and ↑ must go through every choice and
   back; *Tools → Start an explore search…*, chosen with F10, the arrows and Enter, must open the
   explore form with the keyboard on its first box; the grid's cell cursor must draw, erase, select
-  and move a pattern. In every window, every control must have a role, a name that says something
-  and a value that reads, and the status line must be a live region. Each runs in a process of its
+  and move a pattern. With reduced motion on, every still find in the *Hunts* window, after a small
+  hunt, must have its ▶ painted over its picture with nothing painted over the ▶; *Ants and
+  turmites*, opened from its menu item with runs stored, must list them in its first frames, play
+  a highway's loop and show a strip-building ant's build-up at least 60 points across, each still
+  with its ▶ on top, and *Open* must load the strip's whole run. The ▶ itself must stand out 3:1 or more, by its ring or its disc, from every
+  colour of a sweep of the colour cube, the house style's colours and the themes' fills, in the
+  dark and light themes and both high-contrast ones (`a11y.rs`). In every window, every control
+  must have a role, a name that says something and a value that reads, and the status line must be
+  a live region. Each runs in a process of its
   own with scratch folders (`crates/jetcarp-app/src/app/keyboard_tests.rs`); the cell cursor's
   next cell is checked on thirteen tilings (`cell_cursor.rs`), and an ignored test reads the tree
   again with the starter pack's cards, patterns and ant runs in the windows
