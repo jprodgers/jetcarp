@@ -1,0 +1,7 @@
+# The keys that sign JETCARP's release tags (v0.4.3-rc.3 onward), in ssh-keygen's allowed-signers
+# format. To check a tag after cloning:
+#   git config gpg.ssh.allowedSignersFile .github/allowed_signers
+#   git tag -v v0.4.3
+# A key is added here, in a pull request, when someone else starts tagging releases; a key that
+# signed past tags stays listed so those tags still verify.
+jimmie@jimmieprodgers.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILCQtcWEzPG6MZtWvAqj0LlRQYno1yiLj/7cqGUEGQGz

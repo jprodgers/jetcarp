@@ -612,6 +612,18 @@ is dated more closely than that.
   grouping, the cooldown, automating the notices) were Claude's, and the answers Jimmie's.
 - **Stands.**
 
+### D-48. Release tags are signed, and can't be moved or deleted
+
+- **Decided:** Jimmie, 25 November 2026 ([#183](https://github.com/jprodgers/jetcarp/issues/183),
+  item 6).
+- **The decision:**
+  - From v0.4.3-rc.3 on, each release tag is signed with an SSH key of his own, kept for that alone and with a passphrase. It's listed in `.github/allowed_signers` and on GitHub as a signing key.
+  - Two tag rules on `refs/tags/v*`: only a repository admin may create one, and nobody may move or delete one.
+  - Contributors' commits and pull requests aren't affected: only whoever tags releases needs a key, and a second tagger's key would be added to the list.
+- **Why:** `SHA256SUMS` shows a download is unchanged, and the attestations show which workflow built it from which commit. The signed tag shows that the maintainer named that commit the release. The audit found v0.4.1's tag unsigned, and three tags moved before publication.
+- **Claude's part:** the explanation and the options (the rules alone cover most of the risk with no key; signing adds the proof). Jimmie chose both, and made the key.
+- **Stands.**
+
 ## People
 
 ### D-34. Contributions, AI-written ones included, are welcome and are verified

@@ -429,6 +429,19 @@ it. The GitHub CLI checks it (the installers do not):
 gh attestation verify jetcarp-0.4.0-x86_64-unknown-linux-gnu.tar.gz --repo jprodgers/jetcarp
 ```
 
+The commit a release is built from is named by its tag, such as `v0.4.3`. From v0.4.3-rc.3 on,
+each release tag is signed by the maintainer's SSH key, which GitHub shows as *Verified* beside the
+tag, and which git checks against the key listed in the repository:
+
+```bash
+git clone https://github.com/jprodgers/jetcarp && cd jetcarp
+git config gpg.ssh.allowedSignersFile .github/allowed_signers
+git tag -v v0.4.3
+```
+
+The repository's rules let only the maintainer create a `v…` tag, and nobody move or delete one,
+so a release's tag can't later be pointed at another commit.
+
 ## No telemetry
 
 JETCARP makes no network connections. It does not check for updates, report crashes or collect
