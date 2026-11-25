@@ -6,7 +6,7 @@
 //! ([`jetcarp_core::strobe::TILE`] pixels square) its mean relative luminance and mean red
 //! measure, and its fine patterns of both (#269; [`jetcarp_core::strobe::frame::Fine`]: its light
 //! and dark parts, and which of its 49 windows of 4 by 4 pixels are clearly above or below its
-//! mean, each window the sum of four threads' 2 by 2 blocks, summed as the processor sums them):
+//! mean, each window the sum of four 2 by 2 blocks, summed as the processor sums them):
 //! the same [`TileMap`] the processor's reduction gives
 //! ([`jetcarp_core::strobe::frame::reduce`]). It decodes by table rather than through an sRGB
 //! view because a texture unit's sRGB decoding differs by driver, and the red measure steps from
@@ -14,8 +14,15 @@
 //! tile's mean by a whole step; with the same tables, and that test in whole numbers
 //! ([`jetcarp_core::strobe::red_measure_fixed`]), every driver measures what the processor does,
 //! to the rounding of the sums. On the frames the stripe check wants, it also writes the
-//! half-resolution luminance image. One workgroup is one tile: 64 threads, each reading a 2 by 2
-//! block of pixels once. When the guard's [`Plan`] softens or veils anything, the same pass then
+//! half-resolution luminance image. A workgroup measures four tiles side by side, sixteen threads
+//! a tile, each reading four 2 by 2 blocks of pixels once: a column of blocks, every other row. A
+//! thread adds its blocks' sums as the first two levels of a tree over the tile's 64 blocks, and
+//! the threads the rest, so every sum is the one the pass made when each block had a thread of its
+//! own, to the bit, with a quarter of the threads, of the waits for one another (`workgroupBarrier`)
+//! and of the shared memory's traffic (#343: on an Intel UHD the pass made the desktop background
+//! cost a third of the GPU at 30 frames a second, whatever its cells; see `tests/frame_cost.rs`).
+//! The windows' bits are gathered from each thread's, not set one by one in shared memory. When
+//! the guard's [`Plan`] softens or veils anything, the same pass then
 //! carries it out as [`jetcarp_core::strobe::soften::Softener`] does: it keeps the last frame
 //! shown in linear light (16 bits a channel; while nothing is softened, only each tile's mean),
 //! moves each softened tile towards the new frame by the fraction that keeps its mean within the
@@ -43,6 +50,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 /// Readback buffers in flight at once.
 pub const SLOTS: usize = 4;
+
+/// Tiles a workgroup of the pass measures, side by side (sixteen threads each, #343).
+const TILES_A_GROUP: u32 = 4;
 
 /// Bytes a tile's readings take, as drawn (and again as shown): its means, its fine patterns'
 /// light and dark parts and windows, and its mean colour.
@@ -80,14 +90,28 @@ const TABLE: u32 = 32u;
 // Where the 16-bit to sRGB byte table starts in `lut` (after the two decode tables).
 const ENC_AT: u32 = 512u;
 
+// A workgroup measures four tiles side by side, sixteen threads each (#343). A tile is 64 blocks
+// of 2 by 2 pixels, numbered row by row; thread `t` of a tile reads blocks `t`, `t + 16`, `t + 32`
+// and `t + 48` (a column of blocks, every other row). Its sums are (b0 + b2) + (b1 + b3) of those
+// blocks' sums: the first two levels of the tree a tile's 64 blocks were summed by when each had a
+// thread of its own (each block with the one 32 after it, then each pair with the pair 16 after).
+// The threads sum the rest of that tree as before, so every mean, part and window is the one that
+// pass gave, to the bit, with a quarter of the threads, of the barriers and of the shared memory's
+// traffic.
+const PER: u32 = 16u;
+
+// Each tile's threads' sums, at `slot * 16 + t`.
 var<workgroup> acc: array<vec4<f32>, 64>;
 var<workgroup> acc2: array<vec4<f32>, 64>;
 var<workgroup> cnt: array<f32, 64>;
-// Each thread's 2 by 2 block: its sums (luminance, red measure) and its pixels in the frame.
-var<workgroup> blk: array<vec2<f32>, 64>;
-var<workgroup> blkn: array<u32, 64>;
-// The windows' bits: luminance's clear (2 words) and above (2), the red measure's the same.
-var<workgroup> wbits: array<atomic<u32>, 8>;
+// Each tile's blocks' sums (luminance, red measure) and their pixels in the frame, at
+// `slot * 64 + block`.
+var<workgroup> blk: array<vec2<f32>, 256>;
+var<workgroup> blkn: array<u32, 256>;
+// Each thread's windows' bits, (luminance clear, luminance above) then (red clear, red above),
+// two words each; then each tile's, gathered.
+var<workgroup> part: array<vec4<u32>, 128>;
+var<workgroup> words: array<vec4<u32>, 8>;
 
 fn dec(x: f32) -> f32 {
   if (x <= 0.04045) { return x / 12.92; }
@@ -108,23 +132,38 @@ fn enc8(x: f32) -> f32 {
   let b = (lut[ENC_AT + (i >> 2u)] >> ((i & 3u) * 8u)) & 0xffu;
   return f32(b) / 255.0;
 }
-// The veil at pixel q, interpolated between tile centres as the processor's `Plan::veil_at`
-// does (by hand: a sampler's filtering precision is the driver's).
-fn veil_at(q: vec2<u32>) -> vec2<f32> {
-  let u = clamp((f32(q.x) + 0.5) * 0.0625 - 0.5, 0.0, f32(p.cols - 1u));
-  let v = clamp((f32(q.y) + 0.5) * 0.0625 - 0.5, 0.0, f32(p.rows - 1u));
-  let c0 = u32(floor(u));
-  let r0 = u32(floor(v));
+// The veil between tile centres, interpolated as the processor's `Plan::veil_at` does (by hand: a
+// sampler's filtering precision is the driver's). A pixel's veil comes from the four tiles whose
+// centres are around it, the same four for every pixel of a 2 by 2 block (a block never straddles
+// the middle of a tile), so a block reads them once (`veils`); where none of the four is veiled
+// the veil is none, as the interpolation would give it.
+struct Veils { a: vec2<f32>, b: vec2<f32>, c: vec2<f32>, d: vec2<f32>, any: bool }
+fn veil_uv(q: vec2<u32>) -> vec2<f32> {
+  return vec2<f32>(clamp((f32(q.x) + 0.5) * 0.0625 - 0.5, 0.0, f32(p.cols - 1u)),
+                   clamp((f32(q.y) + 0.5) * 0.0625 - 0.5, 0.0, f32(p.rows - 1u)));
+}
+fn veils(q: vec2<u32>) -> Veils {
+  let uv = veil_uv(q);
+  let c0 = u32(floor(uv.x));
+  let r0 = u32(floor(uv.y));
   let c1 = min(c0 + 1u, p.cols - 1u);
   let r1 = min(r0 + 1u, p.rows - 1u);
-  let fu = u - f32(c0);
-  let fv = v - f32(r0);
-  let a = plan[r0 * p.cols + c0].yz;
-  let b = plan[r0 * p.cols + c1].yz;
-  let c = plan[r1 * p.cols + c0].yz;
-  let d = plan[r1 * p.cols + c1].yz;
-  let top = a + (b - a) * fu;
-  let bottom = c + (d - c) * fu;
+  var k: Veils;
+  k.a = plan[r0 * p.cols + c0].yz;
+  k.b = plan[r0 * p.cols + c1].yz;
+  k.c = plan[r1 * p.cols + c0].yz;
+  k.d = plan[r1 * p.cols + c1].yz;
+  k.any = any(k.a != vec2<f32>(0.0)) || any(k.b != vec2<f32>(0.0)) || any(k.c != vec2<f32>(0.0)) || any(k.d != vec2<f32>(0.0));
+  return k;
+}
+// The veil at pixel q, of its block's four tiles `k`.
+fn veil_at(q: vec2<u32>, k: Veils) -> vec2<f32> {
+  if (!k.any) { return vec2<f32>(0.0); }
+  let uv = veil_uv(q);
+  let fu = uv.x - f32(u32(floor(uv.x)));
+  let fv = uv.y - f32(u32(floor(uv.y)));
+  let top = k.a + (k.b - k.a) * fu;
+  let bottom = k.c + (k.d - k.c) * fu;
   return top + (bottom - top) * fv;
 }
 fn lum(c: vec3<f32>) -> f32 { return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722)); }
@@ -136,213 +175,279 @@ fn red(c: vec3<f32>) -> f32 {
 fn q16(c: vec3<f32>) -> vec3<f32> {
   return vec3<f32>(unpack2x16unorm(pack2x16unorm(c.rg)), unpack2x16unorm(pack2x16unorm(vec2<f32>(c.b, 0.0))).x);
 }
-fn reduce(lx: u32) {
-  for (var st = 32u; st > 0u; st = st >> 1u) {
-    if (lx < st) {
-      acc[lx] = acc[lx] + acc[lx + st];
-      cnt[lx] = cnt[lx] + cnt[lx + st];
-    }
-    workgroupBarrier();
+// Pixel q's colour in linear light, and its red measure.
+fn pixel(q: vec2<u32>) -> vec4<f32> {
+  var c = textureLoad(src, vec2<i32>(q), 0).rgb;
+  if ((p.mode & TABLE) != 0u) {
+    // 8-bit sRGB values: back to their bytes, decoded with the processor's tables.
+    let b = vec3<u32>(round(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)) * 255.0));
+    return vec4<f32>(lin8(b.x), lin8(b.y), lin8(b.z), red_fixed(lut[256u + b.x], lut[256u + b.y], lut[256u + b.z]));
   }
+  if ((p.mode & DECODE) != 0u) { c = vec3<f32>(dec(c.r), dec(c.g), dec(c.b)); }
+  return vec4<f32>(c, red(c));
 }
-fn reduce3(lx: u32) {
-  for (var st = 32u; st > 0u; st = st >> 1u) {
-    if (lx < st) {
-      acc[lx] = acc[lx] + acc[lx + st];
-      acc2[lx] = acc2[lx] + acc2[lx + st];
-      cnt[lx] = cnt[lx] + cnt[lx + st];
-    }
-    workgroupBarrier();
+fn inside(q: vec2<u32>) -> bool { return q.x < p.size.x && q.y < p.size.y; }
+
+// A block of 2 by 2 pixels, in reading order: each pixel's luminance (l), red measure (r) and
+// colour in linear light (c0 to c3), which are in the frame (ok), and the block's sums, pixel by
+// pixel in that order, of luminance, red measure and colour (a: luminance, red measure, red,
+// green; b: blue), and its pixels in the frame (n). Where the stripe check wants it, the block's
+// mean luminance goes into the half-resolution image.
+struct Block {
+  l: vec4<f32>,
+  r: vec4<f32>,
+  c0: vec3<f32>,
+  c1: vec3<f32>,
+  c2: vec3<f32>,
+  c3: vec3<f32>,
+  ok: vec4<bool>,
+  a: vec4<f32>,
+  b: f32,
+  n: f32,
+}
+fn read_block(base: vec2<u32>) -> Block {
+  var k: Block;
+  var crgb = vec3<f32>(0.0);
+  var l = 0.0;
+  var r = 0.0;
+  var n = 0.0;
+  let q0 = base;
+  let q1 = base + vec2<u32>(1u, 0u);
+  let q2 = base + vec2<u32>(0u, 1u);
+  let q3 = base + vec2<u32>(1u, 1u);
+  k.ok = vec4<bool>(inside(q0), inside(q1), inside(q2), inside(q3));
+  if (k.ok.x) { let x = pixel(q0); k.c0 = x.rgb; crgb += x.rgb; k.l.x = lum(x.rgb); k.r.x = x.w; l += k.l.x; r += x.w; n += 1.0; }
+  if (k.ok.y) { let x = pixel(q1); k.c1 = x.rgb; crgb += x.rgb; k.l.y = lum(x.rgb); k.r.y = x.w; l += k.l.y; r += x.w; n += 1.0; }
+  if (k.ok.z) { let x = pixel(q2); k.c2 = x.rgb; crgb += x.rgb; k.l.z = lum(x.rgb); k.r.z = x.w; l += k.l.z; r += x.w; n += 1.0; }
+  if (k.ok.w) { let x = pixel(q3); k.c3 = x.rgb; crgb += x.rgb; k.l.w = lum(x.rgb); k.r.w = x.w; l += k.l.w; r += x.w; n += 1.0; }
+  if ((p.mode & HALF) != 0u && n > 0.0) {
+    halfimg[(base.y >> 1u) * p.half_w + (base.x >> 1u)] = l / n;
   }
+  k.a = vec4<f32>(l, r, crgb.r, crgb.g);
+  k.b = crgb.b;
+  k.n = n;
+  return k;
 }
-fn reduce2(lx: u32) {
-  for (var st = 32u; st > 0u; st = st >> 1u) {
-    if (lx < st) {
-      acc[lx] = acc[lx] + acc[lx + st];
-      acc2[lx] = acc2[lx] + acc2[lx + st];
-    }
-    workgroupBarrier();
-  }
+// One block's part of the tile's fine patterns, as the processor's
+// `jetcarp_core::strobe::frame::fine_of` works them out, around the tile's means m (luminance in
+// x, the red measure in y): the sums of its pixels above them and at or below them (s), and how
+// many (c); its sums and pixels go to `blk` and `blkn` at `at`, for the windows.
+struct Parts { s: vec4<f32>, c: vec4<f32> }
+fn one(x: vec2<f32>, m: vec2<f32>, q: ptr<function, Parts>) {
+  if (x.x > m.x) { (*q).s.x += x.x; (*q).c.x += 1.0; } else { (*q).s.y += x.x; (*q).c.y += 1.0; }
+  if (x.y > m.y) { (*q).s.z += x.y; (*q).c.z += 1.0; } else { (*q).s.w += x.y; (*q).c.w += 1.0; }
 }
-// The tile's fine patterns, as the processor's `jetcarp_core::strobe::frame::fine_of` works them
-// out: of luminance (x) and of the red measure (y), from each thread's four pixels' values `v`
-// (where `ok`), around the tile's means `m`. The first thread writes them as records `at + 1` to
-// `at + 3`. Called by every thread.
-fn fine(lx: u32, v: array<vec2<f32>, 4>, ok: array<bool, 4>, m: vec2<f32>, at: u32) {
-  var s = vec4<f32>(0.0);
-  var c = vec4<f32>(0.0);
+fn block_parts(k: Block, m: vec2<f32>, at: u32) -> Parts {
+  var q: Parts;
   var b = vec2<f32>(0.0);
   var nb = 0u;
-  for (var k = 0u; k < 4u; k++) {
-    if (ok[k]) {
-      let x = v[k];
-      if (x.x > m.x) { s.x += x.x; c.x += 1.0; } else { s.y += x.x; c.y += 1.0; }
-      if (x.y > m.y) { s.z += x.y; c.z += 1.0; } else { s.w += x.y; c.w += 1.0; }
-      b += x;
-      nb += 1u;
+  if (k.ok.x) { let x = vec2<f32>(k.l.x, k.r.x); one(x, m, &q); b += x; nb += 1u; }
+  if (k.ok.y) { let x = vec2<f32>(k.l.y, k.r.y); one(x, m, &q); b += x; nb += 1u; }
+  if (k.ok.z) { let x = vec2<f32>(k.l.z, k.r.z); one(x, m, &q); b += x; nb += 1u; }
+  if (k.ok.w) { let x = vec2<f32>(k.l.w, k.r.w); one(x, m, &q); b += x; nb += 1u; }
+  blk[at] = b;
+  blkn[at] = nb;
+  return q;
+}
+// The rest of the tree over a tile's sixteen sums, from `s`: each level adds in the sum `st`
+// further on, as the tree over 64 did from its level of 8.
+fn reduce3(t: u32, s: u32) {
+  for (var st = 8u; st > 0u; st = st >> 1u) {
+    if (t < st) {
+      acc[s + t] = acc[s + t] + acc[s + t + st];
+      acc2[s + t] = acc2[s + t] + acc2[s + t + st];
+      cnt[s + t] = cnt[s + t] + cnt[s + t + st];
     }
+    workgroupBarrier();
   }
-  acc[lx] = s;
-  acc2[lx] = c;
-  blk[lx] = b;
-  blkn[lx] = nb;
-  if (lx < 8u) { atomicStore(&wbits[lx], 0u); }
+}
+fn reduce2(t: u32, s: u32) {
+  for (var st = 8u; st > 0u; st = st >> 1u) {
+    if (t < st) {
+      acc[s + t] = acc[s + t] + acc[s + t + st];
+      acc2[s + t] = acc2[s + t] + acc2[s + t + st];
+    }
+    workgroupBarrier();
+  }
+}
+// The tile's fine patterns, of luminance and of the red measure, from the thread's four blocks
+// around the tile's means m: the first thread writes them as records `at + 1` to `at + 3` (where
+// the tile is `valid`, inside the frame). Called by every thread.
+fn fine(t: u32, slot: u32, k0: Block, k1: Block, k2: Block, k3: Block, m: vec2<f32>, at: u32, valid: bool) {
+  let s = slot * PER;
+  let bs = slot * 64u;
+  let q0 = block_parts(k0, m, bs + t);
+  let q1 = block_parts(k1, m, bs + t + 16u);
+  let q2 = block_parts(k2, m, bs + t + 32u);
+  let q3 = block_parts(k3, m, bs + t + 48u);
+  acc[s + t] = (q0.s + q2.s) + (q1.s + q3.s);
+  acc2[s + t] = (q0.c + q2.c) + (q1.c + q3.c);
   workgroupBarrier();
-  reduce2(lx);
-  let ts = acc[0];
-  let tc = acc2[0];
+  reduce2(t, s);
+  let ts = acc[s];
+  let tc = acc2[s];
   let ll = select(m.x, ts.x / tc.x, tc.x > 0.0);
   let ld = select(m.x, ts.y / tc.y, tc.y > 0.0);
   let rl = select(m.y, ts.z / tc.z, tc.z > 0.0);
   let rd = select(m.y, ts.w / tc.w, tc.w > 0.0);
-  // Windows of 4 by 4 pixels, every 2: 7 across, 7 down, each four whole blocks.
-  if (lx < 49u) {
-    let b0 = (lx / 7u) * 8u + lx % 7u;
+  // Windows of 4 by 4 pixels, every 2: 7 across, 7 down, each four whole blocks. Thread t takes
+  // windows t, t + 16, t + 32 and t + 48. Luminance's clear (xy: the two words) and above (zw);
+  // the red measure's the same.
+  var lw = vec4<u32>(0u);
+  var rw = vec4<u32>(0u);
+  for (var w = t; w < 49u; w += PER) {
+    let b0 = bs + (w / 7u) * 8u + w % 7u;
     if (blkn[b0] == 4u && blkn[b0 + 1u] == 4u && blkn[b0 + 8u] == 4u && blkn[b0 + 9u] == 4u) {
       let d = ((blk[b0] + blk[b0 + 1u]) + (blk[b0 + 8u] + blk[b0 + 9u])) / 16.0 - m;
-      let word = lx >> 5u;
-      let bit = 1u << (lx & 31u);
+      let bit = 1u << (w & 31u);
+      let in_word = select(vec2<u32>(0u, bit), vec2<u32>(bit, 0u), w < 32u);
       if (ll > ld && abs(d.x) >= 0.1 * (ll - ld)) {
-        atomicOr(&wbits[word], bit);
-        if (d.x > 0.0) { atomicOr(&wbits[2u + word], bit); }
+        lw = lw | vec4<u32>(in_word, select(vec2<u32>(0u), in_word, d.x > 0.0));
       }
       if (rl > rd && abs(d.y) >= 0.1 * (rl - rd)) {
-        atomicOr(&wbits[4u + word], bit);
-        if (d.y > 0.0) { atomicOr(&wbits[6u + word], bit); }
+        rw = rw | vec4<u32>(in_word, select(vec2<u32>(0u), in_word, d.y > 0.0));
       }
     }
   }
+  part[(s + t) * 2u] = lw;
+  part[(s + t) * 2u + 1u] = rw;
   workgroupBarrier();
-  if (lx == 0u) {
+  // Gathered by two threads a tile, one for luminance and one for the red measure.
+  if (t < 2u) {
+    var x = vec4<u32>(0u);
+    for (var u = 0u; u < PER; u++) { x = x | part[(s + u) * 2u + t]; }
+    words[slot * 2u + t] = x;
+  }
+  workgroupBarrier();
+  if (t == 0u && valid) {
     tiles[at + 1u] = bitcast<vec4<u32>>(vec4<f32>(ll, ld, rl, rd));
-    tiles[at + 2u] = vec4<u32>(atomicLoad(&wbits[0]), atomicLoad(&wbits[1]),
-                               atomicLoad(&wbits[2]), atomicLoad(&wbits[3]));
-    tiles[at + 3u] = vec4<u32>(atomicLoad(&wbits[4]), atomicLoad(&wbits[5]),
-                               atomicLoad(&wbits[6]), atomicLoad(&wbits[7]));
+    tiles[at + 2u] = words[slot * 2u];
+    tiles[at + 3u] = words[slot * 2u + 1u];
   }
   // Everyone has read the sums before the arrays are used again.
   workgroupBarrier();
 }
 
-@compute @workgroup_size(8, 8)
-fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: vec3<u32>,
-        @builtin(local_invocation_index) lx: u32) {
-  let tile = wg.y * p.cols + wg.x;
-  let base = vec2<u32>(wg.x * 16u + li.x * 2u, wg.y * 16u + li.y * 2u);
-  var px: array<vec3<f32>, 4>;
-  var ok: array<bool, 4>;
-  // Each pixel's luminance and red measure, as drawn and as shown.
-  var vin: array<vec2<f32>, 4>;
-  var vout: array<vec2<f32>, 4>;
-  var l = 0.0;
-  var r = 0.0;
-  var n = 0.0;
-  // The colour's sums in linear light, as drawn and as shown (for WCAG 2.2's red flashes).
-  var crgb = vec3<f32>(0.0);
-  var orgb = vec3<f32>(0.0);
-  for (var k = 0u; k < 4u; k++) {
-    let q = base + vec2<u32>(k & 1u, k >> 1u);
-    ok[k] = q.x < p.size.x && q.y < p.size.y;
-    px[k] = vec3<f32>(0.0);
-    vin[k] = vec2<f32>(0.0);
-    vout[k] = vec2<f32>(0.0);
-    if (ok[k]) {
-      var c = textureLoad(src, vec2<i32>(q), 0).rgb;
-      var rk = 0.0;
-      if ((p.mode & TABLE) != 0u) {
-        // 8-bit sRGB values: back to their bytes, decoded with the processor's tables.
-        let b = vec3<u32>(round(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)) * 255.0));
-        c = vec3<f32>(lin8(b.x), lin8(b.y), lin8(b.z));
-        rk = red_fixed(lut[256u + b.x], lut[256u + b.y], lut[256u + b.z]);
-      } else {
-        if ((p.mode & DECODE) != 0u) { c = vec3<f32>(dec(c.r), dec(c.g), dec(c.b)); }
-        rk = red(c);
-      }
-      px[k] = c;
-      crgb += c;
-      vin[k] = vec2<f32>(lum(c), rk);
-      l += vin[k].x;
-      r += rk;
-      n += 1.0;
+// A pixel as shown: softened towards the last frame shown, by `beta`, and veiled; written to
+// `state` (softened, before the veil) and `shown`. Its colour as shown (o) and softened (c).
+struct Px { o: vec3<f32>, c: vec3<f32> }
+fn shown_px(q: vec2<u32>, px: vec3<f32>, beta: f32, pv: vec2<f32>, vk: Veils) -> Px {
+  let at = q.y * p.size.x + q.x;
+  var c = px;
+  if (beta < 1.0) {
+    // The first softened frame moves from a grey at the tile's last mean.
+    var was = vec3<f32>(pv.x);
+    if ((p.mode & FRESH) == 0u) {
+      let st = state[at];
+      was = vec3<f32>(unpack2x16unorm(st.x), unpack2x16unorm(st.y).x);
     }
+    c = was + (px - was) * beta;
   }
-  if ((p.mode & HALF) != 0u && n > 0.0) {
-    halfimg[(base.y >> 1u) * p.half_w + (base.x >> 1u)] = l / n;
-  }
-  acc[lx] = vec4<f32>(l, r, crgb.r, crgb.g);
-  acc2[lx] = vec4<f32>(crgb.b, 0.0, 0.0, 0.0);
-  cnt[lx] = n;
+  state[at] = vec2<u32>(pack2x16unorm(c.rg), pack2x16unorm(vec2<f32>(c.b, 0.0)));
+  c = q16(c);
+  let v = veil_at(q, vk);
+  let o = c * (1.0 - v.x) + vec3<f32>(v.y);
+  textureStore(shown, vec2<i32>(q), vec4<f32>(enc8(o.r), enc8(o.g), enc8(o.b), 1.0));
+  var r: Px;
+  r.o = o;
+  r.c = c;
+  return r;
+}
+// A block as shown: its pixels' luminance and red measure as shown (in `k`), the sums of the
+// softened pixels' luminance and red measure and of the shown ones' (sums), and of their colour.
+struct OutBlock { k: Block, sums: vec4<f32>, orgb: vec3<f32> }
+fn add_out(x: Px, o: ptr<function, OutBlock>) -> vec2<f32> {
+  let v = vec2<f32>(lum(x.o), red(x.o));
+  (*o).orgb += x.o;
+  (*o).sums += vec4<f32>(lum(x.c), red(x.c), v.x, v.y);
+  return v;
+}
+fn out_block(k: Block, base: vec2<u32>, beta: f32, pv: vec2<f32>) -> OutBlock {
+  var o: OutBlock;
+  o.k.ok = k.ok;
+  o.k.n = k.n;
+  let vk = veils(base);
+  if (k.ok.x) { let v = add_out(shown_px(base, k.c0, beta, pv, vk), &o); o.k.l.x = v.x; o.k.r.x = v.y; }
+  if (k.ok.y) { let v = add_out(shown_px(base + vec2<u32>(1u, 0u), k.c1, beta, pv, vk), &o); o.k.l.y = v.x; o.k.r.y = v.y; }
+  if (k.ok.z) { let v = add_out(shown_px(base + vec2<u32>(0u, 1u), k.c2, beta, pv, vk), &o); o.k.l.z = v.x; o.k.r.z = v.y; }
+  if (k.ok.w) { let v = add_out(shown_px(base + vec2<u32>(1u, 1u), k.c3, beta, pv, vk), &o); o.k.l.w = v.x; o.k.r.w = v.y; }
+  return o;
+}
+
+@compute @workgroup_size(16, 4)
+fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_id) li: vec3<u32>) {
+  let t = li.x;
+  let slot = li.y;
+  let s = slot * PER;
+  let tx = wg.x * 4u + slot;
+  let valid = tx < p.cols;
+  let tile = wg.y * p.cols + tx;
+  let corner = vec2<u32>(tx * 16u + (t % 8u) * 2u, wg.y * 16u + (t / 8u) * 2u);
+  let c1 = corner + vec2<u32>(0u, 4u);
+  let c2 = corner + vec2<u32>(0u, 8u);
+  let c3 = corner + vec2<u32>(0u, 12u);
+  // A workgroup past the frame's last column still meets every barrier; its tile writes nothing.
+  let k0 = read_block(corner);
+  let k1 = read_block(c1);
+  let k2 = read_block(c2);
+  let k3 = read_block(c3);
+  acc[s + t] = (k0.a + k2.a) + (k1.a + k3.a);
+  acc2[s + t] = vec4<f32>((k0.b + k2.b) + (k1.b + k3.b), 0.0, 0.0, 0.0);
+  cnt[s + t] = (k0.n + k2.n) + (k1.n + k3.n);
   workgroupBarrier();
-  reduce3(lx);
-  let total = max(cnt[0], 1.0);
-  let lin = acc[0].x / total;
-  let rin = acc[0].y / total;
-  let cin = vec3<f32>(acc[0].z, acc[0].w, acc2[0].x) / total;
+  reduce3(t, s);
+  let total = max(cnt[s], 1.0);
+  let lin = acc[s].x / total;
+  let rin = acc[s].y / total;
+  let cin = vec3<f32>(acc[s].z, acc[s].w, acc2[s].x) / total;
   // Everyone has read the sums before the arrays are used again.
   workgroupBarrier();
   let rec = tile * 5u;
-  if (lx == 0u) {
+  if (t == 0u && valid) {
     tiles[rec + 4u] = bitcast<vec4<u32>>(vec4<f32>(cin, 0.0));
   }
-  fine(lx, vin, ok, vec2<f32>(lin, rin), rec);
+  fine(t, slot, k0, k1, k2, k3, vec2<f32>(lin, rin), rec, valid);
   if ((p.mode & GUARD) == 0u) {
-    if (lx == 0u) {
+    if (t == 0u && valid) {
       tiles[rec] = bitcast<vec4<u32>>(vec4<f32>(lin, rin, lin, rin));
       prev[tile] = vec2<f32>(lin, rin);
     }
     return;
   }
   var beta = 1.0;
-  let pl = plan[tile];
-  let pv = prev[tile];
+  var pl = vec4<f32>(0.0);
+  var pv = vec2<f32>(0.0);
+  if (valid) {
+    pl = plan[tile];
+    pv = prev[tile];
+  }
   if ((p.mode & PREV) != 0u && pl.x > 0.5) {
     let dl = abs(lin - pv.x);
     let dr = abs(rin - pv.y);
     if (dl > p.lum_step) { beta = min(beta, p.lum_step / dl); }
     if (dr > p.red_step) { beta = min(beta, p.red_step / dr); }
   }
-  var sums = vec4<f32>(0.0);
-  for (var k = 0u; k < 4u; k++) {
-    if (ok[k]) {
-      let q = base + vec2<u32>(k & 1u, k >> 1u);
-      let i = q.y * p.size.x + q.x;
-      var s = px[k];
-      if (beta < 1.0) {
-        // The first softened frame moves from a grey at the tile's last mean.
-        var was = vec3<f32>(pv.x);
-        if ((p.mode & FRESH) == 0u) {
-          let st = state[i];
-          was = vec3<f32>(unpack2x16unorm(st.x), unpack2x16unorm(st.y).x);
-        }
-        s = was + (px[k] - was) * beta;
-      }
-      state[i] = vec2<u32>(pack2x16unorm(s.rg), pack2x16unorm(vec2<f32>(s.b, 0.0)));
-      s = q16(s);
-      let v = veil_at(q);
-      let o = s * (1.0 - v.x) + vec3<f32>(v.y);
-      vout[k] = vec2<f32>(lum(o), red(o));
-      orgb += o;
-      sums += vec4<f32>(lum(s), red(s), vout[k].x, vout[k].y);
-      textureStore(shown, vec2<i32>(q), vec4<f32>(enc8(o.r), enc8(o.g), enc8(o.b), 1.0));
-    }
-  }
-  acc[lx] = sums;
-  acc2[lx] = vec4<f32>(orgb, 0.0);
-  cnt[lx] = n;
+  let o0 = out_block(k0, corner, beta, pv);
+  let o1 = out_block(k1, c1, beta, pv);
+  let o2 = out_block(k2, c2, beta, pv);
+  let o3 = out_block(k3, c3, beta, pv);
+  acc[s + t] = (o0.sums + o2.sums) + (o1.sums + o3.sums);
+  acc2[s + t] = vec4<f32>((o0.orgb + o2.orgb) + (o1.orgb + o3.orgb), 0.0);
+  cnt[s + t] = (k0.n + k2.n) + (k1.n + k3.n);
   workgroupBarrier();
-  reduce3(lx);
-  let t = max(cnt[0], 1.0);
-  let a0 = acc[0];
-  let c0 = acc2[0];
+  reduce3(t, s);
+  let tt = max(cnt[s], 1.0);
+  let a0 = acc[s];
+  let cc = acc2[s];
   workgroupBarrier();
   let out_rec = (p.cols * p.rows + tile) * 5u;
-  if (lx == 0u) {
-    prev[tile] = vec2<f32>(a0.x / t, a0.y / t);
-    tiles[rec] = bitcast<vec4<u32>>(vec4<f32>(lin, rin, a0.z / t, a0.w / t));
-    tiles[out_rec + 4u] = bitcast<vec4<u32>>(vec4<f32>(c0.xyz / t, 0.0));
+  if (t == 0u && valid) {
+    prev[tile] = vec2<f32>(a0.x / tt, a0.y / tt);
+    tiles[rec] = bitcast<vec4<u32>>(vec4<f32>(lin, rin, a0.z / tt, a0.w / tt));
+    tiles[out_rec + 4u] = bitcast<vec4<u32>>(vec4<f32>(cc.xyz / tt, 0.0));
   }
   // The fine patterns shown.
-  fine(lx, vout, ok, vec2<f32>(a0.z / t, a0.w / t), out_rec);
+  fine(t, slot, o0.k, o1.k, o2.k, o3.k, vec2<f32>(a0.z / tt, a0.w / tt), out_rec, valid);
 }
 "#;
 
@@ -1055,7 +1160,7 @@ impl StrobeGpu {
             });
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &bind, &[]);
-            pass.dispatch_workgroups(cols, rows, 1);
+            pass.dispatch_workgroups(cols.div_ceil(TILES_A_GROUP), rows, 1);
         }
         // The readings, if a slot is free (else this frame goes unread; the softening holds).
         if let Some(slot) = s.slots.iter_mut().find(|x| x.state == SlotState::Free) {
@@ -1378,6 +1483,14 @@ impl GuardedGpu {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The dispatch matches the pass's workgroups: four tiles side by side, sixteen threads each.
+    #[test]
+    fn a_workgroup_measures_four_tiles() {
+        assert!(SHADER.contains("@compute @workgroup_size(16, 4)"));
+        assert!(SHADER.contains("const PER: u32 = 16u;"));
+        assert!(SHADER.contains(&format!("let tx = wg.x * {TILES_A_GROUP}u + slot;")));
+    }
 
     #[test]
     fn view_formats_pair_srgb_twins() {

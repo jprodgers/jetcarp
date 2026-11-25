@@ -574,6 +574,47 @@ day later (0.4.2: 17 November here, 18 November there).
 
 ### Fixed
 
+- **The strobe guard costs a weak GPU less, measuring exactly as before** (#343). In rc.1, on a
+  laptop's Intel UHD, the desktop background took 32 to 44% of the GPU at 30 frames a second
+  whatever its cells, against 3 to 11% in 0.4.2, so *Fit to this computer* found no size within a
+  25% GPU limit. Timing each pass of a desktop background's frame off screen found the cost in what
+  0.4.2 didn't have: the guard's pass over every pixel of every frame, which no cell size changes,
+  and which on Mesa's llvmpipe (whose figures for the same frames are about the UHD's) took three
+  times as long as drawing the frame. The pass gave each tile a workgroup of 64 threads that waited
+  for one another 17 times; a workgroup now measures four tiles, sixteen threads a tile, adding
+  their sums in the same order, so its readings are the same to the bit, and so are the guard's
+  verdicts on the whole corpus. On llvmpipe, measuring a 1920 × 1080 frame takes 2.5 ms instead of
+  4.6 and softening one about 5 instead of 10.3, and a frame through the guard 34% of 30 frames a
+  second instead of 44%; on an AMD Radeon 8060S, measuring takes 0.060 ms instead of 0.072, and
+  softening 0.20 instead of 0.16. A test that times each pass, and one that records every reading
+  and verdict to compare two builds, come with it.
+  ([What it costs](../guides/strobe-guard.md#what-it-costs),
+  [#343](https://github.com/jprodgers/jetcarp/issues/343))
+- **A rule series' cards show a picture** (#346). *Fit to this computer* measures a rule series,
+  such as the Wolfram series, as one scene, since each of its rules costs the same a cell, and it
+  measured and pictured it by its first rule: the Wolfram series' rule 0, which draws nothing from
+  its one cell, so its cards were empty. A series is now measured and pictured by the first of its
+  rules that changes cells of its seed (the Wolfram series' rule 1), and its row of cards says
+  which; what the fit measures is the same. A scene drawn row by row from the top, as the Wolfram
+  series' rules are, is pictured where its rows are, since in the second each size shows for they
+  do not reach the middle of the screen, where the picture was taken.
+  ([Fit to this computer](../guides/wallpapers.md#fit-to-this-computer),
+  [#346](https://github.com/jprodgers/jetcarp/issues/346))
+- **`--pick` in pixels gives an aperiodic scene the level nearest them** (#345). `jetcarp host tune
+  --pick 4` left Penrose waves at level 4 (16.2 pixels) when every lattice scene went to 4 pixels:
+  the fit's search had tried that level alone, and a pick looked only among the levels tried. A pick
+  in pixels now gives a scene on an aperiodic tiling the level whose tiles are nearest that size, of
+  every level it can show at, tried or not, as a lattice scene gets the cell size asked for.
+  ([Fit to this computer](../guides/wallpapers.md#fit-to-this-computer),
+  [#345](https://github.com/jprodgers/jetcarp/issues/345))
+- **The Desktop background pane's notes fit the docked pane** (#344). Beside each scene a fit sized
+  from the measured one, the pane says why it has its size ("your choice", "a placed pattern…",
+  "96% of the measured scene's work a cell; held to twice the measured scene's cells…"), in a third
+  column that, at the docked pane's width (about 340 points), ran past its right edge, with the
+  sizes' menus clipped. Where the three don't fit side by side, the note now goes under the scene's
+  name and menu, wrapped to the pane. ([The Desktop background pane](../guides/wallpapers.md#fit-to-this-computer),
+  [#344](https://github.com/jprodgers/jetcarp/issues/344))
+
 - **The Desktop background, Screensaver and Display settings open from the Quick Start** (#331).
   Their *View* entries were greyed out until a world was open, though none of them is about the
   world on screen: *Fit to this computer* meant opening a world first. They now open as windows

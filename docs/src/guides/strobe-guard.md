@@ -348,10 +348,31 @@ Since 0.4.3 the strobe guard is part of every animation's render key, so `jetcar
 ## What it costs
 
 Measuring is one read of each frame on the GPU, in a compute pass, fine patterns and colours
-included. On an AMD Radeon 8060S it takes 0.07 ms a frame at 1920 × 1080 (0.4% of a 60 Hz frame)
-and 0.29 ms at 3840 × 2160 (1.7%); with neither it took 0.03 and 0.11 ms. On a weak integrated
-GPU, perhaps a tenth as fast, it should stay under 5% of a frame at 1080p (not yet measured). Its
-readings come back to the processor, 80 bytes a tile (2.6 MB a frame at 3840 × 2160), in about
+included: a cost every frame, whatever the scene's cells. On an AMD Radeon 8060S it takes 0.06 ms
+a frame at 1920 × 1080 (0.4% of a 60 Hz frame) and 0.23 ms at 3840 × 2160 (1.4%); before the fine
+patterns and colours it took 0.03 and 0.11 ms. Softening, while it acts, costs 0.20 ms a frame at
+1080p and 1.1 ms at 3840 × 2160. Mesa's llvmpipe, which runs it on the processor, takes 2.5 ms to
+measure a 1080p frame and about 5 ms to soften one.
+
+A weak GPU feels this most (#343). In 0.4.3-rc.1, on a laptop's Intel UHD, the desktop background
+took 32 to 44% of the GPU at 30 frames a second whatever its cells, against 3 to 11% in 0.4.2, so
+[Fit to this computer](wallpapers.md#fit-to-this-computer) found no size within a 25% GPU limit.
+The pass then gave each tile of 16 by 16 pixels a workgroup of 64 threads, a block of 2 by 2
+pixels each, which waited for one another 17 times a tile (34 while softening). Since rc.3 a
+workgroup measures four tiles, sixteen threads a tile, each reading four blocks, and waits 14
+times for the four; the windows' bits are gathered rather than set one at a time, and a softened
+block reads its veil once rather than once a pixel. Its sums are added in the same order, so its
+readings are the same to the bit, and so are the guard's verdicts on the whole corpus, on the
+Radeon and on llvmpipe ([Testing](../about/testing.md#the-strobe-guard)). On llvmpipe, whose
+figures for the same frames are about the UHD's (a frame of Hodgepodge at 16 pixels a cell, drawn
+as the desktop background draws it, took 10.8% of 30 frames a second with no guard and 44% through
+it), measuring went from 4.6 to 2.5 ms, softening from 10.3 to about 5 ms, and that frame from 44%
+to 34%. On the Radeon, measuring went from 0.072 to 0.060 ms, and softening from 0.16 to 0.20 ms.
+`crates/jetcarp-display/tests/frame_cost.rs` times each pass of a desktop background's frame off
+screen, on the adapter `JETCARP_GPU` picks: `cargo test --release -p jetcarp-display --test
+frame_cost -- --ignored --nocapture`.
+
+Its readings come back to the processor, 80 bytes a tile (2.6 MB a frame at 3840 × 2160), in about
 0.15 ms. Counting the transitions in them takes the processor (a Ryzen AI Max+ 395) about
 1 ms a frame at 3840 × 2160 (0.7 ms with neither), for the frames as drawn and again as shown;
 2 to 3.5 ms while the whole screen flashes every few frames, and up to 11 ms in the frames the
@@ -359,8 +380,7 @@ whole screen changes in part of every tile, every frame, until the scene is slow
 tile's windows with the frame before ([Change in part of a tile](#partial-change)) doubled these,
 from 0.5, 0.35 and 1.5 ms; keeping a second of each tile's windows' changes, for
 [restless change](#restless-change), added about a tenth, and a quarter to the frames that change
-everywhere every frame, and takes about 28 MB more a meter at 3840 × 2160. Softening costs more,
-0.15 ms a frame at 1080p on the same GPU, but only while it acts. The stripe check takes about
+everywhere every frame, and takes about 28 MB more a meter at 3840 × 2160. The stripe check takes about
 3 ms of one processor core for a 1080p frame, four times a second. On a surface the guard cannot
 read in place, each frame is drawn into a texture and copied to the screen.
 

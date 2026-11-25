@@ -1147,7 +1147,8 @@ fn a_rotation_mixing_devices_is_measured_on_both() {
 }
 
 /// A rule series is fitted as one scene (#109): the Wolfram series' first 41 rules are one
-/// scene, its first rule measured, and the host shows every rule at the size found.
+/// scene, measured by its first rule that draws (rule 1, #346), and the host shows every rule at
+/// the size found.
 #[test]
 fn a_rule_series_is_fitted_as_one_scene() {
     let dir = home("series");
@@ -1163,7 +1164,7 @@ fn a_rule_series_is_fitted_as_one_scene() {
     let scenes: Vec<&Value> = events.iter().filter(|e| e["event"] == "scene").collect();
     assert_eq!(scenes.len(), 1, "{out}");
     let r = &scenes[0]["result"];
-    assert_eq!(r["scene"], "W0");
+    assert_eq!(r["scene"], "W1");
     assert_eq!(r["also"].as_array().unwrap().len(), 40, "{r}");
     assert_eq!(r["cell_px"], 2.0, "--pick 2: {r}");
     // The host shows a later rule of the series at that size too.
@@ -1183,6 +1184,56 @@ fn a_rule_series_is_fitted_as_one_scene() {
         (Some(2.0), Some(true)),
         "{s}"
     );
+}
+
+/// A rule series' cards show a picture (#346): the Wolfram series was measured and pictured by its
+/// first rule, rule 0, which draws nothing from its one cell. Now by its first rule that changes
+/// cells of its seed, rule 1, its rows drawn from the top of the screen: the picture is taken
+/// where they are.
+#[test]
+fn a_rule_series_cards_show_a_picture() {
+    let dir = home("series-picture");
+    rotation_on(
+        &dir,
+        json!({"name": "Some Wolfram", "look": {"cell_px": 4.0, "speed": 60.0, "refill": true},
+            "items": [{"source": {"kind": "series", "rules": "W", "from": 0, "to": 40}}]}),
+        1,
+    );
+    let crops = dir.join("crops");
+    let (events, out) = tune(
+        &dir,
+        &["--canvas", "640x360", "--crops", crops.to_str().unwrap()],
+    );
+    let measured: Vec<&Value> = events.iter().filter(|e| e["event"] == "measured").collect();
+    assert!(!measured.is_empty(), "{out}");
+    if events[0]["gpu"].is_null() {
+        // No GPU: no pictures.
+        return;
+    }
+    for e in &measured {
+        let name = e["rung"]["crop"]
+            .as_str()
+            .unwrap_or_else(|| panic!("a picture: {e}"));
+        let png = std::fs::read(crops.join(name)).unwrap();
+        let img = jetcarp_core::media::encode::decode_png(&png).unwrap();
+        let px: Vec<&[u8]> = img.rgba.chunks(4).collect();
+        let mut counts = std::collections::HashMap::new();
+        for p in &px {
+            *counts.entry(*p).or_insert(0usize) += 1;
+        }
+        let most = counts.values().max().copied().unwrap_or(0);
+        let drawn = (px.len() - most) as f64 / px.len() as f64;
+        assert!(
+            drawn > 0.05,
+            "{name} ({} at {}): {:.1}% of its pixels drawn\n{out}",
+            e["scene"],
+            e["rung"]["size"],
+            drawn * 100.0
+        );
+    }
+    let r = &events.iter().find(|e| e["event"] == "scene").unwrap()["result"];
+    assert_eq!(r["scene"], "W1", "measured and pictured by rule 1: {r}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// `--pick` places the sizes the last fit found while they are current, measuring nothing
