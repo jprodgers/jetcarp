@@ -979,6 +979,63 @@ fn a_pick_places_sizes_the_sweep_never_showed() {
     assert!(t.note.as_deref().unwrap().contains("no size was within"));
 }
 
+/// `--pick 4` gives a patch the level whose tiles are nearest 4 pixels, of every level it can
+/// show at, as a lattice gets 4 px whether or not its search showed it (#345): the Acer's fit,
+/// whose search tried Penrose waves at level 4 alone (16.2 px there), over the limits, left it there
+/// when every lattice scene went to 4 px. The same from the saved fit (`--pick` while the fit is
+/// current, #77), and for a scene sized from the measured one.
+#[test]
+fn a_pick_in_pixels_gives_a_patch_the_level_nearest_them() {
+    let l = limits();
+    let canvas = [1920.0, 1080.0];
+    let sizes = patch_ladder("penrose-rhomb", canvas, Some(6), SWEEP_MAX_CELLS);
+    let level = |n: u32| *sizes.iter().find(|s| s.level == Some(n)).unwrap();
+    let nearest = |px: f32| {
+        *sizes
+            .iter()
+            .min_by(|a, b| (a.px - px).abs().total_cmp(&(b.px - px).abs()))
+            .unwrap()
+    };
+    assert!(level(4).px > 12.0, "{:?}", level(4));
+    assert_ne!(nearest(4.0), level(4));
+    let mut s = Search::new(sizes.clone(), level(6), Some(level(4)), None);
+    let i = s.next().unwrap();
+    assert_eq!(s.sizes[i], level(4));
+    let far = Measure {
+        cpu: 0.9,
+        p95: 0.020,
+        cells: 4000,
+        ..Measure::default()
+    };
+    s.record(i, level(4).px, &far, &l);
+    assert!(s.next().is_none(), "the one level tried");
+    let p = Planned {
+        label: "Penrose waves".into(),
+        tiling: "penrose-rhomb".into(),
+        design: 2.4,
+        own: level(6),
+        sizes: sizes.clone(),
+        ..Default::default()
+    };
+    for px in [4.0, 10.0, 30.0] {
+        let t = measured_scene(&p, &s, GpuTiming::None, Some(Pick::Px(px)), None);
+        assert_eq!(t.size(), nearest(px), "--pick {px}");
+        assert!(t.chosen);
+        let again = repick(&[t], &|_| sizes.clone(), canvas, Pick::Px(px));
+        assert_eq!(
+            again[0].size(),
+            nearest(px),
+            "--pick {px} from the saved fit"
+        );
+        let derived = derived_scene(&p, canvas, None, GpuTiming::None, Some(Pick::Px(px)), None);
+        assert_eq!(
+            derived.size(),
+            nearest(px),
+            "--pick {px}, sized from another"
+        );
+    }
+}
+
 /// A scene is held to the frame rate it is drawn at (#42): Life at 60 generations a second
 /// draws 60 frames a second, so its frames must take under 15 ms, not 30; in low power it draws
 /// 30. A frame rate asked for still caps it.

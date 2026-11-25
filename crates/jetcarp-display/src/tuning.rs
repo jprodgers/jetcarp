@@ -423,8 +423,9 @@ pub fn is_placed(scene: &Scene) -> bool {
 
 /// The scenes a fit sees in a rotation's `slots`: each slot's index, with the indexes of the
 /// slots that show at its size. A series' rules (the slots of one series item, on one tiling with
-/// one look) are one scene, shown by its first rule (#109): fitting the Wolfram series rule by rule
-/// took 12 minutes.
+/// one look) are one scene (#109): fitting the Wolfram series rule by rule took 12 minutes. Its
+/// first rule comes first; the fit measures and pictures it by the first that draws (#346,
+/// `jetcarp host tune`'s `series_shown_by`).
 pub fn scene_groups(slots: &[Slot]) -> Vec<(usize, Vec<usize>)> {
     // A series' rules are its slots from one item, each showing a scene on the series' tiling.
     let key = |s: &Slot| -> Option<String> {
@@ -828,16 +829,23 @@ fn nearest_level(sizes: &[Size], px: f32) -> Option<Size> {
 /// The size a scene shows at after its sweep, whether someone chose it, and a note when that needs
 /// saying. With `pick` given, it decides: the scene's `own` size and a cell size in pixels are
 /// placed whether or not the sweep showed them, so a sweep that stopped early (or a failed one)
-/// can be undone (#39). Without, a size someone chose before is kept while it is still within the
-/// limits (as when the monitors change), else the recommended one.
+/// can be undone (#39); on a patch, a size in pixels is the level nearest it of all the scene's
+/// `sizes`, shown or not (#345). Without, a size someone chose before is kept while it is still
+/// within the limits (as when the monitors change), else the recommended one.
 pub fn choose(
     cards: &[Rung],
+    sizes: &[Size],
     recommended: Size,
     own: Size,
     pick: Option<Pick>,
     before: Option<&TunedScene>,
 ) -> (Size, bool, Option<String>) {
-    let shown: Vec<Size> = cards.iter().map(|r| r.size).collect();
+    // Every size it has: those shown, and those of its ladder.
+    let all: Vec<Size> = cards
+        .iter()
+        .map(|r| r.size)
+        .chain(sizes.iter().copied())
+        .collect();
     match pick {
         Some(Pick::Recommended) => return (recommended, false, None),
         Some(Pick::Finest) => {
@@ -853,7 +861,7 @@ pub fn choose(
             if own.level.is_none() && recommended.level.is_none() {
                 return (Size::px(px), true, None);
             }
-            if let Some(s) = nearest_level(&shown, px) {
+            if let Some(s) = nearest_level(&all, px) {
                 return (s, true, None);
             }
         }
@@ -971,7 +979,7 @@ pub fn measured_scene(
 ) -> TunedScene {
     let cards = search.cards();
     let (recommended, _) = search.recommended();
-    let (mut size, chosen, note) = choose(&cards, recommended, p.own, pick, before);
+    let (mut size, chosen, note) = choose(&cards, &p.sizes, recommended, p.own, pick, before);
     // The scene's own size is kept as the scene has it, not as the size its cells came to.
     if cards.iter().any(|r| r.own && r.size.same(&size)) || (size.same(&p.own) && chosen) {
         size = Size::px(p.design);
@@ -1259,6 +1267,7 @@ pub fn repick(
         .map(|m| {
             let (size, chosen, _) = choose(
                 &m.rungs,
+                &sizes(m),
                 m.recommended,
                 Size::px(m.design_px),
                 Some(pick),
