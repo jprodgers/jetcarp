@@ -143,6 +143,101 @@ function Invoke-Program([string]$Program, [string[]]$Arguments) {
     }
 }
 
+# The folders of the PATH a new window gets from the registry: $Scope is "Machine" or "User",
+# their %VARIABLES% expanded.
+function Get-PathDirs([string]$Scope) {
+    $Value = [Environment]::GetEnvironmentVariable("Path", $Scope)
+    if (-not $Value) { return @() }
+    return @($Value -split ";" | Where-Object { $_ } | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) })
+}
+
+# The names a `jetcarp` command has in a folder of the PATH, in the order Windows looks for them.
+$CommandNames = @("jetcarp.exe", "jetcarp.cmd", "jetcarp.bat")
+
+# The `jetcarp` command in the PATH's folder $Dir, if it has one. A folder named with quotes, as
+# Windows allows, is read without them; one that can't be read has none.
+function Find-Command([string]$Dir) {
+    $d = $Dir.Trim().Trim('"')
+    if (-not $d) { return $null }
+    foreach ($n in $CommandNames) {
+        try {
+            $p = Join-Path $d $n
+            if (Test-Path -LiteralPath $p -PathType Leaf -ErrorAction SilentlyContinue) { return $p }
+        } catch { return $null }
+    }
+    return $null
+}
+
+# The first folder of $Dirs holding a `jetcarp` command, and the command: the one `jetcarp` runs.
+function Get-FirstJetcarp([string[]]$Dirs) {
+    foreach ($d in $Dirs) {
+        $p = Find-Command $d
+        if ($p) { return [pscustomobject]@{ Dir = $d; Program = $p } }
+    }
+    return $null
+}
+
+# Whose the JETCARP at $Where is, and what removes it, told by where it is.
+function Get-JetcarpOwner([string]$Where) {
+    $n = $Where.Replace("/", "\").ToLowerInvariant()
+    $dir = if (Test-Path -LiteralPath $Where -PathType Leaf) { Split-Path -Parent $Where } else { $Where }
+    if (Test-Path -LiteralPath (Join-Path $dir ".jetcarp-installer")) {
+        return @("this installer's, in another folder", "this installer again, with -Uninstall -InstallDir '$dir'")
+    }
+    if ($n -like "*\programdata\scoop\*") { return @("Scoop's, for every user", "scoop uninstall --global jetcarp") }
+    if ($n -like "*\scoop\*") { return @("Scoop's", "scoop uninstall jetcarp") }
+    if ($n -like "*\microsoft\winget\*") { return @("winget's", "winget uninstall JimmieRodgers.JETCARP") }
+    if ($n -like "*\.cargo\bin\*") { return @("cargo's", "cargo uninstall jetcarp") }
+    if ($n -like "*\pipx\*") { return @("pipx's", "pipx uninstall jetcarp") }
+    if ($n -like "*\uv\*") { return @("uv's", "uv tool uninstall jetcarp") }
+    return @("another's", "remove it with what installed it")
+}
+
+# The other JETCARPs: a `jetcarp` command in any folder of $Dirs but this install's, and those of
+# Scoop, winget, cargo, pipx and uv in their own folders, on the PATH or not. Each once.
+function Get-OtherJetcarps([string[]]$Dirs) {
+    $Found = [System.Collections.Generic.List[object]]::new()
+    $Mine = $InstallDir.TrimEnd("\")
+    $Places = [System.Collections.Generic.List[string]]::new()
+    $Scoop = if ($env:SCOOP) { $env:SCOOP } else { Join-Path $env:USERPROFILE "scoop" }
+    $ScoopGlobal = if ($env:SCOOP_GLOBAL) { $env:SCOOP_GLOBAL } else { Join-Path $env:ProgramData "scoop" }
+    $CargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
+    foreach ($p in @(
+            (Join-Path $Scoop "apps\jetcarp"),
+            (Join-Path $ScoopGlobal "apps\jetcarp"),
+            (Join-Path $CargoHome "bin\jetcarp.exe"),
+            (Join-Path $env:USERPROFILE "pipx\venvs\jetcarp"),
+            (Join-Path $env:USERPROFILE ".local\pipx\venvs\jetcarp"),
+            (Join-Path $env:LOCALAPPDATA "pipx\pipx\venvs\jetcarp"),
+            (Join-Path $env:APPDATA "uv\data\tools\jetcarp"))) {
+        if (Test-Path -LiteralPath $p) { $Places.Add($p) }
+    }
+    if ($env:PIPX_HOME -and (Test-Path -LiteralPath (Join-Path $env:PIPX_HOME "venvs\jetcarp"))) {
+        $Places.Add((Join-Path $env:PIPX_HOME "venvs\jetcarp"))
+    }
+    $WinGet = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+    if (Test-Path -LiteralPath $WinGet) {
+        foreach ($w in @(Get-ChildItem -LiteralPath $WinGet -Directory -Filter "JimmieRodgers.JETCARP_*" -ErrorAction SilentlyContinue)) {
+            $Places.Add($w.FullName)
+        }
+    }
+    foreach ($d in $Dirs) {
+        if (-not $d -or ($d.Trim().Trim('"').TrimEnd("\") -eq $Mine)) { continue }
+        $p = Find-Command $d
+        if ($p) { $Places.Add($p) }
+    }
+    foreach ($p in $Places) {
+        $Owner = Get-JetcarpOwner $p
+        # One line for each: Scoop's shim and its folder are one JETCARP; two copies of no
+        # known installer's are two.
+        $Key = if ($Owner[0] -eq "another's") { "at $p" } else { $Owner[1] }
+        if (@($Found | Where-Object { $_.Key -eq $Key }).Count -eq 0) {
+            $Found.Add([pscustomobject]@{ Key = $Key; Where = $p; Who = $Owner[0]; Remove = $Owner[1] })
+        }
+    }
+    return $Found
+}
+
 # The folders an earlier install recorded as its own (`made` lines in the marker).
 function Get-MadeBefore {
     if (-not (Test-Path -LiteralPath $Marker)) { return @() }
@@ -155,15 +250,30 @@ if ($Uninstall) {
         Say "removing the program; what JETCARP set up outside its folders (the host, starting at login, the screen saver) is undone by ``jetcarp uninstall``, not by this: if that is still to do, install again and run it"
     }
     # The Start menu entry the install asked the program for, taken out while the program is
-    # still there.
+    # still there. The program runs with folders of its own, which go with it: a run of it may
+    # keep what it read of the machine in its settings folder, or note itself in its runtime
+    # folder (%LOCALAPPDATA%\jetcarp), and so make again a folder that `jetcarp uninstall
+    # --settings --data` took, which the lines below then named as kept (#350).
     $Program = Join-Path $InstallDir "jetcarp.exe"
-    if ((Test-Path $Program) -and (Invoke-Program $Program @("launcher", "status")).Ok) {
-        $R = Invoke-Program $Program @("launcher", "remove")
-        if ($R.Ok) {
-            foreach ($l in ($R.Said -split "`r?`n")) { if ($l) { Say $l.Trim() } }
-        } else {
-            Say "could not remove JETCARP's Start menu entry: $($R.Said)"
+    $Scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("jetcarp-" + [System.Guid]::NewGuid().ToString("N"))
+    $Folders = @{ JETCARP_CONFIG_DIR = "settings"; JETCARP_DATA_DIR = "data"; JETCARP_RUNTIME_DIR = "runtime"; JETCARP_OUT = "output" }
+    $Before = @{}
+    foreach ($v in $Folders.Keys) {
+        $Before[$v] = [Environment]::GetEnvironmentVariable($v, "Process")
+        [Environment]::SetEnvironmentVariable($v, (Join-Path $Scratch $Folders[$v]), "Process")
+    }
+    try {
+        if ((Test-Path $Program) -and (Invoke-Program $Program @("launcher", "status")).Ok) {
+            $R = Invoke-Program $Program @("launcher", "remove")
+            if ($R.Ok) {
+                foreach ($l in ($R.Said -split "`r?`n")) { if ($l) { Say $l.Trim() } }
+            } else {
+                Say "could not remove JETCARP's Start menu entry: $($R.Said)"
+            }
         }
+    } finally {
+        foreach ($v in $Folders.Keys) { [Environment]::SetEnvironmentVariable($v, $Before[$v], "Process") }
+        Remove-Item -Recurse -Force -LiteralPath $Scratch -ErrorAction SilentlyContinue
     }
     $Made = @(Get-MadeBefore)
     Remove-Item -Recurse -Force $InstallDir
@@ -183,14 +293,18 @@ if ($Uninstall) {
         }
     }
     # Named here, as `jetcarp paths` would have, since the program has gone: only the folders still
-    # there, each with what it holds, so nothing is said of what `jetcarp uninstall --settings --data`
-    # already took (#134, #142).
+    # there that hold something (a file, in them or in a folder in them), each with what it holds,
+    # so nothing is said of what `jetcarp uninstall --settings --data` already took (#134, #142,
+    # #350).
     $Pictures = Join-Path ([Environment]::GetFolderPath("MyPictures")) "JETCARP"
     $Kept = @(
         [pscustomobject]@{ Folder = (Join-Path $env:APPDATA 'jetcarp'); Holds = 'your settings' },
         [pscustomobject]@{ Folder = (Join-Path $env:LOCALAPPDATA 'jetcarp'); Holds = 'your library and data' },
         [pscustomobject]@{ Folder = $Pictures; Holds = 'your pictures and exports' }
-    ) | Where-Object { Test-Path -LiteralPath $_.Folder }
+    ) | Where-Object {
+        (Test-Path -LiteralPath $_.Folder) -and
+        @(Get-ChildItem -LiteralPath $_.Folder -Recurse -Force -File -ErrorAction SilentlyContinue | Select-Object -First 1).Count -gt 0
+    }
     if (@($Kept).Count -gt 0) {
         Say "kept these folders; delete them by hand if you want them gone:"
         foreach ($k in @($Kept)) { Say "  $($k.Folder) ($($k.Holds))" }
@@ -285,6 +399,32 @@ if (-not $NoLauncher -and (Invoke-Program $Exe @("launcher", "status")).Ok) {
     } else {
         Say "could not add JETCARP to the Start menu (``jetcarp launcher install`` tries again): $($R.Said)"
     }
+}
+
+# Other JETCARPs on this computer (#348): Scoop's, winget's, cargo's, pipx's, uv's, or another
+# folder of this installer's, each named once with what removes it. Two on the PATH run whichever
+# comes first, and Scoop's Start menu entry is named JETCARP too, so Start may open the other.
+# Only a note: JETCARP is installed by now, so nothing here may stop the installer.
+try {
+    $NewPath = @(@(Get-PathDirs "Machine") + @(Get-PathDirs "User"))
+    if (-not $NoModifyPath -and -not ($NewPath | Where-Object { $_.TrimEnd("\") -eq $InstallDir.TrimEnd("\") })) {
+        $NewPath += $InstallDir
+    }
+    $Others = @(Get-OtherJetcarps @($NewPath + @($env:Path -split ";")))
+    if ($Others.Count -gt 0) {
+        if ($Others.Count -gt 1) {
+            Say "other JETCARPs are installed on this computer as well; to keep only this one, remove them:"
+        } else {
+            Say "another JETCARP is installed on this computer as well; to keep only this one, remove it:"
+        }
+        foreach ($o in $Others) { Say "  $($o.Where) ($($o.Who)): $($o.Remove)" }
+        $First = Get-FirstJetcarp $NewPath
+        if ($First -and ($First.Dir.TrimEnd("\") -ne $InstallDir.TrimEnd("\"))) {
+            Say "``jetcarp`` in a new window runs $($First.Program), which comes first on your PATH, until it is removed"
+        }
+    }
+} catch {
+    Say "could not look for other copies of JETCARP ($($_.Exception.Message)); ``jetcarp doctor`` names them"
 }
 
 if (-not $NoModifyPath) {

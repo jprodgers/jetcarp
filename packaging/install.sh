@@ -129,14 +129,31 @@ if [ -n "$uninstall" ]; then
         say "removing the program; what JETCARP set up outside its folders (the host, starting at login, the screen saver) is undone by \`jetcarp uninstall\`, not by this: if that is still to do, install again and run it"
     fi
     # The launcher the install asked the program for, taken out while the program is still there
-    # (a version without the `launcher` command, before 0.4.3, made none).
-    if [ -x "$dir/jetcarp" ] && "$dir/jetcarp" launcher status >/dev/null 2>&1; then
-        if out=$("$dir/jetcarp" launcher remove 2>&1); then
+    # (a version without the `launcher` command, before 0.4.3, made none). The program runs with
+    # folders of its own, which go with it: a run of it may keep what it read of the machine in
+    # its settings folder, or note itself in its runtime folder, and so make again a folder that
+    # `jetcarp uninstall --settings --data` took (#350).
+    scratch=$(mktemp -d 2>/dev/null || mktemp -d -t jetcarp)
+    trap 'rm -rf "$scratch"' EXIT INT TERM
+    program() {
+        if [ "$(uname -s)" = Darwin ]; then
+            # Not the settings folder on a Mac: a run there brings the screen saver up to date with
+            # the settings in it (#287), which a folder of its own would empty.
+            JETCARP_DATA_DIR="$scratch/data" JETCARP_RUNTIME_DIR="$scratch/runtime" \
+                JETCARP_OUT="$scratch/output" "$dir/jetcarp" "$@"
+        else
+            JETCARP_CONFIG_DIR="$scratch/settings" JETCARP_DATA_DIR="$scratch/data" \
+                JETCARP_RUNTIME_DIR="$scratch/runtime" JETCARP_OUT="$scratch/output" "$dir/jetcarp" "$@"
+        fi
+    }
+    if [ -x "$dir/jetcarp" ] && program launcher status >/dev/null 2>&1; then
+        if out=$(program launcher remove 2>&1); then
             printf '%s\n' "$out" | while IFS= read -r l; do say "$l"; done
         else
             say "could not remove JETCARP's launcher: $out"
         fi
     fi
+    rm -rf "$scratch"
     if link_ours; then
         rm -f "$bin_dir/jetcarp"
         say "removed $bin_dir/jetcarp"
@@ -151,8 +168,9 @@ if [ -n "$uninstall" ]; then
         fi
     done
     # Named here, as `jetcarp paths` would have, since the program has gone: only the folders still
-    # there, each with what it holds, so nothing is said of what `jetcarp uninstall --settings --data`
-    # already took (#134, #142). Each entry is "folder|what it holds".
+    # there that hold something, each with what it holds, so nothing is said of what `jetcarp
+    # uninstall --settings --data` already took (#134, #142, #350). Each entry is "folder|what it
+    # holds".
     case "$(uname -s)" in
         Darwin) set -- "$HOME/Library/Application Support/jetcarp|your settings and data" \
             "$HOME/Pictures/JETCARP|your pictures and exports" ;;
@@ -163,7 +181,8 @@ if [ -n "$uninstall" ]; then
     first=1
     for k in "$@"; do
         folder=${k%|*}
-        if [ -e "$folder" ]; then
+        # A file in it, or in a folder in it: a folder of empty folders holds nothing.
+        if [ -e "$folder" ] && [ -n "$(find "$folder" ! -type d 2>/dev/null | head -n 1)" ]; then
             if [ "$first" = 1 ]; then
                 say "kept these folders; delete them by hand if you want them gone:"
                 first=0
@@ -173,6 +192,93 @@ if [ -n "$uninstall" ]; then
     done
     exit 0
 fi
+
+# `$1` with its symbolic links followed (`readlink -f` is not in every system's readlink).
+resolve() {
+    p=$1
+    n=0
+    while [ -L "$p" ] && [ "$n" -lt 40 ]; do
+        t=$(readlink "$p")
+        case "$t" in
+            /*) p=$t ;;
+            *) p=$(dirname "$p")/$t ;;
+        esac
+        n=$((n + 1))
+    done
+    printf '%s\n' "$p"
+}
+
+# Whose the JETCARP program `$1` (its links followed) is, and what removes it, as
+# "whose|command"; "|" when neither can be told.
+whose_jetcarp() {
+    case "$1" in
+        */Cellar/jetcarp/*) printf '%s\n' "Homebrew's|brew uninstall jetcarp" ;;
+        */pipx/venvs/jetcarp/*) printf '%s\n' "pipx's|pipx uninstall jetcarp" ;;
+        */uv/tools/jetcarp/*) printf '%s\n' "uv's|uv tool uninstall jetcarp" ;;
+        *)
+            d=$(dirname "$1")
+            if [ -f "$d/.jetcarp-installer" ]; then
+                printf '%s\n' "this installer's, in another folder|curl -LsSf https://github.com/$REPO/releases/latest/download/jetcarp-installer.sh | sh -s -- --uninstall --dir '$d'"
+            elif [ -f "$(dirname "$d")/.crates.toml" ] || [ -f "$(dirname "$d")/.crates2.json" ]; then
+                printf '%s\n' "cargo's|cargo uninstall jetcarp"
+            else
+                printf '%s\n' "|"
+            fi
+            ;;
+    esac
+}
+
+# Says which other JETCARPs there are: every `jetcarp` on the PATH that is not this install's, and
+# those of cargo, pipx and uv in their own folders, whether on the PATH or not. Each once, with
+# what removes it, and whether the one `jetcarp` runs is another's.
+other_jetcarps() {
+    mine=$(resolve "$dir/jetcarp")
+    first=""
+    found=""
+    seen=""
+    old_ifs=$IFS
+    IFS=:
+    # shellcheck disable=SC2086 # split on the PATH's colons, on purpose.
+    set -- ${PATH:-}
+    IFS=$old_ifs
+    cargo_home=${CARGO_HOME:-$HOME/.cargo}
+    for p in "$@" "$cargo_home/bin" "${PIPX_HOME:-$HOME/.local/share/pipx}/venvs/jetcarp/bin" \
+        "$HOME/.local/pipx/venvs/jetcarp/bin" "$HOME/Library/Application Support/pipx/venvs/jetcarp/bin" \
+        "${XDG_DATA_HOME:-$HOME/.local/share}/uv/tools/jetcarp/bin" \
+        /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin; do
+        [ -n "$p" ] && [ -x "$p/jetcarp" ] && [ ! -d "$p/jetcarp" ] || continue
+        real=$(resolve "$p/jetcarp")
+        # The first on the PATH is the one `jetcarp` runs.
+        if [ -z "$first" ]; then
+            case ":${PATH:-}:" in *":$p:"*) first=$real ;; esac
+        fi
+        [ "$real" = "$mine" ] && continue
+        case "|$seen|" in *"|$real|"*) continue ;; esac
+        seen="$seen|$real"
+        found="$found$real
+"
+    done
+    [ -n "$found" ] || return 0
+    if [ "$(printf '%s' "$found" | grep -c .)" -gt 1 ]; then
+        say "other JETCARPs are installed on this computer as well; to keep only this one, remove them:"
+    else
+        say "another JETCARP is installed on this computer as well; to keep only this one, remove it:"
+    fi
+    printf '%s' "$found" | while IFS= read -r real; do
+        [ -n "$real" ] || continue
+        w=$(whose_jetcarp "$real")
+        who=${w%%|*}
+        cmd=${w#*|}
+        if [ -n "$who" ]; then
+            say "  $real ($who): $cmd"
+        else
+            say "  $real: remove it with what installed it"
+        fi
+    done
+    if [ -n "$first" ] && [ "$first" != "$mine" ]; then
+        say "\`jetcarp\` runs $first, which comes first on your PATH, until it is removed"
+    fi
+}
 
 # Never replace a `jetcarp` on the PATH that another tool put there.
 if [ -L "$bin_dir/jetcarp" ] && ! link_ours; then
@@ -308,6 +414,9 @@ if [ -z "$no_launcher" ] && "$dir/jetcarp" launcher status >/dev/null 2>&1; then
         say "could not add JETCARP to the system's apps (\`jetcarp launcher install\` tries again): $out"
     fi
 fi
+# Other JETCARPs on this computer (#348): two on the PATH run whichever comes first, and a menu
+# may open the other. Each is named, with what removes it.
+other_jetcarps
 case ":${PATH:-}:" in
     *":$bin_dir:"*) ;;
     *)

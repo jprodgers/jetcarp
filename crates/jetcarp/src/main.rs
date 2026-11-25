@@ -511,11 +511,18 @@ fn main() -> Result<()> {
     jetcarp_store::install();
     // Escape codes on in Windows' old console window, for the progress lines (#127).
     term::init();
+    // The command, read first: `--help`, `--version` and a mistyped command end here, before the
+    // machine is read.
+    let cli = Cli::parse_from(args());
     // GPU self-test results are kept in the settings folder by the program, never by code that
-    // uses the GPU crate as a library (the test suites).
-    jetcarp_gpu::select::keep_checks(true);
-    // So is what NVML or Vulkan said of each GPU's memory, so a later start need not open them.
-    jetcarp_core::machine::keep_readings(true);
+    // uses the GPU crate as a library (the test suites). So is what NVML or Vulkan said of each
+    // GPU's memory, so a later start need not open them. Not by the commands that are over in a
+    // moment ([`quick`]): the installers' `--uninstall` runs `launcher` after `jetcarp uninstall
+    // --settings --data` took the folders, and a `machine.json` kept then made the settings
+    // folder again (#350).
+    let keep = !quick(&cli.cmd);
+    jetcarp_gpu::select::keep_checks(keep);
+    jetcarp_core::machine::keep_readings(keep);
     // A closed pipe (`jetcarp --json quickstart | head`) ends the program quietly, whichever
     // command was writing.
     broken_pipe::install();
@@ -531,8 +538,15 @@ fn main() -> Result<()> {
     }
     // An early end (a second Ctrl-C, a closed pipe, a stopped script) ends as the program does.
     jetcarp_core::machine::pool::end_with(end);
-    let r = run();
+    let r = run_cli(cli);
     finish(r)
+}
+
+/// The commands that build nothing and are over in a moment, which record nothing of their own
+/// in JETCARP's folders: `uninstall`, which removes them, and `launcher`, which the installers'
+/// `--uninstall` runs after it (#135, #350).
+fn quick(cmd: &Option<Cmd>) -> bool {
+    matches!(cmd, Some(Cmd::Uninstall(_) | Cmd::Launcher { .. }))
 }
 
 /// How the program ends once its command has run. The macOS screen saver has what it shows baked
@@ -612,18 +626,14 @@ fn program_name(cmd: &Option<Cmd>) -> String {
     }
 }
 
-fn run() -> Result<()> {
-    run_cli(Cli::parse_from(args()))
-}
-
 /// The command `cli` asks for, run.
 fn run_cli(cli: Cli) -> Result<()> {
     // Every JETCARP program records the memory it holds, so each sees what the others leave of
-    // the one pool reserved for JETCARP (`jetcarp_core::machine::pool`). All but `uninstall` and
-    // `launcher`, which build nothing and are over in a moment: `uninstall` removes the records'
-    // folder and the runtime folder it is in, which its own record would make again, and the
-    // installers' `--uninstall` runs `launcher` after it (#135).
-    if !matches!(cli.cmd, Some(Cmd::Uninstall(_) | Cmd::Launcher { .. })) {
+    // the one pool reserved for JETCARP (`jetcarp_core::machine::pool`). All but the [`quick`]
+    // ones, `uninstall` and `launcher`: `uninstall` removes the records' folder and the runtime
+    // folder it is in, which its own record would make again, and the installers' `--uninstall`
+    // runs `launcher` after it (#135).
+    if !quick(&cli.cmd) {
         jetcarp_core::machine::pool::start(
             &program_name(&cli.cmd),
             jetcarp_search::jobs::explore::memory_bytes,

@@ -5,17 +5,25 @@ The Windows installer refuses a download that does not match the release's SHA25
 .DESCRIPTION
 SECURITY.md, "Release files". This makes a release folder of its own, its archive holding
 -Program as jetcarp.exe and its SHA256SUMS in a release's format, and runs the installer from it
-(-DownloadUrl FOLDER) three times, each into a scratch folder:
+(-DownloadUrl FOLDER), each case into a scratch folder:
 
   1. intact: it installs, and the program adds JETCARP to the Start menu (#105);
   2. one byte of the archive changed: refused, and nothing installed;
   3. the archive missing from SHA256SUMS: refused, and nothing installed;
-  4. -Uninstall, after case 1: the Start menu entry and the program's folder are removed.
+  4. -Uninstall, after case 1: the Start menu entry and the program's folder are removed;
+  5. another JETCARP, Scoop's (its folder and its shim on the PATH): named, with what removes it
+     (#348);
+  6. -Uninstall after `jetcarp uninstall --settings --data`: the program the installer runs first
+     makes neither %APPDATA%\jetcarp nor %LOCALAPPDATA%\jetcarp again, and a folder holding only
+     empty folders is not named as kept (#350).
 
 "Nothing installed" means the scratch folder is still empty afterwards: no program folder, and
 no folder made on the way to it. The installer runs with -NoModifyPath, so the user PATH is not
-touched; the test checks that too. APPDATA points into each case's scratch folder, so the Start
-menu entry is made there and not in the user's own Start menu.
+touched; the test checks that too. APPDATA and LOCALAPPDATA point into each case's scratch
+folder, so the Start menu entry is made there and not in the user's own Start menu, and so do the
+program's own folders (JETCARP_CONFIG_DIR and the rest, as its defaults would be there: the
+program finds its default folders through Windows itself, not these variables), so nothing of
+the user's is read or deleted.
 
 Run it in Windows PowerShell 5.1, as people run the installer:
 
@@ -38,13 +46,37 @@ $ProgressPreference = "SilentlyContinue"
 $Installer = (Resolve-Path $Installer).Path
 $Program = (Resolve-Path $Program).Path
 # Only what this script passes may steer the installer.
-foreach ($v in "JETCARP_VERSION", "JETCARP_INSTALL_DIR", "JETCARP_NO_MODIFY_PATH", "JETCARP_NO_PACKS", "JETCARP_NO_LAUNCHER", "JETCARP_DOWNLOAD_URL", "JETCARP_USE_GH") {
+foreach ($v in "JETCARP_VERSION", "JETCARP_INSTALL_DIR", "JETCARP_NO_MODIFY_PATH", "JETCARP_NO_PACKS", "JETCARP_NO_LAUNCHER", "JETCARP_DOWNLOAD_URL", "JETCARP_USE_GH", "SCOOP") {
     Remove-Item -Path "Env:$v" -ErrorAction SilentlyContinue
 }
+# The program's folders, which each case points into its scratch folder (`Use-Home`).
+$FolderVars = @("JETCARP_CONFIG_DIR", "JETCARP_DATA_DIR", "JETCARP_RUNTIME_DIR", "JETCARP_LIBRARY", "JETCARP_OUT")
+$FoldersBefore = @{}
+foreach ($v in $FolderVars) { $FoldersBefore[$v] = [Environment]::GetEnvironmentVariable($v, "Process") }
 
 $Version = "0.0.0"
 $AppDataBefore = $env:APPDATA
 $LocalBefore = $env:LOCALAPPDATA
+
+# Points APPDATA, LOCALAPPDATA and the program's folders into the scratch folder $Home_, laid
+# out as Windows lays out the defaults: the settings in AppData\Roaming\jetcarp, the data and the
+# runtime files in AppData\Local\jetcarp, the pictures in Pictures\JETCARP.
+function Use-Home([string]$Home_) {
+    $env:APPDATA = Join-Path $Home_ "AppData\Roaming"
+    $env:LOCALAPPDATA = Join-Path $Home_ "AppData\Local"
+    $env:JETCARP_CONFIG_DIR = Join-Path $env:APPDATA "jetcarp"
+    $env:JETCARP_DATA_DIR = Join-Path $env:LOCALAPPDATA "jetcarp"
+    $env:JETCARP_RUNTIME_DIR = Join-Path $env:LOCALAPPDATA "jetcarp"
+    $env:JETCARP_OUT = Join-Path $Home_ "Pictures\JETCARP"
+    Remove-Item -Path "Env:JETCARP_LIBRARY" -ErrorAction SilentlyContinue
+}
+
+# Puts them back as they were.
+function Restore-Env {
+    $env:APPDATA = $AppDataBefore
+    $env:LOCALAPPDATA = $LocalBefore
+    foreach ($v in $FolderVars) { [Environment]::SetEnvironmentVariable($v, $FoldersBefore[$v], "Process") }
+}
 # The windowless launcher, beside the program when it was built (--features windows-launcher):
 # with it, the Start menu entry starts a copy of it in a folder of JETCARP's own.
 $Launcher = Join-Path (Split-Path -Parent $Program) "jetcarpw.exe"
@@ -88,13 +120,11 @@ function Invoke-Installer([string]$Rel, [string]$Case, [string[]]$More = @()) {
     $Home_ = Join-Path $Work "home-$Case"
     New-Item -ItemType Directory -Force -Path $Home_ | Out-Null
     $ErrorActionPreference = "Continue"
-    $env:APPDATA = Join-Path $Home_ "AppData\Roaming"
-    $env:LOCALAPPDATA = Join-Path $Home_ "AppData\Local"
+    Use-Home $Home_
     $script:Out = powershell -NoProfile -ExecutionPolicy Bypass -File $Installer -Version $Version `
         -InstallDir (Join-Path $Home_ "lib\jetcarp") -DownloadUrl $Rel -NoModifyPath -NoPacks @More 2>&1 | Out-String
     $Code = $LASTEXITCODE
-    $env:APPDATA = $AppDataBefore
-    $env:LOCALAPPDATA = $LocalBefore
+    Restore-Env
     $ErrorActionPreference = "Stop"
     $script:Out -split "`r?`n" | Where-Object { $_ } | ForEach-Object { Write-Host "    | $_" }
     return $Code
@@ -188,6 +218,84 @@ try {
         Ok "uninstall: the Start menu entry, the launcher's copy and the program's folder removed"
     }
 
+    Write-Host "5. another JETCARP: Scoop's"
+    $Scoop = Join-Path $Work "home-other\scoop"
+    New-Item -ItemType Directory -Force -Path (Join-Path $Scoop "apps\jetcarp\current"), (Join-Path $Scoop "shims") | Out-Null
+    foreach ($f in "apps\jetcarp\current\jetcarp.exe", "shims\jetcarp.exe") {
+        [System.IO.File]::WriteAllText((Join-Path $Scoop $f), "a stand-in for Scoop's JETCARP")
+    }
+    [System.IO.File]::WriteAllText((Join-Path $Scoop "shims\jetcarp.shim"), "path = `"$(Join-Path $Scoop 'apps\jetcarp\current\jetcarp.exe')`"`n")
+    $env:SCOOP = $Scoop
+    $ProcessPath = $env:Path
+    $env:Path = "$(Join-Path $Scoop 'shims');$env:Path"
+    try {
+        $Code = Invoke-Installer (Join-Path $Work "intact") "other"
+    } finally {
+        $env:Path = $ProcessPath
+        Remove-Item -Path "Env:SCOOP" -ErrorAction SilentlyContinue
+    }
+    $Said = ($script:Out -split "`r?`n") | Where-Object { $_ -match "Scoop's" }
+    if ($Code -ne 0) {
+        Bad "another: the installer failed (exit code $Code)"
+    } elseif ($script:Out -notmatch "(another JETCARP is|other JETCARPs are) installed on this computer as well") {
+        Bad "another: Scoop's JETCARP is not named"
+    } elseif (@($Said).Count -ne 1 -or ($Said -notmatch [regex]::Escape("(Scoop's): scoop uninstall jetcarp"))) {
+        Bad "another: Scoop's JETCARP is not named once, with what removes it"
+    } else {
+        Ok "another: Scoop's JETCARP named once, with what removes it"
+    }
+
+    Write-Host "6. -Uninstall after ``jetcarp uninstall --settings --data``"
+    $Code = Invoke-Installer (Join-Path $Work "intact") "gone"
+    $Home_ = Join-Path $Work "home-gone"
+    $Settings = Join-Path $Home_ "AppData\Roaming\jetcarp"
+    $Data = Join-Path $Home_ "AppData\Local\jetcarp"
+    $Exe = Join-Path $Home_ "lib\jetcarp\jetcarp.exe"
+    if ($Code -ne 0) {
+        Bad "gone: the installer failed (exit code $Code)"
+    } else {
+        Use-Home $Home_
+        $ErrorActionPreference = "Continue"
+        try {
+            # `jetcarp uninstall --settings --data --yes`, when all it would undo is the Start menu
+            # entry and what is in the scratch folder: elsewhere it would undo the rest in this
+            # computer's own settings, as starting at login. Else its folders are deleted here, as
+            # it would.
+            $Plan = (& $Exe --json uninstall --settings --data 2>$null | Out-String | ConvertFrom-Json)
+            $Steps = @($Plan.steps | ForEach-Object { [string]$_.what })
+            $Outside = @($Steps | Where-Object { -not $_.Contains("Start menu") -and -not $_.Contains($Home_) })
+            if ($LASTEXITCODE -eq 0 -and $Outside.Count -eq 0) {
+                & $Exe uninstall --settings --data --yes 2>&1 | ForEach-Object { Write-Host "    | $_" }
+            } else {
+                Write-Host "    (not run here: it would also $($Outside -join '; '))"
+                & $Exe launcher remove 2>&1 | Out-Null
+                Remove-Item -Recurse -Force -LiteralPath $Settings, $Data -ErrorAction SilentlyContinue
+            }
+        } finally {
+            $ErrorActionPreference = "Stop"
+            Restore-Env
+        }
+        if ((Test-Path -LiteralPath $Settings) -or (Test-Path -LiteralPath $Data)) {
+            Bad "gone: ``jetcarp uninstall --settings --data`` left $Settings or $Data"
+        } else {
+            # A settings folder of empty folders, as a program run since could leave: not named.
+            New-Item -ItemType Directory -Force -Path (Join-Path $Settings "tune\screen-1") | Out-Null
+            $Code = Invoke-Installer (Join-Path $Work "intact") "gone" @("-Uninstall")
+            $Files = @(Get-ChildItem -LiteralPath $Settings -Recurse -Force -File -ErrorAction SilentlyContinue)
+            if ($Code -ne 0) {
+                Bad "gone: -Uninstall failed (exit code $Code)"
+            } elseif (Test-Path -LiteralPath $Data) {
+                Bad "gone: -Uninstall made $Data again: $(@(Get-ChildItem -LiteralPath $Data -Recurse -Force).FullName -join ', ')"
+            } elseif ($Files.Count -gt 0) {
+                Bad "gone: -Uninstall wrote in $Settings`: $($Files.FullName -join ', ')"
+            } elseif ($script:Out -match [regex]::Escape($Settings) -or $script:Out -match [regex]::Escape($Data)) {
+                Bad "gone: -Uninstall names a folder that is gone, or holds nothing, as kept"
+            } else {
+                Ok "gone: -Uninstall made no folder of JETCARP's again, and named none that holds nothing"
+            }
+        }
+    }
+
     if ((Get-UserPath) -ne $PathBefore) { Bad "the user PATH changed, with -NoModifyPath" }
 } finally {
     Remove-Item -Recurse -Force $Work -ErrorAction SilentlyContinue
@@ -197,5 +305,5 @@ if ($script:Failures -gt 0) {
     Write-Host "$($script:Failures) check(s) failed"
     exit 1
 }
-Write-Host "all four cases passed"
+Write-Host "all six cases passed"
 exit 0
