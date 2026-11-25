@@ -391,8 +391,278 @@ pub struct DoctorReport {
     /// The GPU policy, and the adapter each purpose uses and why (none: no GPU support here).
     pub gpu_policy: Option<GpuPolicy>,
     pub desktop: Desktop,
+    /// This program, and every program named `jetcarp` on the PATH (#348).
+    pub programs: DoctorPrograms,
     /// `JETCARP_*` and `WGPU_*` variables as `[name, value]`.
     pub environment: Vec<(String, String)>,
+}
+
+/// This program, and the other JETCARPs the PATH has, for `jetcarp doctor` (#348): with two, the
+/// one typed `jetcarp` runs may be another version than the one the Start menu or the app opens.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct DoctorPrograms {
+    /// This program, its links followed.
+    pub this: Option<PathBuf>,
+    /// Every program named `jetcarp` on the PATH, in the PATH's order: typing `jetcarp` runs the
+    /// first.
+    pub on_path: Vec<DoctorProgram>,
+}
+
+/// A program named `jetcarp` on the PATH.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct DoctorProgram {
+    /// Where it is on the PATH (a link or a shim, as found there).
+    pub path: PathBuf,
+    /// The program it runs, when that is another file: a link followed, or the program a Scoop
+    /// shim names (`jetcarp.shim` beside it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runs: Option<PathBuf>,
+    /// How it was installed, and what removes it, when that can be told from where it is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installed_with: Option<InstalledWith>,
+    /// It is this program.
+    pub this: bool,
+}
+
+impl DoctorProgram {
+    /// The program itself: what it runs, else it.
+    pub fn program(&self) -> &Path {
+        self.runs.as_deref().unwrap_or(&self.path)
+    }
+}
+
+/// The names a program `jetcarp` may have in a folder of the PATH: `jetcarp`, or on Windows
+/// `jetcarp` with each of `PATHEXT`'s extensions, in its order (`.COM;.EXE;.BAT;.CMD` when it is
+/// not set), as the command prompt and PowerShell look for them.
+fn program_names(windows: bool, pathext: Option<&std::ffi::OsStr>) -> Vec<String> {
+    if !windows {
+        return vec!["jetcarp".into()];
+    }
+    let exts = pathext
+        .map(|e| e.to_string_lossy().into_owned())
+        .filter(|e| !e.trim().is_empty())
+        .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
+    exts.split(';')
+        .map(str::trim)
+        .filter(|e| e.starts_with('.'))
+        .map(|e| format!("jetcarp{}", e.to_lowercase()))
+        .collect()
+}
+
+/// Whether `p` is a program the PATH would run: a file (a link followed), and on Unix one
+/// that may be run.
+fn runnable(p: &Path, windows: bool) -> bool {
+    let Ok(m) = std::fs::metadata(p) else {
+        return false;
+    };
+    if !m.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    if !windows {
+        use std::os::unix::fs::PermissionsExt;
+        return m.permissions().mode() & 0o111 != 0;
+    }
+    let _ = windows;
+    true
+}
+
+/// Every program named `jetcarp` in the folders of `path` (a PATH's value), in its order, a
+/// folder named twice counted once: in each folder the first of [`program_names`] there.
+pub fn jetcarps_on_path(
+    path: &std::ffi::OsStr,
+    windows: bool,
+    pathext: Option<&std::ffi::OsStr>,
+) -> Vec<PathBuf> {
+    let names = program_names(windows, pathext);
+    let key = |d: &Path| {
+        let c = canonical(d).to_string_lossy().into_owned();
+        if windows { c.to_lowercase() } else { c }
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for dir in std::env::split_paths(path) {
+        if dir.as_os_str().is_empty() || !dir.is_dir() || !seen.insert(key(&dir)) {
+            continue;
+        }
+        if let Some(p) = names
+            .iter()
+            .map(|n| dir.join(n))
+            .find(|p| runnable(p, windows))
+        {
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// The program a Scoop shim runs: `<name>.shim` beside it says, as `path = "..."`.
+fn scoop_shim_target(shim: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(shim.with_extension("shim")).ok()?;
+    text.lines().find_map(|l| {
+        let (k, v) = l.split_once('=')?;
+        (k.trim() == "path").then(|| PathBuf::from(v.trim().trim_matches('"')))
+    })
+}
+
+/// [`DoctorPrograms`] for this program and the PATH `path`.
+pub fn doctor_programs(
+    this: Option<PathBuf>,
+    path: &std::ffi::OsStr,
+    windows: bool,
+    pathext: Option<&std::ffi::OsStr>,
+) -> DoctorPrograms {
+    let same = |a: &Path, b: &Path| {
+        let (a, b) = (canonical(a), canonical(b));
+        if windows {
+            a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+        } else {
+            a == b
+        }
+    };
+    let on_path = jetcarps_on_path(path, windows, pathext)
+        .into_iter()
+        .map(|p| {
+            let runs = scoop_shim_target(&p)
+                .or_else(|| {
+                    let real = jetcarp_core::paths::plain_path(canonical(&p));
+                    (real != p).then_some(real)
+                })
+                .filter(|r| r != &p);
+            let program = runs.clone().unwrap_or_else(|| p.clone());
+            DoctorProgram {
+                installed_with: installed_with(&program, windows).or_else(|| {
+                    // A Scoop shim whose `.shim` could not be read.
+                    let n = p.to_string_lossy().replace('\\', "/").to_lowercase();
+                    n.contains("/scoop/shims/").then(|| InstalledWith {
+                        by: "scoop".into(),
+                        folder: p.parent().map(Path::to_path_buf).unwrap_or_default(),
+                        remove: vec!["scoop uninstall jetcarp".into()],
+                    })
+                }),
+                this: this.as_deref().is_some_and(|t| same(t, &program)),
+                runs,
+                path: p,
+            }
+        })
+        .collect();
+    DoctorPrograms { this, on_path }
+}
+
+impl DoctorPrograms {
+    /// Whether there is more than one JETCARP to speak of: more than one on the PATH, more than
+    /// one Start menu entry named JETCARP, or one on the PATH that is not this program.
+    pub fn more_than_one(&self, start_menu: &[crate::ctx::StartMenuEntry]) -> bool {
+        self.on_path.len() > 1
+            || start_menu.len() > 1
+            || (self.this.is_some() && self.on_path.iter().any(|p| !p.this))
+    }
+
+    /// The doctor's section on them, when there is [more than one](Self::more_than_one): every
+    /// one on the PATH, which runs when `jetcarp` is typed, the Start menu entries named JETCARP
+    /// and what each starts, and how to remove the others.
+    pub fn text(&self, start_menu: &[crate::ctx::StartMenuEntry]) -> String {
+        if !self.more_than_one(start_menu) {
+            return String::new();
+        }
+        let how = |w: &Option<InstalledWith>| {
+            w.as_ref()
+                .map(|w| format!(" (installed with {})", w.name()))
+                .unwrap_or_default()
+        };
+        let mut s = String::from("\nMore than one JETCARP\n");
+        if let Some(t) = &self.this {
+            let mine = installed_with(t, cfg!(windows));
+            let _ = writeln!(s, "  this program: {}{}", t.display(), how(&mine));
+        }
+        if self.on_path.is_empty() {
+            s.push_str("  on the PATH: none\n");
+        } else {
+            s.push_str("  on the PATH, in its order:\n");
+        }
+        for (i, p) in self.on_path.iter().enumerate() {
+            let mut line = format!("    {}", p.path.display());
+            if let Some(r) = &p.runs {
+                let _ = write!(line, ", which runs {}", r.display());
+            }
+            line.push_str(&how(&p.installed_with));
+            if p.this {
+                line.push_str(", this program");
+            }
+            if i == 0 {
+                line.push_str(": it runs when you type `jetcarp` here");
+            }
+            let _ = writeln!(s, "{line}");
+        }
+        if !start_menu.is_empty() {
+            s.push_str("  Start menu entries named JETCARP:\n");
+            for e in start_menu {
+                let mut line = format!("    {}", e.shortcut.display());
+                match &e.starts {
+                    Some(t) => {
+                        let _ = write!(line, ", which starts {}", t.display());
+                    }
+                    None => line.push_str(" (what it starts could not be read)"),
+                }
+                if e.ours {
+                    line.push_str(" (JETCARP's own entry, from `jetcarp launcher install`");
+                    if let Some(p) = &e.then_starts {
+                        let _ = write!(line, ", which starts {}", p.display());
+                    }
+                    line.push(')');
+                } else if let Some(w) = e.starts.as_deref().and_then(|t| installed_with(t, true)) {
+                    let _ = write!(line, " (installed with {})", w.name());
+                }
+                let _ = writeln!(s, "{line}");
+            }
+        }
+        if let Some(first) = self.on_path.first().filter(|p| !p.this)
+            && self.this.is_some()
+        {
+            let _ = writeln!(
+                s,
+                "  note: `jetcarp` here runs {}, not this program",
+                first.program().display()
+            );
+        }
+        // How to remove the others, as far as is known.
+        let mut remove: Vec<(String, String)> = Vec::new();
+        let mut add = |w: &InstalledWith, whose: String| {
+            for c in &w.remove {
+                if !remove.iter().any(|(r, _)| r == c) {
+                    remove.push((c.clone(), whose.clone()));
+                }
+            }
+        };
+        for p in self.on_path.iter().filter(|p| !p.this) {
+            if let Some(w) = &p.installed_with {
+                add(w, p.program().display().to_string());
+            }
+        }
+        for e in start_menu.iter().filter(|e| !e.ours) {
+            if let Some(t) = &e.starts
+                && let Some(w) = installed_with(t, true)
+                && !self
+                    .this
+                    .as_deref()
+                    .is_some_and(|me| me.parent() == t.parent())
+            {
+                add(&w, t.display().to_string());
+            }
+        }
+        if remove.is_empty() {
+            s.push_str(
+                "  To keep only one JETCARP, remove the others with what installed them \
+                 (`jetcarp uninstall` in each lists how).\n",
+            );
+        } else {
+            s.push_str("  To keep only one JETCARP, remove the others:\n");
+            for (c, whose) in &remove {
+                let _ = writeln!(s, "    {c}    ({whose})");
+            }
+        }
+        s
+    }
 }
 
 impl Report for DoctorReport {
@@ -511,6 +781,7 @@ impl Report for DoctorReport {
         if let Some(l) = &d.launcher {
             let _ = writeln!(s, "  launcher: {l}");
         }
+        s.push_str(&self.programs.text(&d.start_menu));
         if !self.environment.is_empty() {
             s.push_str("\nEnvironment\n");
             for (k, v) in &self.environment {
@@ -710,6 +981,12 @@ impl Op for SystemDoctor {
             gpu: cx.platform.gpu_adapters(),
             gpu_policy: cx.platform.gpu_policy(),
             desktop: cx.platform.desktop(),
+            programs: doctor_programs(
+                jetcarp_core::paths::program_path(),
+                &std::env::var_os("PATH").unwrap_or_default(),
+                cfg!(windows),
+                std::env::var_os("PATHEXT").as_deref(),
+            ),
             environment: jetcarp_env(),
         })
     }

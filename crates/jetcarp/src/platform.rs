@@ -95,6 +95,15 @@ impl Platform for Machine {
             gnome_extension: cfg!(target_os = "linux").then(|| gnome::state().describe()),
             screen_saver: cfg!(any(windows, target_os = "macos")).then(saver::describe),
             launcher: Some(launcher::describe()),
+            start_menu: launcher::start_menu_entries()
+                .into_iter()
+                .map(|e| jetcarp_api::ctx::StartMenuEntry {
+                    shortcut: e.shortcut,
+                    starts: e.starts,
+                    ours: e.ours,
+                    then_starts: e.then_starts,
+                })
+                .collect(),
         }
     }
 

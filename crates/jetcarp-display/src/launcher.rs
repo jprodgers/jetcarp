@@ -613,6 +613,97 @@ pub fn remove() -> Result<Vec<PathBuf>, String> {
     Ok(removed)
 }
 
+/// A Start menu entry named JETCARP (Windows), for `jetcarp doctor` (#348).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StartEntry {
+    /// The shortcut.
+    pub shortcut: PathBuf,
+    /// The program it starts, as the shell reads it.
+    pub starts: Option<PathBuf>,
+    /// JETCARP's own entry: [`SHORTCUT`] in the user's Start menu, starting the launcher's copy
+    /// in [`stable_dir`] (or, made without the launcher, the program).
+    pub ours: bool,
+    /// For JETCARP's own entry, the program the copy starts, as its record says.
+    pub then_starts: Option<PathBuf>,
+}
+
+/// The shortcuts (`.lnk`) named JETCARP, whatever the case, in `dir` and its folders down to
+/// `depth` below it (Scoop's is in *Scoop Apps*), sorted.
+pub fn shortcuts_named_jetcarp(dir: &Path, depth: usize) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        let Ok(t) = e.file_type() else {
+            continue;
+        };
+        if t.is_dir() {
+            if depth > 0 {
+                out.extend(shortcuts_named_jetcarp(&p, depth - 1));
+            }
+        } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("lnk"))
+            && p.file_stem()
+                .is_some_and(|s| s.eq_ignore_ascii_case("jetcarp"))
+        {
+            out.push(p);
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Windows: every Start menu entry named JETCARP, the user's (`%APPDATA%\Microsoft\Windows\Start
+/// Menu\Programs`) and every user's (`%ProgramData%\...`), with what each starts, and which is
+/// JETCARP's own. Empty elsewhere.
+pub fn start_menu_entries() -> Vec<StartEntry> {
+    #[cfg(windows)]
+    {
+        let mut folders: Vec<PathBuf> = start_menu().into_iter().collect();
+        if let Some(all) = std::env::var_os("ProgramData").filter(|v| !v.is_empty()) {
+            folders.push(PathBuf::from(all).join(r"Microsoft\Windows\Start Menu\Programs"));
+        }
+        let ours_at = start_menu().ok().map(|d| d.join(SHORTCUT));
+        let stable = stable_dir().ok();
+        let lower = |p: &Path| p.to_string_lossy().replace('\\', "/").to_lowercase();
+        let mut out = Vec::new();
+        for f in folders {
+            for lnk in shortcuts_named_jetcarp(&f, 3) {
+                let starts = shortcut::target(&lnk);
+                let at_ours = ours_at.as_deref().is_some_and(|o| lower(o) == lower(&lnk));
+                let to_copy = match (&starts, &stable) {
+                    (Some(t), Some(d)) => lower(t) == lower(&d.join(LAUNCHER_EXE)),
+                    _ => false,
+                };
+                // As `launcher install` makes it: to the launcher's copy, or without the
+                // launcher (a plain `cargo install`) to the program itself.
+                let ours = at_ours
+                    && stable
+                        .as_deref()
+                        .is_some_and(|d| shortcut_is_ours(starts.as_deref(), d));
+                let then_starts = (ours && to_copy)
+                    .then(|| stable.as_ref().map(|d| d.join(RECORD)))
+                    .flatten()
+                    .and_then(|r| std::fs::read_to_string(r).ok())
+                    .and_then(|t| t.lines().next().map(|l| PathBuf::from(l.trim())))
+                    .filter(|p| !p.as_os_str().is_empty());
+                out.push(StartEntry {
+                    shortcut: lnk,
+                    starts,
+                    ours,
+                    then_starts,
+                });
+            }
+        }
+        out
+    }
+    #[cfg(not(windows))]
+    {
+        Vec::new()
+    }
+}
+
 /// One line for people.
 pub fn describe() -> String {
     match files() {
@@ -691,6 +782,38 @@ mod shortcut {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Doctor names the Start menu entries named JETCARP, JETCARP's own and Scoop's in *Scoop
+    /// Apps* (#348): shortcuts of that name, whatever the case, in the folder and those below.
+    #[test]
+    fn the_start_menu_s_entries_named_jetcarp_are_found_in_its_folders() {
+        let dir = std::env::temp_dir().join(format!("jetcarp-start-menu-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for f in [
+            "JETCARP.lnk",
+            "Scoop Apps/jetcarp.LNK",
+            "Scoop Apps/JETCARP (old).lnk",
+            "Other/JETCARP.txt",
+            "a/b/c/d/JETCARP.lnk",
+            "Golly.lnk",
+        ] {
+            let p = dir.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, b"x").unwrap();
+        }
+        let found: Vec<String> = shortcuts_named_jetcarp(&dir, 3)
+            .iter()
+            .map(|p| {
+                p.strip_prefix(&dir)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+        assert_eq!(found, ["JETCARP.lnk", "Scoop Apps/jetcarp.LNK"]);
+        assert!(shortcuts_named_jetcarp(&dir.join("missing"), 3).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn homebrew_s_link_is_started_where_it_leads_to_this_version() {
