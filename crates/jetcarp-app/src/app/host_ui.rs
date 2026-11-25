@@ -1593,12 +1593,21 @@ fn scene_row(
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new(&scene.scene).strong());
         if !scene.also.is_empty() {
-            ui.label(
-                RichText::new(format!(
-                    "and the {} other rules of its series",
-                    scene.also.len()
-                ))
-                .small(),
+            // Which rule the cards picture (#346).
+            let words = if scene.measured && !scene.rungs.is_empty() {
+                format!(
+                    "and the {} other rules of its series, measured and pictured by {}",
+                    scene.also.len(),
+                    scene.scene
+                )
+            } else {
+                format!("and the {} other rules of its series", scene.also.len())
+            };
+            ui.label(RichText::new(words).small()).on_hover_text(
+                "Every rule of a series costs the same a cell, so a fit measures the series as \
+                 one scene, by the first of its rules that changes cells of its seed (the \
+                 Wolfram series' rule 0 draws nothing from its one cell), and its cards picture \
+                 that rule",
             );
         }
         if scene.measured && choosable {
@@ -1697,8 +1706,10 @@ fn scene_row(
 }
 
 /// The scenes a fit sized from the measured one, each with its size and a choice of the others
-/// (`choosable`); a placed pattern, or a scene that is not rebuilt to fill the screen, at its
-/// own size.
+/// (`choosable`), and why it has that size; a placed pattern, or a scene that is not rebuilt to
+/// fill the screen, at its own size. Each is a line of three columns where the pane is wide
+/// enough for them; else its note goes under its name and size, wrapped to the pane (#344: at the
+/// docked width the third column ran past the pane's edge).
 fn other_scenes(
     ui: &mut egui::Ui,
     screen: usize,
@@ -1707,69 +1718,163 @@ fn other_scenes(
     choosable: bool,
 ) -> Option<CardDo> {
     let mut todo = None;
-    egui::Grid::new(("tune-others", screen))
-        .num_columns(3)
-        .spacing([8.0, 2.0])
-        .show(ui, |ui| {
-            for x in rest {
-                let name = if x.also.is_empty() {
-                    x.scene.clone()
-                } else {
-                    format!("{} and its series' {} other rules", x.scene, x.also.len())
-                };
-                ui.label(RichText::new(name).small());
-                let size = x.size();
-                let sizes = tuning::scene_sizes(t, x);
-                let words = |s: &Size| {
-                    let mut w = s.describe();
-                    if s.same(&x.recommended) {
-                        w.push_str(", recommended");
+    let rows: Vec<OtherRow> = rest.iter().map(|x| OtherRow::of(t, x, choosable)).collect();
+    let spacing = [8.0, 2.0];
+    let one_line = rows
+        .iter()
+        .map(|r| r.widths(ui))
+        .fold([0.0f32; 3], |a, w| {
+            [a[0].max(w[0]), a[1].max(w[1]), a[2].max(w[2])]
+        })
+        .iter()
+        .sum::<f32>()
+        + 2.0 * spacing[0]
+        <= ui.available_width();
+    if one_line {
+        egui::Grid::new(("tune-others", screen))
+            .num_columns(3)
+            .spacing(spacing)
+            .show(ui, |ui| {
+                for r in &rows {
+                    ui.label(RichText::new(&r.name).small());
+                    if let Some(d) = r.size_ui(ui, screen) {
+                        todo = Some(d);
                     }
-                    if s.level.is_none() && (s.px - x.design_px).abs() < 1e-3 {
-                        w.push_str(", its own");
-                    }
-                    w
-                };
-                if choosable && !sizes.is_empty() {
-                    egui::ComboBox::from_id_salt(("tune-size", screen, &x.scene))
-                        .selected_text(words(&size))
-                        .show_ui(ui, |ui| {
-                            for s in &sizes {
-                                if ui.selectable_label(s.same(&size), words(s)).clicked() {
-                                    todo = Some(CardDo::Choose(screen, x.scene.clone(), *s));
-                                }
-                            }
-                        });
-                } else {
-                    ui.label(RichText::new(size.describe()).small());
+                    r.why_ui(ui);
+                    ui.end_row();
                 }
-                let why = if x.chosen {
-                    "your choice".to_string()
-                } else if x.placed {
-                    "a placed pattern: its own size unless you choose".to_string()
-                } else if sizes.is_empty() {
-                    "its own size".to_string()
-                } else if (x.cost - 1.0).abs() < 0.005 {
-                    "the same work a cell as the measured scene".to_string()
-                } else if x.cost < 1.0 {
-                    format!("{:.0}% of the measured scene's work a cell", x.cost * 100.0)
-                } else {
-                    format!("{:.1} times the measured scene's work a cell", x.cost)
-                };
-                // The soft cap on the estimate: said where the size is shown.
-                let why = if x.capped && !x.chosen {
-                    format!("{why}; held to twice the measured scene's cells: choose a finer size to go further")
-                } else {
-                    why
-                };
-                let l = ui.label(RichText::new(why).small().weak());
-                if let Some(n) = &x.note {
-                    l.on_hover_text(n);
+            });
+    } else {
+        for r in &rows {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(&r.name).small());
+                if let Some(d) = r.size_ui(ui, screen) {
+                    todo = Some(d);
                 }
-                ui.end_row();
-            }
-        });
+            });
+            ui.indent(("tune-why", screen, &r.scene.scene), |ui| r.why_ui(ui));
+            ui.add_space(spacing[1]);
+        }
+    }
     todo
+}
+
+/// One of [`other_scenes`]: its name, its size and the sizes it can be chosen at, and why it has
+/// its size.
+struct OtherRow<'a> {
+    scene: &'a TunedScene,
+    name: String,
+    size: Size,
+    /// The sizes in its menu (none: its size is shown, not chosen).
+    sizes: Vec<Size>,
+    why: String,
+}
+
+impl<'a> OtherRow<'a> {
+    fn of(t: &Tuning, x: &'a TunedScene, choosable: bool) -> OtherRow<'a> {
+        let name = if x.also.is_empty() {
+            x.scene.clone()
+        } else {
+            format!("{} and its series' {} other rules", x.scene, x.also.len())
+        };
+        let sizes = tuning::scene_sizes(t, x);
+        let why = if x.chosen {
+            "your choice".to_string()
+        } else if x.placed {
+            "a placed pattern: its own size unless you choose".to_string()
+        } else if sizes.is_empty() {
+            "its own size".to_string()
+        } else if (x.cost - 1.0).abs() < 0.005 {
+            "the same work a cell as the measured scene".to_string()
+        } else if x.cost < 1.0 {
+            format!("{:.0}% of the measured scene's work a cell", x.cost * 100.0)
+        } else {
+            format!("{:.1} times the measured scene's work a cell", x.cost)
+        };
+        // The soft cap on the estimate: said where the size is shown.
+        let why = if x.capped && !x.chosen {
+            format!(
+                "{why}; held to twice the measured scene's cells: choose a finer size to go further"
+            )
+        } else {
+            why
+        };
+        OtherRow {
+            scene: x,
+            name,
+            size: x.size(),
+            sizes: if choosable { sizes } else { vec![] },
+            why,
+        }
+    }
+
+    /// A size in the menu's words.
+    fn words(&self, s: &Size) -> String {
+        let mut w = s.describe();
+        if s.same(&self.scene.recommended) {
+            w.push_str(", recommended");
+        }
+        if s.level.is_none() && (s.px - self.scene.design_px).abs() < 1e-3 {
+            w.push_str(", its own");
+        }
+        w
+    }
+
+    /// About how wide its three columns are on one line: its name, its size's menu, and its note.
+    fn widths(&self, ui: &egui::Ui) -> [f32; 3] {
+        let width = |text: String, style: egui::TextStyle| {
+            let font = style.resolve(ui.style());
+            ui.painter()
+                .layout_no_wrap(text, font, Color32::WHITE)
+                .size()
+                .x
+        };
+        let sp = ui.spacing();
+        let menu = if self.sizes.is_empty() {
+            width(self.size.describe(), egui::TextStyle::Small)
+        } else {
+            // The menu's button: its words, the arrow, and the button's padding.
+            let words = width(self.words(&self.size), egui::TextStyle::Button);
+            (words + sp.icon_width + sp.icon_spacing + 2.0 * sp.button_padding.x + 4.0)
+                .max(sp.combo_width)
+        };
+        [
+            width(self.name.clone(), egui::TextStyle::Small),
+            menu,
+            width(self.why.clone(), egui::TextStyle::Small),
+        ]
+    }
+
+    /// Its size: a menu of the sizes it can be chosen at, or the size it shows at.
+    fn size_ui(&self, ui: &mut egui::Ui, screen: usize) -> Option<CardDo> {
+        let x = self.scene;
+        let mut todo = None;
+        if self.sizes.is_empty() {
+            ui.label(RichText::new(self.size.describe()).small());
+            return None;
+        }
+        egui::ComboBox::from_id_salt(("tune-size", screen, &x.scene))
+            .selected_text(self.words(&self.size))
+            .show_ui(ui, |ui| {
+                for s in &self.sizes {
+                    if ui
+                        .selectable_label(s.same(&self.size), self.words(s))
+                        .clicked()
+                    {
+                        todo = Some(CardDo::Choose(screen, x.scene.clone(), *s));
+                    }
+                }
+            });
+        todo
+    }
+
+    /// Why it has its size, and the scene's note on hover.
+    fn why_ui(&self, ui: &mut egui::Ui) {
+        let l = ui.label(RichText::new(&self.why).small().weak());
+        if let Some(n) = &self.scene.note {
+            l.on_hover_text(n);
+        }
+    }
 }
 
 /// One card: the picture at the screen's own pixels, the size and cells, the numbers, and whether
@@ -1983,6 +2088,128 @@ mod tests {
             }
             _ => None,
         })
+    }
+
+    /// Every text drawn starting `start`, where it is laid out, and the clip it is drawn in.
+    fn texts(shapes: &[egui::epaint::ClippedShape], start: &str) -> Vec<(egui::Rect, egui::Rect)> {
+        let mut out = vec![];
+        fn walk(
+            s: &egui::Shape,
+            clip: egui::Rect,
+            start: &str,
+            out: &mut Vec<(egui::Rect, egui::Rect)>,
+        ) {
+            match s {
+                egui::Shape::Text(t) if t.galley.text().starts_with(start) => {
+                    out.push((t.galley.rect.translate(t.pos.to_vec2()), clip));
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, start, out)),
+                _ => {}
+            }
+        }
+        for c in shapes {
+            walk(&c.shape, c.clip_rect, start, &mut out);
+        }
+        out
+    }
+
+    /// The other scenes of a fit in a pane `width` points wide: what each frame drew.
+    fn other_scenes_at(width: f32, rest: &[TunedScene]) -> Vec<egui::epaint::ClippedShape> {
+        let t = Tuning {
+            canvas: [1920, 1080],
+            ..Default::default()
+        };
+        let rest: Vec<&TunedScene> = rest.iter().collect();
+        let ctx = egui::Context::default();
+        let mut shapes = vec![];
+        for k in 0..4 {
+            let raw = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(width, 600.0),
+                )),
+                time: Some(k as f64 * 0.1),
+                predicted_dt: 0.1,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, |ui| {
+                // The pane's own scrolling, as `pane_scroll` has it.
+                egui::ScrollArea::vertical()
+                    .id_salt("pane")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        let _ = other_scenes(ui, 0, &t, &rest, true);
+                    });
+            });
+            out.textures_delta.clear();
+            shapes = out.shapes;
+        }
+        shapes
+    }
+
+    /// The other scenes' rows at the docked pane's width, about 340 points (#344): each one's
+    /// note, saying why it has its size, is laid out inside the pane, and so is its size's menu.
+    /// They were a grid of three columns, whose third ran past the pane's right edge.
+    #[test]
+    fn the_other_scenes_notes_fit_the_docked_pane() {
+        let scene = |name: &str| TunedScene {
+            scene: name.into(),
+            tiling: "square".into(),
+            design_px: 3.0,
+            cell_px: 4.0,
+            cost: 0.96,
+            recommended: Size::px(4.0),
+            ..Default::default()
+        };
+        let rest = vec![
+            TunedScene {
+                chosen: true,
+                ..scene("Life")
+            },
+            TunedScene {
+                placed: true,
+                ..scene("Quick Start glider-gun")
+            },
+            TunedScene {
+                capped: true,
+                ..scene("Hodgepodge")
+            },
+        ];
+        let notes = [
+            "your choice",
+            "a placed pattern",
+            "96% of the measured scene's work a cell; held to twice",
+        ];
+        let width = 340.0;
+        let shapes = other_scenes_at(width, &rest);
+        for note in notes.iter().copied().chain(["Life", "Hodgepodge", "4 px"]) {
+            let at = texts(&shapes, note);
+            assert!(!at.is_empty(), "{note:?} is drawn");
+            for (r, clip) in at {
+                assert!(
+                    r.min.x >= 0.0 && r.max.x <= width + 0.5,
+                    "{note:?} is laid out inside the pane, 0 to {width}: {r:?}"
+                );
+                let seen = r.intersect(clip);
+                assert!(
+                    seen.width() >= r.width() - 0.5,
+                    "{note:?} is not clipped: {r:?} in {clip:?}"
+                );
+            }
+        }
+        // Each note under its scene's name.
+        let at = |shapes: &[egui::epaint::ClippedShape], s: &str| texts(shapes, s)[0].0;
+        let (name, note) = (at(&shapes, "Life"), at(&shapes, "your choice"));
+        assert!(note.min.y >= name.max.y - 0.5, "{name:?} then {note:?}");
+        // A pane wide enough keeps each scene on one line: name, menu, note.
+        let shapes = other_scenes_at(1000.0, &rest);
+        for (scene, note) in [("Life", notes[0]), ("Hodgepodge", notes[2])] {
+            let (a, b) = (at(&shapes, scene), at(&shapes, note));
+            assert!(
+                (a.center().y - b.center().y).abs() < 3.0 && b.min.x > a.max.x,
+                "one line at 1000 points: {a:?}, {b:?}"
+            );
+        }
     }
 
     /// A scene's row of cards runs past the pane's edge, so it scrolls sideways: with shift and
