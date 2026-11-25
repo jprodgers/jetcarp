@@ -179,6 +179,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   tool window must give screen readers the same roles and names in Atkinson Hyperlegible as in
   egui's original fonts, where a font's widths and line heights move controls and their labels
   about (`screen_reader_names_are_the_same_in_every_font`).
+- **The system's settings.** With the system's settings stood in, the whole app, headless, must
+  follow a change in reduced motion and high contrast within a couple of seconds, and its own
+  setting must win either way (`crates/jetcarp-app/src/app/accessibility.rs`). Under a Windows
+  contrast theme, *Follow the system* must give the form of the theme's window colour, whatever
+  winit says: a black window (*Night sky*, as Windows reports it, light to winit) and *Aquatic*'s
+  dark, a white one and *Desert*'s light; a choice of *Dark* or *Light* must still win, and with no
+  contrast theme winit's answer must be followed (red before the fix, #342). Which colours are
+  dark, by WCAG's contrast ratio, and how `GetSysColor`'s value is read are checked on every
+  system (`crates/jetcarp-app/src/a11y.rs`).
 - **The fonts.** The app must start in Atkinson Hyperlegible Next and Mono, with Next Bold for
   headings, the files byte for byte those the fonts' README names by SHA-256, and egui's fonts
   behind them in egui's order; egui's original choice must give exactly the fonts the app had
@@ -264,6 +273,19 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   settings made POSIX rules, for zones with daylight saving time in either hemisphere and without,
   which must give the IANA zones' offsets through 2026 and 2027
   (`jetcarp-core/src/time_zone.rs`).
+- **More than one JETCARP.** `jetcarp doctor`, run with two stand-ins named `jetcarp` first on its
+  `PATH`, must name both in the `PATH`'s order, the first as the one `jetcarp` runs, and this
+  program, in its text and its JSON; with only itself on the `PATH`, it must say nothing of other
+  copies (`crates/jetcarp/tests/doctor_programs.rs`; red before the fix, #348). Its first lines
+  and its JSON's `program` must name this program, its version and its path, with the home folder
+  shown as `~` there and in the section (red before the change; `jetcarp-api/tests/reference.rs`),
+  and the home folder must become `~` only at the start of a path and on a folder's boundary
+  (`installed_with.rs`). In scratch folders,
+  the section must follow a Scoop shim to the program its `.shim` names, tell Scoop's, cargo's and
+  the installer's apart, count a folder named twice once, look for `PATHEXT`'s extensions in their
+  order on Windows, and name the commands that remove the others, each once
+  (`crates/jetcarp-api/tests/installed_with.rs`). The Start menu's entries named JETCARP must be
+  found in its folders, *Scoop Apps* among them, whatever the case (`jetcarp-display/src/launcher.rs`).
 - **The launchers and the icon.** `jetcarp launcher install` runs in a scratch home on each
   system, cut off from the desktop session: on Linux the menu entry must pass the Desktop Entry
   spec's rules (and `desktop-file-validate`, where it is installed, with nothing to say), name the
@@ -271,7 +293,13 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   *JETCARP.app* must hold its `Info.plist`, its launcher naming the program and the `.icns`, and
   pass `codesign --verify`; on Windows the Start menu's `JETCARP.lnk` must be a shell link, with
   the copy of `jetcarpw.exe` it starts and a record naming the program. `jetcarp doctor` must say
-  where it is. Then `jetcarp uninstall` must list it and take every file out (on Windows,
+  where it is, and on Windows the shortcut's AppUserModelID must read back as the app's,
+  `JimmieRodgers.JETCARP` (#347), and doctor's JSON must name it as JETCARP's own entry, with a copy
+  of it in *Scoop Apps* named too. A window must relaunch its own program's launcher, the one
+  beside it or the entry's copy only when that copy's record names it, never another JETCARP's
+  (on every system, with scratch files), and on Windows a window's property store must give back
+  the ID and the relaunch command, icon and name it was given, and nothing once cleared
+  (`jetcarp-display/src/launcher.rs`). Then `jetcarp uninstall` must list it and take every file out (on Windows,
   `jetcarp launcher remove`, since `jetcarp uninstall` would reach the real registry), and a menu
   entry, app or shortcut of the same name that JETCARP did not make must be neither replaced nor
   removed (`crates/jetcarp/tests/launcher.rs`). On Windows a winget upgrade is played out for
@@ -292,9 +320,15 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   256 px picture.
 - **Uninstalling.** In scratch folders on every system, `jetcarp uninstall --data` and
   `--settings` must delete only folders that hold nothing but JETCARP's own, refusing any other
-  before doing anything (`crates/jetcarp-api/tests/uninstall_folders.rs`), both of them with the
-  data folder inside the settings folder, as on macOS (`uninstall_nested.rs`), and a second run
-  must say the folders are already gone (`uninstall_again.rs`). The runtime
+  before doing anything (`crates/jetcarp-api/tests/uninstall_folders.rs`; `machine.json`,
+  `limits.json` and `screen-saver-state.json` among JETCARP's own, #349). Every file the code
+  keeps at the top of the settings folder must be one `--settings` counts as JETCARP's: the test
+  gathers the names from every crate's code, each path built there with `.join` on the folder,
+  its name resolved from a string or a `const`, so a file added there later fails it until it is
+  listed (`settings_files_listed.rs`, with a check of the gathering on code written for it). Both
+  options must do the same with the data folder inside the settings folder, as on macOS
+  (`uninstall_nested.rs`), and a second run must say the folders are already gone
+  (`uninstall_again.rs`). The runtime
   folder must be emptied of the locks, port and token files (one of them half-written) and memory
   records that programs left, keeping and naming those a running app or host still uses, then
   removed; a file JETCARP did not put there must be left alone, and in Windows' layout, where it
@@ -757,7 +791,13 @@ every contributor's own builds use that version too.
   nothing installed (the shell installer on Linux, the PowerShell one on Windows). The intact install
   must have the program add JETCARP to the system's apps, `--no-launcher` must leave that out (the
   shell installer), and uninstalling must take the launcher out with the program: on Windows the
-  real program makes and removes the Start menu entry in the test's own `APPDATA`.
+  real program makes and removes the Start menu entry in the test's own `APPDATA`. Another JETCARP
+  must be named with what removes it: cargo's first on the `PATH` and pipx's in its folder, with
+  `jetcarp` said to run cargo's, and nothing said when there is none (shell); Scoop's folder and
+  its shim, as one (PowerShell). After `jetcarp uninstall --settings --data`, uninstalling must
+  make none of JETCARP's folders again and name none that is gone or holds only empty folders: the
+  shell test's stand-in program writes in its settings and runtime folders on every run, as
+  JETCARP may, and the PowerShell test runs the real one (#348, #350).
 - **Build only** for macOS on Intel and Linux on ARM, which nobody tests by hand yet, and the whole
   workspace with the oldest Rust it says it supports (1.95), so that the stated minimum stays true.
   The Intel Mac is built at the end of the macOS test job, on the same Apple silicon runner, since

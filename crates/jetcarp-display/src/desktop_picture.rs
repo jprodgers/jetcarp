@@ -213,12 +213,16 @@ fn unescape(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn show_on(desktop: &dyn Desktop, dir: &Path, stills: &[Still]) -> Result<Vec<PathBuf>, String> {
+fn show_on(
+    desktop: &dyn Desktop,
+    settings: &Path,
+    stills: &[Still],
+) -> Result<Vec<PathBuf>, String> {
     if stills.is_empty() {
         return Err("no still to show".into());
     }
     let err = |p: &Path, e: std::io::Error| format!("{}: {e}", p.display());
-    let folder = dir.join(FOLDER);
+    let folder = settings.join(FOLDER);
     std::fs::create_dir_all(&folder).map_err(|e| err(&folder, e))?;
     let stamp = millis();
     let mut files = Vec::with_capacity(stills.len());
@@ -227,7 +231,7 @@ fn show_on(desktop: &dyn Desktop, dir: &Path, stills: &[Still]) -> Result<Vec<Pa
         std::fs::write(&path, &s.png).map_err(|e| err(&path, e))?;
         files.push((s.monitor, path));
     }
-    let saved_file = dir.join(SAVED);
+    let saved_file = settings.join(SAVED);
     let original = match read_saved(&saved_file) {
         Some(s) => s.original,
         None => desktop.keep(desktop.current()?, &folder),
@@ -242,8 +246,8 @@ fn show_on(desktop: &dyn Desktop, dir: &Path, stills: &[Still]) -> Result<Vec<Pa
     Ok(paths)
 }
 
-fn restore_on(desktop: &dyn Desktop, dir: &Path) -> Result<Restored, String> {
-    let saved_file = dir.join(SAVED);
+fn restore_on(desktop: &dyn Desktop, settings: &Path) -> Result<Restored, String> {
+    let saved_file = settings.join(SAVED);
     let Some(saved) = read_saved(&saved_file) else {
         return Ok(Restored::Nothing);
     };
@@ -257,7 +261,7 @@ fn restore_on(desktop: &dyn Desktop, dir: &Path) -> Result<Restored, String> {
         Restored::LeftAlone
     };
     let _ = std::fs::remove_file(&saved_file);
-    remove_stills(&dir.join(FOLDER), &[]);
+    remove_stills(&settings.join(FOLDER), &[]);
     Ok(result)
 }
 

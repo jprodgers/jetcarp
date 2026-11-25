@@ -103,7 +103,7 @@ pub fn built_from(config: &Path) -> BuiltFrom {
 
 fn save(config: &Path, state: &BuiltFrom) {
     let file = config.join(STATE_FILE);
-    let tmp = config.join(format!("{STATE_FILE}.{}", std::process::id()));
+    let tmp = config.join(format!("{STATE_FILE}.tmp-{}", std::process::id()));
     let text = serde_json::to_string_pretty(state).unwrap_or_default();
     if std::fs::create_dir_all(config).is_ok()
         && std::fs::write(&tmp, text + "\n").is_ok()

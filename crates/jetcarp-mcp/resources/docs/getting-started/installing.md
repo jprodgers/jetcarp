@@ -84,6 +84,12 @@ An installer only ever replaces a folder it made itself (it leaves a `.jetcarp-i
 there), and refuses to replace a `jetcarp` on your `PATH` that something else put there, such as
 pipx or cargo.
 
+At the end, each installer says whether another JETCARP is installed on the computer, and how to
+remove it: Scoop's, winget's, Homebrew's, cargo's, pipx's or uv's, another folder of the
+installer's, or any other `jetcarp` on your `PATH`. Two copies are easy to mix up: `jetcarp` runs
+whichever comes first on the `PATH` (the installer says so when that is the other one), and Scoop's
+Start menu entry is named *JETCARP* too. See [More than one JETCARP](#more-than-one-jetcarp).
+
 ## With pipx, uv or pip
 
 JETCARP's Python package contains the program and the starter pack, and no Python code. It installs
@@ -485,6 +491,14 @@ jetcarp launcher install
 | macOS | *JETCARP.app* in `~/Applications`, signed ad hoc on your Mac | Launchpad, Spotlight or Finder; keep it in the Dock from there |
 | Windows | `JETCARP.lnk` in your Start menu's folder (`%APPDATA%\Microsoft\Windows\Start Menu\Programs`), starting a copy of `jetcarpw.exe` in `%LOCALAPPDATA%\jetcarp\launcher`, so no console window opens | the Start menu |
 
+On Windows the entry and the app's windows share one AppUserModelID, `JimmieRodgers.JETCARP`, so
+the taskbar shows the app under the entry: a pin, made from the Start menu or from the app's
+taskbar button, starts JETCARP through the windowless launcher, with no console window. A pin
+made from the taskbar starts the program that was pinned, never another JETCARP: the main window
+says so (its relaunch command), naming its own program's launcher, the `jetcarpw.exe` beside it,
+or the entry's copy when that copy starts this same program, which keeps a pin working after an
+upgrade whose folder names the version (winget's).
+
 Each keeps working when JETCARP is upgraded. On Linux and macOS it starts the program by a path an
 upgrade keeps (Homebrew's `jetcarp` link, not the version's own folder); *JETCARP.app* holds a
 small launcher that starts the program, not a copy of it. On Windows, Scoop's folders name the
@@ -503,6 +517,34 @@ of the same name that JETCARP did not make is left alone.
 The app's windows carry the icon too: in the title bar and taskbar on Windows and X11, and in the
 Dock on macOS. On Wayland the desktop takes a window's icon from the menu entry named after it, so
 there it needs `jetcarp launcher install`.
+
+## More than one JETCARP
+
+Installing JETCARP a second way, Scoop's as well as the installer's for instance, leaves two
+programs: `jetcarp` in a new window runs whichever comes first on your `PATH`, and the Start menu
+may open the other, an older version perhaps. `jetcarp doctor` then has a section, *More than one
+JETCARP*: this program, every `jetcarp` on the `PATH` in its order, the one `jetcarp` runs, how
+each was installed, on Windows every Start menu entry named *JETCARP* and what it starts, and the
+commands that remove the others. Your home folder is shown as `~`, as in doctor's first lines,
+which always name this program and its version, so no user name is pasted into a bug report:
+
+```text
+More than one JETCARP
+  this program: ~\AppData\Local\Programs\jetcarp\jetcarp.exe (installed with JETCARP's installer)
+  on the PATH, in its order:
+    ~\scoop\shims\jetcarp.exe, which runs ~\scoop\apps\jetcarp\current\jetcarp.exe (installed with Scoop): it runs when you type `jetcarp` here
+    ~\AppData\Local\Programs\jetcarp\jetcarp.exe (installed with JETCARP's installer), this program
+  Start menu entries named JETCARP:
+    ~\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\JETCARP.lnk, which starts ~\AppData\Local\jetcarp\launcher\jetcarpw.exe (JETCARP's own entry, from `jetcarp launcher install`, which starts ~\AppData\Local\Programs\jetcarp\jetcarp.exe)
+    ~\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Scoop Apps\JETCARP.lnk, which starts ~\scoop\apps\jetcarp\current\jetcarpw.exe (installed with Scoop)
+  note: `jetcarp` here runs ~\scoop\apps\jetcarp\current\jetcarp.exe, not this program
+  To keep only one JETCARP, remove the others:
+    scoop uninstall jetcarp    (~\scoop\apps\jetcarp\current\jetcarp.exe)
+```
+
+`jetcarp --json doctor` has them as `programs` and `desktop.start_menu`. Run `jetcarp uninstall`
+with the copy you remove first, if it set up anything outside its folders (see
+[Uninstalling](../guides/uninstalling.md)).
 
 The first time, the app shows the [photosensitive seizure warning](photosensitivity.md), then asks a
 few questions to set itself up: see [First run and setup](first-run.md).

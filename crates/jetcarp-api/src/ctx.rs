@@ -391,6 +391,25 @@ pub struct Desktop {
     /// JETCARP among the system's apps (`jetcarp launcher`), in words: whether it is there, and
     /// where.
     pub launcher: Option<String>,
+    /// Windows: every Start menu entry named JETCARP, the user's and every user's, with what
+    /// each starts (#348). Empty elsewhere.
+    pub start_menu: Vec<StartMenuEntry>,
+}
+
+/// A Start menu entry named JETCARP (Windows): JETCARP's own, or another's (Scoop makes one in
+/// *Scoop Apps*).
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+pub struct StartMenuEntry {
+    /// The shortcut.
+    pub shortcut: PathBuf,
+    /// The program it starts, as the shell reads it (none: it could not be read).
+    pub starts: Option<PathBuf>,
+    /// It is JETCARP's own entry, made by `jetcarp launcher install`.
+    pub ours: bool,
+    /// For JETCARP's own entry: the program the launcher's copy it starts goes on to start, as
+    /// the record beside the copy says.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub then_starts: Option<PathBuf>,
 }
 
 /// One thing `system.uninstall` undoes outside JETCARP's own folders.

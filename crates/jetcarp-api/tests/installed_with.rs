@@ -202,3 +202,187 @@ fn the_report_ends_with_the_command_that_applies() {
         "{t}"
     );
 }
+
+/// `jetcarp doctor`'s section on more than one JETCARP (#348): every program named `jetcarp` on
+/// the PATH in its order, what a Scoop shim runs, how each was installed, which `jetcarp` runs,
+/// the Start menu entries named JETCARP, and the commands that remove the others. The programs
+/// are stand-ins in a scratch folder: one in cargo's `bin`, one Scoop shim beside the `.shim`
+/// file that names its program.
+#[test]
+fn doctor_names_each_jetcarp_on_the_path_whose_it_is_and_how_to_remove_the_others() {
+    use jetcarp_api::ctx::StartMenuEntry;
+    use jetcarp_api::ops::system::doctor_programs;
+    let d = scratch("doctor-programs");
+    let cargo_bin = d.join(".cargo").join("bin");
+    let shims = d.join("scoop").join("shims");
+    let installer = d.join("lib").join("jetcarp");
+    for dir in [&cargo_bin, &shims, &installer] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    let exe = |dir: &Path| {
+        let p = dir.join("jetcarp");
+        std::fs::write(&p, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        p
+    };
+    let scoop_program = d.join("scoop/apps/jetcarp/current/jetcarp");
+    std::fs::write(
+        shims.join("jetcarp.shim"),
+        format!("path = \"{}\"\n", scoop_program.display()),
+    )
+    .unwrap();
+    let shim = exe(&shims);
+    let cargo = exe(&cargo_bin);
+    std::fs::write(cargo_bin.parent().unwrap().join(".crates.toml"), "").unwrap();
+    let mine = exe(&installer);
+    std::fs::write(installer.join(".jetcarp-installer"), "JETCARP 0.4.3\n").unwrap();
+    // A folder named twice, and one with no program, count once and not at all.
+    let path = std::env::join_paths([&shims, &cargo_bin, &shims, &d, &installer]).unwrap();
+
+    let p = doctor_programs(Some(mine.clone()), &path, false, None);
+    let found: Vec<&Path> = p.on_path.iter().map(|x| x.path.as_path()).collect();
+    assert_eq!(found, [shim.as_path(), cargo.as_path(), mine.as_path()]);
+    assert_eq!(p.on_path[0].runs.as_deref(), Some(scoop_program.as_path()));
+    let whose: Vec<Option<&str>> = p
+        .on_path
+        .iter()
+        .map(|x| x.installed_with.as_ref().map(|w| w.by.as_str()))
+        .collect();
+    assert_eq!(whose, [Some("scoop"), Some("cargo"), Some("installer")]);
+    assert_eq!(
+        p.on_path.iter().map(|x| x.this).collect::<Vec<_>>(),
+        [false, false, true]
+    );
+    let start = [
+        StartMenuEntry {
+            shortcut: d.join("Start Menu/Programs/JETCARP.lnk"),
+            starts: Some(d.join("AppData/Local/jetcarp/launcher/jetcarpw.exe")),
+            ours: true,
+            then_starts: Some(mine.clone()),
+        },
+        StartMenuEntry {
+            shortcut: d.join("Start Menu/Programs/Scoop Apps/JETCARP.lnk"),
+            starts: Some(d.join("scoop/apps/jetcarp/current/jetcarpw.exe")),
+            ours: false,
+            then_starts: None,
+        },
+    ];
+    let t = p.text(&start);
+    assert!(t.starts_with("\nMore than one JETCARP\n"), "{t}");
+    let lines: Vec<&str> = t.lines().collect();
+    let at = |what: &Path| {
+        lines
+            .iter()
+            .position(|l| l.starts_with(&format!("    {}", what.display())))
+            .unwrap_or_else(|| panic!("{} is not named: {t}", what.display()))
+    };
+    assert!(at(&shim) < at(&cargo) && at(&cargo) < at(&mine), "{t}");
+    assert_eq!(
+        lines[at(&shim)],
+        format!(
+            "    {}, which runs {} (installed with Scoop): it runs when you type `jetcarp` here",
+            shim.display(),
+            scoop_program.display()
+        )
+    );
+    assert!(lines[at(&mine)].ends_with("(installed with JETCARP's installer), this program"));
+    assert!(
+        t.contains("JETCARP's own entry, from `jetcarp launcher install`"),
+        "{t}"
+    );
+    assert!(
+        t.contains(&format!(
+            "  note: `jetcarp` here runs {}, not this program\n",
+            scoop_program.display()
+        )),
+        "{t}"
+    );
+    assert!(t.contains("\n    scoop uninstall jetcarp    ("), "{t}");
+    assert!(t.contains("\n    cargo uninstall jetcarp"), "{t}");
+    // Scoop's, named by the shim and by the Start menu entry, once.
+    assert_eq!(t.matches("scoop uninstall jetcarp").count(), 1, "{t}");
+
+    // One JETCARP, this one: nothing to say.
+    let alone = doctor_programs(
+        Some(mine.clone()),
+        &std::env::join_paths([&installer]).unwrap(),
+        false,
+        None,
+    );
+    assert!(alone.text(&start[..1]).is_empty());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// On Windows the PATH's folders are searched for `jetcarp` with each of `PATHEXT`'s
+/// extensions, in its order, as the command prompt and PowerShell do.
+#[test]
+fn on_windows_each_pathext_extension_is_looked_for_in_its_order() {
+    use jetcarp_api::ops::system::jetcarps_on_path;
+    let d = scratch("doctor-pathext");
+    let (a, b) = (d.join("a"), d.join("b"));
+    for dir in [&a, &b] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    std::fs::write(a.join("jetcarp.cmd"), "").unwrap();
+    std::fs::write(a.join("jetcarp.exe"), "").unwrap();
+    std::fs::write(b.join("jetcarp.ps1"), "").unwrap();
+    let path = std::env::join_paths([&a, &b]).unwrap();
+    let names = |found: Vec<PathBuf>| -> Vec<String> {
+        found
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect()
+    };
+    // .exe before .cmd, as PATHEXT has them by default; .ps1 is not one of them.
+    assert_eq!(names(jetcarps_on_path(&path, true, None)), ["jetcarp.exe"]);
+    assert_eq!(
+        names(jetcarps_on_path(&path, true, Some(".CMD;.EXE".as_ref()))),
+        ["jetcarp.cmd"]
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// Doctor shows the home folder as `~` (#348): at the start of a path, on a folder's boundary,
+/// in the system's own separators; on Windows whatever the case.
+#[test]
+fn the_home_folder_is_shown_as_a_tilde() {
+    use jetcarp_api::ops::system::home_as_tilde;
+    let t = |p: &str, h: Option<&str>| home_as_tilde(Path::new(p), h.map(Path::new));
+    assert_eq!(
+        t("/home/ada/.local/bin/jetcarp", Some("/home/ada")),
+        "~/.local/bin/jetcarp"
+    );
+    assert_eq!(
+        t("/home/ada/.local/bin/jetcarp", Some("/home/ada/")),
+        "~/.local/bin/jetcarp"
+    );
+    assert_eq!(t("/home/ada", Some("/home/ada")), "~");
+    // Another user's folder whose name begins with the same letters, and no home: as it is.
+    assert_eq!(
+        t("/home/adam/jetcarp", Some("/home/ada")),
+        "/home/adam/jetcarp"
+    );
+    assert_eq!(
+        t("/opt/jetcarp/jetcarp", Some("/home/ada")),
+        "/opt/jetcarp/jetcarp"
+    );
+    assert_eq!(t("/home/ada/jetcarp", None), "/home/ada/jetcarp");
+    assert_eq!(t("/home/ada/jetcarp", Some("")), "/home/ada/jetcarp");
+    assert_eq!(
+        t(
+            r"C:\Users\ada\AppData\Local\Programs\jetcarp\jetcarp.exe",
+            Some(r"C:\Users\ada")
+        ),
+        r"~\AppData\Local\Programs\jetcarp\jetcarp.exe"
+    );
+    if cfg!(windows) {
+        assert_eq!(
+            t(r"c:\users\ADA\jetcarp.exe", Some(r"C:\Users\ada")),
+            r"~\jetcarp.exe"
+        );
+    }
+}

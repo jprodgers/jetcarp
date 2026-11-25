@@ -168,6 +168,32 @@ fn the_launcher_goes_in_with_its_icon_and_comes_out_with_uninstall() {
         let bytes = std::fs::read(&lnk).unwrap();
         // A shell link: its header's size, then the class of shell links.
         assert_eq!(&bytes[..4], &[0x4C, 0, 0, 0]);
+        // With the AppUserModelID the app's window has too, so a pin made from the taskbar is of
+        // this entry (#347).
+        assert_eq!(
+            jetcarp_display::launcher::shortcut_app_id(&lnk).as_deref(),
+            Some(jetcarp_display::launcher::APP_USER_MODEL_ID),
+            "the entry's AppUserModelID"
+        );
+        // Doctor names it, as JETCARP's own entry (#348); and beside another entry named
+        // JETCARP (Scoop makes one in *Scoop Apps*), it names both.
+        let (ok, json, err) = jetcarp(&h, &["--json", "doctor"]);
+        assert!(ok, "{err}");
+        let d: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let entries = d["desktop"]["start_menu"].as_array().unwrap().clone();
+        let ours: Vec<&serde_json::Value> = entries.iter().filter(|e| e["ours"] == true).collect();
+        assert_eq!(ours.len(), 1, "{entries:?}");
+        let scoop = lnk.parent().unwrap().join("Scoop Apps");
+        std::fs::create_dir_all(&scoop).unwrap();
+        std::fs::copy(&lnk, scoop.join("JETCARP.lnk")).unwrap();
+        let (ok, doctor, err) = jetcarp(&h, &["doctor"]);
+        assert!(ok, "{err}");
+        assert!(
+            doctor.contains("\n  Start menu entries named JETCARP:\n")
+                && doctor.contains(&scoop.join("JETCARP.lnk").display().to_string()),
+            "{doctor}"
+        );
+        std::fs::remove_dir_all(&scoop).unwrap();
         let mut made = vec![lnk];
         // With the windowless launcher built, the entry starts a copy of it in a folder of
         // JETCARP's own, beside a record of this program.
@@ -175,6 +201,11 @@ fn the_launcher_goes_in_with_its_icon_and_comes_out_with_uninstall() {
             let stable = h.join("AppData/Local/jetcarp/launcher");
             let record = std::fs::read_to_string(stable.join("jetcarp-program")).unwrap();
             assert_eq!(record.trim(), program.display().to_string());
+            assert_eq!(
+                ours[0]["then_starts"].as_str(),
+                Some(program.display().to_string().as_str()),
+                "{entries:?}"
+            );
             made.push(stable.join("jetcarpw.exe"));
             made.push(stable.join("jetcarp-program"));
         }

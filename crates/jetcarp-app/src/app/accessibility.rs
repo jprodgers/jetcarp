@@ -177,6 +177,7 @@ impl JetcarpApp {
             brightness_shown(
                 self.a11y.settings.brightness,
                 self.a11y.watch.reading.dark,
+                self.a11y.watch.reading.contrast_dark(),
                 ctx.system_theme(),
             ),
         );
@@ -271,21 +272,27 @@ impl JetcarpApp {
     }
 }
 
-/// What the system says, in words.
-/// Light or dark as shown: the choice, except that *Follow the system* takes the style the app
+/// Light or dark as shown: the choice, except that *Follow the system* takes the form of the
+/// contrast theme on (Windows: `contrast`, from its window colour, #342), whatever winit says,
+/// since Windows tells winit the style is light under any contrast theme; else the style the app
 /// read itself (Linux, #137) where egui has none from winit.
 fn brightness_shown(
     chosen: theme::Brightness,
     read: Option<bool>,
+    contrast: Option<bool>,
     from_winit: Option<egui::Theme>,
 ) -> theme::Brightness {
-    match (chosen, read, from_winit) {
-        (theme::Brightness::System, Some(true), None) => theme::Brightness::Dark,
-        (theme::Brightness::System, Some(false), None) => theme::Brightness::Light,
-        (b, _, _) => b,
+    use theme::Brightness::{Dark, Light, System};
+    match (chosen, contrast, read, from_winit) {
+        (System, Some(true), _, _) => Dark,
+        (System, Some(false), _, _) => Light,
+        (System, None, Some(true), None) => Dark,
+        (System, None, Some(false), None) => Light,
+        (b, ..) => b,
     }
 }
 
+/// What the system says, in words.
 fn system_word(v: Option<bool>, on: &str, off: &str) -> String {
     match v {
         Some(true) => format!("Your system asks for {on}."),
@@ -609,8 +616,7 @@ pub(super) mod tests {
     fn reduce(on: Option<bool>) -> Reading {
         Reading {
             reduce_motion: on,
-            high_contrast: None,
-            dark: None,
+            ..Default::default()
         }
     }
 
@@ -665,7 +671,7 @@ pub(super) mod tests {
         sys.set(Reading {
             reduce_motion: Some(true),
             high_contrast: Some(true),
-            dark: None,
+            ..Default::default()
         });
         // Read again after a couple of seconds of the app's clock.
         app.started -= std::time::Duration::from_secs(5);
@@ -904,14 +910,89 @@ pub(super) mod tests {
     fn follow_the_system_takes_the_style_read_on_linux() {
         use crate::theme::Brightness::*;
         use eframe::egui::Theme;
-        assert_eq!(brightness_shown(System, Some(false), None), Light);
-        assert_eq!(brightness_shown(System, Some(true), None), Dark);
-        assert_eq!(brightness_shown(System, None, None), System);
+        assert_eq!(brightness_shown(System, Some(false), None, None), Light);
+        assert_eq!(brightness_shown(System, Some(true), None, None), Dark);
+        assert_eq!(brightness_shown(System, None, None, None), System);
         assert_eq!(
-            brightness_shown(System, Some(false), Some(Theme::Dark)),
+            brightness_shown(System, Some(false), None, Some(Theme::Dark)),
             System
         );
-        assert_eq!(brightness_shown(Dark, Some(false), None), Dark);
-        assert_eq!(brightness_shown(Light, Some(true), None), Light);
+        assert_eq!(brightness_shown(Dark, Some(false), None, None), Dark);
+        assert_eq!(brightness_shown(Light, Some(true), None, None), Light);
+        // A Windows contrast theme's form wins over winit's answer, not over a choice (#342).
+        assert_eq!(
+            brightness_shown(System, None, Some(true), Some(Theme::Light)),
+            Dark
+        );
+        assert_eq!(
+            brightness_shown(System, None, Some(false), Some(Theme::Dark)),
+            Light
+        );
+        assert_eq!(brightness_shown(Light, None, Some(true), None), Light);
+    }
+
+    /// Under a Windows contrast theme, Windows tells winit the style is light whatever the
+    /// theme's colours (`AppsUseLightTheme` is 1), and *Follow the system* showed *Night sky*, a
+    /// black window with white text, in the light form (#342). The theme's window colour says
+    /// which form: a black window dark, a white one light, whatever winit says; a choice in the
+    /// app still wins, and with no contrast theme on, winit's answer is followed as before.
+    #[test]
+    fn a_contrast_theme_s_window_colour_chooses_light_or_dark_whatever_winit_says() {
+        use eframe::egui::Theme;
+        let shown = |reading: Reading, winit: Theme, chosen: Brightness| {
+            let mut app = headless(&Fixed::new(reading));
+            let ctx = app.ctx.clone().unwrap();
+            // What winit says of the system's style.
+            let input = egui::RawInput {
+                system_theme: Some(winit),
+                ..Default::default()
+            };
+            let _ = ctx.run_pass(input, |_| {});
+            app.a11y.settings.brightness = chosen;
+            app.a11y.applied = None;
+            app.a11y_frame(&ctx);
+            (ctx.theme(), crate::a11y::high_contrast(&ctx))
+        };
+        let contrast = |window: [u8; 3]| Reading {
+            high_contrast: Some(true),
+            contrast_window: Some(window),
+            ..Default::default()
+        };
+        for (window, winit, want) in [
+            // Night sky, as Windows reports it.
+            ([0, 0, 0], Theme::Light, Theme::Dark),
+            ([0, 0, 0], Theme::Dark, Theme::Dark),
+            ([255, 255, 255], Theme::Dark, Theme::Light),
+            ([255, 255, 255], Theme::Light, Theme::Light),
+            // Aquatic's window, and Desert's.
+            ([0x20, 0x20, 0x20], Theme::Light, Theme::Dark),
+            ([0xff, 0xfa, 0xef], Theme::Dark, Theme::Light),
+        ] {
+            assert_eq!(
+                shown(contrast(window), winit, Brightness::System),
+                (want, true),
+                "window {window:?}, winit {winit:?}"
+            );
+            for chosen in [Brightness::Light, Brightness::Dark] {
+                let want = if chosen == Brightness::Light {
+                    Theme::Light
+                } else {
+                    Theme::Dark
+                };
+                assert_eq!(shown(contrast(window), winit, chosen), (want, true));
+            }
+        }
+        // No contrast theme on: winit's answer.
+        let plain = Reading {
+            high_contrast: Some(false),
+            ..Default::default()
+        };
+        for winit in [Theme::Light, Theme::Dark] {
+            assert_eq!(
+                shown(plain, winit, Brightness::System),
+                (winit, false),
+                "{winit:?}"
+            );
+        }
     }
 }

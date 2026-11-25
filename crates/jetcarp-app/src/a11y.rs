@@ -4,7 +4,9 @@
 //! [`SystemSettings`] is the reading, behind a small trait so tests can stand it in:
 //!
 //! - **Windows:** *Show animations in Windows* (`SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION)`)
-//!   and the contrast themes (`SPI_GETHIGHCONTRAST`, `HCF_HIGHCONTRASTON`).
+//!   and the contrast themes (`SPI_GETHIGHCONTRAST`, `HCF_HIGHCONTRASTON`), with the theme's
+//!   window colour (`GetSysColor(COLOR_WINDOW)`), which says whether it is a dark or a light one
+//!   (#342).
 //! - **macOS:** `NSWorkspace`'s `accessibilityDisplayShouldReduceMotion` and
 //!   `accessibilityDisplayShouldIncreaseContrast` (*Reduce motion* and *Increase contrast*).
 //! - **Linux:** GNOME's `org.gnome.desktop.interface enable-animations` and
@@ -32,6 +34,43 @@ pub struct Reading {
     /// The system's style is dark (`Some(false)`: light), where the app reads it itself: on Linux
     /// (#137). Elsewhere `None`, and egui follows the system through winit.
     pub dark: Option<bool>,
+    /// Windows, while a contrast theme is on: the theme's window colour (red, green, blue), from
+    /// `GetSysColor(COLOR_WINDOW)`. Windows then tells winit the style is light
+    /// (`AppsUseLightTheme` is 1) whatever the theme's colours, so this says which form it is
+    /// ([`Reading::contrast_dark`], #342). `None` elsewhere, and with no contrast theme on.
+    pub contrast_window: Option<[u8; 3]>,
+}
+
+impl Reading {
+    /// Whether the contrast theme on (Windows) is a dark one, by its window colour
+    /// ([`dark_colour`]); `None` when none is on, or it isn't known.
+    pub fn contrast_dark(&self) -> Option<bool> {
+        self.contrast_window.map(dark_colour)
+    }
+}
+
+/// Whether text should be light on `rgb`: white text stands out more on it than black does, by
+/// WCAG's contrast ratio, which is when its relative luminance is under about 0.18 (of Windows
+/// 11's contrast themes, *Desert*'s window is light, and *Aquatic*'s, *Dusk*'s and *Night
+/// sky*'s dark, #342).
+pub fn dark_colour(rgb: [u8; 3]) -> bool {
+    let linear = |c: u8| {
+        let c = f64::from(c) / 255.0;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let l = 0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2]);
+    // White's contrast with it, (1 + 0.05) / (l + 0.05), beats black's, (l + 0.05) / 0.05.
+    1.05 * 0.05 > (l + 0.05) * (l + 0.05)
+}
+
+/// A Windows colour (`COLORREF`, `0x00BBGGRR`) as red, green, blue.
+#[cfg(any(windows, test))]
+pub fn colorref_rgb(c: u32) -> [u8; 3] {
+    [c as u8, (c >> 8) as u8, (c >> 16) as u8]
 }
 
 /// Reads the system's accessibility settings. [`Os`] reads the real ones; tests stand in.
@@ -180,6 +219,7 @@ impl SystemSettings for Os {
 #[cfg(windows)]
 mod windows {
     use super::Reading;
+    use windows_sys::Win32::Graphics::Gdi::{COLOR_WINDOW, GetSysColor};
     use windows_sys::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, SystemParametersInfoW,
@@ -214,10 +254,16 @@ mod windows {
             )
         };
         let high_contrast = (ok != 0).then_some(hc.dwFlags & HCF_HIGHCONTRASTON != 0);
+        // A contrast theme's window colour, which says whether it is a dark or a light one: while
+        // one is on, Windows says light to winit whatever its colours (#342).
+        // SAFETY: GetSysColor takes a colour's index and returns it; it has no pointers.
+        let contrast_window = (high_contrast == Some(true))
+            .then(|| super::colorref_rgb(unsafe { GetSysColor(COLOR_WINDOW) }));
         Reading {
             reduce_motion,
             high_contrast,
             dark: None,
+            contrast_window,
         }
     }
 }
@@ -247,6 +293,7 @@ mod macos {
                 reduce_motion: Some(reduce),
                 high_contrast: Some(contrast),
                 dark: None,
+                contrast_window: None,
             }
         }
     }
@@ -332,6 +379,7 @@ mod linux {
                     .map(|on| !on),
                 high_contrast: p.bool_of("org.gnome.desktop.a11y.interface", "high-contrast"),
                 dark: p.dark(),
+                contrast_window: None,
             }
         }
 
@@ -367,6 +415,7 @@ mod linux {
                 reduce_motion,
                 high_contrast,
                 dark,
+                contrast_window: None,
             };
             if !self.answered {
                 // No portal (a desktop without one, or none running yet): GNOME's own tool.
@@ -1201,8 +1250,7 @@ mod tests {
     fn a_watch_reads_now_then_every_couple_of_seconds_and_sees_changes() {
         let sys = Fixed::new(Reading {
             reduce_motion: Some(true),
-            high_contrast: None,
-            dark: None,
+            ..Default::default()
         });
         let mut w = Watch::new(Box::new(sys.clone()));
         assert!(w.poll(0.0), "the first poll reads");
@@ -1210,7 +1258,7 @@ mod tests {
         sys.set(Reading {
             reduce_motion: Some(false),
             high_contrast: Some(true),
-            dark: None,
+            ..Default::default()
         });
         assert!(!w.poll(READ_EVERY * 0.5), "not yet");
         assert_eq!(w.reading.reduce_motion, Some(true));
@@ -1218,6 +1266,33 @@ mod tests {
         assert_eq!(w.reading.reduce_motion, Some(false));
         assert_eq!(w.reading.high_contrast, Some(true));
         assert!(!w.poll(READ_EVERY * 2.5), "nothing changed since");
+    }
+
+    /// A contrast theme's window colour says its form (#342): Windows 11's *Night sky* (black),
+    /// *Aquatic* and *Dusk* are dark, *Desert* and Windows 10's *High Contrast White* light, read
+    /// from `GetSysColor`'s `0x00BBGGRR`.
+    #[test]
+    fn a_contrast_theme_is_dark_or_light_by_its_window_colour() {
+        for (colorref, dark) in [
+            (0x0000_0000, true),
+            (0x0020_2020, true),
+            (0x0036_322d, true),
+            (0x00ef_faff, false),
+            (0x00ff_ffff, false),
+        ] {
+            let rgb = colorref_rgb(colorref);
+            assert_eq!(dark_colour(rgb), dark, "{colorref:06x}");
+        }
+        assert_eq!(colorref_rgb(0x00ef_faff), [0xff, 0xfa, 0xef]);
+        // The line between them: where white and black text stand out alike.
+        assert!(dark_colour([0x75, 0x75, 0x75]) && !dark_colour([0x77, 0x77, 0x77]));
+        let r = Reading {
+            high_contrast: Some(true),
+            contrast_window: Some([0, 0, 0]),
+            ..Default::default()
+        };
+        assert_eq!(r.contrast_dark(), Some(true));
+        assert_eq!(Reading::default().contrast_dark(), None);
     }
 
     #[test]
