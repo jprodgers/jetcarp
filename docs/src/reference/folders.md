@@ -26,7 +26,9 @@ reads and never writes; it says `(no packs came with the program)` when there is
 folder for the running app's and host's control files ([Runtime](#runtime-folder) below).
 
 `jetcarp paths --json` prints the same as JSON (`bundled_packs` and `runtime` are `null` when there
-is none). `jetcarp doctor` adds what JETCARP read of the computer, with its score and limits, the
+is none). `jetcarp doctor` names this program first, its version and its path (your home folder
+shown as `~`, in the text and the JSON's `program`, so no user name is pasted into a bug report),
+and adds what JETCARP read of the computer, with its score and limits, the
 time zone local times are in and where it came from, the catalog file, how much data is in use,
 the starter pack's size (or where it looked for one), and every `JETCARP_…` variable that is set,
 with wgpu's `WGPU_…` ones (such as `WGPU_BACKEND`), which change the graphics adapters it finds,

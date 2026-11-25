@@ -480,9 +480,11 @@ jetcarp launcher install
 
 On Windows the entry and the app's windows share one AppUserModelID, `JimmieRodgers.JETCARP`, so
 the taskbar shows the app under the entry: a pin, made from the Start menu or from the app's
-taskbar button, starts JETCARP through the windowless launcher, with no console window. The main
-window says what a pin of it starts (its relaunch command): the entry's copy of the launcher, or,
-with no entry, the `jetcarpw.exe` beside the program.
+taskbar button, starts JETCARP through the windowless launcher, with no console window. A pin
+made from the taskbar starts the program that was pinned, never another JETCARP: the main window
+says so (its relaunch command), naming its own program's launcher, the `jetcarpw.exe` beside it,
+or the entry's copy when that copy starts this same program, which keeps a pin working after an
+upgrade whose folder names the version (winget's).
 
 Each keeps working when JETCARP is upgraded. On Linux and macOS it starts the program by a path an
 upgrade keeps (Homebrew's `jetcarp` link, not the version's own folder); *JETCARP.app* holds a
@@ -510,20 +512,21 @@ programs: `jetcarp` in a new window runs whichever comes first on your `PATH`, a
 may open the other, an older version perhaps. `jetcarp doctor` then has a section, *More than one
 JETCARP*: this program, every `jetcarp` on the `PATH` in its order, the one `jetcarp` runs, how
 each was installed, on Windows every Start menu entry named *JETCARP* and what it starts, and the
-commands that remove the others:
+commands that remove the others. Your home folder is shown as `~`, as in doctor's first lines,
+which always name this program and its version, so no user name is pasted into a bug report:
 
 ```text
 More than one JETCARP
-  this program: C:\Users\ada\AppData\Local\Programs\jetcarp\jetcarp.exe (installed with JETCARP's installer)
+  this program: ~\AppData\Local\Programs\jetcarp\jetcarp.exe (installed with JETCARP's installer)
   on the PATH, in its order:
-    C:\Users\ada\scoop\shims\jetcarp.exe, which runs C:\Users\ada\scoop\apps\jetcarp\current\jetcarp.exe (installed with Scoop): it runs when you type `jetcarp` here
-    C:\Users\ada\AppData\Local\Programs\jetcarp\jetcarp.exe (installed with JETCARP's installer), this program
+    ~\scoop\shims\jetcarp.exe, which runs ~\scoop\apps\jetcarp\current\jetcarp.exe (installed with Scoop): it runs when you type `jetcarp` here
+    ~\AppData\Local\Programs\jetcarp\jetcarp.exe (installed with JETCARP's installer), this program
   Start menu entries named JETCARP:
-    C:\Users\ada\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\JETCARP.lnk, which starts C:\Users\ada\AppData\Local\jetcarp\launcher\jetcarpw.exe (JETCARP's own entry, from `jetcarp launcher install`, which starts C:\Users\ada\AppData\Local\Programs\jetcarp\jetcarp.exe)
-    C:\Users\ada\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Scoop Apps\JETCARP.lnk, which starts C:\Users\ada\scoop\apps\jetcarp\current\jetcarpw.exe (installed with Scoop)
-  note: `jetcarp` here runs C:\Users\ada\scoop\apps\jetcarp\current\jetcarp.exe, not this program
+    ~\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\JETCARP.lnk, which starts ~\AppData\Local\jetcarp\launcher\jetcarpw.exe (JETCARP's own entry, from `jetcarp launcher install`, which starts ~\AppData\Local\Programs\jetcarp\jetcarp.exe)
+    ~\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Scoop Apps\JETCARP.lnk, which starts ~\scoop\apps\jetcarp\current\jetcarpw.exe (installed with Scoop)
+  note: `jetcarp` here runs ~\scoop\apps\jetcarp\current\jetcarp.exe, not this program
   To keep only one JETCARP, remove the others:
-    scoop uninstall jetcarp    (C:\Users\ada\scoop\apps\jetcarp\current\jetcarp.exe)
+    scoop uninstall jetcarp    (~\scoop\apps\jetcarp\current\jetcarp.exe)
 ```
 
 `jetcarp --json doctor` has them as `programs` and `desktop.start_menu`. Run `jetcarp uninstall`

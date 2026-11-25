@@ -276,7 +276,11 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
 - **More than one JETCARP.** `jetcarp doctor`, run with two stand-ins named `jetcarp` first on its
   `PATH`, must name both in the `PATH`'s order, the first as the one `jetcarp` runs, and this
   program, in its text and its JSON; with only itself on the `PATH`, it must say nothing of other
-  copies (`crates/jetcarp/tests/doctor_programs.rs`; red before the fix, #348). In scratch folders,
+  copies (`crates/jetcarp/tests/doctor_programs.rs`; red before the fix, #348). Its first lines
+  and its JSON's `program` must name this program, its version and its path, with the home folder
+  shown as `~` there and in the section (red before the change; `jetcarp-api/tests/reference.rs`),
+  and the home folder must become `~` only at the start of a path and on a folder's boundary
+  (`installed_with.rs`). In scratch folders,
   the section must follow a Scoop shim to the program its `.shim` names, tell Scoop's, cargo's and
   the installer's apart, count a folder named twice once, look for `PATHEXT`'s extensions in their
   order on Windows, and name the commands that remove the others, each once
@@ -291,7 +295,11 @@ JETCARP has over a thousand automated tests, beside the code (`#[cfg(test)]`) an
   the copy of `jetcarpw.exe` it starts and a record naming the program. `jetcarp doctor` must say
   where it is, and on Windows the shortcut's AppUserModelID must read back as the app's,
   `JimmieRodgers.JETCARP` (#347), and doctor's JSON must name it as JETCARP's own entry, with a copy
-  of it in *Scoop Apps* named too. Then `jetcarp uninstall` must list it and take every file out (on Windows,
+  of it in *Scoop Apps* named too. A window must relaunch its own program's launcher, the one
+  beside it or the entry's copy only when that copy's record names it, never another JETCARP's
+  (on every system, with scratch files), and on Windows a window's property store must give back
+  the ID and the relaunch command, icon and name it was given, and nothing once cleared
+  (`jetcarp-display/src/launcher.rs`). Then `jetcarp uninstall` must list it and take every file out (on Windows,
   `jetcarp launcher remove`, since `jetcarp uninstall` would reach the real registry), and a menu
   entry, app or shortcut of the same name that JETCARP did not make must be neither replaced nor
   removed (`crates/jetcarp/tests/launcher.rs`). On Windows a winget upgrade is played out for

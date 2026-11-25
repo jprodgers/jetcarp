@@ -581,7 +581,8 @@ day later (0.4.2: 17 November here, 18 November there).
   AppUserModelID, so Windows pinned the process it saw, the console program `jetcarp.exe`, and a
   pin opened a console window with the app. The Start menu entry and the app's windows now share
   one AppUserModelID, `JimmieRodgers.JETCARP`, and the main window has a relaunch command that
-  starts the windowless launcher, so a pin starts JETCARP as the Start menu entry does. Run
+  starts its own program's windowless launcher, so a pin starts the program that was pinned, with
+  no console window, as the Start menu entry does. Run
   `jetcarp launcher install` once (the installer does) to give an older entry the ID.
   ([Open the app](../getting-started/installing.md#open-the-app),
   [#347](https://github.com/jprodgers/jetcarp/issues/347))
@@ -591,7 +592,10 @@ day later (0.4.2: 17 November here, 18 November there).
   order, which one `jetcarp` runs, how each was installed, and on Windows every Start menu entry
   named *JETCARP* with what it starts, with the commands that remove the others; and both
   installers say at the end when they find another JETCARP (Scoop's, winget's, Homebrew's,
-  cargo's, pipx's, uv's, or another folder of the installer's), with how to remove it.
+  cargo's, pipx's, uv's, or another folder of the installer's), with how to remove it. Doctor's
+  first lines always name this program, its version and its path, in the text and the JSON
+  (`program`), with your home folder shown as `~` there and in the new section, so no user name
+  is pasted into a bug report.
   ([More than one JETCARP](../getting-started/installing.md#more-than-one-jetcarp),
   [#348](https://github.com/jprodgers/jetcarp/issues/348))
 - **`jetcarp uninstall --settings` deletes a settings folder holding `machine.json`** (#349).
