@@ -827,11 +827,12 @@ impl Core {
                     let painter = sw.painter.get_or_insert_with(|| {
                         Painter::new(&g.device, jetcarp_display::crop::FORMAT)
                     });
-                    jetcarp_display::crop::render(
+                    jetcarp_display::crop::picture(
                         &g.device,
                         &g.queue,
                         painter,
                         &screen.stage,
+                        [f.canvas[0].round() as u32, f.canvas[1].round() as u32],
                         crop_size(f.canvas),
                         f.scale as f32,
                     )

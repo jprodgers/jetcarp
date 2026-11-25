@@ -322,9 +322,54 @@ fn reads_per_cell(scene: &jetcarp_core::Scene) -> Option<f64> {
     Some(jetcarp_gpu::neighbour_reads(&w) as f64 / n)
 }
 
-/// A screen's scenes as a fit sees them: a series' rules as one scene (#109), each with its
-/// sizes on `canvas` at `scale` (at most `max_cells` cells), its cost, and the frame rate it is
-/// held to. `reads` caches the neighbour reads of each tiling and set of rules.
+/// Generations a rule is given to change a cell of its seed ([`changes_its_seed`]).
+const DRAWS_WITHIN: u32 = 4;
+
+/// Whether `scene` changes any cell of its seed within its first few generations, on a small world
+/// of its tiling (its own size where a small one can't be built): Wolfram's rule 0, from its one
+/// cell, changes none.
+fn changes_its_seed(scene: &jetcarp_core::Scene) -> bool {
+    let mut small = scene.clone();
+    if profiles::is_lattice(scene) {
+        small.tiling.size = Some(SizeSpec::Rect { w: 32, h: 32 });
+    }
+    let Ok(mut w) = World::from_scene(&small).or_else(|_| World::from_scene(scene)) else {
+        return false;
+    };
+    let seeded = w.states_hash();
+    (0..DRAWS_WITHIN).any(|_| {
+        w.step();
+        w.states_hash() != seeded
+    })
+}
+
+/// The rule a series is measured and pictured by: the first of its rules (`first`, then `rest`,
+/// in the rotation's order) that changes cells of its seed ([`changes_its_seed`]), so its cards
+/// show a picture (#346: the Wolfram series' first rule, rule 0, draws nothing from its one
+/// cell); every rule of a series costs the same a cell, so what the fit measures is the same.
+/// Its first rule when none does. Returns that rule's slot, and the others' in order.
+fn series_shown_by(
+    slots: &[Slot],
+    lookup: &Lookup,
+    first: usize,
+    rest: Vec<usize>,
+) -> (usize, Vec<usize>) {
+    if rest.is_empty() {
+        return (first, rest);
+    }
+    let all: Vec<usize> = std::iter::once(first).chain(rest).collect();
+    let by = all
+        .iter()
+        .copied()
+        .find(|&i| changes_its_seed(&profiles::resolve(&slots[i].profile, &**lookup).1))
+        .unwrap_or(first);
+    (by, all.into_iter().filter(|&i| i != by).collect())
+}
+
+/// A screen's scenes as a fit sees them: a series' rules as one scene (#109), measured and
+/// pictured by a rule that draws ([`series_shown_by`]), each with its sizes on `canvas` at
+/// `scale` (at most `max_cells` cells), its cost, and the frame rate it is held to. `reads`
+/// caches the neighbour reads of each tiling and set of rules.
 pub(crate) fn plan_scenes(
     slots: &[Slot],
     lookup: &Lookup,
@@ -338,7 +383,8 @@ pub(crate) fn plan_scenes(
 ) -> Vec<Planned> {
     scene_groups(slots)
         .into_iter()
-        .map(|(k, rest)| {
+        .map(|(first, rest)| {
+            let (k, rest) = series_shown_by(slots, lookup, first, rest);
             let slot = &slots[k];
             let design = stage::cell_pixels(slot.profile.cell_px, scale);
             // A source that can't be had (a Quick Start entry missing here) shows Life, as in
@@ -1746,12 +1792,8 @@ impl Rig {
                 let image = match (&self.gpu, &t.draw) {
                     (Some(g), Some((_, tex))) => {
                         let size = crop_size([t.canvas[0] as f64, t.canvas[1] as f64]);
-                        jetcarp_display::crop::read(
-                            &g.device,
-                            &g.queue,
-                            tex,
-                            jetcarp_display::crop::middle(t.canvas, size),
-                            size,
+                        jetcarp_display::crop::from_frame(
+                            &g.device, &g.queue, tex, &t.stage, t.canvas, size,
                         )
                     }
                     _ => None,
@@ -1925,7 +1967,7 @@ mod tests {
 
     /// The scenes' costs come from their tilings' neighbours and their speeds: Life on
     /// triangles (12 neighbours a cell) costs more a cell than on squares (8), and a series'
-    /// rules are one scene, measured by its first (#109).
+    /// rules are one scene, measured by its first that draws (#109, #346).
     #[test]
     fn scenes_cost_by_their_neighbours_and_a_series_is_one() {
         use jetcarp_core::{Boundary, CaSpec, Scene, TilingSpec};
@@ -1961,6 +2003,54 @@ mod tests {
         let (sq, tri) = (plan[0].cost.unwrap(), plan[1].cost.unwrap());
         assert!(tri > sq, "triangles {tri} against squares {sq}");
         assert_eq!(tuning::most_demanding(&plan), Some(1));
+    }
+
+    /// A series is measured and pictured by its first rule that changes cells of its seed (#346):
+    /// the Wolfram series' rule 0 draws nothing from its one cell, so its cards were empty
+    /// pictures; rule 1 draws. A series whose first rule draws is shown by it, as before.
+    #[test]
+    fn a_series_is_measured_and_pictured_by_a_rule_that_draws() {
+        use jetcarp_core::{Boundary, CaSpec, Scene, TilingSpec};
+        let scene = |rule: &str| {
+            let mut sc = Scene::new(TilingSpec::rect("square", 200, 140, Boundary::Dead));
+            sc.cas = vec![CaSpec::new(rule)];
+            profiles::Show::Scene {
+                scene: Box::new(sc),
+            }
+        };
+        let lookup: Lookup = Arc::new(|_: &str| None);
+        let plan = |slots: &[Slot]| {
+            plan_scenes(
+                slots,
+                &lookup,
+                [1280.0, 720.0],
+                1.0,
+                4_000_000,
+                &TuneLimits::default(),
+                &Pacer::default(),
+                Devices {
+                    gpu: true,
+                    speedup: tuning::GPU_SPEEDUP,
+                },
+                &mut HashMap::new(),
+            )
+        };
+        let wolfram: Vec<Slot> = ["W0", "W1", "W2", "W30"]
+            .into_iter()
+            .map(|r| slot(r, scene(r), Some(0)))
+            .collect();
+        let p = plan(&wolfram);
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert_eq!(p[0].label, "W1", "{p:?}");
+        assert_eq!(p[0].also, ["W0", "W2", "W30"]);
+        assert!(!changes_its_seed(
+            &profiles::resolve(&wolfram[0].profile, &*lookup).1
+        ));
+        let life: Vec<Slot> = ["B3/S23", "B36/S23"]
+            .into_iter()
+            .map(|r| slot(r, scene(r), Some(0)))
+            .collect();
+        assert_eq!(plan(&life)[0].label, "B3/S23");
     }
 
     #[test]
